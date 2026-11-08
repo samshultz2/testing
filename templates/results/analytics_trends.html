@@ -2,145 +2,498 @@
 {% block title %}Exam Trends — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Trends</span>{% endblock %}
 
-{% macro bars(points, key, label, suffix='%', scale=1.0) %}
-<div class="card mb-3">
-    <div class="card-header"><h3>{{ label }}</h3></div>
-    <div class="card-body">
-        {% if points %}
-        <div style="display:flex;flex-direction:column;gap:.5rem;">
-        {% for p in points %}
-            {% set val = p[key] %}
-            {% set width = (val * scale) if (val * scale) <= 100 else 100 %}
-            <div style="display:flex;align-items:center;gap:.75rem;">
-                <div style="width:3.5rem;text-align:right;font-variant-numeric:tabular-nums;" class="text-muted text-sm">{{ p.year }}</div>
-                <div style="flex:1;background:var(--border-light);border-radius:6px;overflow:hidden;height:1.25rem;">
-                    <div style="width:{{ width }}%;height:100%;background:var(--primary,#2563eb);"></div>
-                </div>
-                <div style="width:4.5rem;font-variant-numeric:tabular-nums;"><strong>{{ val }}{{ suffix }}</strong></div>
-            </div>
-        {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-muted">No data yet.</p>
-        {% endif %}
-    </div>
-</div>
-{% endmacro %}
+{# ---------------------------------------------------------------- macros #}
+{% macro fmt(v, unit='') -%}
+{%- if v is none -%}—{%- elif unit == '%' -%}{{ '%.1f'|format(v) }}%{%- elif v is number and v != v|int -%}{{ ('%.2f'|format(v)).rstrip('0').rstrip('.') if v|abs < 10 else '%.1f'|format(v) }}{{ unit }}{%- else -%}{{ v|int }}{{ unit }}{%- endif -%}
+{%- endmacro %}
+
+{% macro signed(v, unit='') -%}
+{%- if v is none -%}—{%- else -%}{{ '+' if v > 0 else ('−' if v < 0 else '±') }}{{ '%.1f'|format(v|abs) ~ ' pts' if unit == '%' else fmt(v|abs, unit) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro spark(series, mark=none, w=120, h=32) -%}
+{%- set vals = series|selectattr(1, 'ne', none)|list -%}
+{%- if vals|length > 1 -%}
+  {%- set lo = vals|map(attribute=1)|min -%}{%- set hi = vals|map(attribute=1)|max -%}
+  {%- set rng = (hi - lo) if hi != lo else 1 -%}
+  {%- set n = series|length -%}
+  <svg class="tr-spark" viewBox="0 0 {{ w }} {{ h }}" width="{{ w }}" height="{{ h }}" aria-hidden="true" preserveAspectRatio="none">
+    <polyline fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" points="
+    {%- for yr, v in series if v is not none -%}{{ '%.1f'|format(4 + (loop.index0 if vals|length == n else (series|map(attribute=0)|list).index(yr)) * (w - 8) / (n - 1)) }},{{ '%.1f'|format(h - 4 - (v - lo) / rng * (h - 8)) }} {% endfor -%}" />
+    {%- for yr, v in series if v is not none -%}{%- set x = 4 + ((series|map(attribute=0)|list).index(yr)) * (w - 8) / (n - 1) -%}
+    {%- if yr == mark or loop.last -%}<circle cx="{{ '%.1f'|format(x) }}" cy="{{ '%.1f'|format(h - 4 - (v - lo) / rng * (h - 8)) }}" r="{{ 3 if yr == mark else 2.2 }}" fill="currentColor"/>{%- endif -%}{%- endfor -%}
+  </svg>
+{%- else -%}<span class="tr-muted tr-xs">one year</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro sigbadge(sig) -%}
+{%- if sig -%}<span class="tr-sig {{ 'real' if sig.real else ('small' if 'Small' in sig.label or 'enough' in sig.label else 'chance') }}" title="{{ 'p = %s'|format(sig.p) if sig.p is not none else '' }}">{{ sig.label }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro heat(v) -%}
+{%- if v is none -%}background:transparent{%- else -%}
+{%- set a = (v / 100) -%}background:color-mix(in srgb, var(--tr-good) {{ (a * 70)|round|int }}%, color-mix(in srgb, var(--tr-bad) {{ ((1 - a) * 55)|round|int }}%, var(--bg-card)));
+{%- endif -%}
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+.tr{--tr-good:#16a34a;--tr-bad:#dc2626;--tr-warn:#d97706;--tr-info:#2563eb;--tr-d:#15803d;--tr-c:#3b82f6;--tr-p:#f59e0b;--tr-f:#ef4444;
+    --tr-a:#94a3b8;--tr-b:var(--primary,#0f766e);display:flex;flex-direction:column;gap:1rem;min-width:0}
+[data-theme="dark"] .tr,[data-theme="midnight"] .tr,[data-theme="carbon"] .tr{--tr-good:#22c55e;--tr-bad:#f87171;--tr-warn:#fbbf24;--tr-a:#64748b}
+.tr *{min-width:0}
+.tr-muted{color:var(--text-muted)}.tr-xs{font-size:.72rem}
+.tr-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;box-shadow:var(--shadow-sm,0 1px 2px rgba(15,23,42,.05))}
+.tr-card > header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.9rem 1.1rem .7rem;border-bottom:1px solid var(--border-color)}
+.tr-card > header h2{margin:0;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.tr-card > header h2 i{color:var(--primary);font-size:.9rem}
+.tr-card > header p{margin:.15rem 0 0;font-size:.78rem;color:var(--text-muted);flex-basis:100%}
+.tr-body{padding:1rem 1.1rem}
+/* header */
+.tr-top{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.tr-top h1{margin:0;font-size:1.55rem}
+.tr-top p{margin:.25rem 0 0;color:var(--text-muted);font-size:.88rem;max-width:60ch}
+/* toolbar */
+.tr-bar{display:flex;align-items:center;gap:.75rem 1.25rem;flex-wrap:wrap;padding:.75rem .9rem}
+.tr-exams{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none;padding:.2rem;background:var(--gray-50,#f8fafc);border:1px solid var(--border-color);border-radius:11px;max-width:100%}
+.tr-exams::-webkit-scrollbar{display:none}
+.tr-exams a{flex:0 0 auto;padding:.42rem .8rem;border-radius:8px;font-size:.84rem;font-weight:600;color:var(--text-muted);text-decoration:none;white-space:nowrap}
+.tr-exams a small{font-weight:500;opacity:.75;margin-left:.25rem;font-size:.72rem}
+.tr-exams a.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.14)}
+.tr-cmp{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin-left:auto}
+.tr-cmp label{font-size:.78rem;font-weight:600;color:var(--text-muted)}
+.tr-cmp select{padding:.38rem .55rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-weight:600;font-size:.86rem}
+.tr-cmp .vs{font-size:.78rem;color:var(--text-muted)}
+.tr-quick{display:flex;gap:.3rem;flex-wrap:wrap}
+.tr-quick a{font-size:.74rem;padding:.25rem .55rem;border-radius:999px;border:1px solid var(--border-color);color:var(--text-muted);text-decoration:none;white-space:nowrap}
+.tr-quick a.on{border-color:var(--primary);color:var(--primary);background:var(--primary-alpha,rgba(15,118,110,.08))}
+/* verdict */
+.tr-verdict{display:grid;grid-template-columns:auto 1fr auto;gap:1rem;align-items:center;padding:1rem 1.2rem;border-left:5px solid var(--tr-info)}
+.tr-verdict.good{border-left-color:var(--tr-good)}.tr-verdict.bad{border-left-color:var(--tr-bad)}.tr-verdict.mixed{border-left-color:var(--tr-warn)}
+.tr-verdict .ic{width:2.8rem;height:2.8rem;border-radius:12px;display:grid;place-items:center;font-size:1.2rem;background:var(--gray-50,#f1f5f9)}
+.tr-verdict.good .ic{color:var(--tr-good)}.tr-verdict.bad .ic{color:var(--tr-bad)}.tr-verdict.mixed .ic{color:var(--tr-warn)}
+.tr-verdict h3{margin:0;font-size:1.12rem}
+.tr-verdict p{margin:.2rem 0 0;font-size:.88rem;color:var(--text-secondary,var(--text-muted))}
+.tr-tally{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}
+.tr-tally span{font-size:.76rem;font-weight:700;padding:.3rem .6rem;border-radius:999px;background:var(--gray-50,#f1f5f9);white-space:nowrap}
+.tr-tally .g{color:var(--tr-good)}.tr-tally .b{color:var(--tr-bad)}
+/* KPI tiles */
+.tr-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem}
+@media (max-width:1250px){.tr-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.tr-kpi{padding:.85rem .95rem .75rem;display:flex;flex-direction:column;gap:.35rem}
+.tr-kpi .l{font-size:.72rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--text-muted);line-height:1.25}
+.tr-kpi .row{display:flex;flex-wrap:nowrap;align-items:flex-end;justify-content:space-between;gap:.4rem}
+.tr-kpi .v{font-size:1.55rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tr-kpi .tr-spark{color:var(--primary);flex:0 1 72px;width:72px;height:28px;min-width:36px}
+.tr-kpi .f{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;font-size:.74rem;color:var(--text-muted)}
+.tr-delta{display:inline-flex;align-items:center;gap:.25rem;font-weight:700;font-size:.78rem;padding:.12rem .45rem;border-radius:999px;background:var(--gray-50,#f1f5f9);color:var(--text-muted);white-space:nowrap}
+.tr-delta.good{color:var(--tr-good);background:color-mix(in srgb,var(--tr-good) 12%,transparent)}
+.tr-delta.bad{color:var(--tr-bad);background:color-mix(in srgb,var(--tr-bad) 12%,transparent)}
+.tr-sig{font-size:.68rem;font-weight:700;padding:.1rem .45rem;border-radius:999px;white-space:nowrap;border:1px solid var(--border-color);color:var(--text-muted)}
+.tr-sig.real{border-color:color-mix(in srgb,var(--tr-info) 40%,transparent);color:var(--tr-info)}
+.tr-sig.small{border-style:dashed}
+/* grid layouts */
+.tr-two{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:1rem}
+.tr-half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+/* chart */
+.tr-metrics{display:flex;gap:.3rem;flex-wrap:wrap}
+.tr-metrics button{font:inherit;font-size:.76rem;font-weight:600;padding:.3rem .6rem;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-muted);cursor:pointer}
+.tr-metrics button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.tr-chart{position:relative;height:270px}
+.tr-proj{display:flex;gap:.75rem;align-items:center;margin-top:.75rem;padding:.65rem .8rem;border-radius:10px;background:var(--gray-50,#f8fafc);font-size:.82rem}
+.tr-proj i{color:var(--primary)}
+/* actions */
+.tr-acts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tr-acts li{display:grid;grid-template-columns:2rem 1fr;gap:.6rem;padding:.65rem 0;border-bottom:1px solid var(--border-color)}
+.tr-acts li:last-child{border-bottom:0}
+.tr-acts .i{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;font-size:.85rem;background:var(--gray-50,#f1f5f9)}
+.tr-acts .bad .i{color:var(--tr-bad);background:color-mix(in srgb,var(--tr-bad) 11%,transparent)}
+.tr-acts .warn .i{color:var(--tr-warn);background:color-mix(in srgb,var(--tr-warn) 13%,transparent)}
+.tr-acts .good .i{color:var(--tr-good);background:color-mix(in srgb,var(--tr-good) 12%,transparent)}
+.tr-acts .info .i{color:var(--tr-info);background:color-mix(in srgb,var(--tr-info) 11%,transparent)}
+.tr-acts b{display:block;font-size:.88rem;line-height:1.3}
+.tr-acts span{display:block;font-size:.78rem;color:var(--text-muted);margin-top:.15rem;line-height:1.4}
+.tr-acth{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:.25rem 0 .1rem}
+/* tables */
+.tr-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tr-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.tr-table th{font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);text-align:right;padding:.55rem .7rem;border-bottom:1px solid var(--border-color);white-space:nowrap;background:var(--gray-50,#f8fafc)}
+.tr-table th:first-child,.tr-table td:first-child{text-align:left}
+.tr-table td{padding:.55rem .7rem;border-bottom:1px solid var(--border-color);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tr-table tr:last-child td{border-bottom:0}
+.tr-table td.m{white-space:normal;min-width:12rem}
+.tr-table td.m small{display:block;color:var(--text-muted);font-size:.72rem;line-height:1.3}
+.tr-table .grp td{background:var(--gray-50,#f8fafc);font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);text-align:left;padding:.4rem .7rem}
+.tr-table .yb{font-weight:800}
+.tr-table .tr-spark{color:var(--primary);vertical-align:middle}
+.tr-rank{font-size:.72rem;color:var(--text-muted)}
+.tr-rank.top{color:var(--tr-good);font-weight:700}
+/* grade shift */
+.tr-shift{display:flex;flex-direction:column;gap:.45rem}
+.tr-shift .r{display:grid;grid-template-columns:3.2rem 1fr 4.2rem;gap:.6rem;align-items:center;font-size:.8rem}
+.tr-shift .g{font-weight:800}
+.tr-shift .bars{display:flex;flex-direction:column;gap:3px}
+.tr-shift .bar{height:9px;border-radius:5px;background:var(--gray-100,#eef2f6);overflow:hidden}
+.tr-shift .bar i{display:block;height:100%;border-radius:5px}
+.tr-shift .bar.a i{background:var(--tr-a)}
+.tr-shift .d{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.k-distinction{background:var(--tr-d)!important}.k-credit{background:var(--tr-c)!important}.k-pass{background:var(--tr-p)!important}.k-fail{background:var(--tr-f)!important}
+.tr-legend{display:flex;gap:.9rem;flex-wrap:wrap;font-size:.74rem;color:var(--text-muted);margin-bottom:.6rem}
+.tr-legend i{display:inline-block;width:.65rem;height:.65rem;border-radius:3px;margin-right:.3rem;vertical-align:-1px}
+/* stacked years */
+.tr-stack{display:flex;flex-direction:column;gap:.5rem}
+.tr-stack .r{display:grid;grid-template-columns:3rem 1fr;gap:.6rem;align-items:center;font-size:.8rem}
+.tr-stack .s{display:flex;height:18px;border-radius:6px;overflow:hidden;background:var(--gray-100,#eef2f6)}
+.tr-stack .s i{display:block;height:100%;font-style:normal;font-size:.62rem;color:#fff;font-weight:700;text-align:center;line-height:18px;overflow:hidden}
+.tr-stack .r.on .yr{font-weight:800;color:var(--primary)}
+/* subjects */
+.tr-filters{display:flex;gap:.3rem;flex-wrap:wrap}
+.tr-filters button{font:inherit;font-size:.76rem;font-weight:600;padding:.28rem .65rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-muted);cursor:pointer}
+.tr-filters button.on{border-color:var(--primary);color:var(--primary);background:var(--primary-alpha,rgba(15,118,110,.08))}
+.tr-hist{display:inline-flex;gap:2px}
+.tr-hist i{display:inline-block;width:1.9rem;font-style:normal;font-size:.66rem;font-weight:700;text-align:center;padding:.18rem 0;border-radius:4px;color:var(--text-primary)}
+.tr-trend{font-size:.7rem;font-weight:700;padding:.12rem .45rem;border-radius:999px;white-space:nowrap}
+.tr-trend.rising{color:var(--tr-good);background:color-mix(in srgb,var(--tr-good) 12%,transparent)}
+.tr-trend.falling{color:var(--tr-bad);background:color-mix(in srgb,var(--tr-bad) 12%,transparent)}
+.tr-trend.mixed,.tr-trend.new{color:var(--text-muted);background:var(--gray-50,#f1f5f9)}
+.tr-core{font-size:.62rem;font-weight:800;color:var(--primary);border:1px solid currentColor;border-radius:4px;padding:0 .25rem;margin-left:.35rem;vertical-align:1px}
+.tr-empty{padding:2.5rem 1rem;text-align:center;color:var(--text-muted)}
+.tr-note{font-size:.76rem;color:var(--text-muted);line-height:1.5}
+.tr-note b{color:var(--text-secondary,var(--text-primary))}
+@media (max-width: 980px){ .tr-two,.tr-half{grid-template-columns:minmax(0,1fr)} }
+@media (max-width: 640px){
+  .tr-top h1{font-size:1.3rem}
+  .tr-cmp{margin-left:0;width:100%}
+  .tr-verdict{grid-template-columns:auto 1fr;padding:.9rem}
+  .tr-tally{grid-column:1/-1;justify-content:flex-start}
+  .tr-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+  .tr-kpi .v{font-size:1.35rem}
+  .tr-kpi .tr-spark{width:54px}
+  .tr-body{padding:.85rem}
+  .tr-chart{height:230px}
+  .tr-hide-sm{display:none}
+  .tr-table td.m{min-width:9.5rem}
+}
+@media print{ .tr-bar,.tr-noprint,.tr-filters,.tr-metrics{display:none!important} .tr-card{break-inside:avoid;box-shadow:none} }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="tr">
+  <div class="tr-top">
     <div>
-        <h1>Exam Trends</h1>
-        <p class="text-muted text-sm">How external-exam performance has moved across years for the branch you're viewing.</p>
+      <h1>Exam Trends</h1>
+      <p>How each external exam has moved across the years, and what changed between any two years — with a check on whether each change is real or chance.</p>
     </div>
-    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
-</div>
-
-{% macro insight_card(title, ins, unit, good_up=True) %}
-  {% if ins and ins.latest is not none %}
-  <div class="card" style="flex:1 1 180px;min-width:170px;">
-    <div class="card-body">
-      <div class="text-muted text-sm">{{ title }}</div>
-      <div style="font-size:1.6rem;font-weight:700;">{{ ins.latest }}{{ unit }}</div>
-      <div class="text-sm">
-        {% if ins.delta is not none %}
-          {% set up = ins.delta > 0 %}
-          {% set positive = (up if good_up else not up) %}
-          <span style="color:{{ '#28a745' if positive else ('#dc3545' if ins.delta != 0 else 'var(--text-muted)') }};">
-            <i class="fas fa-arrow-{{ 'up' if up else 'down' if ins.delta < 0 else 'right' }}"></i>
-            {{ ins.delta if ins.delta < 0 else '+' ~ ins.delta }}{{ unit }} vs {{ ins.prev_year }}
-          </span>
-        {% else %}<span class="text-muted">first year on record</span>{% endif %}
-      </div>
-      <div class="text-muted text-sm" style="margin-top:.2rem;">Best: {{ ins.best }}{{ unit }} ({{ ins.best_year }})</div>
+    <div class="tr-noprint" style="display:flex;gap:.5rem">
+      <button type="button" class="btn btn-secondary btn-sm" data-print><i class="fas fa-print"></i> Print</button>
+      <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
     </div>
   </div>
-  {% endif %}
-{% endmacro %}
 
-{% if insights %}
-<h2 class="section-title">At a glance ({{ waec.years[-1] if waec.years else '' }})</h2>
-<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.2rem;">
-  {{ insight_card('5 credits incl. English & Maths', insights.waec_core, '%') }}
-  {{ insight_card('WAEC credit rate', insights.waec_credit, '%') }}
-  {{ insight_card('WAEC F9 (fail) rate', insights.waec_f9, '%', good_up=False) }}
-  {{ insight_card('JAMB average score', insights.jamb_avg, '') }}
-  {{ insight_card('JAMB ≥ 200 rate', insights.jamb_200, '%') }}
-</div>
-{% endif %}
-
-<h2 class="section-title">WAEC / WASSCE</h2>
-{% if waec.points %}
-    {{ bars(waec.points, 'with_5_incl_core_pct', 'Candidates with 5 credits incl. English & Maths', '%') }}
-    {{ bars(waec.points, 'credit_rate', 'Overall credit rate (C6 and above)', '%') }}
-    {{ bars(waec.points, 'f9_rate', 'F9 (fail) rate', '%') }}
-    <div class="card mb-4"><div class="card-body" style="overflow-x:auto;">
-        <table class="table" style="width:100%;">
-            <thead><tr><th>Year</th><th>Candidates</th><th>5 credits incl. core</th><th>Credit rate</th><th>F9 rate</th><th>Avg credits</th></tr></thead>
-            <tbody>
-            {% for p in waec.points %}
-                <tr><td>{{ p.year }}</td><td>{{ p.students }}</td>
-                    <td>{{ p.with_5_incl_core }} ({{ p.with_5_incl_core_pct }}%)</td>
-                    <td>{{ p.credit_rate }}%</td><td>{{ p.f9_rate }}%</td><td>{{ p.avg_credits }}</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div></div>
-
-    {% if subject_trends and subject_trends.movers %}
-    <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
-      <div class="card" style="flex:1 1 300px;">
-        <div class="card-header"><h3><i class="fas fa-arrow-trend-up" style="color:#28a745;"></i> Most improved subjects</h3>
-          <span class="text-muted text-sm">credit rate, {{ subject_trends.years[-2] }} → {{ subject_trends.years[-1] }}</span></div>
-        <div class="card-body" style="overflow-x:auto;">
-          <table class="table" style="width:100%;"><thead><tr><th>Subject</th><th>{{ subject_trends.years[-2] }}</th><th>{{ subject_trends.years[-1] }}</th><th>Change</th></tr></thead>
-            <tbody>{% for m in top_movers %}
-              <tr><td>{{ m.subject }}</td><td>{{ m.prev }}%</td><td>{{ m.latest }}%</td>
-                  <td style="color:{{ '#28a745' if m.delta > 0 else ('#dc3545' if m.delta < 0 else 'inherit') }};font-weight:600;">{{ '+' ~ m.delta if m.delta > 0 else m.delta }}%</td></tr>
-            {% endfor %}</tbody></table>
-        </div>
-      </div>
-      <div class="card" style="flex:1 1 300px;">
-        <div class="card-header"><h3><i class="fas fa-arrow-trend-down" style="color:#dc3545;"></i> Needs attention</h3>
-          <span class="text-muted text-sm">biggest credit-rate drops</span></div>
-        <div class="card-body" style="overflow-x:auto;">
-          <table class="table" style="width:100%;"><thead><tr><th>Subject</th><th>{{ subject_trends.years[-2] }}</th><th>{{ subject_trends.years[-1] }}</th><th>Change</th></tr></thead>
-            <tbody>{% for m in bottom_movers %}
-              <tr><td>{{ m.subject }}</td><td>{{ m.prev }}%</td><td>{{ m.latest }}%</td>
-                  <td style="color:{{ '#28a745' if m.delta > 0 else ('#dc3545' if m.delta < 0 else 'inherit') }};font-weight:600;">{{ '+' ~ m.delta if m.delta > 0 else m.delta }}%</td></tr>
-            {% endfor %}</tbody></table>
-        </div>
-      </div>
+{% if not t.exams %}
+  <div class="tr-card tr-empty"><i class="fas fa-chart-line" style="font-size:2rem;opacity:.4"></i>
+    <p style="margin:.6rem 0 0">No external exam results yet. Trends appear once WAEC, NECO, JAMB, BECE or Common Entrance results are entered.</p></div>
+{% else %}
+  {# ---------------------------------------------------------- toolbar #}
+  <div class="tr-card tr-bar">
+    <nav class="tr-exams" aria-label="Exam">
+      {% for k, label, group in t.exams %}
+      <a href="{{ url_for('results.analytics_trends', exam=k) }}" class="{{ 'on' if k == t.key }}" {% if k == t.key %}aria-current="page"{% endif %}>{{ label }}{% if group not in ('SSS3',) %}<small>{{ group }}</small>{% endif %}</a>
+      {% endfor %}
+    </nav>
+    {% if t.years|length > 1 %}
+    <form method="get" class="tr-cmp" aria-label="Years to compare">
+      <input type="hidden" name="exam" value="{{ t.key }}">
+      {% if t.years|select('lt', t.year_b)|list %}<label for="trA">Compare</label>
+      <select id="trA" name="a" data-autosubmit>{% for y in t.years|reverse if y < t.year_b %}<option value="{{ y }}" {% if y == t.year_a %}selected{% endif %}>{{ y }} · {{ t.counts[y] }} cand.</option>{% endfor %}</select>
+      <span class="vs">with</span>{% else %}<label for="trB">Year</label>{% endif %}
+      <select id="trB" name="b" data-autosubmit aria-label="Year">{% for y in t.years|reverse %}<option value="{{ y }}" {% if y == t.year_b %}selected{% endif %}>{{ y }} · {{ t.counts[y] }} cand.</option>{% endfor %}</select>
+    </form>
+    {% if t.year_a %}
+    {% set prev = (t.years|select('lt', t.year_b)|list) %}
+    {% set head = t.compare|selectattr('key', 'eq', t.head_key)|first %}
+    <div class="tr-quick tr-noprint">
+      {% if prev %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=prev[-1]) }}" class="{{ 'on' if t.year_a == prev[-1] }}">vs previous year</a>{% endif %}
+      {% if prev|length >= 3 %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=prev[-3]) }}" class="{{ 'on' if t.year_a == prev[-3] }}">vs 3 years ago</a>{% endif %}
+      {% if prev|length >= 2 %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=prev[0]) }}" class="{{ 'on' if t.year_a == prev[0] }}">vs first year</a>{% endif %}
+      {% if head and head.best and head.best[0] != t.year_b and head.best[0] in prev and head.best[0] not in (prev[-1], prev[0]) %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=head.best[0]) }}" class="{{ 'on' if t.year_a == head.best[0] }}">vs best year ({{ head.best[0] }})</a>{% endif %}
     </div>
-
-    <div class="card mb-4"><div class="card-body" style="overflow-x:auto;">
-        <h3 style="margin-top:0;">Per-subject credit rate by year</h3>
-        <table class="table" style="width:100%;"><thead><tr><th>Subject</th>{% for y in subject_trends.years %}<th>{{ y }}</th>{% endfor %}</tr></thead>
-          <tbody>{% for subj in subject_trends.subjects %}
-            <tr><td>{{ subj }}</td>{% for v in subject_trends.series[subj] %}<td>{{ (v ~ '%') if v is not none else '—' }}</td>{% endfor %}</tr>
-          {% endfor %}</tbody></table>
-    </div></div>
     {% endif %}
-{% else %}
-    <div class="card mb-4"><div class="card-body text-muted">No WAEC results recorded yet.</div></div>
-{% endif %}
+    {% endif %}
+  </div>
 
-<h2 class="section-title">JAMB / UTME</h2>
-{% if jamb.points %}
-    {{ bars(jamb.points, 'avg_score', 'Average UTME total score (out of 400)', '', 0.25) }}
-    {{ bars(jamb.points, 'above_200_pct', 'Candidates scoring 200 and above', '%') }}
-    <div class="card mb-4"><div class="card-body" style="overflow-x:auto;">
-        <table class="table" style="width:100%;">
-            <thead><tr><th>Year</th><th>Candidates</th><th>Average score</th><th>≥ 200</th><th>Best score</th></tr></thead>
-            <tbody>
-            {% for p in jamb.points %}
-                <tr><td>{{ p.year }}</td><td>{{ p.candidates }}</td><td>{{ p.avg_score }}</td>
-                    <td>{{ p.above_200 }} ({{ p.above_200_pct }}%)</td><td>{{ p.max_score }}</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div></div>
+{% if t.empty %}
+  <div class="tr-card tr-empty">No {{ t.label }} results yet.</div>
 {% else %}
-    <div class="card mb-4"><div class="card-body text-muted">No JAMB results recorded yet.</div></div>
+  {% set kpi_keys = ['benchmark_rate', 'core_rate', 'credit_rate', 'distinction_rate', 'fail_rate', 'candidates'] if t.kind == 'grade'
+                    else ['avg_score', 'above_200', 'above_250', 'below_160', 'top_score', 'candidates'] %}
+  {% set A, B = t.year_a, t.year_b %}
+  {% set short = {'benchmark_rate': 'Met benchmark', 'core_rate': 'Eng + Maths credit', 'credit_rate': 'Credit rate',
+                  'distinction_rate': 'Distinctions', 'fail_rate': 'Fail rate', 'candidates': 'Candidates',
+                  'avg_score': 'Average score', 'above_200': '200 and above', 'above_250': '250 and above',
+                  'below_160': 'Below 160', 'top_score': 'Top score'} %}
+
+  {# ---------------------------------------------------------- verdict #}
+  {% if t.verdict %}{% set v = t.verdict %}{% set h = v.head %}
+  <section class="tr-card tr-verdict {{ v.tone }}" aria-label="Summary">
+    <div class="ic"><i class="fas {{ 'fa-arrow-trend-up' if v.tone == 'good' else 'fa-arrow-trend-down' if v.tone == 'bad' else 'fa-scale-balanced' }}"></i></div>
+    <div>
+      <h3>{{ v.title }} — {{ t.label }} {{ B }} vs {{ A }}</h3>
+      {% if v.small %}<p>Only {{ v.n_a }} candidate{{ 's' if v.n_a != 1 }} in {{ A }} and {{ v.n_b }} in {{ B }} — with so few, a single pupil moves the rates by many points. Treat the figures below as indicative.</p>{% endif %}
+      {% if h %}<p><b>{{ h.label }}</b>{% if t.kind == 'grade' %} ({{ t.bench_label }}){% endif %}: {{ fmt(h.a, h.unit) }} → <b>{{ fmt(h.b, h.unit) }}</b>
+        ({{ signed(h.delta, h.unit) }}){% if h.sig %}, {{ h.sig.label|lower }}{% endif %}.
+        {% if h.rank == 1 and h.of > 1 %}Best of the {{ h.of }} years on record.{% elif h.rank and h.of > 1 %}{{ h.rank }}{{ 'st' if h.rank == 1 else 'nd' if h.rank == 2 else 'rd' if h.rank == 3 else 'th' }} best of {{ h.of }} years.{% endif %}
+        {% if h.streak >= 2 %}Improved {{ h.streak }} years in a row.{% endif %}</p>{% endif %}
+    </div>
+    <div class="tr-tally"><span class="g"><i class="fas fa-arrow-up"></i> {{ v.better }} better</span><span class="b"><i class="fas fa-arrow-down"></i> {{ v.worse }} worse</span><span>{{ v.same }} steady</span></div>
+  </section>
+  {% elif not A %}
+  <section class="tr-card tr-verdict" aria-label="Summary"><div class="ic"><i class="fas fa-circle-info"></i></div>
+    <div>{% if t.years|length > 1 %}<h3>{{ t.label }} {{ B }} — no earlier year to compare with</h3><p>{{ B }} is the earliest year on record. Pick a later year in <b>with</b> above to see what changed since.</p>
+      {% else %}<h3>{{ t.label }} {{ B }} — the first year on record</h3><p>Year-over-year comparisons appear once a second year of results is entered.</p>{% endif %}</div></section>
+  {% endif %}
+
+  {# ---------------------------------------------------------- KPI tiles #}
+  <section class="tr-kpis" aria-label="Key measures, {{ B }}">
+    {% for k in kpi_keys %}{% set r = t.compare|selectattr('key', 'eq', k)|first %}{% if r %}
+    <div class="tr-card tr-kpi">
+      <div class="l" title="{{ r.label }}">{{ short.get(r.key, r.label) }}</div>
+      <div class="row"><div class="v">{{ fmt(r.b, r.unit) }}</div>{{ spark(r.series, B, 72, 28) }}</div>
+      <div class="f">
+        {% if r.delta is not none %}<span class="tr-delta {{ r.mood }}"><i class="fas fa-{{ 'arrow-up' if r.delta > 0 else 'arrow-down' if r.delta < 0 else 'minus' }}"></i>{{ signed(r.delta, r.unit)|replace('+', '')|replace('−', '') }}</span>
+        <span>vs {{ A }}</span>{% endif %}
+        {% if r.rank and r.of > 1 %}<span class="tr-rank {{ 'top' if r.rank == 1 }}">#{{ r.rank }} of {{ r.of }} yrs</span>{% endif %}
+      </div>
+    </div>{% endif %}{% endfor %}
+  </section>
+
+  {# ---------------------------------------------------------- trend + actions #}
+  <div class="tr-two">
+    <section class="tr-card">
+      <header><h2><i class="fas fa-chart-line"></i> Trend across {{ t.years|length }} year{{ 's' if t.years|length != 1 }}</h2>
+        <div class="tr-metrics tr-noprint" role="tablist" aria-label="Measure">
+          {% for k in kpi_keys if k != 'candidates' %}{% set r = t.compare|selectattr('key', 'eq', k)|first %}{% if r %}
+          <button type="button" data-tr-metric="{{ k }}" class="{{ 'on' if loop.first }}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ r.label|replace('Met the benchmark', 'Benchmark')|replace('Credit in English and Maths', 'Eng + Maths')|replace(' (all papers)', '')|replace('Scored ', '') }}</button>
+          {% endif %}{% endfor %}
+        </div></header>
+      <div class="tr-body">
+        <div class="tr-chart"><canvas id="trChart" role="img" aria-label="Trend chart"></canvas></div>
+        {% if t.projection %}{% set p = t.projection %}
+        <div class="tr-proj"><i class="fas fa-wand-magic-sparkles"></i>
+          <div><b>{{ p.next_year }} projection{% if t.kind == 'grade' %} — benchmark rate{% else %} — average score{% endif %}:</b> about {{ fmt(p.projected, '%' if t.kind == 'grade' else '') }}
+            <span class="tr-muted">{% if (p.high - p.low) > (40 if t.kind == 'grade' else 120) %}— but the years so far vary too much to give a useful range ({{ p.years }} years, {{ p.confidence }} confidence).{% else %}(likely {{ fmt(p.low, '%' if t.kind == 'grade' else '') }}–{{ fmt(p.high, '%' if t.kind == 'grade' else '') }}; {{ p.confidence }} confidence from {{ p.years }} years).{% endif %} Straight-line trend — a guide, not a forecast.</span></div></div>
+        {% endif %}
+      </div>
+    </section>
+    <section class="tr-card">
+      <header><h2><i class="fas fa-list-check"></i> What it means</h2><p>Generated from the {{ B }}{% if A %} vs {{ A }}{% endif %} comparison.</p></header>
+      <div class="tr-body">
+        {% if t.actions %}<div class="tr-acth">Act on</div>
+        <ul class="tr-acts">{% for tone, icon, title, detail in t.actions %}<li class="{{ tone }}"><span class="i"><i class="fas {{ icon }}"></i></span><div><b>{{ title }}</b><span>{{ detail }}</span></div></li>{% endfor %}</ul>{% endif %}
+        {% if t.wins %}<div class="tr-acth" style="margin-top:.6rem">What's working</div>
+        <ul class="tr-acts">{% for tone, icon, title, detail in t.wins %}<li class="{{ tone }}"><span class="i"><i class="fas {{ icon }}"></i></span><div><b>{{ title }}</b><span>{{ detail }}</span></div></li>{% endfor %}</ul>{% endif %}
+        {% if not t.actions and not t.wins %}<p class="tr-muted" style="margin:0">{% if A %}No significant movements between {{ A }} and {{ B }}.{% else %}Needs a second year of results.{% endif %}</p>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  {# ---------------------------------------------------------- year-over-year table #}
+  <section class="tr-card">
+    <header><h2><i class="fas fa-table-columns"></i> Year-over-year comparison</h2>
+      <p>Every measure for {{ B }}{% if A %} against {{ A }}{% endif %}. <b>Real change</b> = unlikely to be chance (95% confidence); rank is among all {{ t.years|length }} year{{ 's' if t.years|length != 1 }}.</p></header>
+    <div class="tr-scroll"><table class="tr-table">
+      <thead><tr><th>Measure</th>{% if A %}<th>{{ A }}</th>{% endif %}<th>{{ B }}</th>{% if A %}<th>Change</th><th>Real?</th>{% endif %}<th class="tr-hide-sm" title="Average of up to 3 years before {{ B }}">Avg before {{ B }}</th><th class="tr-hide-sm">Best year</th><th>Rank</th><th>Trend</th></tr></thead>
+      <tbody>
+      {% set groups = [] %}{% for r in t.compare %}{% if r.group not in groups %}{% set _ = groups.append(r.group) %}{% endif %}{% endfor %}
+      {% for g in groups %}
+        <tr class="grp"><td colspan="9">{{ g }}</td></tr>
+        {% for r in t.compare if r.group == g %}
+        <tr>
+          <td class="m">{{ r.label }}{% if r.help %}<small>{{ r.help }}</small>{% endif %}</td>
+          {% if A %}<td>{{ fmt(r.a, r.unit) }}</td>{% endif %}
+          <td class="yb">{{ fmt(r.b, r.unit) }}</td>
+          {% if A %}<td>{% if r.delta is not none %}<span class="tr-delta {{ r.mood }}">{{ signed(r.delta, r.unit) }}</span>{% if r.rel is not none and r.unit != '%' and r.rel != 0 %}<div class="tr-xs tr-muted">{{ '%+.1f'|format(r.rel) }}%</div>{% endif %}{% else %}—{% endif %}</td>
+          <td>{{ sigbadge(r.sig) if r.sig else '' }}</td>{% endif %}
+          <td class="tr-hide-sm">{{ fmt(r.avg3, r.unit) }}</td>
+          <td class="tr-hide-sm">{% if r.best %}{{ fmt(r.best[1], r.unit) }} <span class="tr-muted tr-xs">{{ r.best[0] }}</span>{% else %}—{% endif %}</td>
+          <td>{% if r.rank and r.of > 1 %}<span class="tr-rank {{ 'top' if r.rank == 1 }}">{{ r.rank }} / {{ r.of }}</span>{% else %}—{% endif %}</td>
+          <td>{{ spark(r.series, B, 90, 24) }}</td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  {# ---------------------------------------------------------- grade shift + across years #}
+  <div class="tr-half">
+    {% if A and t.grade_shift %}
+    <section class="tr-card">
+      <header><h2><i class="fas fa-layer-group"></i> {{ 'Grade' if t.kind == 'grade' else 'Score band' }} shift, {{ A }} → {{ B }}</h2>
+        <p>{{ 'Share of all papers at each grade.' if t.kind == 'grade' else 'Share of candidates in each score band.' }} Grey = {{ A }}, colour = {{ B }}.</p></header>
+      <div class="tr-body"><div class="tr-shift">
+        {% set mx = [t.grade_shift|map(attribute='a')|map('default', 0)|max, t.grade_shift|map(attribute='b')|map('default', 0)|max, 1]|max %}
+        {% for g in t.grade_shift %}{% set d = ((g.b or 0) - (g.a or 0))|round(1) %}
+        {% set good = (d > 0) == (g.kind in ('distinction', 'credit')) %}
+        <div class="r"><span class="g">{{ g.grade }}</span>
+          <div class="bars"><div class="bar a"><i style="width:{{ ((g.a or 0) / mx * 100)|round(1) }}%"></i></div><div class="bar"><i class="k-{{ g.kind }}" style="width:{{ ((g.b or 0) / mx * 100)|round(1) }}%"></i></div></div>
+          <span class="d" style="color:{{ 'var(--text-muted)' if d|abs < 0.05 or g.kind == 'credit' else ('var(--tr-good)' if good else 'var(--tr-bad)') }}">{{ '%+.1f'|format(d) }}</span></div>
+        {% endfor %}
+      </div></div>
+    </section>
+    {% endif %}
+    <section class="tr-card">
+      <header><h2><i class="fas fa-chart-simple"></i> {{ 'Credits per candidate' if t.kind == 'grade' else 'Score bands' }} by year</h2>
+        <p>{{ 'How many credits each candidate got — the 5–6 and 7+ groups meet the credit count for most admissions.' if t.kind == 'grade' else 'Where candidates landed each year.' }}</p></header>
+      <div class="tr-body">
+        {% set bl = t.points[0].bands.keys()|list %}
+        {% set bk = ['fail', 'pass', 'credit', 'distinction'] if t.kind == 'grade' else ['fail', 'pass', 'credit', 'credit', 'distinction'] %}
+        <div class="tr-legend">{% for b in bl %}<span><i class="k-{{ bk[loop.index0] }}" style="{{ 'opacity:.6' if t.kind != 'grade' and loop.index0 == 2 }}"></i>{{ b }}</span>{% endfor %}</div>
+        <div class="tr-stack">
+          {% for p in t.points %}{% set tot = p.bands.values()|sum or 1 %}
+          <div class="r {{ 'on' if p.year == B }}"><span class="yr">{{ p.year }}</span>
+            <div class="s" title="{{ p.year }}: {% for b in bl %}{{ b }} {{ p.bands[b] }}{{ ', ' if not loop.last }}{% endfor %}">
+              {% for b in bl %}{% set w = p.bands[b] / tot * 100 %}<i class="k-{{ bk[loop.index0] }}" style="width:{{ w|round(1) }}%;{{ 'opacity:.6' if t.kind != 'grade' and loop.index0 == 2 }}">{{ (w|round|int ~ '%') if w >= 9 }}</i>{% endfor %}
+            </div></div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    {% if not A %}<section class="tr-card"><div class="tr-empty">Grade shift appears with a second year of results.</div></section>{% endif %}
+  </div>
+
+  {# ---------------------------------------------------------- subjects #}
+  {% if t.subjects %}
+  <section class="tr-card" id="trSubjects">
+    <header><h2><i class="fas fa-book-open"></i> Subjects{% if A %}, {{ A }} → {{ B }}{% endif %}</h2>
+      <div class="tr-filters tr-noprint" role="group" aria-label="Show">
+        <button type="button" class="on" data-tr-sf="all">All ({{ t.subjects|length }})</button>
+        {% if A %}<button type="button" data-tr-sf="up">Improved ({{ t.subjects|selectattr('delta')|selectattr('delta', 'gt', 0)|list|length }})</button>
+        <button type="button" data-tr-sf="down">Declined ({{ t.subjects|selectattr('delta')|selectattr('delta', 'lt', 0)|list|length }})</button>
+        <button type="button" data-tr-sf="real">Real changes</button>{% endif %}
+        <button type="button" data-tr-sf="core">Core</button>
+      </div>
+      <p>{{ 'Credit rate (credit or better)' if t.kind == 'grade' else 'Share scoring 50+ in the paper' }} per subject; the coloured cells are every year on record ({{ t.years|join(', ') }}).</p></header>
+    <div class="tr-scroll"><table class="tr-table">
+      <thead><tr><th>Subject</th>{% if A %}<th>{{ A }}</th>{% endif %}<th>{{ B }}</th>{% if A %}<th>Change</th><th>Real?</th>{% endif %}
+        {% if t.kind == 'grade' %}<th class="tr-hide-sm">Avg pts {{ B }}</th><th class="tr-hide-sm">Fail {{ B }}</th>{% else %}<th class="tr-hide-sm">Avg {{ B }}</th>{% endif %}
+        <th class="tr-hide-sm">Papers</th><th>History</th><th>Trend</th></tr></thead>
+      <tbody>
+      {% for s in t.subjects %}
+        <tr data-tr-s="{{ 'up' if (s.delta or 0) > 0 else 'down' if (s.delta or 0) < 0 else 'flat' }}{{ ' real' if s.sig == 'Real change' }}{{ ' core' if s.core }}">
+          <td class="m"><b>{{ s.subject }}</b>{% if s.core %}<span class="tr-core">CORE</span>{% endif %}</td>
+          {% if A %}<td>{{ fmt(s.a, '%') }}</td>{% endif %}
+          <td class="yb">{{ fmt(s.b, '%') }}</td>
+          {% if A %}<td>{% if s.delta is not none %}<span class="tr-delta {{ 'good' if s.delta > 0 else 'bad' if s.delta < 0 else '' }}">{{ signed(s.delta, '%') }}</span>{% else %}<span class="tr-muted tr-xs">{{ 'new' if s.a is none else 'not sat' }}</span>{% endif %}</td>
+          <td>{% if s.sig %}<span class="tr-sig {{ 'real' if s.sig == 'Real change' else 'small' if 'Small' in s.sig else 'chance' }}">{{ s.sig }}</span>{% endif %}</td>{% endif %}
+          {% if t.kind == 'grade' %}<td class="tr-hide-sm">{{ fmt(s.pts_b) }}</td><td class="tr-hide-sm">{{ fmt(s.fail_b, '%') }}</td>{% else %}<td class="tr-hide-sm">{{ fmt(s.avg_b) }}</td>{% endif %}
+          <td class="tr-hide-sm">{{ s.n_b or '—' }}</td>
+          <td><span class="tr-hist">{% for yr, v in s.history %}<i style="{{ heat(v) }}" title="{{ yr }}: {{ fmt(v, '%') }}">{{ v|round|int if v is not none else '·' }}</i>{% endfor %}</span></td>
+          <td><span class="tr-trend {{ s.trend }}">{{ {'rising': '↑ 3 yrs', 'falling': '↓ 3 yrs', 'mixed': 'Mixed', 'new': '1 year'}[s.trend] }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  {# ---------------------------------------------------------- gender + cohort #}
+  <div class="tr-half">
+    <section class="tr-card">
+      <header><h2><i class="fas fa-venus-mars"></i> Girls and boys</h2>
+        <p>{{ 'Share meeting the benchmark' if t.kind == 'grade' else 'Average score' }} each year.</p></header>
+      <div class="tr-body"><div class="tr-chart" style="height:220px"><canvas id="trGender" role="img" aria-label="Girls and boys trend"></canvas></div></div>
+    </section>
+    <section class="tr-card">
+      <header><h2><i class="fas fa-users"></i> Cohort size</h2><p>Candidates each year — rates from small cohorts swing more.</p></header>
+      <div class="tr-body"><div class="tr-chart" style="height:220px"><canvas id="trCohort" role="img" aria-label="Candidates per year"></canvas></div></div>
+    </section>
+  </div>
+
+  <p class="tr-note"><b>How to read this page.</b> {{ t.label }} is graded on its own scheme{% if t.kind == 'grade' %} — benchmark: {{ t.bench_label }}{% endif %}.
+    “Real change” uses a two-proportion test (or a test on the means for scores) at 95% confidence; “Could be chance” means the difference is within normal year-to-year variation for cohorts this size; cohorts under 10 are marked small.
+    Results are for the branch you are viewing.</p>
+{% endif %}
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if t.exams and not t.empty %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var years = {{ t.years|tojson }}, yb = {{ t.year_b|tojson }}, ya = {{ t.year_a|tojson }};
+  var rows = {{ t.compare|map(attribute='key')|list|tojson }};
+  var series = {}, units = {}, labels = {};
+  {% for r in t.compare %}series[{{ r.key|tojson }}] = {{ r.series|map(attribute=1)|list|tojson }}; units[{{ r.key|tojson }}] = {{ r.unit|tojson }}; labels[{{ r.key|tojson }}] = {{ r.label|tojson }};
+  {% endfor %}
+  var proj = {{ (t.projection or none)|tojson }}, headKey = {{ t.head_key|tojson }};
+  var css = getComputedStyle(document.querySelector('.tr'));
+  var c = function (n, f) { return (css.getPropertyValue(n) || '').trim() || f; };
+  var primary = c('--primary', '#0f766e'), muted = c('--text-muted', '#64748b'), grid = 'rgba(148,163,184,.22)';
+  if (!window.Chart) return;
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  Chart.defaults.color = muted;
+
+  function pointColors() { return years.map(function (y) { return y === yb ? primary : (y === ya ? c('--tr-a', '#94a3b8') : primary); }); }
+  function pointRadius() { return years.map(function (y) { return (y === yb || y === ya) ? 6 : 3.5; }); }
+
+  var chart, el = document.getElementById('trChart');
+  function draw(key) {
+    var unit = units[key], data = series[key];
+    var ds = [{ label: labels[key], data: data, borderColor: primary, backgroundColor: primary + '22', fill: true, tension: .3,
+                pointBackgroundColor: pointColors(), pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: pointRadius(), spanGaps: true }];
+    var xl = years.slice();
+    if (proj && key === headKey) {
+      xl = years.concat([proj.next_year]);
+      var pd = data.map(function () { return null; }); pd[pd.length - 1] = data[data.length - 1]; pd.push(proj.projected);
+      ds.push({ label: 'Projection', data: pd, borderColor: primary, borderDash: [5, 5], pointRadius: [0].concat(pd.slice(1).map(function (v, i) { return i === pd.length - 2 ? 5 : 0; })),
+                pointStyle: 'rectRot', fill: false, spanGaps: true });
+      ds[0].data = data.concat([null]);
+    }
+    var pct = unit === '%';
+    var cfg = { type: 'line', data: { labels: xl, datasets: ds },
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (x) { return x.dataset.label + ': ' + (x.parsed.y == null ? '—' : x.parsed.y + (pct ? '%' : '')); } } } },
+        scales: { y: { beginAtZero: pct || key === 'candidates', suggestedMax: pct ? 100 : undefined, grid: { color: grid }, ticks: { callback: function (v) { return v + (pct ? '%' : ''); } } },
+                  x: { grid: { display: false } } } } };
+    if (chart) chart.destroy();
+    chart = new Chart(el, cfg);
+  }
+  var btns = document.querySelectorAll('[data-tr-metric]');
+  if (btns.length) draw(btns[0].getAttribute('data-tr-metric'));
+  btns.forEach(function (b) { b.addEventListener('click', function () {
+    btns.forEach(function (o) { o.classList.toggle('on', o === b); o.setAttribute('aria-selected', o === b ? 'true' : 'false'); });
+    draw(b.getAttribute('data-tr-metric'));
+  }); });
+
+  // Girls & boys
+  var gKey = {{ ('girls_benchmark' if t.kind == 'grade' else 'girls_avg')|tojson }}, bKey = {{ ('boys_benchmark' if t.kind == 'grade' else 'boys_avg')|tojson }};
+  var gel = document.getElementById('trGender');
+  if (gel && series[gKey]) new Chart(gel, { type: 'line', data: { labels: years, datasets: [
+      { label: 'Girls', data: series[gKey], borderColor: '#db2777', backgroundColor: '#db2777', tension: .3, spanGaps: true },
+      { label: 'Boys', data: series[bKey], borderColor: '#2563eb', backgroundColor: '#2563eb', tension: .3, spanGaps: true }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
+      scales: { y: { beginAtZero: {{ 'true' if t.kind == 'grade' else 'false' }}, suggestedMax: {{ 100 if t.kind == 'grade' else 'undefined' }}, grid: { color: grid } }, x: { grid: { display: false } } } } });
+  var cel = document.getElementById('trCohort');
+  if (cel) new Chart(cel, { type: 'bar', data: { labels: years, datasets: [{ label: 'Candidates', data: series.candidates,
+      backgroundColor: years.map(function (y) { return y === yb ? primary : (y === ya ? c('--tr-a', '#94a3b8') : primary + '55'); }), borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } }, x: { grid: { display: false } } } } });
+
+  // Subject filter chips
+  var sb = document.querySelectorAll('[data-tr-sf]');
+  sb.forEach(function (b) { b.addEventListener('click', function () {
+    var f = b.getAttribute('data-tr-sf');
+    sb.forEach(function (o) { o.classList.toggle('on', o === b); });
+    document.querySelectorAll('#trSubjects tbody tr').forEach(function (tr) {
+      var tags = ' ' + tr.getAttribute('data-tr-s') + ' ';
+      tr.style.display = (f === 'all' || tags.indexOf(' ' + f + ' ') !== -1) ? '' : 'none';
+    });
+  }); });
+})();
+</script>
 {% endif %}
 {% endblock %}

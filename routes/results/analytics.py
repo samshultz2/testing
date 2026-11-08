@@ -774,43 +774,15 @@ def analytics_by_class():
 @results_bp.route('/analytics/trends')
 @login_required
 def analytics_trends():
-    """Cross-year external-exam trends: how the WAEC 5-credits-incl-core / credit
-    / F9 rates and the JAMB average & ≥200 rate move across every year on record.
-    Branch-scoped to the branch being viewed."""
+    """Exam Trends: every external exam across the years, with a year-over-year
+    comparison of any two years (each change tested for "real or chance"),
+    subject movement, grade shift, gender trend, a projection and a list of
+    what to act on. Branch-scoped to the branch being viewed."""
     from utils.branch_scope import viewing_branch_id
-    bid = viewing_branch_id()
-    waec = AcademicAnalytics.get_waec_multiyear_trends(bid)
-    jamb = AcademicAnalytics.get_jamb_multiyear_trends(bid)
-    subject_trends = AcademicAnalytics.get_waec_subject_trends(bid)
-
-    def _delta(points, key):
-        """Latest value, the change from the prior year, and the best year on
-        record for one series metric — the headline 'insights' derived from the
-        multi-year points."""
-        if not points:
-            return None
-        latest = points[-1]
-        prev = points[-2] if len(points) >= 2 else None
-        best = max(points, key=lambda p: p.get(key, 0))
-        return {
-            'latest': latest.get(key), 'year': latest.get('year'),
-            'delta': (round(latest.get(key, 0) - prev.get(key, 0), 1) if prev else None),
-            'prev_year': prev.get('year') if prev else None,
-            'best': best.get(key), 'best_year': best.get('year'),
-        }
-
-    insights = {
-        'waec_core': _delta(waec['points'], 'with_5_incl_core_pct'),
-        'waec_credit': _delta(waec['points'], 'credit_rate'),
-        'waec_f9': _delta(waec['points'], 'f9_rate'),
-        'jamb_avg': _delta(jamb['points'], 'avg_score'),
-        'jamb_200': _delta(jamb['points'], 'above_200_pct'),
-    }
-    top_movers = subject_trends['movers'][:5]
-    bottom_movers = list(reversed(subject_trends['movers'][-5:])) if subject_trends['movers'] else []
-    return render_template('results/analytics_trends.html', waec=waec, jamb=jamb,
-                           insights=insights, subject_trends=subject_trends,
-                           top_movers=top_movers, bottom_movers=bottom_movers)
+    from utils import exam_yoy
+    data = exam_yoy.build(request.args.get('exam', ''), viewing_branch_id(),
+                          request.args.get('a', type=int), request.args.get('b', type=int))
+    return render_template('results/analytics_trends.html', t=data)
 
 
 @results_bp.route('/analytics/watchlist')
