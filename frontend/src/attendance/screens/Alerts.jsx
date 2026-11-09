@@ -3,7 +3,7 @@ import { apiGet } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired } from '../../components/ui';
-import { Tiles, Card, Person, pctColor, pctTone } from '../kit';
+import { Tiles, Card, Person, pctColor, pctTone, fmtPct } from '../kit';
 
 // Read-only attendance alerts: students below a threshold, scoped to the
 // classes this user may access. Server-computed → needs the network.
@@ -69,7 +69,7 @@ export default function Alerts() {
                                 tone={a.status === 'critical' ? 'out' : 'half'}
                                 href={a.id ? `/attendance/app?student_id=${a.id}#/student` : undefined}
                                 right={<><span className="tr-bar"><i style={{ width: a.percentage + '%', background: pctColor(a.percentage) }} /></span>
-                                  <span className={'ak-pct ' + pctTone(a.percentage)}>{a.percentage}%</span></>} />))}
+                                  <span className={'ak-pct ' + pctTone(a.percentage)}>{fmtPct(a.percentage)}</span></>} />))}
                     </React.Fragment>
                   ))}
                 </ul>

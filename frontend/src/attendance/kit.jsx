@@ -37,6 +37,13 @@ export const prettyDate = (iso, long) => {
     : { weekday: 'short', day: 'numeric', month: 'short' });
 };
 export const initialsOf = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+// Attendance percentages: whole numbers as-is ("96%"), otherwise 2 dp ("96.43%").
+export const fmtNum = (v) => {
+  if (v == null || v === '' || Number.isNaN(Number(v))) return '—';
+  const r = Math.round(Number(v) * 100) / 100;
+  return Number.isInteger(r) ? String(r) : r.toFixed(2);
+};
+export const fmtPct = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? '—' : fmtNum(v) + '%');
 export const pctTone = (p) => (p == null ? '' : p >= 75 ? 'good' : p >= 50 ? 'warn' : 'bad');
 export const pctColor = (p) => (p >= 75 ? 'var(--success)' : p >= 50 ? 'var(--warning)' : 'var(--danger)');
 
@@ -165,10 +172,11 @@ export function Card({ icon, title, sub, action, children, className = '', flush
 }
 
 export function Ring({ pct, label = 'Rate', size = 96 }) {
-  const p = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  const raw = Math.max(0, Math.min(100, Number(pct) || 0));
+  const p = Math.round(raw);
   return (
-    <div className="ak-ring" style={{ '--p': p, '--c': pctColor(p), width: size, height: size }} role="img" aria-label={`${label} ${p}%`}>
-      <div><b>{p}%</b><small>{label}</small></div>
+    <div className="ak-ring" style={{ '--p': p, '--c': pctColor(p), width: size, height: size }} role="img" aria-label={`${label} ${fmtPct(raw)}`}>
+      <div><b>{fmtPct(raw)}</b><small>{label}</small></div>
     </div>
   );
 }
@@ -180,7 +188,7 @@ export function Meter({ label, value, max, pct, tone }) {
     <div className="ak-meter">
       <span className="ak-meter-l">{label}</span>
       <div className="ak-track"><i style={{ width: Math.max(0, Math.min(100, p)) + '%', background: tone || pctColor(p) }} /></div>
-      <b>{max != null ? `${value}/${max}` : `${Math.round(p)}%`}</b>
+      <b>{max != null ? `${value}/${max}` : fmtPct(p)}</b>
     </div>
   );
 }

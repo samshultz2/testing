@@ -3,7 +3,7 @@ import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Autocomplete, Spinner, EmptyState, ErrorState, Pill } from '../../components/ui';
-import { Tiles, Card, Ring, initialsOf, pctTone } from '../kit';
+import { Tiles, Card, Ring, initialsOf, pctTone, fmtPct } from '../kit';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STATUS_TONE = { present: 'var(--success)', late: 'var(--warning)', absent: 'var(--danger)', unmarked: 'var(--gray-200)' };
@@ -51,8 +51,8 @@ function TrendBars({ trend }) {
   return (
     <div className="att-trend" aria-label="Attendance percentage by term">
       {trend.map((t, i) => (
-        <div key={i} className="att-trend-col" title={`${t.label}: ${t.percentage}%`}>
-          <span className="att-trend-v">{t.percentage}%</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%',
+        <div key={i} className="att-trend-col" title={`${t.label}: ${fmtPct(t.percentage)}`}>
+          <span className="att-trend-v">{fmtPct(t.percentage)}</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%',
             background: t.percentage >= 75 ? 'var(--success)' : t.percentage >= 50 ? 'var(--warning)' : 'var(--danger)' }} />
           <div className="att-trend-lbl">{t.label}</div>
         </div>))}
@@ -130,7 +130,7 @@ export default function StudentProfile() {
                       <li key={t.enrollment_id} className="ak-person">
                         <span className="ak-pmain"><span className="ak-pname">{t.term} <span className="ak-dim">· {t.session}</span>
                           <small>{t.class} · {t.full_days} present · {t.late_days} late · {t.absent_days} absent</small></span></span>
-                        <span className={'ak-pct ' + pctTone(t.percentage)}>{t.percentage}%</span>
+                        <span className={'ak-pct ' + pctTone(t.percentage)}>{fmtPct(t.percentage)}</span>
                       </li>))}
                   </ul>)}
               </Card>
@@ -144,7 +144,7 @@ export default function StudentProfile() {
                           <strong>{iv.reason || 'Intervention'}</strong>
                           <Pill tone={iv.status === 'Resolved' ? 'green' : iv.status === 'Escalated' ? 'red' : 'amber'}>{iv.status}</Pill>
                         </div>
-                        <small className="ak-dim">Opened {iv.opened}{iv.opened_by ? ' by ' + iv.opened_by : ''}{iv.baseline != null ? ` · was ${iv.baseline}%` : ''}{iv.current != null ? ` → now ${iv.current}%` : ''}</small>
+                        <small className="ak-dim">Opened {iv.opened}{iv.opened_by ? ' by ' + iv.opened_by : ''}{iv.baseline != null ? ` · was ${fmtPct(iv.baseline)}` : ''}{iv.current != null ? ` → now ${fmtPct(iv.current)}` : ''}</small>
                         {iv.outcome && <small>Outcome: {iv.outcome}</small>}
                         {iv.notes.length > 0 && (
                           <ol className="iv2-tl">{iv.notes.map((n, i) => (

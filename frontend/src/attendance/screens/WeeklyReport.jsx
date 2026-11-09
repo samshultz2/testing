@@ -5,7 +5,7 @@ import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired } from '../../components/ui';
 import { withGroups, genderLabel } from '../roster';
 import { lastClass, rememberClass } from '../../lib/attprefs';
-import { Picker, ClassChips, WeekStepper, Tiles, Card, Ring, Meter, Dot, initialsOf, pctTone, pickInitialClass } from '../kit';
+import { Picker, ClassChips, WeekStepper, Tiles, Card, Ring, Meter, Dot, initialsOf, pctTone, pickInitialClass, fmtPct } from '../kit';
 
 // Read-only weekly attendance report — full parity with the Jinja weekly page:
 // attendance rate, student/school-day/roll-call counts, week totals (AM/PM/
@@ -95,7 +95,7 @@ export default function WeeklyReport() {
                   {withGroups(d.students,
                     (gender, first, gkey) => <div key={gkey} className="wg-ghead">{genderLabel(gender)}</div>,
                     (s) => {
-                      const p = maxEach ? Math.round(s.weekly_total / maxEach * 100) : 0;
+                      const p = maxEach ? s.weekly_total / maxEach * 100 : 0;
                       return (
                         <div key={s.student_id} className="wr-row" style={cols}>
                           <span className="wr-who">
@@ -107,7 +107,7 @@ export default function WeeklyReport() {
                               <Dot v={day.morning} label={`${day.day_name} AM`} /><Dot v={day.afternoon} label={`${day.day_name} PM`} />
                             </span>
                           ))}
-                          <span className={'c wr-tot ' + pctTone(p)}><b>{s.weekly_total}</b><small>{p}%</small></span>
+                          <span className={'c wr-tot ' + pctTone(p)}><b>{s.weekly_total}</b><small>{fmtPct(p)}</small></span>
                         </div>
                       );
                     })}

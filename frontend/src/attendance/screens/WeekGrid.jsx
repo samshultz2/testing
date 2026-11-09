@@ -5,7 +5,7 @@ import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
 import { withGroups, genderLabel } from '../roster';
 import { lastClass, rememberClass } from '../../lib/attprefs';
-import { Picker, ClassChips, WeekStepper, Seg, ActionBar, MoreMenu, usePhone, initialsOf, pickInitialClass } from '../kit';
+import { Picker, ClassChips, WeekStepper, Seg, ActionBar, MoreMenu, usePhone, initialsOf, pickInitialClass, fmtPct } from '../kit';
 
 const key = (aid, wid) => `week|${aid}|${wid}`;
 
@@ -96,9 +96,9 @@ export default function WeekGrid() {
     try {
       await apiPost('/attendance/api/week/mark', payload);
       const w = weeks.find((x) => String(x.id) === String(weekId));
-      const pct = totalMarks ? Math.round(presentMarks / totalMarks * 100) : 0;
+      const pct = fmtPct(totalMarks ? presentMarks / totalMarks * 100 : 0);
       setSavedSig(JSON.stringify(marks));
-      setToast({ tone: 'success', text: `Attendance saved — ${w ? 'Week ' + w.number : 'this week'}, ${d.days.length} day${d.days.length === 1 ? '' : 's'}, ${d.students.length} students (${pct}% present).` });
+      setToast({ tone: 'success', text: `Attendance saved — ${w ? 'Week ' + w.number : 'this week'}, ${d.days.length} day${d.days.length === 1 ? '' : 's'}, ${d.students.length} students (${pct} present).` });
     } catch (e) {
       if (isPermanent(e)) setToast({ tone: 'error', text: `Couldn’t save: ${e.message}` });
       else { await enqueue('/attendance/api/week/mark', payload); await sync.refresh(); setToast({ tone: 'warn', text: 'Offline — the week is queued, will sync on reconnect.' }); }
@@ -144,7 +144,7 @@ export default function WeekGrid() {
             </div>
             {editable ? (
               <div className="md-meters">
-                <div className="md-meter"><span>Present</span><div className="md-track"><i style={{ width: (totalMarks ? presentMarks / totalMarks * 100 : 0) + '%' }} /></div><b>{totalMarks ? Math.round(presentMarks / totalMarks * 100) : 0}%</b></div>
+                <div className="md-meter"><span>Present</span><div className="md-track"><i style={{ width: (totalMarks ? presentMarks / totalMarks * 100 : 0) + '%' }} /></div><b>{fmtPct(totalMarks ? presentMarks / totalMarks * 100 : 0)}</b></div>
               </div>
             ) : null}
           </div>
@@ -203,7 +203,7 @@ export default function WeekGrid() {
           )}
           {editable && (
             <ActionBar phone={phone}>
-              <div className="md-bar-count"><b>{totalMarks ? Math.round(presentMarks / totalMarks * 100) : 0}%</b> present this week</div>
+              <div className="md-bar-count"><b>{fmtPct(totalMarks ? presentMarks / totalMarks * 100 : 0)}</b> present this week</div>
               <button type="button" className="md-btn ghost" onClick={() => setAll(true)} title="Everyone present all week">
                 <i className="fas fa-check-double" aria-hidden="true" /><span> All present</span></button>
               <MoreMenu items={[{ icon: 'fa-user-xmark', label: 'Everyone absent all week', onClick: () => setAll(false) }]} />

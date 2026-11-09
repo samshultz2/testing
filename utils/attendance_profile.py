@@ -89,7 +89,7 @@ def _term_stats(enrollment, term_id, want_calendar=False):
             late_days += 1
         else:
             absent_days += 1
-    pct = round(present_sessions / total_opened * 100, 1) if total_opened else 0.0
+    pct = round(present_sessions / total_opened * 100, 2) if total_opened else 0.0
     out = {'present_sessions': present_sessions, 'total_opened': total_opened,
            'absent_sessions': total_opened - present_sessions,
            'school_days': len(school_days), 'full_days': full_days,
@@ -146,7 +146,7 @@ def bulk_term_percentages(student_ids, term_id):
                                          Attendance.date.in_(school_days)).all():
             if a.enrollment_id in present:
                 present[a.enrollment_id] += (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
-    return {sid: round(present[e.id] / total_opened * 100, 1)
+    return {sid: round(present[e.id] / total_opened * 100, 2)
             for sid, e in enr_by_student.items()}
 
 
@@ -190,7 +190,7 @@ def build_student_profile(student_id, focus_term_id=None):
     # Overall aggregates across all terms.
     tot_open = sum(r['total_opened'] for r in term_rows)
     tot_present = sum(r['present_sessions'] for r in term_rows)
-    overall_pct = round(tot_present / tot_open * 100, 1) if tot_open else 0.0
+    overall_pct = round(tot_present / tot_open * 100, 2) if tot_open else 0.0
     thresh = warning_threshold()
 
     # Focus term: the requested one, else the latest with data.

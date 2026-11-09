@@ -4,7 +4,7 @@ import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired, Banner } from '../../components/ui';
 import { withGroups, genderLabel } from '../roster';
-import { Picker, ClassChips, DateStepper, Seg, Tiles, Card, Person, Dot, prettyDate, pctColor } from '../kit';
+import { Picker, ClassChips, DateStepper, Seg, Tiles, Card, Person, Dot, prettyDate, pctColor, fmtPct } from '../kit';
 import { lastClass, recentClasses, rememberClass } from '../../lib/attprefs';
 
 function AbsenteesPanel({ assignmentId, date, className, ready, onNotify, notifying, canNotify }) {
@@ -93,13 +93,13 @@ export default function DailySummary() {
     [assignmentId, date, online, syncing]
   );
 
-  const pct = (present, total) => (total ? Math.round(present / total * 100) : 0);
+  const pct = (present, total) => (total ? present / total * 100 : 0);
   const d = state.data;
   const flag = (v) => v == null ? <Pill tone="gray">—</Pill>
     : v ? <Pill tone="green">Present</Pill> : <Pill tone="red">Absent</Pill>;
 
   const total = d ? d.total_students : 0;
-  const rateAm = d && total ? Math.round(d.morning_present / total * 100) : 0;
+  const rateAm = d && total ? d.morning_present / total * 100 : 0;
   const isAbs = (s) => s.morning_present === false || s.afternoon_present === false;
   const absentCount = d ? d.students.filter(isAbs).length : 0;
   const shown = d ? d.students.filter((s) => (show === 'absent' ? isAbs(s) : show === 'present' ? !isAbs(s) : true)) : [];
@@ -129,7 +129,7 @@ export default function DailySummary() {
                       <span className="d">{new Date(wd.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
                       <span className="n">{new Date(wd.date + 'T00:00:00').getDate()}</span>
                       <span className="ak-mini"><i style={{ width: p + '%', background: pctColor(p) }} /></span>
-                      <span className="p">{wd.total ? p + '%' : '—'}</span>
+                      <span className="p">{wd.total ? fmtPct(p) : '—'}</span>
                     </button>
                   );
                 })}
@@ -145,7 +145,7 @@ export default function DailySummary() {
             )}
 
             <Tiles items={[
-              { label: 'Attendance', value: rateAm + '%', sub: prettyDate(d.date), tone: total ? (rateAm >= 75 ? 'good' : rateAm >= 50 ? 'warn' : 'bad') : '' },
+              { label: 'Attendance', value: fmtPct(rateAm), sub: prettyDate(d.date), tone: total ? (rateAm >= 75 ? 'good' : rateAm >= 50 ? 'warn' : 'bad') : '' },
               { label: 'Morning', value: d.morning_present, unit: `/${total}`, sub: `${d.morning_absent} absent`, tone: d.morning_absent ? 'warn' : 'good' },
               { label: 'Afternoon', value: d.afternoon_present, unit: `/${total}`, sub: `${d.afternoon_absent} absent`, tone: d.afternoon_absent ? 'warn' : 'good' },
               { label: 'Students', value: total, sub: d.class_name },

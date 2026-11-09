@@ -99,7 +99,7 @@ def _row(iv, *, current=_UNSET, class_name=None, notes=None):
     if notes is None:
         notes = iv.notes.order_by(InterventionNote.created_at.desc()).all()
     base = iv.baseline_pct
-    delta = round((current - base), 1) if (current is not None and base is not None) else None
+    delta = round((current - base), 2) if (current is not None and base is not None) else None
     direction = 'flat'
     if delta is not None:
         direction = 'up' if delta >= IMPROVE_DELTA else ('down' if delta < 0 else 'flat')

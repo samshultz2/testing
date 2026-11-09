@@ -34,7 +34,7 @@ def invalidate_term(term_id):
 
 
 def _pct(present, opened):
-    return round(present / opened * 100, 1) if opened else 0.0
+    return round(present / opened * 100, 2) if opened else 0.0
 
 
 def _student_pct_map(caa_ids, week_ids, school_days_count):
@@ -218,7 +218,7 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
         for e in enrollments:
             if e.student_id in prev_by_student:
                 cur = _pct(present.get(e.id, 0), opened_per_student)
-                delta = round(cur - prev_by_student[e.student_id], 1)
+                delta = round(cur - prev_by_student[e.student_id], 2)
                 if delta > 0:
                     improved.append({'id': e.student.id, 'name': e.student.full_name,
                                      'class': caa_by_id[e.class_arm_assignment_id].display_name,

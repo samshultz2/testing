@@ -3,7 +3,7 @@ import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired } from '../../components/ui';
-import { Tiles, Card, Ring, Person, MoreMenu, pctTone } from '../kit';
+import { Tiles, Card, Ring, Person, MoreMenu, pctTone, fmtPct, fmtNum } from '../kit';
 
 const pctHex = (p) => (p >= 75 ? 'var(--success)' : p >= 50 ? 'var(--warning)' : 'var(--danger)');
 
@@ -17,7 +17,7 @@ function Bars({ rows, labelKey, valueKey }) {
           <div className="att-bar-lbl" title={r[labelKey]}>{r[labelKey]}</div>
           <div className="att-bar-track"><div className="att-bar-fill"
             style={{ width: Math.max(2, r[valueKey]) + '%', background: pctHex(r[valueKey]) }} /></div>
-          <div className="att-bar-val">{r[valueKey]}%</div>
+          <div className="att-bar-val">{fmtPct(r[valueKey])}</div>
         </div>))}
     </div>
   );
@@ -28,8 +28,8 @@ function ColumnChart({ rows }) {
   return (
     <div className="att-trend" aria-label="Attendance percentage trend">
       {rows.map((t, i) => (
-        <div key={i} className="att-trend-col" title={`${t.label}: ${t.percentage}%`}>
-          <span className="att-trend-v">{t.percentage}%</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%', background: pctHex(t.percentage) }} />
+        <div key={i} className="att-trend-col" title={`${t.label}: ${fmtPct(t.percentage)}`}>
+          <span className="att-trend-v">{fmtPct(t.percentage)}</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%', background: pctHex(t.percentage) }} />
           <div className="att-trend-lbl">{t.label}</div>
         </div>))}
     </div>
@@ -40,11 +40,11 @@ function HeatStrip({ rows }) {
   return (
     <div className="att-heat" role="img" aria-label="Attendance by weekday">
       {rows.map((r, i) => (
-        <div key={i} className="att-heat-cell" title={`${r.label}: ${r.percentage}%`}
+        <div key={i} className="att-heat-cell" title={`${r.label}: ${fmtPct(r.percentage)}`}
              style={{ background: r.percentage ? pctHex(r.percentage) : 'var(--gray-100,#f1f5f9)',
                       color: r.percentage ? '#fff' : 'inherit' }}>
           <div className="att-heat-day">{r.label}</div>
-          <div className="att-heat-pct">{r.percentage}%</div>
+          <div className="att-heat-pct">{fmtPct(r.percentage)}</div>
         </div>))}
     </div>
   );
@@ -128,7 +128,7 @@ export default function Analytics() {
               {dist.map((b) => (
                 <div key={b.tone} className={'ak-band ' + BAND_STYLE[b.tone]}>
                   <span className="n">{b.count}</span><span className="t">{b.title}</span>
-                  <span className="r">{b.range}{total ? ` · ${Math.round(b.count / total * 100)}%` : ''}</span>
+                  <span className="r">{b.range}{total ? ` · ${fmtPct(b.count / total * 100)}` : ''}</span>
                 </div>))}
             </div>
 
@@ -143,8 +143,8 @@ export default function Analytics() {
                 <Card icon="fa-arrow-trend-up" title="Most improved" sub={d.prev_term ? `vs ${d.prev_term}` : ''} flush>
                   <ul className="ak-people">
                     {d.most_improved.map((s) => (
-                      <Person key={s.id} name={s.name} sub={`${s.class} · ${s.from}% → ${s.to}%`} href={`/attendance/app?student_id=${s.id}#/student`}
-                              right={<span className="ak-pct good">+{s.delta}</span>} />))}
+                      <Person key={s.id} name={s.name} sub={`${s.class} · ${fmtPct(s.from)} → ${fmtPct(s.to)}`} href={`/attendance/app?student_id=${s.id}#/student`}
+                              right={<span className="ak-pct good">+{fmtNum(s.delta)}</span>} />))}
                   </ul>
                 </Card>)}
             </div>
@@ -165,7 +165,7 @@ export default function Analytics() {
                       {d.chronic_list.map((s) => (
                         <Person key={s.id + '|' + s.class} name={s.name} sub={`${s.class} · ${s.student_id}`} tone="out"
                                 href={`/attendance/app?student_id=${s.id}#/student`}
-                                right={<span className={'ak-pct ' + pctTone(s.percentage)}>{s.percentage}%</span>} />))}
+                                right={<span className={'ak-pct ' + pctTone(s.percentage)}>{fmtPct(s.percentage)}</span>} />))}
                     </ul>)}
                 {d.chronic_list.length > 0 && <p className="ak-foot">Notify parents drafts a message for you to review — nothing sends automatically.</p>}
               </Card>

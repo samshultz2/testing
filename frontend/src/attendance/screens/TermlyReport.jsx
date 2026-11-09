@@ -5,7 +5,7 @@ import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired } from '../../components/ui';
 import { withGroups, genderLabel } from '../roster';
 import { lastClass, rememberClass } from '../../lib/attprefs';
-import { Picker, ClassChips, Tiles, Card, Ring, Meter, Seg, initialsOf, pctColor, pctTone, usePhone, pickInitialClass } from '../kit';
+import { Picker, ClassChips, Tiles, Card, Ring, Meter, Seg, initialsOf, pctColor, pctTone, usePhone, pickInitialClass, fmtPct } from '../kit';
 
 const round1 = (n) => Math.round(n * 10) / 10;
 
@@ -70,8 +70,8 @@ export default function TermlyReport() {
   };
   let rows = d ? d.students.filter((s) => !band || bandOf(s) === band) : [];
   if (order !== 'roll') rows = rows.slice().sort((x, y) => (order === 'low' ? 1 : -1) * (x.termly_percentage - y.termly_percentage));
-  const amPct = maxSess > 0 ? round1((ct.total_morning / maxSess) * 100) : 0;
-  const pmPct = maxSess > 0 ? round1((ct.total_afternoon / maxSess) * 100) : 0;
+  const amPct = maxSess > 0 ? (ct.total_morning / maxSess) * 100 : 0;
+  const pmPct = maxSess > 0 ? (ct.total_afternoon / maxSess) * 100 : 0;
   const BAND_STYLE = { excellent: 'good', good: 'good2', fair: 'warn', poor: 'bad' };
 
   return (
@@ -130,7 +130,7 @@ export default function TermlyReport() {
                         <span className="ak-pname">{s.student_name}<small>AM {s.termly_morning} · PM {s.termly_afternoon} · {s.termly_total} sessions</small></span>
                       </span>
                       <span className="tr-bar"><i style={{ width: s.termly_percentage + '%', background: pctColor(s.termly_percentage) }} /></span>
-                      <b className="tr-pct">{s.termly_percentage}%</b>
+                      <b className="tr-pct">{fmtPct(s.termly_percentage)}</b>
                     </li>
                   ))}
                 </ul>
@@ -146,12 +146,12 @@ export default function TermlyReport() {
                             <td className="nm">{s.student_name}</td>
                             {s.weekly.map((w) => <td key={w.week_id}>{w.total}</td>)}
                             <td>{s.termly_morning}</td><td>{s.termly_afternoon}</td><td><b>{s.termly_total}</b></td>
-                            <td><span className={'ak-pct ' + pctTone(s.termly_percentage)}>{s.termly_percentage}%</span></td>
+                            <td><span className={'ak-pct ' + pctTone(s.termly_percentage)}>{fmtPct(s.termly_percentage)}</span></td>
                           </tr>
                         ))}
                     </tbody>
                     <tfoot><tr><td className="nm">Total</td>{d.weekly_totals.map((t, i) => <td key={i}>{t}</td>)}
-                      <td>{ct.total_morning}</td><td>{ct.total_afternoon}</td><td>{ct.total_attendance}</td><td>{ct.termly_percentage}%</td></tr></tfoot>
+                      <td>{ct.total_morning}</td><td>{ct.total_afternoon}</td><td>{ct.total_attendance}</td><td>{fmtPct(ct.termly_percentage)}</td></tr></tfoot>
                   </table>
                 </div>
               )}

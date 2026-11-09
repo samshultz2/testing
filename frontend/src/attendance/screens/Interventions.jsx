@@ -3,7 +3,7 @@ import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired, Pill } from '../../components/ui';
-import { Tiles, Seg, Person, Sheet, initialsOf, pctTone } from '../kit';
+import { Tiles, Seg, Person, Sheet, initialsOf, pctTone, fmtPct } from '../kit';
 
 const dirIcon = { up: '↑', down: '↓', flat: '→' };
 const dirTone = { up: 'green', down: 'red', flat: 'gray' };
@@ -52,9 +52,9 @@ function Case({ iv, act, onFollow }) {
         <Pill tone={iv.status === 'Escalated' ? 'red' : iv.status === 'Resolved' ? 'green' : 'amber'}>{iv.status}</Pill>
       </header>
       <div className="iv2-m">
-        <div><span>Was</span><b>{iv.baseline != null ? iv.baseline + '%' : '—'}</b></div>
+        <div><span>Was</span><b>{iv.baseline != null ? fmtPct(iv.baseline) : '—'}</b></div>
         <i className="fas fa-arrow-right" aria-hidden="true" />
-        <div><span>Now</span><b className={'ak-pct ' + pctTone(iv.current)}>{iv.current != null ? iv.current + '%' : '—'}</b></div>
+        <div><span>Now</span><b className={'ak-pct ' + pctTone(iv.current)}>{iv.current != null ? fmtPct(iv.current) : '—'}</b></div>
         {iv.delta != null && <span className={'iv2-d ' + (up ? 'good' : down ? 'bad' : '')}>
           <i className={'fas ' + (up ? 'fa-arrow-trend-up' : down ? 'fa-arrow-trend-down' : 'fa-minus')} aria-hidden="true" /> {iv.delta > 0 ? '+' : ''}{iv.delta}</span>}
       </div>
@@ -144,7 +144,7 @@ export default function Interventions() {
                       {d.recommendations.map((r) => (
                         <Person key={r.student_id} name={r.name} sub={`${r.class} · ${r.student_id_str}`} tone="out"
                                 href={`/attendance/app?student_id=${r.student_id}#/student`}
-                                right={<><span className={'ak-pct ' + pctTone(r.percentage)}>{r.percentage}%</span>
+                                right={<><span className={'ak-pct ' + pctTone(r.percentage)}>{fmtPct(r.percentage)}</span>
                                   <button type="button" className="ak-btn primary no-print" onClick={() => openFor(r.student_id)}><i className="fas fa-plus" aria-hidden="true" /><span> Open case</span></button></>} />))}
                     </ul>)}
               </div>)}
