@@ -314,6 +314,43 @@ _SUMMARY = [('waec_results', 'WAEC'), ('jamb_results', 'JAMB'),
             ('student_enrollments', 'Enrolments'), ('fee_payments', 'Payments')]
 
 
+# --- Pairs an admin has confirmed are different people ----------------------
+# Stored as "smallerId-largerId" strings in SchoolSettings, so a reviewed pair
+# is never offered as a duplicate again.
+_NOT_DUP_KEY = 'students_not_duplicates'
+
+
+def not_duplicate_pairs():
+    from models.models.settings import SchoolSettings
+    try:
+        return set(SchoolSettings.get(_NOT_DUP_KEY, []) or [])
+    except Exception:
+        return set()
+
+
+def _pair(a, b):
+    return '%d-%d' % (min(a, b), max(a, b))
+
+
+def mark_not_duplicates(ids):
+    """Remember every pair within ``ids`` as two different pupils."""
+    from models.models.settings import SchoolSettings
+    ids = sorted({int(i) for i in ids})
+    pairs = not_duplicate_pairs()
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            pairs.add(_pair(ids[i], ids[j]))
+    SchoolSettings.set(_NOT_DUP_KEY, sorted(pairs), value_type='json',
+                       description='Student pairs confirmed as different people')
+    return len(pairs)
+
+
+def clear_not_duplicates():
+    from models.models.settings import SchoolSettings
+    SchoolSettings.set(_NOT_DUP_KEY, [], value_type='json',
+                       description='Student pairs confirmed as different people')
+
+
 def find_groups(class_id=None, search=None, min_score=0.5):
     """Groups of 2+ active students that look like the same person:
 
@@ -346,8 +383,11 @@ def find_groups(class_id=None, search=None, min_score=0.5):
         return x
 
     pair_score = {}
+    dismissed = not_duplicate_pairs()
 
     def link(a, b, sc):
+        if _pair(a.id, b.id) in dismissed:      # an admin said these are two people
+            return
         pair_score[(min(a.id, b.id), max(a.id, b.id))] = max(sc, pair_score.get((min(a.id, b.id), max(a.id, b.id)), 0))
         parent[find(a.id)] = find(b.id)
 

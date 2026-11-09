@@ -129,6 +129,9 @@
       {% if c.help %}<div class="h">{{ c.help }}</div>{% endif %}
       {% if c['items'] %}<ul>{% for it in c['items'] %}<li>{{ it }}</li>{% endfor %}{% if c.count > c['items']|length %}<li>… and {{ c.count - c['items']|length }} more</li>{% endif %}</ul>{% endif %}
       {% if c.count and c.fix %}<a href="{{ c.fix }}" class="btn btn-sm btn-secondary mt-1">{{ c.fix_label }} <i class="fas fa-arrow-right"></i></a>{% endif %}
+      {% if c.count and c.fix_post %}<form method="post" action="{{ c.fix_post }}" class="mt-1" data-confirm="Take {{ c.count }} graduate(s) off this term's class registers? Their past attendance and scores are kept.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ request.full_path }}#health">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-user-minus"></i> {{ c.fix_label }}</button></form>{% endif %}
     </div>
   {% endfor %}
   </div>

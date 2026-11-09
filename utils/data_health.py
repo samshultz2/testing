@@ -11,9 +11,9 @@ from models import db, Student
 from utils import exam_rules as R
 
 
-def _check(key, label, items, *, severity='warn', fix=None, fix_label=None, help_text=''):
+def _check(key, label, items, *, severity='warn', fix=None, fix_label=None, help_text='', fix_post=None):
     return {'key': key, 'label': label, 'count': len(items), 'items': items[:25],
-            'severity': severity if items else 'ok', 'fix': fix, 'fix_label': fix_label,
+            'severity': severity if items else 'ok', 'fix': fix, 'fix_label': fix_label, 'fix_post': fix_post,
             'help': help_text}
 
 
@@ -25,15 +25,17 @@ def duplicate_pupils():
     return items
 
 
-def graduates_on_registers(bid=None):
-    """Graduates of an earlier session still enrolled in a current-term class."""
-    from models import StudentEnrollment, ClassArmAssignment, Term
+def graduate_enrolments(bid=None):
+    """(enrolment, student, class) for graduates of an earlier session who still
+    hold an active enrolment in a current-term class. Class registers hide
+    graduates, so these are invisible there yet still count as enrolled."""
+    from models import StudentEnrollment, ClassArmAssignment
     from utils.helpers import get_active_term
     term = get_active_term()
     if not term:
         return []
-    q = (db.session.query(Student, ClassArmAssignment)
-         .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+    q = (db.session.query(StudentEnrollment, Student, ClassArmAssignment)
+         .join(Student, StudentEnrollment.student_id == Student.id)
          .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
          .filter(ClassArmAssignment.term_id == term.id, StudentEnrollment.is_active == True,  # noqa: E712
                  Student.is_graduated == True,  # noqa: E712
@@ -41,7 +43,13 @@ def graduates_on_registers(bid=None):
                         Student.graduation_session_id != term.session_id)))
     if bid is not None:
         q = q.filter(Student.branch_id == bid)
-    return ['%s (%s) — %s' % (s.full_name, s.student_id, caa.display_name) for s, caa in q.all()]
+    return q.all()
+
+
+def graduates_on_registers(bid=None):
+    """Graduates of an earlier session still enrolled in a current-term class."""
+    return ['%s (%s) — %s' % (s.full_name, s.student_id, caa.display_name)
+            for _e, s, caa in graduate_enrolments(bid)]
 
 
 def results_without_enrolment(year, bid=None, model=None):
@@ -118,10 +126,15 @@ def run(year, bid=None, model=None):
     for fn in (
         lambda: _check('duplicates', 'Possible duplicate pupils', duplicate_pupils(),
                        fix=url_for('main.duplicate_merge'), fix_label='Review duplicates',
-                       help_text='The same pupil saved twice splits their results across two records.'),
+                       help_text='The same pupil saved twice splits their results across two records. '
+                                 'On the review page, merge real duplicates or mark a pair "Not the same person" '
+                                 'so it is never flagged again.'),
         lambda: _check('graduates', 'Graduates still on a current class register', graduates_on_registers(bid),
-                       severity='bad', fix=url_for('main.move_class_records'), fix_label='Move class records',
-                       help_text='Usually left behind by a merge of two different pupils.'),
+                       severity='bad', fix_post=url_for('main.graduates_close_enrolments'),
+                       fix_label='Take them off current registers',
+                       help_text='They are marked graduated, so class registers hide them — but an enrolment in this '
+                                 'term is still attached, so they still count as enrolled. Taking them off closes that '
+                                 'enrolment; their past attendance and scores are kept.'),
         lambda: _check('no_enrolment', '%s %s candidates with no class enrolment that session' % (exam, year),
                        results_without_enrolment(year, bid, model) if year else [],
                        help_text='They are left out of class, teacher and attendance analysis.'),

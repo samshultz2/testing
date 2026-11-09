@@ -1694,8 +1694,73 @@ def duplicate_merge():
     loose = request.args.get('loose') == '1'
     groups = find_groups(class_id=class_id, search=search, min_score=0.34 if loose else 0.5)
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level, SchoolClass.name).all()
+    from utils.student_merge import not_duplicate_pairs
     return render_template('students/duplicates.html', groups=groups, classes=classes,
-                           class_id=class_id, search=search, loose=loose)
+                           class_id=class_id, search=search, loose=loose,
+                           not_dup_count=len(not_duplicate_pairs()))
+
+
+@main_bp.route('/students/duplicates/not-same', methods=['POST'])
+@admin_required
+def duplicate_not_same():
+    """Mark a suggested group as different pupils, so it is never suggested
+    (or counted in Data health) again."""
+    from utils.student_merge import mark_not_duplicates
+    from utils.branch_scope import can_access_branch
+    from utils.audit import log_action
+    back = request.form.get('next') or url_for('main.duplicate_merge')
+    if not back.startswith('/'):
+        back = url_for('main.duplicate_merge')
+    try:
+        ids = [int(x) for x in (request.form.get('group') or '').split('-') if x]
+    except ValueError:
+        ids = []
+    studs = Student.query.filter(Student.id.in_(ids)).all() if len(ids) > 1 else []
+    if len(studs) < 2 or not all(can_access_branch(x.branch_id) for x in studs):
+        flash('Could not find those students.', 'warning')
+        return redirect(back)
+    mark_not_duplicates([x.id for x in studs])
+    names = ' / '.join(f'{x.full_name} ({x.student_id})' for x in studs)
+    log_action('students.not_duplicates', detail=names)
+    flash(f'Marked as different pupils — they won\'t be suggested again: {names}.', 'success')
+    return redirect(back)
+
+
+@main_bp.route('/students/duplicates/not-same/reset', methods=['POST'])
+@admin_required
+def duplicate_not_same_reset():
+    """Forget every 'not the same person' decision (they're suggested again)."""
+    from utils.student_merge import clear_not_duplicates
+    from utils.audit import log_action
+    clear_not_duplicates()
+    log_action('students.not_duplicates_reset', detail='all')
+    flash('Every pair you marked as different pupils will be suggested again.', 'info')
+    return redirect(url_for('main.duplicate_merge'))
+
+
+@main_bp.route('/students/graduates/close-enrolments', methods=['POST'])
+@admin_required
+def graduates_close_enrolments():
+    """Take graduated students off this term's class registers: their active
+    current-term enrolments are closed (not deleted — attendance and scores
+    stay attached for the record). Registers already hide graduates, so these
+    leftovers are invisible there but still count as enrolled."""
+    from utils.data_health import graduate_enrolments
+    from utils.audit import log_action
+    from utils.branch_scope import viewing_branch_id
+    bid = viewing_branch_id()
+    rows = graduate_enrolments(None if bid in (None, -1) else bid)
+    for e, _s, _caa in rows:
+        e.is_active = False
+    db.session.commit()
+    if rows:
+        log_action('students.graduates_off_register',
+                   detail='; '.join(f'{st.full_name} ({st.student_id}) — {caa.display_name}' for _e, st, caa in rows))
+        flash(f'Took {len(rows)} graduate(s) off the current class registers. Their past attendance and scores are kept.', 'success')
+    else:
+        flash('No graduates were on a current class register.', 'info')
+    back = request.form.get('next') or url_for('results.analytics_insights')
+    return redirect(back if back.startswith('/') else url_for('results.analytics_insights'))
 
 
 @main_bp.route('/students/move-records', methods=['GET', 'POST'])

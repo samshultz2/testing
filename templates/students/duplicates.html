@@ -5,7 +5,7 @@
 <style>
 .dup-group{border:1px solid var(--border-color);border-radius:var(--radius-md,10px);margin-bottom:.75rem;background:var(--bg-card);overflow:hidden}
 .dup-group.picked{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
-.dup-head{display:flex;gap:.6rem;align-items:center;padding:.55rem .8rem;background:var(--gray-50);border-bottom:1px solid var(--border-light)}
+.dup-head{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;padding:.55rem .8rem;background:var(--gray-50);border-bottom:1px solid var(--border-light)}
 .dup-head label{display:flex;gap:.5rem;align-items:center;margin:0;font-weight:600;cursor:pointer}
 .dup-members{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem;padding:.7rem .8rem}
 .dup-m{border:1px solid var(--border-light);border-radius:8px;padding:.55rem .7rem;display:flex;gap:.55rem;align-items:flex-start;cursor:pointer}
@@ -25,11 +25,17 @@
 </style>
 {% endblock %}
 {% block content %}
+<form method="post" action="{{ url_for('main.duplicate_not_same_reset') }}" id="dupResetForm" hidden
+      data-confirm="Show every pair you marked as different pupils as possible duplicates again?">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"></form>
 <div class="page-header">
   <div>
     <h1>Merge Duplicate Students</h1>
     <p class="text-muted text-sm">Students with the <strong>same surname</strong> whose other names are the closest match (capitals, spelling slips and a missing middle name are ignored — e.g. “ABDULWAHAB ILUEDO AKHTAR-OZOMOYA ISMAIL” and “Abdulwahab Ismail”). Brothers and sisters with different first names are not grouped. For each group choose the record to <strong>keep</strong> — everything saved for the others (WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees …) is moved onto it, any blank details (e.g. middle name) are copied across, and the other records are deleted.</p>
     <p class="text-sm mb-0">Merged two different pupils by mistake? <a href="{{ url_for('main.move_class_records') }}"><i class="fas fa-right-left"></i> Move their class records back</a> (attendance, scores and enrolment).</p>
+    <p class="text-sm mb-0 mt-1">Two different pupils with similar names? Press <strong>Not the same person</strong> on their group and it won't be suggested again.
+      {% if not_dup_count %}<span class="text-muted">· {{ not_dup_count }} pair(s) already marked as different —</span>
+      <button type="submit" form="dupResetForm" class="btn btn-link btn-sm" style="padding:0;vertical-align:baseline">show them again</button>{% endif %}</p>
   </div>
 </div>
 
@@ -70,6 +76,7 @@
       <label><input type="checkbox" name="group" value="{{ g.key }}" class="dup-pick"> Merge this group</label>
       <span class="text-muted text-sm">{{ g.members|length }} records · tick the one to keep</span>
       <span class="dup-tag {{ 'keep' if g.score >= 75 else 'caps' }}" style="margin-left:auto" title="How closely the names match">{{ g.score }}% name match</span>
+      <button type="submit" form="ns-{{ g.key }}" class="btn btn-sm btn-secondary dup-ns" title="These are two different pupils — stop suggesting them"><i class="fas fa-user-slash"></i> Not the same person</button>
     </div>
     {% if g.warnings %}<div class="dup-warn"><i class="fas fa-triangle-exclamation"></i> {{ g.warnings|join('; ') }} — they may be two different students with the same name. Only merge if you're sure it's one person.</div>{% endif %}
     <div class="dup-members">
@@ -98,6 +105,13 @@
     <span class="text-muted text-sm">The kept record keeps its own admission number. This cannot be undone.</span>
   </div>
 </form>
+{% for g in groups %}
+<form method="post" action="{{ url_for('main.duplicate_not_same') }}" id="ns-{{ g.key }}" hidden
+      data-confirm="Mark {{ g.members|map(attribute='student.full_name')|join(' and ') }} as different pupils? They won't be suggested as duplicates again.">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="group" value="{{ g.key }}">
+  <input type="hidden" name="next" value="{{ request.full_path }}">
+</form>
+{% endfor %}
 {% endif %}
 {% endblock %}
 

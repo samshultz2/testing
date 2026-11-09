@@ -304,3 +304,91 @@ def test_jss3_and_basic_insights(app, seeded):
     assert 'Common Entrance %d' % (YEAR - 3) in html and 'Intake cohorts' not in html
     dash = c.get('/jss3-exams/?body=federal&year=%d' % YEAR).get_data(as_text=True)
     assert 'board=jss3' in dash and 'Deeper insights' in dash
+
+
+def _admin_client(app):
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    return c
+
+
+def _form_token(c, url):
+    import re
+    html = c.get(url).get_data(as_text=True)
+    m = re.search(r'name="_csrf_token" value="([^"]+)"', html)
+    return m.group(1) if m else ''
+
+
+def test_not_the_same_person_hides_a_duplicate_pair_until_reset(app):
+    """'Not the same person' stops a pair being suggested (and counted in Data
+    health); resetting brings it back."""
+    from utils.student_merge import find_groups, clear_not_duplicates
+    tag = 'Dupx' + uuid.uuid4().hex[:4]
+    with app.app_context():
+        bid = Branch.get_default().id
+        a = Student(student_id='DPA' + uuid.uuid4().hex[:5], first_name='Chinedu', middle_name='Paul',
+                    surname=tag, gender='Male', branch_id=bid, is_active=True)
+        b = Student(student_id='DPB' + uuid.uuid4().hex[:5], first_name='Chinedu', surname=tag,
+                    gender='Male', branch_id=bid, is_active=True)
+        db.session.add_all([a, b]); db.session.commit()
+        ids = sorted([a.id, b.id])
+
+    def flagged():
+        from flask import session
+        with app.test_request_context():
+            session['role'] = 'super_admin'
+            return any(sorted(m['student'].id for m in g['members']) == ids for g in find_groups())
+    assert flagged()
+    c = _admin_client(app)
+    tok = _form_token(c, '/students/duplicates')
+    r = c.post('/students/duplicates/not-same', data={'_csrf_token': tok, 'group': '%d-%d' % tuple(ids)})
+    assert r.status_code in (302, 303)
+    assert not flagged()
+    with app.test_request_context():
+        from flask import session
+        session['role'] = 'super_admin'
+        from utils import data_health
+        assert not any(tag in x for x in data_health.duplicate_pupils())
+    page = c.get('/students/duplicates').get_data(as_text=True)
+    assert 'Not the same person' in page and 'already marked as different' in page
+    r = c.post('/students/duplicates/not-same/reset', data={'_csrf_token': tok})
+    assert r.status_code in (302, 303)
+    assert flagged()
+    with app.app_context():
+        clear_not_duplicates()
+
+
+def test_take_graduates_off_current_registers(app, seeded, monkeypatch):
+    """The Data-health button closes graduates' leftover current-term
+    enrolments (kept, just inactive) so they stop being flagged."""
+    import utils.helpers as H
+    from utils import data_health
+    with app.app_context():
+        sess = AcademicSession.query.filter_by(name='%d/%d' % (YEAR - 1, YEAR)).first()
+        term = Term.query.filter_by(session_id=sess.id).first()
+        term_id = term.id
+    monkeypatch.setattr(H, 'get_active_term', lambda: db.session.get(Term, term_id))
+    with app.app_context():
+        bid = Branch.get_default().id
+        old = AcademicSession(name='IX OLD2 %d' % next(_SEQ), is_active=False)
+        db.session.add(old); db.session.flush()
+        cls = SchoolClass(name='IXGCLS%d' % next(_SEQ), level=11)
+        arm = ClassArm(name='IXG%d' % next(_SEQ), is_active=True)
+        db.session.add_all([cls, arm]); db.session.flush()
+        caa = ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term_id, branch_id=bid)
+        db.session.add(caa); db.session.flush()
+        g = Student(student_id='IXO' + uuid.uuid4().hex[:5], first_name='Leftover', surname='Grad', gender='Female',
+                    branch_id=bid, is_active=True, is_graduated=True, graduation_session_id=old.id)
+        db.session.add(g); db.session.flush()
+        en = StudentEnrollment(student_id=g.id, class_arm_assignment_id=caa.id, is_active=True)
+        db.session.add(en); db.session.commit()
+        en_id = en.id
+        assert any('Leftover' in x for x in data_health.graduates_on_registers())
+    c = _admin_client(app)
+    tok = _form_token(c, '/students/duplicates')
+    r = c.post('/students/graduates/close-enrolments', data={'_csrf_token': tok})
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        e = db.session.get(StudentEnrollment, en_id)
+        assert e is not None and e.is_active is False          # closed, not deleted
+        assert not any('Leftover' in x for x in data_health.graduates_on_registers())
