@@ -1615,3 +1615,46 @@
 .bx-menu-pop.bx-sheet-pop.on{transform:none}
 .bx-menu-pop.bx-sheet-pop::before{content:"";display:block;width:40px;height:4px;border-radius:99px;background:var(--border-color);margin:.1rem auto .5rem}
 .bx-menu-pop.bx-sheet-pop a,.bx-menu-pop.bx-sheet-pop button{padding:.85rem .8rem;font-size:.95rem}
+/* Mock JAMB student progress */
+.mj-line{width:100%;height:auto;display:block}
+.mj-line .gl{stroke:var(--border-light,var(--border-color));stroke-width:1}
+.mj-line .tk{font-size:11px;fill:var(--text-muted)}
+.mj-line .tg{stroke:var(--primary);stroke-width:1.5;stroke-dasharray:6 5}
+.mj-line .tgl{font-size:11px;font-weight:700;fill:var(--primary)}
+.mj-line .ln{fill:none;stroke:var(--primary);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.mj-line .pt{fill:var(--bg-card);stroke:var(--primary);stroke-width:3}
+.mj-line .pv{font-size:12px;font-weight:800;fill:var(--text-primary)}
+.mj-pred-n{display:flex;align-items:center;gap:1rem}
+.mj-pred-n>b{font-size:2.6rem!important;line-height:1}
+.mj-pred-n div{display:flex;flex-direction:column;gap:.2rem;font-size:.88rem}
+.mj-conf{display:flex;flex-direction:column;gap:.25rem;margin-top:.9rem}
+.mj-conf small{color:var(--text-muted);font-size:.76rem}
+.mj-reco{margin:.8rem 0 0;font-size:.86rem;line-height:1.45;padding:.6rem .75rem;border-radius:12px;background:var(--gray-50,var(--gray-100));border-left:3px solid var(--primary)}
+.mj-subj td,.mj-subj th{padding:.5rem .6rem}
+.mj-no{width:32px;height:32px;border-radius:10px;font-size:.85rem}
+.mj-chg{font-weight:800;font-size:.85rem}
+/* Student predictions */
+.sp-swing{display:flex;gap:.6rem;align-items:flex-start;margin:0 1rem .6rem;padding:.6rem .8rem;border-radius:12px;font-size:.85rem;background:color-mix(in srgb,var(--warning) 12%,var(--bg-card));border:1px solid color-mix(in srgb,var(--warning) 30%,var(--bg-card))}
+.sp-swing i{color:#b45309;margin-top:.15rem}
+.sp-gbf{display:flex;flex-direction:column}
+.sp-gbf-r{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,2.2fr) 48px 64px;gap:.8rem;align-items:center;padding:.55rem 1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.sp-gbf-r .n{display:flex;flex-direction:column;min-width:0}
+.sp-gbf-r .n b{font-size:.9rem}.sp-gbf-r .n small{font-size:.74rem;color:var(--text-muted)}
+.sp-bar{display:flex;height:22px;border-radius:7px;overflow:hidden;background:var(--gray-100)}
+.sp-bar i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:.66rem;font-weight:800;color:#fff;background:var(--g-c)}
+.sp-bar i.a1,.sp-bar i.b2,.sp-bar i.b3{background:var(--g-d)}.sp-bar i.d7,.sp-bar i.e8{background:var(--g-p)}.sp-bar i.f9{background:var(--g-f)}
+.sp-bar i.b2{opacity:.85}.sp-bar i.b3{opacity:.7}.sp-bar i.c5{opacity:.85}.sp-bar i.c6{opacity:.7}.sp-bar i.e8{opacity:.8}
+.sp-p{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+.sp-p small{font-size:.66rem;color:var(--text-muted);font-weight:700;text-transform:uppercase}
+.sp-alt{margin-top:.8rem;font-size:.82rem;color:var(--text-secondary);padding-top:.7rem;border-top:1px dashed var(--border-color)}
+.sp-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;text-align:center}
+.sp-sum span{display:flex;flex-direction:column;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);padding:.5rem .2rem;border-radius:10px;background:var(--gray-50,var(--gray-100))}
+.sp-sum b{font-size:1.35rem;font-family:'Space Grotesk',sans-serif;color:var(--text-primary)}
+.sp-sum .good b{color:var(--success)}.sp-sum .bad b{color:var(--danger)}
+.sp-outlook{margin:.7rem 0;font-size:.85rem;font-weight:700}
+.sp-outlook.good{color:var(--success)}.sp-outlook.bad{color:var(--danger)}
+.sp-subs{display:flex;flex-direction:column}
+.sp-sub{display:flex;align-items:center;gap:.6rem;padding:.45rem 0;border-top:1px solid var(--border-light,var(--border-color))}
+.sp-sub .n{flex:1;display:flex;flex-direction:column;min-width:0}
+.sp-sub .n b{font-size:.88rem}.sp-sub .n small{font-size:.74rem;color:var(--text-muted)}
+@media (max-width:759px){.sp-gbf-r{grid-template-columns:minmax(0,1fr) 44px 56px;padding:.6rem .8rem}.sp-bar{grid-column:1/-1;grid-row:2}}

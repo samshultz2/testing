@@ -661,128 +661,127 @@ function ExportModal({ onClose, onGenerate, hasSubjects, spec }) {
 }
 
 // ---- Student progress ------------------------------------------------------
+// Score-over-mocks line chart (SVG, no library): JAMB bands, target line, points.
+function ScoreLine({ points, target }) {
+  const W = 640, H = 220, L = 34, R = 12, T = 12, B = 26;
+  const ys = points.map((x) => x.score).concat(target ? [target] : []);
+  const lo = Math.max(0, Math.floor((Math.min(...ys) - 30) / 50) * 50);
+  const hi = Math.min(400, Math.ceil((Math.max(...ys) + 30) / 50) * 50);
+  const x = (i) => L + (points.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (points.length - 1));
+  const y = (v) => T + (hi - v) / (hi - lo || 1) * (H - T - B);
+  const ticks = []; for (let v = lo; v <= hi; v += 50) ticks.push(v);
+  const bands = [[250, 400, 'var(--g-d)'], [200, 250, 'var(--g-c)'], [180, 200, 'var(--g-p)'], [0, 180, 'var(--g-f)']];
+  return (
+    <svg className="mj-line" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Mock JAMB score over time">
+      {bands.map(([a, b2, c]) => { const t = Math.min(hi, b2), f = Math.max(lo, a); return t > f ? <rect key={a} x={L} width={W - L - R} y={y(t)} height={y(f) - y(t)} fill={c} opacity=".07" /> : null; })}
+      {ticks.map((v) => <g key={v}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="gl" /><text x={L - 6} y={y(v) + 4} textAnchor="end" className="tk">{v}</text></g>)}
+      {target != null && target >= lo && target <= hi && <g><line x1={L} x2={W - R} y1={y(target)} y2={y(target)} className="tg" /><text x={W - R} y={y(target) - 5} textAnchor="end" className="tgl">Target {target}</text></g>}
+      <polyline points={points.map((p, i) => x(i) + ',' + y(p.score)).join(' ')} className="ln" />
+      {points.map((p, i) => <g key={i}><circle cx={x(i)} cy={y(p.score)} r="5" className="pt" /><text x={x(i)} y={y(p.score) - 10} textAnchor="middle" className="pv">{p.score}</text>
+        <text x={x(i)} y={H - 6} textAnchor="middle" className="tk">M{p.exam_number || i + 1}</text></g>)}
+    </svg>
+  );
+}
+
 function StudentProgress({ d }) {
   const nav = useNav();
-  const chartRef = useRef();
   const p = d.progress;
   const pred = d.prediction;
   const recs = d.recommendations;
   const s = d.student;
-
-  useEffect(() => {
-    if (!p || !p.progress.length || !chartRef.current || !window.Chart) return;
-    const scores = p.progress.map((x) => x.score);
-    const chart = new window.Chart(chartRef.current, {
-      type: 'line',
-      data: { labels: p.progress.map((x) => x.exam),
-        datasets: [{ label: 'Score', data: scores, borderColor: chartPalette().green, backgroundColor: chartPalette().fill,
-          borderWidth: 3, fill: true, tension: 0.3, pointRadius: 6, pointBackgroundColor: chartPalette().green }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-        scales: { y: { beginAtZero: false, min: Math.max(0, Math.min(...scores) - 50), max: Math.min(400, Math.max(...scores) + 50), grid: { color: 'rgba(0,0,0,0.05)' } },
-          x: { grid: { display: false } } } },
-    });
-    return () => chart.destroy();
-  }, [p]);
-
   const latest = p && p.progress.length ? p.progress[p.progress.length - 1] : null;
   const gap = s.jamb_target != null && p ? s.jamb_target - p.latest_score : null;
+  // Subject × mock matrix — which subjects are rising or slipping.
+  const subjNames = [];
+  (p ? p.progress : []).forEach((m) => (m.subjects || []).forEach((x) => { if (x && !subjNames.includes(x.name)) subjNames.push(x.name); }));
+  const subjRows = subjNames.map((nm) => {
+    const sc = p.progress.map((m) => { const f = (m.subjects || []).find((x) => x && x.name === nm); return f ? f.score : null; });
+    const got = sc.filter((v) => v != null);
+    return { nm, sc, last: got[got.length - 1], delta: got.length > 1 ? got[got.length - 1] - got[0] : null };
+  }).sort((a, b) => (a.last ?? 0) - (b.last ?? 0));
+  const weakest = subjRows[0];
+  const PRI = { critical: 'bad', high: 'bad', medium: 'mid', low: '', none: 'good' };
 
   return (
     <>
-      <div className="student-header">
-        <div className="student-avatar">{s.full_name[0]}</div>
-        <div className="student-info"><h1>{s.full_name}</h1><p>{s.student_id}{s.gender ? ` | ${s.gender}` : ''}</p></div>
-        <div style={{ marginLeft: 'auto' }}>
-          <select className="form-control" value={d.selected_session_id}
-                  onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
-            {d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-          </select>
-        </div>
-      </div>
+      <Head icon="fa-user-graduate" title={s.full_name} sub={[s.student_id, s.gender, 'Mock JAMB progress'].filter(Boolean).join(' · ')}>
+        <select className="mj-sel" aria-label="Session" value={d.selected_session_id}
+                onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
+          {d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <a href={d.urls.predictions} className="rs-btn primary"><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /><span className="rs-hide-sm">All predictions</span></a>
+      </Head>
       <MjNav d={d} active="" />
 
       {p ? (<>
-        <div className="stats-row">
-          <div className="stat-box highlight"><div className="value">{r1(p.average_score)}</div><div className="label">Average Score</div></div>
-          <div className="stat-box"><div className="value">{p.best_score}</div><div className="label">Best Score</div></div>
-          <div className="stat-box"><div className="value">{p.latest_score}</div><div className="label">Latest Score</div></div>
-          <div className="stat-box"><div className="value">{p.exam_count}</div><div className="label">Exams Taken</div></div>
+        {s.jamb_target != null && (
+          <div className={'bx-verdict ' + (gap <= 0 ? 'good' : gap <= 20 ? 'mid' : 'bad')}>
+            <i className={'fas ' + (gap <= 0 ? 'fa-circle-check' : 'fa-bullseye')} aria-hidden="true" />
+            <div><b>{gap <= 0 ? `Target met — ${-gap} above the ${s.jamb_target} target` : `${gap} points to go to reach the ${s.jamb_target} target`}</b>
+              <span>Latest mock {p.latest_score} · best {p.best_score}{pred ? ` · projected real JAMB ${pred.predicted_score}` : ''}</span></div>
+          </div>)}
+
+        <Tiles items={[
+          { label: 'Latest score', value: p.latest_score, unit: '/400', sub: latest && latest.change != null ? (latest.change > 0 ? '+' : '') + latest.change + ' vs previous mock' : 'first mock', tone: p.latest_score >= 250 ? 'good' : p.latest_score >= 200 ? '' : p.latest_score >= 180 ? 'mid' : 'bad' },
+          { label: 'Best score', value: p.best_score, unit: '/400' },
+          { label: 'Average', value: r1(p.average_score), unit: '/400', sub: p.exam_count + ' mock' + (p.exam_count === 1 ? '' : 's') + ' taken' },
+          pred && { label: 'Projected real JAMB', value: pred.predicted_score, sub: `likely ${pred.predicted_range.low}–${pred.predicted_range.high} · ${pred.confidence_level}% confidence`, tone: pred.predicted_score >= 200 ? 'good' : 'mid' },
+        ]} />
+
+        <div className="bx-two">
+          <section className="rs-card">
+            <div className="rs-card-h"><h3><i className="fas fa-chart-line" aria-hidden="true" /> Score progression</h3><small>shaded: 250+ · 200–249 · 180–199 · below 180</small></div>
+            <ScoreLine points={p.progress} target={s.jamb_target} />
+          </section>
+          {pred ? (
+            <section className="rs-card mj-pred">
+              <div className="rs-card-h"><h3><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Predicted real JAMB</h3><small>from {pred.mock_count} mock{pred.mock_count === 1 ? '' : 's'}</small></div>
+              <div className="mj-pred-n"><b className={'jx-total ' + jt(pred.predicted_score)}>{pred.predicted_score}</b>
+                <div><span>Expected range <b>{pred.predicted_range.low}–{pred.predicted_range.high}</b></span>
+                  <span className={pred.improvement_trend > 0 ? 'bx-good' : pred.improvement_trend < 0 ? 'bx-bad' : 'rs-muted'}>
+                    <i className={'fas fa-arrow-' + (pred.improvement_trend > 0 ? 'up' : pred.improvement_trend < 0 ? 'down' : 'right')} aria-hidden="true" /> {pred.improvement_trend > 0 ? '+' : ''}{pred.improvement_trend || 'Stable'} trend</span></div></div>
+              <div className="mj-conf"><span className="rs-meter good"><i style={{ width: pred.confidence_level + '%' }} /></span><small>{pred.confidence_level}% confidence — rises with each mock</small></div>
+              <p className="mj-reco">{pred.recommendation}</p>
+            </section>
+          ) : (
+            <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Prediction</h3></div>
+              <p className="rs-muted">A real-JAMB projection appears after this student sits more mocks.</p></section>
+          )}
         </div>
 
-        {s.jamb_target != null && (
-          <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div><strong><i aria-hidden="true" className="fas fa-bullseye" /> JAMB Target: {s.jamb_target}</strong>
-              <p className="text-muted mb-0" style={{ fontSize: 'var(--text-sm)' }}>Latest mock: {p.latest_score}</p></div>
-            <div style={{ textAlign: 'right' }}>
-              {gap <= 0 ? <span className="badge badge-success" style={{ fontSize: 'var(--text-base)' }}><i aria-hidden="true" className="fas fa-check" /> Target met (+{-gap})</span>
-                : <span className="badge badge-warning" style={{ fontSize: 'var(--text-base)' }}>{gap} to go</span>}
-            </div>
-          </div></div>
-        )}
+        <div className="bx-two">
+          {subjRows.length > 0 && (
+            <section className="rs-card flush">
+              <div className="rs-card-h pad"><h3><i className="fas fa-book" aria-hidden="true" /> Subjects across mocks</h3><small>weakest first · out of 100</small></div>
+              <div className="sl-tbl-wrap"><table className="sl-tbl mj-subj">
+                <thead><tr><th>Subject</th>{p.progress.map((m, i) => <th key={i} className="c">M{m.exam_number || i + 1}</th>)}<th className="r">Change</th></tr></thead>
+                <tbody>{subjRows.map((r) => (
+                  <tr key={r.nm}><td className="main">{r.nm}</td>
+                    {r.sc.map((v, i) => <td key={i} className="c">{v == null ? <span className="rs-muted">—</span> : <span className={'bx-g ' + js(v)}><b>{v}</b></span>}</td>)}
+                    <td className="r">{r.delta == null ? <span className="rs-muted">—</span> : <span className={r.delta > 0 ? 'bx-good' : r.delta < 0 ? 'bx-bad' : 'rs-muted'}>{r.delta > 0 ? '+' : ''}{r.delta}</span>}</td></tr>))}
+                </tbody></table></div>
+              {weakest && weakest.last != null && weakest.last < 60 && <p className="rs-muted bx-small bx-pad" style={{ paddingTop: 0 }}><b>{weakest.nm}</b> is the subject holding the total back — each 10 marks gained there adds 10 to the JAMB score.</p>}
+            </section>)}
 
-        {pred && (<>
-          <div className="prediction-card">
-            <h3 style={{ textAlign: 'center', margin: '0 0 0.5rem', fontSize: 'var(--text-md)', opacity: 0.9 }}><i aria-hidden="true" className="fas fa-crystal-ball" /> Predicted Real JAMB Score</h3>
-            <div className="prediction-score">{pred.predicted_score}</div>
-            <div className="prediction-range">Expected Range: {pred.predicted_range.low} - {pred.predicted_range.high}</div>
-            <div className="prediction-details">
-              <div className="prediction-detail"><div className="val">
-                <span className={'trend-badge ' + (pred.improvement_trend > 0 ? 'trend-improving' : pred.improvement_trend < 0 ? 'trend-declining' : 'trend-stable')}>
-                  {pred.improvement_trend > 0 ? <><i aria-hidden="true" className="fas fa-arrow-up" /> +{pred.improvement_trend}</>
-                    : pred.improvement_trend < 0 ? <><i aria-hidden="true" className="fas fa-arrow-down" /> {pred.improvement_trend}</>
-                    : <><i aria-hidden="true" className="fas fa-minus" /> Stable</>}
-                </span></div><div className="lbl">Trend</div></div>
-              <div className="prediction-detail"><div className="val">{pred.confidence_level}%</div><div className="lbl">Confidence</div></div>
-              <div className="prediction-detail"><div className="val">{pred.mock_count}</div><div className="lbl">Based on Exams</div></div>
-            </div>
-            <div style={{ textAlign: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: 'var(--text-sm)', opacity: 0.9 }}>
-              {pred.recommendation}</div>
-          </div>
-          <div className="card mb-3"><div className="card-body d-flex justify-content-between align-items-center">
-            <div><strong><i aria-hidden="true" className="fas fa-file-alt" /> Want to see predicted WAEC grades?</strong>
-              <p className="text-muted mb-0" style={{ fontSize: 'var(--text-sm)' }}>Based on your Mock JAMB subject scores</p></div>
-            <a href={d.urls.predictions} className="btn btn-primary"><i aria-hidden="true" className="fas fa-chart-line" /> View All Predictions</a>
-          </div></div>
-        </>)}
-
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Score Progression</h3></div>
-          <div className="card-body"><div className="progress-chart"><canvas ref={chartRef} /></div></div></div>
-
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-history" /> Exam History</h3></div>
-          <div className="card-body"><div className="exam-timeline">
-            {p.progress.map((x, i) => (
-              <div className="exam-item" key={i}>
-                <div className="exam-number">{x.exam_number}</div>
-                <div className="exam-details"><div className="exam-name">{x.exam}</div><div className="exam-date">{x.exam_date}</div></div>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="exam-score" style={{ color: scoreColor(x.score) }}>{x.score}</div>
-                  {x.change != null && <div className={'exam-change ' + (x.change > 0 ? 'positive' : x.change < 0 ? 'negative' : '')}>{x.change > 0 ? '+' : ''}{x.change}</div>}
-                </div>
-              </div>))}
-          </div></div></div>
-
-        {latest && latest.subjects && latest.subjects.length > 0 && (
-          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Latest Subject Scores</h3></div>
-            <div className="card-body"><div className="subject-breakdown">
-              {latest.subjects.map((sub, i) => (
-                <div className="subject-card" key={i}><div className="name">{sub.name}</div>
-                  <div className="score" style={{ color: sub.score >= 70 ? 'var(--success)' : sub.score >= 50 ? 'var(--warning)' : 'var(--danger)' }}>{sub.score}</div></div>))}
-            </div></div></div>
-        )}
+          <section className="rs-card flush">
+            <div className="rs-card-h pad"><h3><i className="fas fa-clock-rotate-left" aria-hidden="true" /> Exam history</h3><small>{p.exam_count}</small></div>
+            <div className="bx-rank">{[...p.progress].reverse().map((x, i) => (
+              <div className="bx-rank-row jx-rank" key={i}>
+                <span className="mw-no mj-no">{x.exam_number}</span>
+                <span className="n"><b>{x.exam}</b><small>{x.exam_date}</small></span>
+                <span>{x.change != null && <span className={'mj-chg ' + (x.change > 0 ? 'bx-good' : x.change < 0 ? 'bx-bad' : 'rs-muted')}>{x.change > 0 ? '+' : ''}{x.change}</span>}</span>
+                <span className={'jx-total ' + jt(x.score)}>{x.score}</span>
+              </div>))}</div>
+          </section>
+        </div>
 
         {recs && recs.length > 0 && (
-          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-lightbulb" /> Improvement Recommendations</h3></div>
-            <div className="card-body"><div className="recommendation-list">
-              {recs.map((rec, i) => (
-                <div className={'rec-item ' + rec.priority} key={i}>
-                  <div style={{ flex: 1 }}><div className="rec-subject">{rec.subject} <span className="rec-score">({rec.score})</span></div>
-                    <div className="rec-text">{rec.recommendation}</div></div>
-                </div>))}
-            </div></div></div>
-        )}
+          <section className="rs-card mw-find">
+            <div className="rs-card-h"><h3><i className="fas fa-lightbulb" aria-hidden="true" /> Improvement recommendations</h3></div>
+            <ul>{recs.map((rec, i) => <li key={i} className={PRI[rec.priority] || ''}><b>{rec.subject}</b> <span className="rs-muted">({rec.score})</span><br />{rec.recommendation}</li>)}</ul>
+          </section>)}
       </>) : (
-        <div className="card"><div className="card-body"><Empty icon="fa-chart-line" title="No Mock Exam Results">
-          <p>This student hasn't taken any mock exams yet</p></Empty></div></div>
+        <Blank icon="fa-chart-line" title="No mock exam results"><p>This student hasn't taken any mock exams in this session yet.</p></Blank>
       )}
     </>
   );
