@@ -2977,6 +2977,16 @@ hr { border-top-color: var(--border-color); }
     gap: var(--sp-2); width: max-content; max-width: 92vw; pointer-events: none;
 }
 .toast-stack > * { pointer-events: auto; }
+.toast-host {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(20px, env(safe-area-inset-bottom));
+    z-index: 3000; width: max-content; max-width: 92vw;
+}
+/* Phones: show toasts at the top, clear of the bottom nav and sticky save bars */
+@media (max-width: 759px) {
+    .toast-host, .toast-stack { bottom: auto; top: calc(10px + env(safe-area-inset-top)); }
+    .toast-stack { flex-direction: column; }
+}
 .toast-pop { animation: toast-pop 320ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 @keyframes toast-pop {
     from { opacity: 0; transform: translateY(10px) scale(0.96); }

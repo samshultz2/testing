@@ -26,6 +26,7 @@ export default function WeekGrid() {
   const [msg, setMsg] = useState(null);
   const [toast, setToast] = useState(null);   // floating save confirmation (no scroll)
   const [busy, setBusy] = useState(false);
+  const [savedSig, setSavedSig] = useState(null);   // marks as last saved → "Saved ✓" until edited
 
   const load = useCallback(async () => {
     if (!assignmentId || !weekId) { setState({ idle: true }); return; }
@@ -42,7 +43,7 @@ export default function WeekGrid() {
     }
   }, [assignmentId, weekId]);
 
-  useEffect(() => { setMsg(null); load(); }, [load]);
+  useEffect(() => { setMsg(null); setSavedSig(null); load(); }, [load]);
 
   useEffect(() => {
     const d = state.data;
@@ -93,8 +94,11 @@ export default function WeekGrid() {
     await cachePut(key(assignmentId, weekId), updated);
     setBusy(true);
     try {
-      const r = await apiPost('/attendance/api/week/mark', payload);
-      setToast({ tone: 'success', text: `Saved ${r.saved} entries for the week.` });
+      await apiPost('/attendance/api/week/mark', payload);
+      const w = weeks.find((x) => String(x.id) === String(weekId));
+      const pct = totalMarks ? Math.round(presentMarks / totalMarks * 100) : 0;
+      setSavedSig(JSON.stringify(marks));
+      setToast({ tone: 'success', text: `Attendance saved — ${w ? 'Week ' + w.number : 'this week'}, ${d.days.length} day${d.days.length === 1 ? '' : 's'}, ${d.students.length} students (${pct}% present).` });
     } catch (e) {
       if (isPermanent(e)) setToast({ tone: 'error', text: `Couldn’t save: ${e.message}` });
       else { await enqueue('/attendance/api/week/mark', payload); await sync.refresh(); setToast({ tone: 'warn', text: 'Offline — the week is queued, will sync on reconnect.' }); }
@@ -108,6 +112,7 @@ export default function WeekGrid() {
   const presentMarks = d ? d.students.reduce((t, s) => t + d.days.reduce((u, day) => {
     const c = cell(s.enrollment_id, day.date); return u + (c.am ? 1 : 0) + (c.pm ? 1 : 0); }, 0), 0) : 0;
   const editable = d && d.students.length && nDays;
+  const isSaved = !busy && savedSig !== null && savedSig === JSON.stringify(marks);
   const dayPresent = (date) => (d ? d.students.filter((s) => { const c = cell(s.enrollment_id, date); return c.am && c.pm; }).length : 0);
   const cols = { gridTemplateColumns: `minmax(0,1fr) repeat(${nDays}, ${phone ? 40 : 56}px)` };
 
@@ -202,8 +207,8 @@ export default function WeekGrid() {
               <button type="button" className="md-btn ghost" onClick={() => setAll(true)} title="Everyone present all week">
                 <i className="fas fa-check-double" aria-hidden="true" /><span> All present</span></button>
               <MoreMenu items={[{ icon: 'fa-user-xmark', label: 'Everyone absent all week', onClick: () => setAll(false) }]} />
-              <button type="button" className="md-btn save" onClick={save} disabled={busy}>
-                <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save week</button>
+              <button type="button" className={'md-btn save' + (isSaved ? ' is-saved' : '')} onClick={save} disabled={busy}>
+                <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : (isSaved ? 'fa-circle-check' : 'fa-check'))} aria-hidden="true" /> {isSaved ? 'Saved' : 'Save week'}</button>
             </ActionBar>
           )}
         </div>

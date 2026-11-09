@@ -112,6 +112,7 @@ export default function MarkDaily() {
   const [msg, setMsg] = useState(null);
   const [toast, setToast] = useState(null);   // floating save confirmation (no scroll)
   const [busy, setBusy] = useState(false);
+  const [savedSig, setSavedSig] = useState(null);   // marks as last saved → "Saved ✓" until edited
   const [weekCached, setWeekCached] = useState(false);
 
   // After an online load, quietly cache every weekday of that week so the
@@ -191,8 +192,11 @@ export default function MarkDaily() {
     await cachePut(key(assignmentId, date), updated);
     setBusy(true);
     try {
-      const r = await apiPost('/attendance/api/mark', payload);
-      setToast({ tone: 'success', text: `Saved ${r.count} student(s) — morning & afternoon.` });
+      await apiPost('/attendance/api/mark', payload);
+      const full = d.students.filter((s) => { const v = present[s.enrollment_id] || { am: true, pm: true }; return v.am && v.pm; }).length;
+      const day = date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }) : 'today';
+      setSavedSig(date + JSON.stringify(present));
+      setToast({ tone: 'success', text: `Attendance saved for ${day} — ${full} of ${d.students.length} present all day.` });
     } catch (e) {
       if (isPermanent(e)) { setToast({ tone: 'error', text: `Couldn’t save: ${e.message}` }); }
       else { await enqueue('/attendance/api/mark', payload); await sync.refresh(); setToast({ tone: 'warn', text: 'Offline — queued, will sync when you reconnect.' }); }
@@ -220,6 +224,7 @@ export default function MarkDaily() {
     ? `${d.date} was marked as ${d.holiday.type ? d.holiday.type.toLowerCase() : 'a holiday'}: ${d.holiday.reason}.`
     : d.weekend ? `${d.date} is a weekend.` : `${d.date} is not a school day.`);
   const canSave = d && d.week_id && d.students.length && !notSchoolDay && !busy;
+  const isSaved = !busy && savedSig !== null && savedSig === date + JSON.stringify(present);
 
   const phone = useMedia('(max-width: 759px)');
   const chipsRef = useRef(null);
@@ -253,8 +258,8 @@ export default function MarkDaily() {
         { icon: 'fa-clone', label: 'Copy previous school day', onClick: copyPrevious,
           disabled: !online || !d.week_id || busy, title: online ? 'Copy the previous school day’s marks' : 'Needs an internet connection' },
       ]} />
-      <button type="button" className="md-btn save" onClick={save} disabled={!canSave}>
-        <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save</button>
+      <button type="button" className={'md-btn save' + (isSaved ? ' is-saved' : '')} onClick={save} disabled={!canSave}>
+        <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : (isSaved ? 'fa-circle-check' : 'fa-check'))} aria-hidden="true" /> {isSaved ? 'Saved' : 'Save'}</button>
     </div>
   ) : null;
 

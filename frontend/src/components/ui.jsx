@@ -316,13 +316,9 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000, st
   const icon = { success: 'fa-circle-check', warn: 'fa-triangle-exclamation', error: 'fa-circle-xmark', info: 'fa-circle-info' }[tone] || 'fa-circle-check';
   // Errors/warnings interrupt (assertive alert); success/info wait politely.
   const urgent = tone === 'error' || tone === 'warn';
-  const pos = stacked ? {} : {
-    position: 'fixed', left: '50%', bottom: 'max(20px, env(safe-area-inset-bottom))',
-    transform: 'translateX(-50%)', zIndex: 3000,
-  };
-  return (
+  const body = (
     <div className="toast-pop" role={urgent ? 'alert' : 'status'} aria-live={urgent ? 'assertive' : 'polite'} style={{
-      ...pos, position: stacked ? 'relative' : pos.position, background: bg, color: fg,
+      position: 'relative', background: bg, color: fg,
       border: '1px solid ' + fg + '33', borderRadius: 10, padding: '.7rem 1rem',
       boxShadow: '0 8px 28px rgba(0,0,0,.18)', display: 'flex', gap: 10, alignItems: 'center',
       fontSize: 'var(--text-sm)', fontWeight: 600, maxWidth: '92vw', overflow: 'hidden' }}>
@@ -333,6 +329,12 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000, st
       {onClose && <span className="toast-progress" aria-hidden="true" style={{ animationDuration: duration + 'ms' }} />}
     </div>
   );
+  if (stacked) return body;
+  // Portalled onto <body>: the page wrapper animates with a transform, which
+  // would otherwise turn `position: fixed` into "fixed to the bottom of the
+  // page content" — off-screen until you scroll. The host does the
+  // positioning so the pop-in animation can't undo the centring.
+  return createPortal(<div className="toast-host">{body}</div>, document.body);
 }
 
 // Bottom-centre host that stacks multiple toasts. `items` = [{id, tone, text,
@@ -340,14 +342,13 @@ export function Toast({ tone = 'success', children, onClose, duration = 4000, st
 // message can keep using a bare <Toast>.
 export function ToastStack({ items, onDismiss }) {
   if (!items || !items.length) return null;
-  return (
+  return createPortal(
     <div className="toast-stack">
       {items.map((t) => (
         <Toast key={t.id} stacked tone={t.tone} duration={t.duration || 4000}
                onClose={() => onDismiss(t.id)}>{t.text}</Toast>
       ))}
-    </div>
-  );
+    </div>, document.body);
 }
 
 // Submit/action button that resolves an async handler into a spinner and then a
