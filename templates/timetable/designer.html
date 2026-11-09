@@ -3,6 +3,7 @@
 {% block breadcrumb %}<a href="{{ url_for('timetable.index') }}">Timetable</a> / <span>Designer</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
 /* ---- controls (screen only) ---- */
 .tt-controls{display:grid;gap:1rem}
@@ -359,19 +360,98 @@
     .no-print{display:none !important}
     @page{margin:12mm;size:landscape}
 }
+
+/* ===== Designer layout: steps on the left, live sheet on the right ===== */
+.td .td-wrap{display:grid;grid-template-columns:minmax(360px,440px) minmax(0,1fr);gap:1rem;align-items:start}
+.td .td-side{display:flex;flex-direction:column;gap:.9rem;min-width:0}
+.td .td-preview{position:sticky;top:12px;min-width:0;max-height:calc(100vh - 24px);overflow:auto;border-radius:16px;
+  background:repeating-conic-gradient(var(--gray-100) 0% 25%,transparent 0% 50%) 0 0/18px 18px,var(--gray-50,var(--bg-body));
+  border:1px solid var(--border-color);padding:0 1rem 1rem}
+.td .td-prev-h{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:.5rem;
+  margin:0 -1rem .8rem;padding:.6rem 1rem;background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(6px);
+  border-bottom:1px solid var(--border-color);font-weight:700;font-size:.86rem}
+.td .td-prev-h small{color:var(--text-muted);font-weight:500;font-size:.76rem}
+.td .tt-sheet{box-shadow:0 10px 30px rgba(15,23,42,.12)}
+.td-step{padding:1rem 1.05rem}
+.td-step-h{display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem}
+.td-step-h h3{margin:0;font-size:1rem}
+.td-n{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;
+  background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));color:var(--primary);flex:none}
+.td-hide{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.td-lays{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
+.td-lay{display:flex;gap:.6rem;align-items:flex-start;text-align:left;font:inherit;color:inherit;cursor:pointer;background:var(--bg-card);
+  border:1.5px solid var(--border-color);border-radius:12px;padding:.6rem .65rem;transition:border-color .12s,box-shadow .12s}
+.td-lay i{width:30px;height:30px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;font-size:.85rem;
+  background:var(--gray-100);color:var(--text-secondary)}
+.td-lay span{display:flex;flex-direction:column;min-width:0}
+.td-lay b{font-size:.84rem;line-height:1.2}.td-lay small{font-size:.72rem;color:var(--text-muted);line-height:1.3;margin-top:.1rem}
+.td-lay:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--border-color))}
+.td-lay.on{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent);background:color-mix(in srgb,var(--primary) 5%,var(--bg-card))}
+.td-lay.on i{background:var(--primary);color:#fff}
+.td-fields{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.td-f{display:flex;flex-direction:column;gap:.25rem;min-width:0;margin:0}
+.td-f>span{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.td-f>span em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:500}
+.td-f input,.td-f select{height:42px;border:1.5px solid var(--border-color);border-radius:11px;padding:0 .7rem;font:inherit;font-size:.9rem;background:var(--bg-card);color:var(--text-primary);width:100%}
+.td-f input:focus,.td-f select:focus{outline:none;border-color:var(--primary)}
+.td-fields>.td-f:first-child,.td-fields>.td-f:nth-child(2){grid-column:1/-1}
+.td-logo{align-self:end;margin-bottom:.6rem}
+.td-sub-h{margin:.9rem 0 .45rem;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.td-sub-h small{text-transform:none;letter-spacing:0;color:var(--text-primary);font-weight:700;margin-left:.3rem}
+.td-sws{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.4rem}
+.td-sw{display:flex;flex-direction:column;align-items:center;gap:.2rem;font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+.td-sw i{display:block;width:100%;aspect-ratio:1.35;border-radius:9px;background:var(--a);border:1.5px solid var(--border-color);position:relative;overflow:hidden}
+.td-sw i em{position:absolute;left:18%;right:18%;bottom:22%;height:16%;border-radius:3px;background:var(--b);opacity:.9}
+.td-sw span{font-size:.66rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.td-sw.on i{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 25%,transparent)}
+.td-sw.on span{color:var(--primary);font-weight:800}
+.td-save{display:flex;gap:.5rem;align-items:flex-end}
+.td-save .td-f{flex:1}
+.td .tt-save,.td .tt-sat{border-top:0;padding-top:0;margin-top:0}
+.td .tt-sat{padding-bottom:.8rem;margin-bottom:.8rem;border-bottom:1px dashed var(--border-color)}
+.td #savedCount.badge{background:var(--gray-100);color:var(--text-secondary);border-radius:999px;padding:.05rem .45rem;font-size:.72rem}
+.td .saved-panel{margin:0;background:var(--bg-card)}
+.td .bulk-box{border-radius:12px}
+.td .sess-card{border-radius:14px;background:var(--gray-50,var(--gray-100))}
+.td .row3{grid-template-columns:1fr!important}
+.td .form-label{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.td .form-control{border-radius:11px}
+.td-tabs{display:none}
+@media (max-width:1100px){.td .td-wrap{grid-template-columns:minmax(0,1fr)}.td .td-preview{position:static;max-height:none}}
+@media (max-width:1100px){
+  .td-tabs{display:inline-flex;align-self:flex-start}
+  .td .td-wrap.show-edit .td-preview{display:none}
+  .td .td-wrap.show-preview .td-side{display:none}
+}
+@media (max-width:759px){.td-lays{grid-template-columns:1fr}.td-sws{grid-template-columns:repeat(4,minmax(0,1fr))}.td-fields{grid-template-columns:1fr}.td .td-preview{padding:0 .5rem .5rem}.td .td-prev-h{margin:0 -.5rem .6rem}}
+@media print{.td .td-wrap{display:block}.td .td-preview{position:static;max-height:none;overflow:visible;border:0;background:none;padding:0}.td .td-wrap .td-preview{display:block!important}.td .tt-sheet{box-shadow:none}}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header no-print"><h1><i class="fas fa-drafting-compass"></i> Timetable Designer</h1></div>
-<p class="text-muted no-print" style="margin-top:-.5rem">Design a timetable (Saturday classes, holiday lessons, exams or a blank grid), print it, save it as PDF — or <b>save it with a name</b> to reload and edit later.</p>
+<div class="rs bx td">
+  <header class="rs-head no-print">
+    <span class="rs-head-ic"><i class="fas fa-drafting-compass" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Timetable Designer</h1><p>Saturday classes, holiday lessons, exams, rosters or a blank grid — print it, download it, or save it to edit later</p></div>
+    <div class="rs-head-a">
+      <button class="rs-btn ghost" type="button" data-call="toggleSaved"><i class="fas fa-folder-open" aria-hidden="true"></i><span class="rs-hide-sm">Saved</span> <span id="savedCount" class="badge">0</span></button>
+      <button class="rs-btn ghost" type="button" data-call="newDesign" id="newBtn" style="display:none"><i class="fas fa-file" aria-hidden="true"></i><span class="rs-hide-sm">New</span></button>
+      <button class="rs-btn primary" type="button" data-call="openExport"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></button>
+    </div>
+  </header>
+  <div id="savedPanel" class="saved-panel no-print" style="display:none"></div>
 
-<div class="card mb-3 no-print">
-    <div class="card-body tt-controls">
-        <div class="row3">
-            <div class="form-group">
-                <label class="form-label">Layout</label>
-                <select id="layout" class="form-control">
+  <div class="rs-seg td-tabs no-print" role="tablist" aria-label="View">
+    <button type="button" class="on" data-td-tab="edit"><i class="fas fa-sliders" aria-hidden="true"></i> Edit</button>
+    <button type="button" data-td-tab="preview"><i class="fas fa-eye" aria-hidden="true"></i> Preview</button>
+  </div>
+
+  <div class="td-wrap" id="tdWrap">
+    <div class="td-side no-print">
+      <section class="rs-card td-step">
+        <div class="td-step-h"><span class="td-n">1</span><h3>What are you making?</h3></div>
+        <div class="td-lays"><button type="button" class="td-lay" data-layout="saturday" aria-pressed="false"><i class="fas fa-calendar-week" aria-hidden="true"></i><span><b>Saturday classes</b><small>Weekly Saturday lessons, dated automatically</small></span></button><button type="button" class="td-lay" data-layout="holiday" aria-pressed="false"><i class="fas fa-umbrella-beach" aria-hidden="true"></i><span><b>Holiday lessons</b><small>Lessons over a holiday period</small></span></button><button type="button" class="td-lay" data-layout="exam" aria-pressed="false"><i class="fas fa-file-signature" aria-hidden="true"></i><span><b>Examination</b><small>Papers by date, time and venue</small></span></button><button type="button" class="td-lay" data-layout="grid" aria-pressed="false"><i class="fas fa-table-cells" aria-hidden="true"></i><span><b>Blank grid</b><small>Your own rows and columns</small></span></button><button type="button" class="td-lay" data-layout="list_table" aria-pressed="false"><i class="fas fa-list-ol" aria-hidden="true"></i><span><b>List / table</b><small>Auto-numbered rows, any columns</small></span></button><button type="button" class="td-lay" data-layout="roster_week" aria-pressed="false"><i class="fas fa-broom" aria-hidden="true"></i><span><b>Sweeping roster — weekly</b><small>One group sweeps all week</small></span></button><button type="button" class="td-lay" data-layout="roster_day" aria-pressed="false"><i class="fas fa-broom" aria-hidden="true"></i><span><b>Sweeping roster — daily</b><small>One group sweeps each day</small></span></button></div>
+        <div class="td-hide">                <select id="layout" class="form-control">
                     <option value="saturday">Saturday class timetable</option>
                     <option value="holiday">Holiday lesson timetable</option>
                     <option value="exam">Examination timetable</option>
@@ -379,11 +459,25 @@
                     <option value="list_table">Custom list / table (auto-numbered rows)</option>
                     <option value="roster_week">Sweeping roster — weekly (one group sweeps all week)</option>
                     <option value="roster_day">Sweeping roster — daily (one group sweeps that day)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Design theme</label>
-                <select id="theme" class="form-control">
+                </select></div>
+      </section>
+
+      <section class="rs-card td-step">
+        <div class="td-step-h"><span class="td-n">2</span><h3>Heading &amp; look</h3></div>
+        <div class="td-fields">
+          <label class="td-f"><span>School name</span><input id="school" value="{{ school_name }}" placeholder="School name"></label>
+          <label class="td-f"><span>Title</span><input id="title" placeholder="e.g. Saturday Class Timetable"></label>
+          <label class="td-f"><span>Subtitle <em>(optional)</em></span><input id="subtitle" placeholder="e.g. First Term 2025/2026 — SSS 3"></label>
+          <div class="td-f" id="orientWrap"><span>Table orientation</span>
+            <select id="orient" aria-label="Table orientation">
+              <option value="rows">Days as rows (time across the top)</option>
+              <option value="cols">Days as columns (time down the left)</option>
+            </select></div>
+          {% if school_logo_url %}<label class="rs-check td-logo"><input type="checkbox" id="showLogo" checked> Show school logo</label>{% endif %}
+        </div>
+        <div class="td-sub-h">Theme <small id="tdThemeName"></small></div>
+        <div class="td-sws"><button type="button" class="td-sw" data-theme-pick="classic" aria-pressed="false" title="Classic"><i style="--a:#f0f0f0;--b:#222"><em></em></i><span>Classic</span></button><button type="button" class="td-sw" data-theme-pick="print" aria-pressed="false" title="Print"><i style="--a:#e8e8e8;--b:#000"><em></em></i><span>Print</span></button><button type="button" class="td-sw" data-theme-pick="modern" aria-pressed="false" title="Modern"><i style="--a:#0f766e;--b:#fff"><em></em></i><span>Modern</span></button><button type="button" class="td-sw" data-theme-pick="colour" aria-pressed="false" title="Colourful"><i style="--a:#4338ca;--b:#fff"><em></em></i><span>Colourful</span></button><button type="button" class="td-sw" data-theme-pick="minimal" aria-pressed="false" title="Minimal"><i style="--a:#ffffff;--b:#111"><em></em></i><span>Minimal</span></button><button type="button" class="td-sw" data-theme-pick="elegant" aria-pressed="false" title="Elegant"><i style="--a:#111827;--b:#fbbf24"><em></em></i><span>Elegant</span></button><button type="button" class="td-sw" data-theme-pick="corporate" aria-pressed="false" title="Corporate"><i style="--a:#1e3a8a;--b:#fff"><em></em></i><span>Corporate</span></button><button type="button" class="td-sw" data-theme-pick="chalkboard" aria-pressed="false" title="Chalkboard"><i style="--a:#1b3a2b;--b:#fde68a"><em></em></i><span>Chalkboard</span></button><button type="button" class="td-sw" data-theme-pick="sunset" aria-pressed="false" title="Sunset"><i style="--a:#fb923c;--b:#7c2d12"><em></em></i><span>Sunset</span></button><button type="button" class="td-sw" data-theme-pick="ocean" aria-pressed="false" title="Ocean"><i style="--a:#0e7490;--b:#fff"><em></em></i><span>Ocean</span></button><button type="button" class="td-sw" data-theme-pick="rose" aria-pressed="false" title="Rose"><i style="--a:#9f1239;--b:#fff"><em></em></i><span>Rose</span></button><button type="button" class="td-sw" data-theme-pick="mono" aria-pressed="false" title="Mono"><i style="--a:#000;--b:#fff"><em></em></i><span>Mono</span></button><button type="button" class="td-sw" data-theme-pick="plain" aria-pressed="false" title="Plain"><i style="--a:#fff;--b:#000"><em></em></i><span>Plain</span></button><button type="button" class="td-sw" data-theme-pick="forest" aria-pressed="false" title="Forest"><i style="--a:#166534;--b:#fff"><em></em></i><span>Forest</span></button><button type="button" class="td-sw" data-theme-pick="royal" aria-pressed="false" title="Royal"><i style="--a:#5b21b6;--b:#fff"><em></em></i><span>Royal</span></button><button type="button" class="td-sw" data-theme-pick="slate" aria-pressed="false" title="Slate"><i style="--a:#475569;--b:#fff"><em></em></i><span>Slate</span></button><button type="button" class="td-sw" data-theme-pick="midnight" aria-pressed="false" title="Midnight"><i style="--a:#0f172a;--b:#93c5fd"><em></em></i><span>Midnight</span></button><button type="button" class="td-sw" data-theme-pick="coral" aria-pressed="false" title="Coral"><i style="--a:#f43f5e;--b:#fff"><em></em></i><span>Coral</span></button><button type="button" class="td-sw" data-theme-pick="emerald" aria-pressed="false" title="Emerald"><i style="--a:#047857;--b:#fff"><em></em></i><span>Emerald</span></button><button type="button" class="td-sw" data-theme-pick="burgundy" aria-pressed="false" title="Burgundy"><i style="--a:#7f1d1d;--b:#fde68a"><em></em></i><span>Burgundy</span></button><button type="button" class="td-sw" data-theme-pick="sky" aria-pressed="false" title="Sky"><i style="--a:#0ea5e9;--b:#fff"><em></em></i><span>Sky</span></button><button type="button" class="td-sw" data-theme-pick="amber" aria-pressed="false" title="Amber"><i style="--a:#d97706;--b:#fff"><em></em></i><span>Amber</span></button><button type="button" class="td-sw" data-theme-pick="plum" aria-pressed="false" title="Plum"><i style="--a:#7e22ce;--b:#fff"><em></em></i><span>Plum</span></button><button type="button" class="td-sw" data-theme-pick="graphite" aria-pressed="false" title="Graphite"><i style="--a:#1f2937;--b:#fff"><em></em></i><span>Graphite</span></button></div>
+        <div class="td-hide">                <select id="theme" class="form-control">
                     <option value="classic">Classic (bordered, serif)</option>
                     <option value="print">Print (bold sans, grey header, striped)</option>
                     <option value="modern" selected>Modern (teal header)</option>
@@ -408,60 +502,11 @@
                     <option value="amber">Amber (warm gold)</option>
                     <option value="plum">Plum (soft purple)</option>
                     <option value="graphite">Graphite (near-black, crisp)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">School name</label>
-                <input id="school" class="form-control" value="{{ school_name }}" placeholder="School name">
-            </div>
-            {% if school_logo_url %}
-            <div class="form-group" style="align-self:end">
-                <label class="form-label" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;margin-bottom:.6rem">
-                    <input type="checkbox" id="showLogo" checked style="width:auto;margin:0">
-                    Show school logo
-                </label>
-            </div>
-            {% endif %}
-            <div class="form-group" id="orientWrap">
-                <label class="form-label">Table orientation</label>
-                <select id="orient" class="form-control">
-                    <option value="rows">Days as rows (time across the top)</option>
-                    <option value="cols">Days as columns (time down the left)</option>
-                </select>
-            </div>
-        </div>
-        <div class="row3">
-            <div class="form-group">
-                <label class="form-label">Title</label>
-                <input id="title" class="form-control" placeholder="e.g. Saturday Class Timetable">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Subtitle <span class="text-muted">(optional)</span></label>
-                <input id="subtitle" class="form-control" placeholder="e.g. First Term 2025/2026 — SSS 3">
-            </div>
-            <div class="form-group" style="align-self:end">
-                <button class="btn btn-primary" data-call="openExport"><i class="fas fa-download"></i> Download (PDF / image)</button>
-            </div>
-        </div>
+                </select></div>
+      </section>
 
-        <!-- Save / load named designs -->
-        <div class="tt-save no-print">
-            <div class="row3" style="align-items:end">
-                <div class="form-group" style="margin:0">
-                    <label class="form-label">Save this timetable as</label>
-                    <input id="saveName" class="form-control" placeholder="e.g. Saturday Classes — First Term">
-                </div>
-                <div class="form-group" style="align-self:end;margin:0">
-                    <button class="btn btn-success" data-call="saveDesign"><i class="fas fa-save"></i> <span id="saveBtnLabel">Save</span></button>
-                    <button class="btn btn-light btn-sm" type="button" data-call="newDesign" id="newBtn" style="display:none"><i class="fas fa-file"></i> New</button>
-                </div>
-                <div class="form-group" style="align-self:end;margin:0">
-                    <button class="btn btn-secondary" type="button" data-call="toggleSaved"><i class="fas fa-folder-open"></i> Saved timetables <span id="savedCount" class="badge">0</span></button>
-                </div>
-            </div>
-            <div id="savedPanel" class="saved-panel" style="display:none"></div>
-        </div>
-
+      <section class="rs-card td-step">
+        <div class="td-step-h"><span class="td-n">3</span><h3>Content</h3></div>
         <!-- Saturday plan: first Saturday + lesson-free cascade (Saturday layout only) -->
         <div id="satPanel" class="tt-sat no-print" style="display:none">
             <div class="row3" style="align-items:end">
@@ -587,10 +632,20 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
                 </div>
             </details>
         </div>
-    </div>
-</div>
+      </section>
 
-<!-- The printable sheet -->
+      <section class="rs-card td-step tt-save">
+        <div class="td-step-h"><span class="td-n">4</span><h3>Save to edit later</h3></div>
+        <div class="td-save">
+          <label class="td-f"><span>Save this timetable as</span><input id="saveName" placeholder="e.g. Saturday Classes — First Term"></label>
+          <button class="rs-btn primary" type="button" data-call="saveDesign"><i class="fas fa-floppy-disk" aria-hidden="true"></i> <span id="saveBtnLabel">Save</span></button>
+        </div>
+      </section>
+    </div>
+
+    <div class="td-preview">
+      <div class="td-prev-h no-print"><span><i class="fas fa-eye" aria-hidden="true"></i> Live preview</span><small>updates as you type · this is what prints</small></div>
+      <!-- The printable sheet -->
 <p id="rosterTip" class="text-muted no-print" style="display:none;margin:.25rem 0 .5rem">
     <i class="fas fa-hand-pointer"></i> Click any box in the grid below and type <b>one student's name per box</b>. Set how many students per week/day with “Students per week / day” above. What you type prints and exports.
 </p>
@@ -606,6 +661,9 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
         </div>
     </div>
     <div id="pBody"></div>
+</div>
+    </div>
+  </div>
 </div>
 
 <datalist id="subjectList">
@@ -645,4 +703,35 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
 <script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script type="application/json" id="designer-config">{{ designer_config|tojson }}</script>
 <script src="{{ bundle_url('js/timetable-designer.js') }}" defer></script>
+<script nonce="{{ csp_nonce }}">
+/* Picture cards + swatches drive the (hidden) Layout / Theme selects the
+   designer script listens to; they re-sync after loading a saved design. */
+(function () {
+  var lay = document.getElementById('layout'), thm = document.getElementById('theme');
+  var wrap = document.getElementById('tdWrap');
+  function sync() {
+    document.querySelectorAll('.td-lay').forEach(function (b) { var on = b.dataset.layout === lay.value; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    document.querySelectorAll('.td-sw').forEach(function (b) { var on = b.dataset.themePick === thm.value; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    var o = thm.options[thm.selectedIndex]; document.getElementById('tdThemeName').textContent = o ? o.textContent : '';
+  }
+  function pick(sel, v) { if (sel.value === v) return; sel.value = v; sel.dispatchEvent(new Event('change', { bubbles: true })); sync(); }
+  document.querySelectorAll('.td-lay').forEach(function (b) { b.addEventListener('click', function () { pick(lay, b.dataset.layout); }); });
+  document.querySelectorAll('.td-sw').forEach(function (b) { b.addEventListener('click', function () { pick(thm, b.dataset.themePick); }); });
+  lay.addEventListener('change', sync); thm.addEventListener('change', sync);
+  // a saved design sets the selects in code — catch up after any click/load
+  document.addEventListener('click', function () { setTimeout(sync, 400); });
+  // Phone / tablet: Edit ↔ Preview
+  function tab(t) {
+    wrap.classList.toggle('show-edit', t === 'edit'); wrap.classList.toggle('show-preview', t === 'preview');
+    document.querySelectorAll('[data-td-tab]').forEach(function (b) { b.classList.toggle('on', b.dataset.tdTab === t); });
+  }
+  document.querySelectorAll('[data-td-tab]').forEach(function (b) { b.addEventListener('click', function () { tab(b.dataset.tdTab); }); });
+  tab('edit');
+  // Exporting captures the sheet — make sure it's on screen first (phones).
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('[data-call="openExport"]')) tab('preview');
+  }, true);
+  sync(); setTimeout(sync, 600);
+})();
+</script>
 {% endblock %}
