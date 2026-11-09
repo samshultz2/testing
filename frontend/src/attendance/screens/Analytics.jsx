@@ -3,7 +3,7 @@ import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
 import { Spinner, EmptyState, ErrorState, OfflineRequired } from '../../components/ui';
-import { Tiles, Card, Ring, Person, MoreMenu, pctTone, fmtPct, fmtNum } from '../kit';
+import { Tiles, Card, Ring, Person, MoreMenu, pctTone, fmtPct, fmtNum, UnmarkedNote } from '../kit';
 
 const pctHex = (p) => (p >= 75 ? 'var(--success)' : p >= 50 ? 'var(--warning)' : 'var(--danger)');
 
@@ -115,6 +115,8 @@ export default function Analytics() {
                 </div>
               </div>
             </div>
+
+            <UnmarkedNote classes={d.unmarked_classes} what="the analytics" />
 
             <Tiles items={[
               { label: 'Students', value: d.kpis.students },

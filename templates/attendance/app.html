@@ -295,6 +295,12 @@
 .md-btn.ghost{background:var(--bg-card);color:var(--text-secondary)}
 .md-btn.ghost:hover{border-color:var(--primary);color:var(--primary)}
 .md-btn.save{background:var(--primary);border-color:var(--primary);color:#fff;padding:0 1.4rem}
+.ak-unmarked{display:flex;align-items:center;gap:.75rem;padding:.75rem .9rem;margin:0 0 .9rem;border:1px solid color-mix(in srgb,var(--info,#2563eb) 30%,var(--border-color));border-radius:14px;background:color-mix(in srgb,var(--info,#2563eb) 6%,var(--bg-card))}
+.ak-unmarked>i{color:var(--info,#2563eb);font-size:1.05rem;flex:none}
+.ak-unmarked>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:.1rem;font-size:.84rem;line-height:1.35}
+.ak-unmarked span{color:var(--text-muted)}
+.ak-unmarked .ak-btn{flex:none}
+@media (max-width:759px){.ak-unmarked{flex-wrap:wrap}.ak-unmarked .ak-btn{width:100%;justify-content:center}}
 .md-btn.save.is-saved{background:var(--success,#16a34a);border-color:var(--success,#16a34a)}
 .md-btn:disabled{opacity:.55;cursor:not-allowed}
 .md-more{position:relative}

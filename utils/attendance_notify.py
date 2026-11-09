@@ -51,7 +51,9 @@ def absentee_student_ids(caa_ids, target_date):
 
 def _low_attendance_student_ids(term, caa_ids, threshold):
     """Students in the classes below ``threshold`` % for the term."""
-    from utils.attendance_profile import _term_school_days
+    from utils.attendance_profile import _term_school_days, marked_class_ids
+    marked = marked_class_ids(term.id, caa_ids)
+    caa_ids = [c for c in (caa_ids or []) if c in marked]   # untaken registers: no data, not low
     if not caa_ids:
         return []
     school_days = _term_school_days(term.id)

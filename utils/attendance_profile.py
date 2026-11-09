@@ -44,6 +44,26 @@ def _term_school_days(term_id, up_to=None):
     return days
 
 
+def marked_class_ids(term_id, caa_ids):
+    """The classes (of ``caa_ids``) that have marked attendance at least once in
+    the term. A class whose register has never been taken has no data — its
+    students aren't 0%, they're unknown — so every analytics / alert /
+    intervention consumer leaves those classes out rather than counting them
+    as absent all term."""
+    caa_ids = [c for c in (caa_ids or []) if c is not None]
+    if not caa_ids or not term_id:
+        return set()
+    week_ids = [w.id for w in Week.query.filter_by(term_id=term_id).all()]
+    if not week_ids:
+        return set()
+    rows = (db.session.query(StudentEnrollment.class_arm_assignment_id)
+            .join(Attendance, Attendance.enrollment_id == StudentEnrollment.id)
+            .filter(StudentEnrollment.class_arm_assignment_id.in_(caa_ids),
+                    Attendance.week_id.in_(week_ids))
+            .distinct().all())
+    return {r[0] for r in rows}
+
+
 def _status_of(rec):
     if rec is None:
         return 'absent'          # school day with no register row for this student
@@ -116,6 +136,8 @@ def student_term_percentage(student_id, term_id):
            .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
            .filter(StudentEnrollment.student_id == student_id,
                    ClassArmAssignment.term_id == term_id).first())
+    if enr and enr.class_arm_assignment_id not in marked_class_ids(term_id, [enr.class_arm_assignment_id]):
+        return None   # class register never taken this term — no data, not 0%
     if not enr:
         return None
     stats = _term_stats(enr, term_id)
@@ -140,6 +162,9 @@ def bulk_term_percentages(student_ids, term_id):
     enr_by_student = {}
     for e in enrollments:
         enr_by_student.setdefault(e.student_id, e)   # first match, same as student_term_percentage()'s .first()
+    # Students whose class has never marked attendance this term have no %.
+    marked = marked_class_ids(term_id, list({e.class_arm_assignment_id for e in enr_by_student.values()}))
+    enr_by_student = {sid: e for sid, e in enr_by_student.items() if e.class_arm_assignment_id in marked}
     present = {e.id: 0 for e in enr_by_student.values()}
     if present:
         for a in Attendance.query.filter(Attendance.enrollment_id.in_(list(present)),
@@ -174,12 +199,21 @@ def build_student_profile(student_id, focus_term_id=None):
         return (t.session_id or 0, t.term_number or 0) if t else (0, 0)
     enrollments.sort(key=_term_key, reverse=True)
 
+    marked_by_term = {}
+    for e in enrollments:
+        if e.class_arm_assignment:
+            marked_by_term.setdefault(e.class_arm_assignment.term_id, []).append(e.class_arm_assignment_id)
+    marked = set()
+    for tid, ids in marked_by_term.items():
+        marked |= marked_class_ids(tid, ids)
     term_rows = []
     for e in enrollments:
         caa = e.class_arm_assignment
         term = caa.term if caa else None
         if not term:
             continue
+        if caa.id not in marked:
+            continue   # register never taken for this class/term — no data
         stats = _term_stats(e, term.id)
         if stats is None:
             continue

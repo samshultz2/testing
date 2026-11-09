@@ -271,6 +271,24 @@ export function Sheet({ title, onClose, children }) {
 }
 
 // Present/absent dot for read-only reports (null = not marked).
+// Classes left out of an analysis because their register has never been taken
+// this term ("no data", not 0%). `classes` = list of names or {class, students}.
+export function UnmarkedNote({ classes, what = 'these figures' }) {
+  if (!classes || !classes.length) return null;
+  const names = classes.map((c) => (typeof c === 'string' ? c : c.class));
+  const n = names.length;
+  return (
+    <div className="ak-unmarked" role="note">
+      <i className="fas fa-circle-info" aria-hidden="true" />
+      <div>
+        <b>{n} class{n === 1 ? '' : 'es'} not included in {what}</b>
+        <span>No attendance has been marked for {n === 1 ? 'it' : 'them'} this term yet: {names.join(', ')}.</span>
+      </div>
+      <a className="ak-btn" href="#/mark"><i className="fas fa-user-check" aria-hidden="true" /><span> Mark now</span></a>
+    </div>
+  );
+}
+
 export function Dot({ v, label }) {
   const cls = v == null ? 'na' : v ? 'in' : 'out';
   return <span className={'ak-dot ' + cls} title={label} aria-label={label + ': ' + (v == null ? 'not marked' : v ? 'present' : 'absent')}>

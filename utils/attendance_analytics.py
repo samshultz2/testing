@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from models import (db, Attendance, StudentEnrollment, ClassArmAssignment, Term,
                     Week, Holiday, Branch)
-from utils.attendance_profile import _term_school_days, warning_threshold
+from utils.attendance_profile import _term_school_days, warning_threshold, marked_class_ids
 from utils import timeutil
 
 CRITICAL_PCT = 50.0
@@ -95,8 +95,22 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
     school_days = _term_school_days(term.id)
     n_days = len(school_days)
 
-    enrollments, present, opened_per_student = _student_pct_map(caa_ids, week_ids, n_days)
+    # Only classes that have marked attendance at least once this term count —
+    # an untaken register is "no data", not "everyone absent". The rest are
+    # listed separately so the office can chase them.
+    marked = marked_class_ids(term.id, caa_ids)
+    unmarked = sorted((c for c in accessible_caas if c.id not in marked), key=lambda c: c.display_name)
+    enrollments, present, opened_per_student = _student_pct_map(
+        [cid for cid in caa_ids if cid in marked], week_ids, n_days)
     caa_by_id = {c.id: c for c in accessible_caas}
+    unmarked_rows = []
+    if unmarked:
+        counts = dict(db.session.query(StudentEnrollment.class_arm_assignment_id, db.func.count(StudentEnrollment.id))
+                      .filter(StudentEnrollment.class_arm_assignment_id.in_([c.id for c in unmarked]),
+                              StudentEnrollment.is_active == True)  # noqa: E712
+                      .group_by(StudentEnrollment.class_arm_assignment_id).all())
+        unmarked_rows = [{'class': c.display_name, 'caa_id': c.id, 'students': counts.get(c.id, 0)}
+                         for c in unmarked if counts.get(c.id, 0)]
 
     # Per-class and per-student aggregation.
     class_present, class_students = {}, {}
@@ -230,7 +244,7 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
         'term': {'id': term.id, 'name': term.name},
         'kpis': {'overall': overall, 'students': n_students, 'classes': len(class_students),
                  'present_sessions': total_present, 'total_opened': total_opened,
-                 'chronic': len(chronic),
+                 'chronic': len(chronic), 'classes_unmarked': len(unmarked_rows),
                  'best_class': class_rank[0]['class'] if class_rank else '—',
                  'worst_class': class_rank[-1]['class'] if class_rank else '—',
                  'school_days': n_days},
@@ -238,6 +252,7 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
         'trend': trend, 'heatmap': heatmap, 'distribution': dist,
         'class_rank': class_rank, 'branch_rank': branch_rank,
         'chronic_list': chronic[:20], 'most_improved': improved,
+        'unmarked_classes': unmarked_rows,
         'prev_term': (prev.name if prev else None),
     }
     if use_cache:

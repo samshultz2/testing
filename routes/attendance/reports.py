@@ -388,7 +388,10 @@ def attendance_alerts():
         # Only enrolments in classes this user may access (branch + role scoped).
         accessible = filter_classes_for_user(
             ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
-        class_ids = [c.id for c in accessible]
+        # Classes that never marked attendance this term have no data — skip them.
+        from utils.attendance_profile import marked_class_ids, _term_school_days
+        _marked = marked_class_ids(term_id, [c.id for c in accessible])
+        class_ids = [c.id for c in accessible if c.id in _marked]
         enrollments = StudentEnrollment.query.filter(
             StudentEnrollment.class_arm_assignment_id.in_(class_ids or [-1]),
             StudentEnrollment.is_active == True,
@@ -404,14 +407,8 @@ def attendance_alerts():
             holidays = Holiday.query.filter_by(term_id=term_id).all()
             holiday_dates = set(h.date for h in holidays)
             
-            # Calculate total times opened
-            total_school_days = 0
-            for week in weeks:
-                current = week.start_date
-                while current <= week.end_date:
-                    if current.weekday() < 5 and current not in holiday_dates:
-                        total_school_days += 1
-                    current += timedelta(days=1)
+            # School days up to today only — future days aren't absences.
+            total_school_days = len(_term_school_days(term_id))
             
             total_times_opened = total_school_days * 2  # Morning + Afternoon
             
@@ -469,7 +466,9 @@ def export_alerts():
     # Get alerts (same logic as the page) — scoped to the user's accessible classes
     accessible = filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all(), form_only=True)
-    class_ids = [c.id for c in accessible]
+    from utils.attendance_profile import marked_class_ids, _term_school_days
+    _marked = marked_class_ids(term_id, [c.id for c in accessible])
+    class_ids = [c.id for c in accessible if c.id in _marked]   # skip never-marked classes
     enrollments = StudentEnrollment.query.filter(
         StudentEnrollment.class_arm_assignment_id.in_(class_ids or [-1]),
         StudentEnrollment.is_active == True
@@ -481,14 +480,7 @@ def export_alerts():
     holidays = Holiday.query.filter_by(term_id=term_id).all()
     holiday_dates = set(h.date for h in holidays)
     
-    total_school_days = 0
-    for week in weeks:
-        current = week.start_date
-        while current <= week.end_date:
-            if current.weekday() < 5 and current not in holiday_dates:
-                total_school_days += 1
-            current += timedelta(days=1)
-    
+    total_school_days = len(_term_school_days(term_id))   # up to today only
     total_times_opened = total_school_days * 2
     
     alerts = []

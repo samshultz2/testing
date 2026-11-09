@@ -509,18 +509,20 @@ def api_report_alerts():
     # Only classes this user may see, within the term.
     classes = filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
-    class_by_id = {c.id: c for c in classes}
+    # Classes that have never marked attendance this term have no data — they're
+    # listed separately instead of every student showing as 0%.
+    from utils.attendance_profile import _term_school_days, marked_class_ids
+    marked = marked_class_ids(term.id, [c.id for c in classes])
+    _with_students = {r[0] for r in db.session.query(StudentEnrollment.class_arm_assignment_id)
+                      .filter(StudentEnrollment.class_arm_assignment_id.in_([c.id for c in classes if c.id not in marked] or [-1]),
+                              StudentEnrollment.is_active == True).distinct().all()}  # noqa: E712
+    unmarked = sorted(c.display_name for c in classes if c.id in _with_students)
+    class_by_id = {c.id: c for c in classes if c.id in marked}
 
     weeks = Week.query.filter_by(term_id=term.id).all()
     week_ids = [w.id for w in weeks]
-    holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=term.id).all()}
-    total_school_days = 0
-    for week in weeks:
-        current = week.start_date
-        while current <= week.end_date:
-            if current.weekday() < 5 and current not in holiday_dates:
-                total_school_days += 1
-            current += timedelta(days=1)
+    # School days up to today only — a day that hasn't happened isn't an absence.
+    total_school_days = len(_term_school_days(term.id))
     total_times_opened = total_school_days * 2
 
     alerts = []
@@ -563,6 +565,7 @@ def api_report_alerts():
         'threshold': threshold,
         'total_times_opened': total_times_opened,
         'alerts': alerts,
+        'unmarked_classes': unmarked,
     })
 
 
