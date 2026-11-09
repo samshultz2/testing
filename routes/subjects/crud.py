@@ -23,12 +23,28 @@ def subjects_list():
             })
         return [{'name': k, 'subjects': v} for k, v in categories.items()]
 
+    # How many classes take each subject this term — flags subjects nobody teaches.
+    active = get_active_term()
+    used = {}
+    if active:
+        for sid, n in (db.session.query(ClassSubject.subject_id, db.func.count(db.distinct(ClassSubject.class_id)))
+                       .filter(ClassSubject.term_id == active.id, ClassSubject.is_active == True)  # noqa: E712
+                       .group_by(ClassSubject.subject_id).all()):
+            used[sid] = n
     return _render({
         'page': 'list', 'nav': _nav_urls(),
         'junior_categories': _grouped([s for s in subjects if s.for_junior]),
         'senior_categories': _grouped([s for s in subjects if s.for_senior]),
+        'subjects': [{'id': s.id, 'name': s.name, 'short_name': s.short_name or '',
+                      'category': s.category or 'General', 'for_junior': bool(s.for_junior),
+                      'for_senior': bool(s.for_senior), 'has_practical': bool(s.has_practical),
+                      'classes': used.get(s.id, 0),
+                      'edit_url': url_for('subjects.edit_subject', subject_id=s.id),
+                      'delete_url': url_for('subjects.delete_subject', subject_id=s.id)} for s in subjects],
+        'term_name': active.full_name if active else '',
         'urls': {'add': url_for('subjects.add_subject'),
-                 'bulk_add': url_for('subjects.bulk_add_subjects')},
+                 'bulk_add': url_for('subjects.bulk_add_subjects'),
+                 'class_subjects': url_for('subjects.class_subjects_list')},
     })
 
 
@@ -185,6 +201,21 @@ def class_subjects_list():
         
         class_subjects = query.join(Subject).order_by(Subject.name).all()
 
+    # Term-wide picture (independent of the class filter): subjects per class and
+    # how many still have no teacher — for the class chips and the summary tiles.
+    class_counts, class_missing, teachers = {}, {}, []
+    if term_id:
+        for cid, n, missing in (db.session.query(
+                ClassSubject.class_id, db.func.count(ClassSubject.id),
+                db.func.sum(db.case((db.func.coalesce(ClassSubject.teacher_name, '') == '', 1), else_=0)))
+                .filter(ClassSubject.term_id == term_id, ClassSubject.is_active == True)  # noqa: E712
+                .group_by(ClassSubject.class_id).all()):
+            class_counts[cid] = n
+            class_missing[cid] = int(missing or 0)
+    teachers = sorted({r[0].strip() for r in db.session.query(ClassSubject.teacher_name)
+                       .filter(ClassSubject.teacher_name.isnot(None), ClassSubject.teacher_name != '').distinct().all()
+                       if r[0] and r[0].strip()}, key=str.lower)
+
     return _render({
         'page': 'class_subjects', 'nav': _nav_urls(),
         'term_id': term_id or '', 'class_id': class_id or '',
@@ -195,9 +226,13 @@ def class_subjects_list():
                             'class_id': cs.class_id,
                             'class_name': cs.school_class.name if cs.school_class else '',
                             'arm': cs.arm.name if cs.arm else '', 'teacher_name': cs.teacher_name or '',
+                            'category': cs.subject.category or 'General',
                             'edit_url': url_for('subjects.edit_class_subject', cs_id=cs.id),
                             'delete_url': url_for('subjects.delete_class_subject', cs_id=cs.id)}
                            for cs in class_subjects],
+        'class_counts': {str(k): v for k, v in class_counts.items()},
+        'class_missing': {str(k): v for k, v in class_missing.items()},
+        'teachers': teachers,
         'self_url': url_for('subjects.class_subjects_list'),
         'urls': {'assign': url_for('subjects.assign_class_subjects'),
                  'copy': url_for('subjects.copy_class_subjects'),
@@ -302,6 +337,12 @@ def assign_class_subjects():
                      'for_junior': bool(s.for_junior), 'for_senior': bool(s.for_senior)} for s in subjects],
         'submit_url': url_for('subjects.assign_class_subjects'),
         'cancel_url': url_for('subjects.class_subjects_list'),
+        'initial': {'term_id': request.args.get('term_id', type=int) or '',
+                    'class_id': request.args.get('class_id', type=int) or ''},
+        'existing_url': url_for('subjects.api_class_subjects', term_id=0, class_id=0)[:-3],
+        'teachers': sorted({r[0].strip() for r in db.session.query(ClassSubject.teacher_name)
+                            .filter(ClassSubject.teacher_name.isnot(None), ClassSubject.teacher_name != '').distinct().all()
+                            if r[0] and r[0].strip()}, key=str.lower),
     })
 
 
