@@ -1484,14 +1484,46 @@ def passwords():
                     if output == 'pdf':
                         return _passwords_pdf(school, label, rows, safe)
                     return _passwords_xlsx(school, label, rows, safe)
+                roster = _password_directory(term)
+                where = {r['id']: r['where'] for r in roster}
                 return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
-                    class_id=class_id, arm_id=arm_id,
-                    students=_password_roster(class_id, arm_id, term), generated=generated)
+                    class_id=class_id, arm_id=arm_id, roster=roster,
+                    generated=[(st, pw, where.get(st.id, '')) for st, pw in generated])
         return redirect(url_for('cbt.passwords', class_id=class_id or '', arm_id=arm_id or ''))
 
     return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
-        class_id=class_id, arm_id=arm_id,
-        students=_password_roster(class_id, arm_id, term), generated=None)
+        class_id=class_id, arm_id=arm_id, roster=_password_directory(term), generated=None)
+
+
+def _password_directory(term):
+    """Every active student the viewer may manage, with this term's class and
+    arm, so the page can filter by class / arm / status live in the browser."""
+    from utils.branch_scope import scope_query
+    placed = {}
+    if term:
+        rows = (scope_query(db.session.query(StudentEnrollment.student_id, ClassArmAssignment.class_id,
+                                             ClassArmAssignment.arm_id)
+                            .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                            .filter(StudentEnrollment.is_active == True,  # noqa: E712
+                                    ClassArmAssignment.term_id == term.id), ClassArmAssignment).all())
+        for sid, cid, aid in rows:
+            placed.setdefault(sid, (cid, aid))
+    cls = {c.id: c for c in SchoolClass.query.all()}
+    arms = {a.id: a for a in ClassArm.query.all()}
+    out = []
+    for st in scope_query(Student.query.filter_by(is_active=True), Student).all():
+        cid, aid = placed.get(st.id, (None, None))
+        c = cls.get(cid); a = arms.get(aid)
+        arm_name = a.name if a and not a.is_default else ''
+        out.append({'id': st.id, 'name': st.full_name, 'student_id': st.student_id,
+                    'gender': st.gender or '', 'set': bool(st.portal_password_hash),
+                    'class_id': cid or 0, 'class_name': c.name if c else '',
+                    'level': (c.level if c and c.level is not None else 999),
+                    'arm_id': (aid if arm_name else 0), 'arm_name': arm_name,
+                    'where': ' '.join(x for x in [c.name if c else '', arm_name] if x) or 'Not in a class',
+                    '_sort': f"{(st.surname or '').lower()} {(st.first_name or '').lower()}"})
+    out.sort(key=lambda r: (r['level'], r['class_name'], r['arm_name'], r['_sort']))
+    return out
 
 
 def _password_roster(class_id, arm_id, term):
