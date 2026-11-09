@@ -1,0 +1,115 @@
+{# Shared layout for the standalone sign-in / recovery pages. Child templates set
+   `au_role` (staff|student|parent|result|none) and fill the blocks. #}
+{# Student / parent / alumni portals are white-label: the school's own brand only,
+   never the EduSyncra mark or name (pages set au_whitelabel = true). #}
+{% set brand_name = school_brand.name or ('School' if au_whitelabel else 'EduSyncra') %}
+{% set brand_logo = school_brand.logo_url or ('' if au_whitelabel else url_for('static', filename='img/logo-mark.svg')) %}
+{% set owner = brand_name if au_whitelabel else 'EduSyncra' %}
+{% macro mark() %}{% if brand_logo %}<span class="au-mark" style="background-image:url('{{ brand_logo }}')" aria-hidden="true"></span>{% else %}<span class="au-mark au-mark-ic" aria-hidden="true"><i class="fas fa-school"></i></span>{% endif %}{% endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}Sign in{% endblock %} · {{ brand_name }}</title>
+    <meta name="theme-color" content="#0d6a4e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="{{ brand_name if au_whitelabel else 'EduSyncra' }}">
+    {% if not au_whitelabel %}<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">{% endif %}
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+    {% include 'components/_ios_splash.html' %}
+    <link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
+    <link rel="stylesheet" href="{{ bundle_url('css/auth.css') }}">
+    <link id="faPreload" rel="preload" as="style" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <noscript><link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}"></noscript>
+</head>
+<body class="au">
+<div class="au-shell">
+    <aside class="au-side" aria-hidden="true">
+        {# background-image (not <img>) so phones, where this panel is hidden, never fetch it #}
+        <div class="au-side-top">{{ mark() }}{{ brand_name }}</div>
+        <div class="au-side-mid">
+            {% block side %}
+            <h2>Everything your school runs on, in one place.</h2>
+            <p>Admissions, attendance, results, fees and more — for {{ brand_name }}.</p>
+            <ul class="au-feats">
+                <li><i class="fas fa-layer-group"></i><span><b>One workspace</b>Students, staff, results and fees, always in sync.</span></li>
+                <li><i class="fas fa-mobile-screen"></i><span><b>Works anywhere</b>Installs on any phone or laptop and keeps working offline.</span></li>
+                <li><i class="fas fa-shield-halved"></i><span><b>Private by design</b>Encrypted sign-in, two-step verification and audit trails.</span></li>
+            </ul>
+            {% endblock %}
+        </div>
+        <div class="au-side-foot"><span>© {{ now_year or 2026 }} {{ owner }}</span>
+            {% if not au_whitelabel %}<a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy</a>
+            <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms</a>{% endif %}</div>
+    </aside>
+
+    <main class="au-main">
+        <header class="au-mhead">{{ mark() }}<span>{{ brand_name }}</span></header>
+        <div class="au-center">
+            <div class="au-box">
+                {% if au_role and au_role != 'none' %}
+                <nav class="au-roles" aria-label="Who is signing in?">
+                    <a href="{{ url_for('auth.login') }}" class="{{ 'on' if au_role == 'staff' }}" {% if au_role == 'staff' %}aria-current="page"{% endif %}><i class="fas fa-user-tie" aria-hidden="true"></i>Staff</a>
+                    <a href="{{ url_for('cbt_portal.login') }}" class="{{ 'on' if au_role == 'student' }}"><i class="fas fa-laptop-code" aria-hidden="true"></i>Student</a>
+                    <a href="{{ url_for('parent.login') }}" class="{{ 'on' if au_role == 'parent' }}" {% if au_role == 'parent' %}aria-current="page"{% endif %}><i class="fas fa-user-group" aria-hidden="true"></i>Parent</a>
+                    <a href="{{ url_for('result_portal.check') }}" class="{{ 'on' if au_role == 'result' }}"><i class="fas fa-file-lines" aria-hidden="true"></i>Results</a>
+                </nav>
+                {% endif %}
+                <div class="au-title">
+                    {% block heading %}{% endblock %}
+                </div>
+                <div class="au-flash" role="alert" aria-live="assertive">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    {% set icon = 'circle-exclamation' if category == 'error' else 'circle-check' if category == 'success' else 'triangle-exclamation' if category == 'warning' else 'circle-info' %}
+                    <div class="au-msg {{ category }}"><i class="fas fa-{{ icon }}" aria-hidden="true"></i><span>{{ message }}</span></div>
+                {% endfor %}
+                {% endwith %}
+                </div>
+                {% block body %}{% endblock %}
+                <div class="au-trust"><i class="fas fa-lock" aria-hidden="true"></i> Secure, encrypted sign-in</div>
+            </div>
+        </div>
+        <footer class="au-legal">© {{ now_year or 2026 }} {{ owner }}{% if not au_whitelabel %} ·
+            <a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy</a> ·
+            <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms</a>{% endif %}</footer>
+    </main>
+</div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+    // preload → stylesheet without an onload="" attribute (CSP has no unsafe-inline)
+    var fa = document.getElementById('faPreload'); if (fa) fa.rel = 'stylesheet';
+    // Show / hide password: any [data-eye] button toggles the input beside it.
+    document.querySelectorAll('[data-eye]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var inp = b.parentNode.querySelector('input'); var show = inp.type === 'password';
+            inp.type = show ? 'text' : 'password';
+            b.setAttribute('aria-pressed', show ? 'true' : 'false');
+            b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            b.querySelector('i').className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+            inp.focus();
+        });
+    });
+    // Caps Lock warning under any password field with a [data-caps] hint.
+    document.querySelectorAll('[data-caps]').forEach(function (hint) {
+        var inp = document.getElementById(hint.getAttribute('data-caps')); if (!inp) return;
+        function chk(e) { if (e.getModifierState) hint.classList.toggle('on', e.getModifierState('CapsLock')); }
+        inp.addEventListener('keyup', chk); inp.addEventListener('keydown', chk);
+        inp.addEventListener('blur', function () { hint.classList.remove('on'); });
+    });
+    // Submit → spinner, and no double submits.
+    document.querySelectorAll('form[data-busy]').forEach(function (f) {
+        f.addEventListener('submit', function () {
+            var b = f.querySelector('.au-btn[type=submit]'); if (!b || !f.checkValidity()) return;
+            b.classList.add('loading'); setTimeout(function () { b.disabled = true; }, 0);
+            setTimeout(function () { b.disabled = false; b.classList.remove('loading'); }, 9000);
+        });
+    });
+})();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

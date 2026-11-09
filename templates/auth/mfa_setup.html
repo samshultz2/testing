@@ -1,37 +1,59 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "auth/_account.html" import acct_nav with context %}
 {% block title %}Enable 2FA — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('auth.security_settings') }}">Security</a> / <span>Enable 2FA</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.mf{display:grid;grid-template-columns:240px minmax(0,1fr);gap:1.5rem;padding:1.3rem;align-items:start}
+.mf-qr{display:flex;flex-direction:column;align-items:center;gap:.6rem;text-align:center}
+.mf-qr .box{width:220px;height:220px;padding:10px;background:#fff;border:1px solid var(--border-color);border-radius:16px}
+.mf-qr .box svg{width:100%;height:100%}
+.mf-key{font-family:ui-monospace,Menlo,monospace;font-size:.92rem;letter-spacing:.08em;word-break:break-all;background:var(--gray-50,var(--gray-100));border:1px dashed var(--border-color);border-radius:10px;padding:.5rem .7rem;cursor:pointer}
+.mf-steps{list-style:none;margin:0 0 1.1rem;padding:0;display:flex;flex-direction:column;gap:.75rem;counter-reset:s}
+.mf-steps li{display:flex;gap:.7rem;align-items:flex-start;font-size:.9rem;line-height:1.45;counter-increment:s}
+.mf-steps li::before{content:counter(s);width:26px;height:26px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));color:var(--primary)}
+.mf-code{width:100%;max-width:240px;height:54px;border:1.5px solid var(--border-color);border-radius:12px;font:inherit;font-size:1.5rem;letter-spacing:.4em;text-align:center;font-weight:700;background:var(--bg-card);color:var(--text-primary)}
+.mf-code:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 16%,transparent)}
+.mf-acts{display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
+@media (max-width:759px){.mf{grid-template-columns:1fr}.mf-acts .rs-btn{flex:1}}
+</style>{% endblock %}
 {% block content %}
-<div class="page-header"><div><h1>Enable two-factor authentication</h1></div></div>
-
-<div class="card" style="max-width:560px;">
-    <div class="card-body">
-        <ol class="text-sm" style="padding-left:1.1rem; color:var(--text-secondary); line-height:1.7;">
-            <li>Open your authenticator app (Google Authenticator, Authy, 1Password…).</li>
-            <li>Scan this QR code, or enter the key below by hand.</li>
-            <li>Type the 6-digit code it shows to confirm.</li>
+<div class="rs bx" style="max-width:860px">
+  {% call bx_head('fa-shield-halved', 'Turn on two-step sign-in', 'Takes about a minute — you\'ll need your phone') %}{% endcall %}
+  {{ acct_nav('security') }}
+  <section class="rs-card flush">
+    <div class="mf">
+      <div class="mf-qr">
+        {% if qr_svg %}<div class="box">{{ qr_svg|safe }}</div>{% else %}<p class="rs-muted">QR code unavailable — use the key below.</p>{% endif %}
+        <small class="rs-muted">Can't scan? Enter this key:</small>
+        <code class="mf-key" id="mfKey" title="Click to copy">{{ secret }}</code>
+      </div>
+      <div>
+        <ol class="mf-steps">
+          <li><span>Open an authenticator app on your phone — <b>Google Authenticator</b>, <b>Microsoft Authenticator</b>, <b>Authy</b> or <b>1Password</b>.</span></li>
+          <li><span>Tap <b>Add account</b> and scan the QR code (or type the key).</span></li>
+          <li><span>Type the 6-digit code the app shows to finish.</span></li>
         </ol>
-
-        <div style="text-align:center; margin:1rem 0;">
-            {% if qr_svg %}
-            <div style="width:200px; height:200px; margin:0 auto; padding:8px; background:#fff; border:1px solid var(--border-color); border-radius:12px;">{{ qr_svg|safe }}</div>
-            {% else %}
-            <p class="text-muted text-sm">QR unavailable — enter the key manually.</p>
-            {% endif %}
-            <p class="text-muted text-sm" style="margin-top:.6rem;">Manual key</p>
-            <code style="font-size:1rem; letter-spacing:.08em; word-break:break-all;">{{ secret }}</code>
-        </div>
-
         <form method="POST" action="{{ url_for('auth.mfa_confirm') }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label class="form-label">6-digit code from your app</label>
-                <input type="text" name="code" class="form-control" inputmode="numeric"
-                       autocomplete="one-time-code" autofocus placeholder="••••••" maxlength="6" style="max-width:200px; letter-spacing:.3em;">
-            </div>
-            <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Confirm &amp; turn on</button>
-            <a href="{{ url_for('auth.security_settings') }}" class="btn btn-secondary">Cancel</a>
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <label class="rs-muted" for="mfCode" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:.35rem">6-digit code</label>
+          <input type="text" id="mfCode" name="code" class="mf-code" inputmode="numeric" autocomplete="one-time-code" autofocus placeholder="000000" maxlength="6">
+          <div class="mf-acts">
+            <a href="{{ url_for('auth.security_settings') }}" class="rs-btn ghost">Cancel</a>
+            <button type="submit" class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Confirm &amp; turn on</button>
+          </div>
         </form>
+      </div>
     </div>
+  </section>
 </div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var k = document.getElementById('mfKey');
+  if (k && navigator.clipboard) k.addEventListener('click', function () {
+    navigator.clipboard.writeText(k.textContent.trim()).then(function () { var t = k.textContent; k.textContent = 'Copied ✓'; setTimeout(function () { k.textContent = t; }, 1200); });
+  });
+})();
+</script>
 {% endblock %}

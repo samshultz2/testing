@@ -1,32 +1,41 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
 {% block title %}Backup codes — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('auth.security_settings') }}">Security</a> / <span>Backup codes</span>{% endblock %}
-{% block content %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-@media print { .filter-card, .no-print { display:none !important; } .print-sheet { border:none !important; box-shadow:none !important; } }
-.print-head { display:none; }
-@media print { .print-head { display:block; margin-bottom:12px; } }
-.bk-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.5rem; max-width:360px; }
-.bk-grid code { font-size:1.05rem; letter-spacing:.06em; padding:.4rem .2rem; text-align:center; background:var(--gray-50); border:1px solid var(--border-color); border-radius:6px; }
-</style>
-
-<div class="page-header no-print"><div>
-    <h1>{% if fresh %}2FA is on — save your backup codes{% else %}New backup codes{% endif %}</h1>
-</div></div>
-
-<div class="card print-sheet" style="max-width:520px; border-color:var(--success);">
-    <div class="card-header"><h3><i class="fas fa-key"></i> Backup codes — shown once</h3>
-        <button type="button" class="btn btn-secondary btn-sm no-print" data-print><i class="fas fa-print"></i> Print</button>
+.bk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem;max-width:420px;padding:0 1.2rem}
+.bk-grid code{font-family:ui-monospace,Menlo,monospace;font-size:1.05rem;letter-spacing:.08em;padding:.55rem .3rem;text-align:center;background:var(--gray-50,var(--gray-100));border:1px solid var(--border-color);border-radius:10px;color:var(--text-primary)}
+.bk-note{display:flex;gap:.6rem;align-items:flex-start;margin:0 1.2rem 1rem;padding:.75rem .9rem;border-radius:12px;background:color-mix(in srgb,var(--warning) 9%,var(--bg-card));border:1px solid color-mix(in srgb,var(--warning) 35%,var(--border-color));font-size:.86rem;line-height:1.45}
+.bk-note i{color:#b45309;margin-top:.15rem}
+.bk-acts{display:flex;gap:.5rem;flex-wrap:wrap;padding:1.1rem 1.2rem 1.2rem}
+.print-head{display:none}
+@media print{.no-print,.sidebar,.top-bar,.bottom-nav{display:none!important}.print-head{display:block;margin:0 1.2rem 12px}.rs-card{border:0;box-shadow:none}}
+</style>{% endblock %}
+{% block content %}
+<div class="rs bx" style="max-width:860px">
+  <div class="no-print">{% call bx_head('fa-key', '2FA is on — save your backup codes' if fresh else 'New backup codes', 'Each code signs you in once if you lose your phone') %}{% endcall %}</div>
+  <section class="rs-card flush">
+    <div class="rs-card-h pad"><h3><i class="fas fa-key" aria-hidden="true"></i> Backup codes — shown once</h3></div>
+    <div class="print-head"><h2 style="margin:0;">{{ app_name }} — 2FA backup codes</h2></div>
+    <div class="bk-note no-print"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+      <span>Each code works <b>once</b>. Save them now — print them, or copy them into your password manager. They won't be shown again.</span></div>
+    <div class="bk-grid" id="bkCodes">{% for c in codes %}<code>{{ c }}</code>{% endfor %}</div>
+    <div class="bk-acts no-print">
+      <button type="button" class="rs-btn ghost" data-print><i class="fas fa-print" aria-hidden="true"></i> Print</button>
+      <button type="button" class="rs-btn ghost" id="bkCopy"><i class="fas fa-copy" aria-hidden="true"></i> Copy all</button>
+      <a href="{{ url_for('auth.security_settings') }}" class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> I've saved them</a>
     </div>
-    <div class="card-body">
-        <div class="print-head"><h2 style="margin:0;">{{ app_name }} — 2FA backup codes</h2></div>
-        <p class="text-muted text-sm no-print"><i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i>
-            Each code works <strong>once</strong>. Store them somewhere safe — they let you sign in if you lose your
-            authenticator device. They are shown only this once.</p>
-        <div class="bk-grid">
-            {% for c in codes %}<code>{{ c }}</code>{% endfor %}
-        </div>
-        <a href="{{ url_for('auth.security_settings') }}" class="btn btn-primary mt-3 no-print"><i class="fas fa-check"></i> Done</a>
-    </div>
+  </section>
 </div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var b = document.getElementById('bkCopy');
+  if (!b || !navigator.clipboard) { if (b) b.hidden = true; return; }
+  b.addEventListener('click', function () {
+    var t = Array.prototype.map.call(document.querySelectorAll('#bkCodes code'), function (c) { return c.textContent; }).join('\n');
+    navigator.clipboard.writeText(t).then(function () { b.lastChild.textContent = ' Copied'; });
+  });
+})();
+</script>
 {% endblock %}

@@ -1,44 +1,83 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "auth/_account.html" import acct_nav with context %}
 {% block title %}Security — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Security</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.sec-list{display:flex;flex-direction:column}
+.sec-item{display:flex;align-items:center;gap:.9rem;padding:1rem 1.1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.sec-item:first-child{border-top:0}
+.sec-ic{width:42px;height:42px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--text-secondary)}
+.sec-ic.good{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.sec-ic.mid{background:color-mix(in srgb,var(--warning) 15%,var(--bg-card));color:#b45309}
+.sec-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.sec-t b{font-size:.95rem}.sec-t small{color:var(--text-muted);font-size:.82rem;line-height:1.4}
+.sec-a{display:flex;gap:.4rem;flex:none;flex-wrap:wrap;justify-content:flex-end}
+.sec-form{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;padding:.9rem 1.1rem;border-top:1px dashed var(--border-color);background:var(--gray-50,var(--gray-100))}
+.sec-form input{height:40px;border:1.5px solid var(--border-color);border-radius:11px;padding:0 .7rem;font:inherit;background:var(--bg-card);color:var(--text-primary);min-width:200px;flex:1;max-width:280px}
+.sec-form small{flex-basis:100%;color:var(--text-muted);font-size:.78rem}
+@media (max-width:759px){.sec-item{flex-wrap:wrap}.sec-a{flex-basis:100%;justify-content:flex-start}.sec-form input{max-width:none}}
+</style>{% endblock %}
 {% block content %}
-<div class="page-header">
-    <div><h1>Security</h1>
-        <p class="text-muted text-sm">Manage two-factor authentication for your account.</p></div>
-</div>
+<div class="rs bx" style="max-width:860px">
+  {% call bx_head('fa-shield-halved', 'Security', 'Keep your account safe: two-step sign-in, devices and password') %}{% endcall %}
+  {{ acct_nav('security') }}
 
-<div class="card" style="max-width:560px;">
-    <div class="card-header">
-        <h3><i class="fas fa-shield-halved"></i> Two-factor authentication</h3>
-        {% if user.mfa_enabled %}<span class="badge badge-success"><i class="fas fa-check"></i> On</span>
-        {% else %}<span class="badge badge-warning">Off</span>{% endif %}
-    </div>
-    <div class="card-body">
-        {% if user.mfa_enabled %}
-        <p class="text-muted text-sm">A code from your authenticator app is required each time you sign in.
-            Keep your backup codes somewhere safe in case you lose your phone.</p>
-        <div class="d-flex gap-2 flex-wrap mt-3">
-            <form method="POST" action="{{ url_for('auth.mfa_backup_codes') }}" class="d-flex gap-2 align-end">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <div class="form-group mb-0"><label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" required autocomplete="current-password" placeholder="Your password" style="max-width:200px;"></div>
-                <button type="submit" class="btn btn-secondary"><i class="fas fa-rotate"></i> New backup codes</button>
-            </form>
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile {{ 'good' if user.mfa_enabled else 'mid' }}"><span class="l">Two-step sign-in</span><span class="v">{{ 'On' if user.mfa_enabled else 'Off' }}</span><span class="s">{{ 'code needed at sign-in' if user.mfa_enabled else 'recommended' }}</span></div>
+    <div class="rs-tile"><span class="l">Signed-in devices</span><span class="v">{{ device_count or 0 }}</span><span class="s">{{ trusted_count or 0 }} trusted</span></div>
+    <div class="rs-tile {{ 'mid' if user.must_change_password else 'good' }}"><span class="l">Password</span><span class="v" style="font-size:1.1rem">{{ 'Change due' if user.must_change_password else 'Set' }}</span><span class="s">stored securely hashed</span></div>
+  </div>
+
+  <section class="rs-card flush">
+    <div class="sec-list">
+      <div class="sec-item">
+        <span class="sec-ic {{ 'good' if user.mfa_enabled else 'mid' }}"><i class="fas fa-mobile-screen-button" aria-hidden="true"></i></span>
+        <div class="sec-t"><b>Two-step sign-in {% if user.mfa_enabled %}<span class="sl-pill good">On</span>{% else %}<span class="sl-pill mid">Off</span>{% endif %}</b>
+          <small>{% if user.mfa_enabled %}A 6-digit code from your authenticator app is needed every time you sign in on a new device.{% else %}Add a code from an authenticator app (Google Authenticator, Authy, 1Password…) so a stolen password alone can't get into your account.{% endif %}</small></div>
+        <div class="sec-a">
+          {% if user.mfa_enabled %}
+          <button type="button" class="rs-btn ghost sm" data-toggle-form="acCodes"><i class="fas fa-rotate" aria-hidden="true"></i> New backup codes</button>
+          <button type="button" class="rs-btn ghost sm" data-toggle-form="acOff"><i class="fas fa-shield-xmark" aria-hidden="true"></i> Turn off</button>
+          {% else %}
+          <a href="{{ url_for('auth.mfa_setup') }}" class="rs-btn primary sm"><i class="fas fa-shield-halved" aria-hidden="true"></i> Turn on</a>
+          {% endif %}
         </div>
-        <hr style="margin:1.2rem 0;">
-        <form method="POST" action="{{ url_for('auth.mfa_disable') }}" class="d-flex gap-2 align-end"
-              data-confirm="Turn off two-factor authentication for your account?">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group mb-0"><label class="form-label">Password</label>
-                <input type="password" name="password" class="form-control" required autocomplete="current-password" placeholder="Your password" style="max-width:200px;"></div>
-            <button type="submit" class="btn btn-danger"><i class="fas fa-shield-xmark"></i> Turn off 2FA</button>
-        </form>
-        {% else %}
-        <p class="text-muted text-sm">Add a second step at sign-in using an authenticator app
-            (Google Authenticator, Authy, 1Password, …). Even if your password is stolen, your
-            account stays protected.</p>
-        <a href="{{ url_for('auth.mfa_setup') }}" class="btn btn-primary mt-2"><i class="fas fa-shield-halved"></i> Enable 2FA</a>
-        {% endif %}
+      </div>
+      {% if user.mfa_enabled %}
+      <form method="POST" action="{{ url_for('auth.mfa_backup_codes') }}" class="sec-form" id="acCodes" hidden>
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="password" name="password" required autocomplete="current-password" placeholder="Confirm with your password" aria-label="Your password">
+        <button type="submit" class="rs-btn primary sm"><i class="fas fa-rotate" aria-hidden="true"></i> Make new codes</button>
+        <small>Your old backup codes stop working.</small>
+      </form>
+      <form method="POST" action="{{ url_for('auth.mfa_disable') }}" class="sec-form" id="acOff" hidden data-confirm="Turn off two-step sign-in for your account?">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="password" name="password" required autocomplete="current-password" placeholder="Confirm with your password" aria-label="Your password">
+        <button type="submit" class="rs-btn danger sm"><i class="fas fa-shield-xmark" aria-hidden="true"></i> Turn off two-step sign-in</button>
+      </form>
+      {% endif %}
+      <div class="sec-item">
+        <span class="sec-ic"><i class="fas fa-laptop" aria-hidden="true"></i></span>
+        <div class="sec-t"><b>Devices</b><small>{{ device_count or 0 }} device{{ '' if device_count == 1 else 's' }} signed in. Sign out any you don't recognise.</small></div>
+        <div class="sec-a"><a href="{{ url_for('auth.sessions') }}" class="rs-btn ghost sm"><i class="fas fa-list" aria-hidden="true"></i> Review devices</a></div>
+      </div>
+      <div class="sec-item">
+        <span class="sec-ic"><i class="fas fa-key" aria-hidden="true"></i></span>
+        <div class="sec-t"><b>Password</b><small>Use at least 12 characters and don't reuse a password from another site.</small></div>
+        <div class="sec-a"><a href="{{ url_for('auth.change_password') }}" class="rs-btn ghost sm"><i class="fas fa-pen" aria-hidden="true"></i> Change password</a></div>
+      </div>
     </div>
+  </section>
 </div>
+<script nonce="{{ csp_nonce }}">
+document.querySelectorAll('[data-toggle-form]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var f = document.getElementById(b.getAttribute('data-toggle-form'));
+    document.querySelectorAll('.sec-form').forEach(function (x) { if (x !== f) x.hidden = true; });
+    f.hidden = !f.hidden; if (!f.hidden) f.querySelector('input[type=password]').focus();
+  });
+});
+</script>
 {% endblock %}

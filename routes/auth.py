@@ -610,7 +610,13 @@ def security_settings():
             flash('Security settings aren’t available for the legacy admin login.', 'info')
             return redirect(url_for('main.dashboard'))
         return redirect(url_for('auth.login'))
-    return render_template('auth/security.html', user=user)
+    try:
+        from utils import sessions as S
+        devices = S.list_for(user.id)
+    except Exception:
+        devices = []
+    return render_template('auth/security.html', user=user, device_count=len(devices),
+                           trusted_count=sum(1 for d in devices if getattr(d, 'trusted', False)))
 
 
 @auth_bp.route('/security/2fa/setup')

@@ -1,0 +1,135 @@
+/* Sign-in & account recovery pages (staff login, forgot / reset password,
+   two-step verification, parent portal). Standalone — no app shell. Light by
+   design: a calm brand panel beside a clean form on laptops; a compact header
+   above the form on phones. */
+:root{
+  --au-brand:#0d6a4e; --au-brand-d:#0a5340; --au-brand-l:#e8f5ef;
+  --au-ink:#111827; --au-ink-2:#374151; --au-muted:#6b7280; --au-line:#e5e7eb;
+  --au-bg:#f5f7f9; --au-card:#fff; --au-ring:rgba(13,106,78,.16);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body.au{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--au-ink);
+  background:var(--au-bg);min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased}
+.au a{color:var(--au-brand)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+
+.au-shell{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:1fr}
+@media (min-width:980px){.au-shell{grid-template-columns:minmax(380px,44%) 1fr}}
+
+/* --- brand panel (laptops) --- */
+.au-side{display:none;position:relative;overflow:hidden;color:#fff;padding:2.6rem 3rem;flex-direction:column;justify-content:space-between;
+  background:
+    radial-gradient(circle at 1px 1px,rgba(255,255,255,.09) 1px,transparent 0) 0 0/22px 22px,
+    radial-gradient(640px 420px at 110% 110%,rgba(255,255,255,.10),transparent 60%),
+    linear-gradient(160deg,#0f7a5a 0%,var(--au-brand) 45%,var(--au-brand-d) 100%)}
+@media (min-width:980px){.au-side{display:flex}}
+.au-side-top{display:flex;align-items:center;gap:.8rem;font-weight:700;font-size:1rem}
+.au-mark{width:44px;height:44px;border-radius:12px;background:#fff center/contain no-repeat;background-origin:content-box;padding:5px;flex:none;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.au-side-mid{max-width:440px}
+.au-side-mid h2{font-size:2.05rem;line-height:1.15;letter-spacing:-.025em;font-weight:700;margin-bottom:.9rem}
+.au-side-mid p{color:rgba(255,255,255,.8);font-size:1rem;line-height:1.55;margin-bottom:2rem}
+.au-feats{list-style:none;display:flex;flex-direction:column;gap:1rem}
+.au-feats li{display:flex;gap:.85rem;align-items:flex-start;font-size:.92rem;line-height:1.45;color:rgba(255,255,255,.88)}
+.au-feats i{flex:none;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.12);color:#fff;font-size:.85rem}
+.au-feats b{display:block;color:#fff;font-weight:700}
+.au-side-foot{font-size:.78rem;color:rgba(255,255,255,.6);display:flex;gap:.9rem;flex-wrap:wrap}
+.au-side-foot a{color:rgba(255,255,255,.75);text-decoration:none}
+.au-side-foot a:hover{color:#fff;text-decoration:underline}
+
+/* --- form column --- */
+.au-main{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;background:var(--au-card)}
+@media (max-width:979px){.au-main{background:var(--au-bg)}}
+.au-mhead{display:flex;align-items:center;gap:.7rem;padding:1rem 1.25rem;font-weight:700}
+.au-mhead .au-mark{width:38px;height:38px;border-radius:11px;box-shadow:0 2px 8px rgba(15,23,42,.08);border:1px solid var(--au-line)}
+.au-mhead span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (min-width:980px){.au-mhead{display:none}}
+.au-center{flex:1;display:flex;align-items:center;justify-content:center;padding:1.5rem 1.25rem 2rem}
+.au-box{width:100%;max-width:400px}
+@media (max-width:979px){.au-box{background:var(--au-card);border:1px solid var(--au-line);border-radius:20px;padding:1.5rem 1.35rem 1.35rem;box-shadow:0 10px 30px rgba(15,23,42,.06)}}
+
+/* who-are-you switcher */
+.au-roles{display:grid;grid-template-columns:repeat(4,1fr);gap:.25rem;padding:.25rem;background:#f1f3f5;border-radius:13px;margin-bottom:1.6rem}
+.au-roles a{display:flex;flex-direction:column;align-items:center;gap:.2rem;padding:.5rem .25rem;border-radius:10px;font-size:.74rem;font-weight:600;color:var(--au-muted);text-decoration:none;text-align:center;line-height:1.15}
+.au-roles a i{font-size:.9rem}
+.au-roles a:hover{color:var(--au-ink)}
+.au-roles a.on{background:#fff;color:var(--au-brand);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.au-roles a:focus-visible{outline:2px solid var(--au-brand);outline-offset:1px}
+
+.au-title{margin-bottom:1.35rem}
+.au-ic{width:46px;height:46px;border-radius:13px;display:inline-flex;align-items:center;justify-content:center;background:var(--au-brand-l);color:var(--au-brand);font-size:1.15rem;margin-bottom:.9rem}
+.au-title h1{font-size:1.6rem;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+.au-title p{color:var(--au-muted);font-size:.92rem;margin-top:.3rem;line-height:1.45}
+.au-title p b{color:var(--au-ink-2)}
+
+/* messages */
+.au-flash{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem}
+.au-flash:empty{display:none}
+.au-msg{display:flex;gap:.55rem;align-items:flex-start;padding:.7rem .85rem;border-radius:11px;font-size:.86rem;line-height:1.4;border:1px solid}
+.au-msg i{margin-top:.15rem}
+.au-msg.error{background:#fef2f2;color:#b42318;border-color:#fecaca}
+.au-msg.success{background:#ecfdf3;color:#067647;border-color:#a6f4c5}
+.au-msg.info,.au-msg.message{background:#eff8ff;color:#175cd3;border-color:#b2ddff}
+.au-msg.warning{background:#fffaeb;color:#b54708;border-color:#fedf89}
+
+/* fields */
+.au-f{margin-bottom:1rem}
+.au-f>label,.au-lab{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-weight:600;font-size:.84rem;color:var(--au-ink-2);margin-bottom:.4rem}
+.au-lab a{font-size:.82rem;font-weight:600;text-decoration:none}
+.au-lab a:hover{text-decoration:underline}
+.au-in{position:relative;display:flex;align-items:center}
+.au-in>i{position:absolute;left:.95rem;color:#9ca3af;font-size:.9rem;pointer-events:none}
+.au-in input{width:100%;height:48px;padding:0 1rem 0 2.6rem;border:1.5px solid var(--au-line);border-radius:12px;font:inherit;font-size:1rem;background:#fff;color:var(--au-ink);transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+.au-in input:hover{border-color:#d1d5db}
+.au-in input:focus{outline:none;border-color:var(--au-brand);box-shadow:0 0 0 4px var(--au-ring)}
+.au-in input::placeholder{color:#9ca3af}
+.au-in input.has-eye{padding-right:3rem}
+.au-in input.code{padding:0 1rem;text-align:center;font-size:1.45rem;letter-spacing:.4em;font-weight:700;height:56px;font-variant-numeric:tabular-nums}
+.au-eye{position:absolute;right:.35rem;width:40px;height:40px;border:0;background:none;color:var(--au-muted);border-radius:10px;cursor:pointer;font-size:.95rem;display:flex;align-items:center;justify-content:center}
+.au-eye:hover{color:var(--au-brand);background:var(--au-brand-l)}
+.au-eye:focus-visible{outline:2px solid var(--au-brand);outline-offset:1px}
+.au-help{font-size:.78rem;color:var(--au-muted);margin-top:.4rem;line-height:1.4}
+.caps-hint{display:none;font-size:.78rem;color:#b54708;margin-top:.4rem;align-items:center;gap:.4rem}
+.caps-hint.on{display:flex}
+
+.au-row{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin:.1rem 0 1.2rem}
+.au-check{display:inline-flex;align-items:flex-start;gap:.55rem;font-size:.86rem;color:var(--au-ink-2);cursor:pointer;line-height:1.4}
+.au-check input{width:17px;height:17px;margin-top:.1rem;accent-color:var(--au-brand);cursor:pointer;flex:none}
+.au-check small{display:block;color:var(--au-muted);font-size:.78rem}
+
+.au-btn{width:100%;height:50px;display:flex;align-items:center;justify-content:center;gap:.55rem;border:0;border-radius:12px;
+  background:var(--au-brand);color:#fff;font:inherit;font-size:1rem;font-weight:700;cursor:pointer;transition:background .15s,box-shadow .15s,transform .1s}
+.au-btn:hover{background:var(--au-brand-d);box-shadow:0 8px 20px rgba(13,106,78,.25)}
+.au-btn:active{transform:translateY(1px)}
+.au-btn:disabled{opacity:.6;cursor:not-allowed;box-shadow:none}
+.au-btn .spin{display:none;width:18px;height:18px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:au-spin .6s linear infinite}
+.au-btn.loading .spin{display:inline-block}
+.au-btn.loading>i,.au-btn.loading .lbl{display:none}
+@keyframes au-spin{to{transform:rotate(360deg)}}
+.au-btn.ghost{background:#fff;color:var(--au-ink-2);border:1.5px solid var(--au-line);margin-top:.6rem}
+.au-btn.ghost:hover{border-color:var(--au-brand);color:var(--au-brand);box-shadow:none}
+
+.au-alt{text-align:center;margin-top:1.2rem;font-size:.86rem;color:var(--au-muted)}
+.au-alt a{font-weight:600;text-decoration:none}
+.au-alt a:hover{text-decoration:underline}
+.au-trust{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:1.4rem;font-size:.78rem;color:var(--au-muted)}
+.au-trust i{color:#16a34a}
+.au-legal{text-align:center;padding:0 1rem 1.25rem;font-size:.74rem;color:var(--au-muted)}
+.au-legal a{color:var(--au-muted);text-decoration:none}
+.au-legal a:hover{color:var(--au-brand);text-decoration:underline}
+@media (min-width:980px){.au-legal{display:none}}
+
+/* password rules */
+.au-reqs{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:.3rem .8rem;margin:.55rem 0 0}
+.au-reqs li{display:flex;align-items:center;gap:.45rem;font-size:.78rem;color:var(--au-muted)}
+.au-reqs li i{width:15px;height:15px;border-radius:50%;border:1.5px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;font-size:.5rem;color:transparent;flex:none}
+.au-reqs li.ok{color:#067647}
+.au-reqs li.ok i{background:#16a34a;border-color:#16a34a;color:#fff}
+.au-meter{height:5px;border-radius:9px;background:#eef0f3;margin-top:.55rem;overflow:hidden}
+.au-meter i{display:block;height:100%;width:0;border-radius:9px;transition:width .2s,background .2s;background:#ef4444}
+.pw-match{display:block;font-size:.78rem;margin-top:.4rem;min-height:1em}
+.pw-match.bad{color:#b42318}.pw-match.good{color:#067647}
+@media (max-width:420px){.au-reqs{grid-template-columns:1fr}}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:.01ms!important}}
+.au-mark-ic{display:inline-flex;align-items:center;justify-content:center;color:var(--au-brand);font-size:1.05rem}

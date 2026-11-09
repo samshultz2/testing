@@ -1,31 +1,37 @@
-{% extends "cbt/portal_base.html" %}
-{% block title %}Student Login{% endblock %}
-{% block head_extra %}<style>
-.pl{max-width:430px;margin:4vh auto 0}
-.pl-head{text-align:center;margin-bottom:1.2rem}
-.pl-logo{display:inline-flex;width:68px;height:68px;border-radius:20px;background:var(--px);color:#fff;align-items:center;justify-content:center;font-size:1.7rem;box-shadow:0 10px 24px rgba(79,70,229,.35)}
-.pl-logo img{width:68px;height:68px;border-radius:20px;object-fit:contain;background:#fff}
-.pl-head h1{margin:.8rem 0 .2rem}
-.pl-steps{display:flex;justify-content:center;gap:1rem;margin-top:1.1rem;font-size:.78rem;color:#64748b;flex-wrap:wrap}
-.pl-steps span{display:inline-flex;align-items:center;gap:.35rem}
-.pl-steps b{width:20px;height:20px;border-radius:50%;background:#eef2ff;color:var(--px);display:inline-flex;align-items:center;justify-content:center;font-size:.7rem}
-</style>{% endblock %}
-{% block content %}
-<div class="portal-card pl">
-    <div class="pl-head">
-        <span class="pl-logo">{% if school_brand.logo_url %}<img src="{{ school_brand.logo_url }}" alt="{{ school_brand.name }}">{% else %}<i class="fas fa-laptop-code"></i>{% endif %}</span>
-        <h1>Exam Portal</h1>
-        <p class="p-muted" style="margin:0;">Log in with your student ID and password.</p>
+{% extends "auth/_layout.html" %}
+{% set au_role = 'student' %}
+{% set au_whitelabel = true %}
+{% block title %}Student login{% endblock %}
+{% block side %}
+<h2>Ready for your test?</h2>
+<p>Sign in, pick your test, then enter the test password your teacher gives you.</p>
+<ul class="au-feats">
+    <li><i class="fas fa-right-to-bracket"></i><span><b>1 · Sign in</b>With your Student ID and portal password.</span></li>
+    <li><i class="fas fa-list-check"></i><span><b>2 · Pick your test</b>Only tests open to your class are shown.</span></li>
+    <li><i class="fas fa-key"></i><span><b>3 · Enter the test password</b>Your answers save as you go.</span></li>
+</ul>
+{% endblock %}
+{% block heading %}
+<h1>Exam Portal</h1>
+<p>Log in with your Student ID and password.</p>
+{% endblock %}
+{% block body %}
+<form method="POST" action="{{ url_for('cbt_portal.login') }}" data-busy>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="au-f">
+        <label for="sid">Student ID</label>
+        <div class="au-in"><i class="fas fa-id-badge" aria-hidden="true"></i>
+            <input id="sid" type="text" name="student_id" placeholder="e.g. STU00001" autocomplete="username"
+                   autocapitalize="characters" spellcheck="false" required autofocus></div>
     </div>
-    <form method="POST" action="{{ url_for('cbt_portal.login') }}">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div class="p-field"><label for="sid">Student ID</label>
-            <div class="p-input"><i class="fas fa-id-badge lead"></i><input id="sid" type="text" name="student_id" placeholder="e.g. STU00001" autocomplete="username" autocapitalize="characters" required autofocus></div></div>
-        <div class="p-field"><label for="spw">Password</label>
-            <div class="p-input"><i class="fas fa-lock lead"></i><input id="spw" type="password" name="password" autocomplete="current-password" required>
-                <button type="button" class="p-eye" data-eye aria-label="Show password"><i class="fas fa-eye"></i></button></div></div>
-        <button type="submit" class="p-btn wide"><i class="fas fa-right-to-bracket"></i> Log in</button>
-    </form>
-    <div class="pl-steps" aria-hidden="true"><span><b>1</b> Log in</span><span><b>2</b> Pick your test</span><span><b>3</b> Enter the test password</span></div>
-</div>
+    <div class="au-f">
+        <label for="spw">Password</label>
+        <div class="au-in"><i class="fas fa-lock" aria-hidden="true"></i>
+            <input id="spw" type="password" name="password" class="has-eye" autocomplete="current-password" placeholder="Your portal password" required>
+            <button type="button" class="au-eye" data-eye aria-label="Show password" aria-pressed="false"><i class="fas fa-eye" aria-hidden="true"></i></button></div>
+        <p class="caps-hint" data-caps="spw"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Caps Lock is on</p>
+    </div>
+    <button type="submit" class="au-btn"><span class="spin" aria-hidden="true"></span><i class="fas fa-right-to-bracket" aria-hidden="true"></i><span class="lbl">Log in</span></button>
+</form>
+<p class="au-alt">Forgot your password? Ask your teacher or the school office.</p>
 {% endblock %}

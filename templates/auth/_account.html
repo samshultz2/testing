@@ -1,0 +1,9 @@
+{# Account section tabs shared by profile-adjacent security pages. #}
+{% macro acct_nav(active) %}
+<nav class="sl-nav" aria-label="Account">
+  <a href="{{ url_for('auth.profile') }}" class="{{ 'on' if active == 'profile' }}"><i class="fas fa-user" aria-hidden="true"></i><span>Profile</span></a>
+  <a href="{{ url_for('auth.security_settings') }}" class="{{ 'on' if active == 'security' }}"><i class="fas fa-shield-halved" aria-hidden="true"></i><span>Security</span></a>
+  <a href="{{ url_for('auth.sessions') }}" class="{{ 'on' if active == 'devices' }}"><i class="fas fa-laptop" aria-hidden="true"></i><span>Devices</span></a>
+  <a href="{{ url_for('auth.change_password') }}" class="{{ 'on' if active == 'password' }}"><i class="fas fa-key" aria-hidden="true"></i><span>Password</span></a>
+</nav>
+{% endmacro %}

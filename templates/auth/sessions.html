@@ -1,48 +1,49 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "auth/_account.html" import acct_nav with context %}
 {% block title %}Active devices - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('auth.profile') }}">My profile</a> / <span>Active devices</span>{% endblock %}
-
-{% block extra_css %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-  .sess-row{display:flex;align-items:center;gap:1rem;padding:.9rem 0;border-bottom:1px solid var(--border-light)}
-  .sess-row:last-child{border-bottom:none}
-  .sess-ic{width:2.4rem;height:2.4rem;border-radius:10px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
-  .sess-meta{flex:1;min-width:0}
-  .sess-meta .t{font-weight:600}
-  .sess-meta .s{font-size:.8rem;color:var(--text-muted)}
-  .badge-cur{background:#dcfce7;color:#166534;border-radius:var(--radius-full);padding:.1rem .5rem;font-size:.72rem;font-weight:700}
-</style>
-{% endblock %}
-
+.sess-row{display:flex;align-items:center;gap:.9rem;padding:.9rem 1.1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.sess-row:first-child{border-top:0}
+.sess-row.cur{background:color-mix(in srgb,var(--primary) 4%,var(--bg-card))}
+.sess-ic{width:42px;height:42px;border-radius:12px;background:var(--gray-100);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;flex:none}
+.sess-row.cur .sess-ic{background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));color:var(--primary)}
+.sess-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.sess-meta .t{font-weight:700;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.sess-meta .s{font-size:.8rem;color:var(--text-muted)}
+@media (max-width:759px){.sess-row{flex-wrap:wrap}.sess-row form{flex-basis:100%}.sess-row form .rs-btn{width:100%}}
+</style>{% endblock %}
 {% block content %}
-<div class="page-header">
-  <div><h1>Active devices</h1><p class="text-muted text-sm">These devices are currently signed in to your account. Remove any you don’t recognise.</p></div>
-  <div class="page-header-actions">
+{% set others = sessions|rejectattr('current')|list %}
+<div class="rs bx" style="max-width:860px">
+  {% call bx_head('fa-laptop', 'Devices', 'Where you\'re signed in. Sign out any device you don\'t recognise.') %}
+    {% if others %}
     <form method="POST" action="{{ url_for('auth.revoke_other_sessions') }}" data-confirm="Sign out all other devices?">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-secondary btn-sm"><i class="fas fa-right-from-bracket"></i> Sign out all other devices</button>
+      <button class="rs-btn ghost"><i class="fas fa-right-from-bracket" aria-hidden="true"></i><span class="rs-hide-sm">Sign out all other devices</span></button>
     </form>
-  </div>
-</div>
-
-<div class="card"><div class="card-body">
-  {% for s in sessions %}
-  <div class="sess-row">
-    <div class="sess-ic"><i class="fas fa-{{ 'mobile-screen' if 'iPhone' in s.label or 'Android' in s.label else 'desktop' }}"></i></div>
-    <div class="sess-meta">
-      <div class="t">{{ s.label }} {% if s.current %}<span class="badge-cur">This device</span>{% endif %}{% if s.trusted %} <i class="fas fa-shield-halved" title="Trusted device" style="color:#16a34a"></i>{% endif %}</div>
-      <div class="s">IP {{ s.ip }} · last active {{ s.last_seen.strftime('%d %b %Y, %H:%M') if s.last_seen else '—' }} · since {{ s.created_at.strftime('%d %b %Y') if s.created_at else '—' }}</div>
+    {% endif %}
+  {% endcall %}
+  {{ acct_nav('devices') }}
+  <section class="rs-card flush">
+    {% for s in sessions %}
+    <div class="sess-row {{ 'cur' if s.current }}">
+      <span class="sess-ic"><i class="fas fa-{{ 'mobile-screen' if 'iPhone' in s.label or 'Android' in s.label else ('tablet-screen-button' if 'iPad' in s.label else 'desktop') }}" aria-hidden="true"></i></span>
+      <div class="sess-meta">
+        <div class="t">{{ s.label }}{% if s.current %}<span class="sl-pill good">This device</span>{% endif %}{% if s.trusted %}<span class="sl-pill info" title="Skips the 2FA code"><i class="fas fa-shield-halved" aria-hidden="true"></i> Trusted</span>{% endif %}</div>
+        <div class="s">Last active {{ s.last_seen.strftime('%d %b %Y, %H:%M') if s.last_seen else '—' }} · since {{ s.created_at.strftime('%d %b %Y') if s.created_at else '—' }} · IP {{ s.ip }}</div>
+      </div>
+      <form method="POST" action="{{ url_for('auth.revoke_session', sid_id=s.id) }}"
+            {% if not s.current %}data-confirm="Sign this device out?"{% else %}data-confirm="This will sign you out here. Continue?"{% endif %}>
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="rs-btn sm {{ 'ghost' if s.current else 'danger' }}"><i class="fas fa-right-from-bracket" aria-hidden="true"></i> {{ 'Sign out here' if s.current else 'Sign out' }}</button>
+      </form>
     </div>
-    <form method="POST" action="{{ url_for('auth.revoke_session', sid_id=s.id) }}"
-          {% if not s.current %}data-confirm="Sign this device out?"{% else %}data-confirm="This will sign you out here. Continue?"{% endif %}>
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-sm {{ 'btn-secondary' if s.current else 'btn-danger' }}">
-        <i class="fas fa-sign-out-alt"></i> {{ 'Sign out here' if s.current else 'Sign out' }}
-      </button>
-    </form>
-  </div>
-  {% else %}
-  <div class="empty-state"><i class="fas fa-laptop"></i><p>No active devices recorded yet.</p></div>
-  {% endfor %}
-</div></div>
+    {% else %}
+    <div class="rs-blank" style="border:0"><span><i class="fas fa-laptop" aria-hidden="true"></i></span><h3>No devices recorded yet</h3><p>Devices appear here after you sign in.</p></div>
+    {% endfor %}
+  </section>
+</div>
 {% endblock %}
