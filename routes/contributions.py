@@ -70,6 +70,9 @@ def _urls():
         'export_defaulters': url_for('contributions.export_defaulters'),
         'clear_all': url_for('contributions.clear_all_data'),
         'logout': url_for('contributions.logout_contributions'),
+        'roster': url_for('contributions.api_roster'),
+        'student_info': url_for('contributions.api_student_info', student_id=0),
+        'student_base': url_for('contributions.student_detail', student_id=0),
     }
 
 
@@ -345,6 +348,8 @@ def add_payment():
             if not _stu or not can_access_branch(_stu.branch_id):
                 return _err('That student is not in your branch.', url_for('contributions.add_payment'))
             amount = float(request.form.get('amount'))
+            if amount <= 0:
+                return _err('Enter an amount greater than zero.', url_for('contributions.add_payment'))
             payment_date = datetime.strptime(request.form.get('payment_date'), '%Y-%m-%d').date()
             received_by = request.form.get('received_by', '').strip()
             notes = request.form.get('notes', '').strip()
@@ -352,8 +357,9 @@ def add_payment():
             db.session.add(payment)
             db.session.commit()
             student = db.session.get(Student, student_id)
-            return _ok(f'Payment of ₦{amount:,.0f} added for {student.full_name}',
-                       url_for('contributions.dashboard'))
+            return _ok(f'₦{amount:,.0f} recorded for {student.full_name}',
+                       url_for('contributions.dashboard'), payment_id=payment.id,
+                       undo_url=url_for('contributions.delete_payment', payment_id=payment.id))
         except Exception as e:
             db.session.rollback()
             return _err(f'Error: {str(e)}', url_for('contributions.add_payment'))
@@ -405,6 +411,7 @@ def payments_list():
         'unique_dates': [{'value': d[0].strftime('%Y-%m-%d'),
                           'label': d[0].strftime('%a, %d %b %Y')} for d in unique_dates if d[0]],
         'payments': [{'id': p.id, 'date': p.payment_date.strftime('%a, %d %b %Y'),
+                      'iso': p.payment_date.strftime('%Y-%m-%d'),
                       'student_name': p.student.full_name, 'amount': p.amount,
                       'received_by': p.received_by or '-', 'notes': p.notes or '-',
                       'detail_url': url_for('contributions.student_detail', student_id=p.student_id),
@@ -456,11 +463,12 @@ def student_detail(student_id):
     from utils.services.contributions import payment_status
     return _render({
         'page': 'student_detail',
-        'student': {'id': student.id, 'name': student.full_name},
+        'student': {'id': student.id, 'name': student.full_name, 'student_id': student.student_id},
         'total_paid': total_paid, 'remaining': remaining, 'max_due': max_due,
         'status': payment_status(total_paid, max_due),
-        'payments': [{'date': p.payment_date.strftime('%d %b %Y'), 'amount': p.amount,
-                      'received_by': p.received_by or '-'} for p in payments],
+        'payments': [{'id': p.id, 'date': p.payment_date.strftime('%d %b %Y'), 'amount': p.amount,
+                      'received_by': p.received_by or '-', 'notes': p.notes or '',
+                      'delete_url': url_for('contributions.delete_payment', payment_id=p.id)} for p in payments],
         'weekly_data': weekly_data,
     })
 
@@ -499,6 +507,7 @@ def expenses_list():
         'category_summary': ([{'name': k, 'amount': v} for k, v in category_summary.items()]
                              if len(category_summary) > 1 else []),
         'expenses': [{'id': e.id, 'date': e.expense_date.strftime('%a, %d %b %Y'),
+                      'iso': e.expense_date.strftime('%Y-%m-%d'),
                       'description': e.description, 'amount': e.amount, 'notes': e.notes or '-',
                       'delete_url': url_for('contributions.delete_expense', expense_id=e.id)}
                      for e in expenses],
@@ -680,6 +689,38 @@ def export_excel():
     except Exception as e:
         flash(f'Export error: {str(e)}', 'error')
         return redirect(url_for('contributions.dashboard'))
+
+
+@contributions_bp.route('/api/roster')
+@contributions_access_required
+def api_roster():
+    """SSS3 roster with each student's paid / balance — feeds the 'Record a
+    payment' student search available on every screen."""
+    active_term = get_active_term()
+    sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
+    active_session = get_active_session()
+    if not active_term or not sss3_class or not active_session:
+        return jsonify({'students': [], 'max_due': 0})
+    max_due = float(ContributionSettings.get('max_due', 20000))
+    ids = [a.id for a in scope_query(ClassArmAssignment.query.filter_by(
+        class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()]
+    enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(ids or [-1]),
+                                                 StudentEnrollment.is_active == True).all()  # noqa: E712
+    from utils.services.contributions import paid_by_student, payment_status
+    paid = paid_by_student(active_session.id, [e.student_id for e in enrollments])
+    rows = []
+    for e in enrollments:
+        p = paid.get(e.student_id, 0)
+        rows.append({'id': e.student_id, 'name': e.student.full_name, 'arm': e.class_arm_assignment.arm_label,
+                     'student_id': e.student.student_id, 'total_paid': p, 'remaining': max(0, max_due - p),
+                     'status': payment_status(p, max_due)})
+    rows.sort(key=lambda r: r['name'])
+    collectors = [r[0] for r in db.session.query(ContributionPayment.received_by)
+                  .filter(ContributionPayment.received_by.isnot(None), ContributionPayment.received_by != '')
+                  .group_by(ContributionPayment.received_by)
+                  .order_by(func.max(ContributionPayment.created_at).desc()).limit(8).all()]
+    return jsonify({'students': rows, 'max_due': max_due, 'collectors': collectors,
+                    'today': timeutil.today().strftime('%Y-%m-%d')})
 
 
 @contributions_bp.route('/api/student/<int:student_id>/info')

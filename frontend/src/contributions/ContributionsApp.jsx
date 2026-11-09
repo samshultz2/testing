@@ -1,895 +1,740 @@
-import React, { useState, useMemo } from 'react';
-import { submitJson, useSave } from '../lib/forms';
-import { useDraft } from '../lib/draft';
+// SSS3 graduation-fund contributions — rebuilt on the results kit.
+// Every screen can record a payment from one sheet (search a student → amount
+// chips → save), so the common job is two taps from anywhere.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { submitJson } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav } from '../lib/section';
-import { confirm, Banner, SectionShell, Empty } from '../components/ui';
+import { confirm, SectionShell, Toast } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, usePhone, Avatar } from '../subjects/results';
 
-const money = (n) => '₦' + Math.round(Number(n) || 0).toLocaleString();
-const armColor = (arm) => (arm === 'Iris' ? 'primary' : arm === 'Rose' ? 'danger' : arm === 'Lily' ? 'warning' : 'info');
+const money = (n) => { const v = Math.round(Number(n) || 0); return (v < 0 ? '−₦' : '₦') + Math.abs(v).toLocaleString(); };
+const short = (n) => {
+  const v = Math.round(Number(n) || 0), a = Math.abs(v), sign = v < 0 ? '−' : '';
+  return a >= 1e6 ? sign + '₦' + (a / 1e6).toFixed(a % 1e6 ? 1 : 0) + 'm' : a >= 1e4 ? sign + '₦' + Math.round(a / 1e3) + 'k' : money(v);
+};
+const pct = (a, b) => (b > 0 ? Math.min(100, (a / b) * 100) : 0);
+const pctTxt = (v) => { const r = Math.round(v * 10) / 10; return (Number.isInteger(r) ? r : r.toFixed(1)) + '%'; };
+const STATUS = { 'Paid': ['good', 'Paid'], 'In Progress': ['mid', 'Part-paid'], 'Not Started': ['bad', 'Not started'] };
+const isoToday = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const isoShift = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const lsGet = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } };
+const studentUrl = (d, id) => (d.urls.student_base || '').replace(/0(\/?)$/, id + '$1');
 
-const A = ({ to, className, children, title, style }) => {
+const A = ({ to, className, children, title }) => {
   const nav = useNav();
-  return <a href={to} title={title} className={className} style={style}
-    onClick={(e) => { e.preventDefault(); nav.go(to); }}>{children}</a>;
+  return <a href={to} title={title} className={className} onClick={(e) => { e.preventDefault(); nav.go(to); }}>{children}</a>;
 };
 
-const Stat = ({ icon, tone, value, label }) => (
-  <div className="stat-card">
-    <div className={`stat-icon ${tone}`}><i aria-hidden="true" className={`fas ${icon}`} /></div>
-    <div className="stat-content"><h3>{value}</h3><p>{label}</p></div>
-  </div>
-);
-
-function Bar({ pct, color = 'var(--success)', height = 8 }) {
-  return (
-    <div style={{ background: 'var(--border-color)', borderRadius: 4, height, overflow: 'hidden' }}>
-      <div style={{ background: color, height: '100%', width: `${Math.min(100, pct)}%` }} />
-    </div>
-  );
+function StatusPill({ status }) {
+  const [t, l] = STATUS[status] || ['', status];
+  return <span className={'sl-pill ' + t}>{l}</span>;
 }
 
-function StatusBadge({ status }) {
-  if (status === 'Paid') return <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span>;
-  if (status === 'Not Started') return <span className="badge badge-danger">Not Started</span>;
-  return <span className="badge badge-warning">In Progress</span>;
+function Meter({ value, max, tone }) {
+  const p = pct(value, max);
+  return <span className={'rs-meter ' + (tone || (p >= 100 ? 'good' : p > 0 ? 'mid' : 'bad'))}><i style={{ width: p + '%' }} /></span>;
 }
 
-// ---- Persistent quick-nav menu, shown above every screen so any page is one
-// click away -- separate from the breadcrumb (which shows *where you are*,
-// not *where you can go*). Items the user can't write to are hidden rather
-// than disabled, matching the rest of the app's convention.
-const NAV_ITEMS = [
-  { key: 'dashboard', icon: 'fa-gauge-high', label: 'Dashboard', sub: 'record' },
+// ---- section nav ------------------------------------------------------------
+const NAV = [
+  { key: 'dashboard', icon: 'fa-gauge-high', label: 'Overview', sub: 'record' },
+  { key: 'quick_entry', icon: 'fa-bolt', label: 'Quick entry', sub: 'record', write: true },
   { key: 'payments', icon: 'fa-list', label: 'Payments', sub: 'record' },
-  { key: 'quick_entry', icon: 'fa-bolt', label: 'Quick Entry', sub: 'record', write: true },
-  { key: 'add_payment', icon: 'fa-plus', label: 'Add Payment', sub: 'record', write: true },
-  { key: 'defaulters', icon: 'fa-user-times', label: 'Defaulters', sub: 'reports' },
+  { key: 'defaulters', icon: 'fa-user-clock', label: 'Owing', sub: 'reports' },
   { key: 'expenses', icon: 'fa-receipt', label: 'Expenses', sub: 'expenses' },
-  { key: 'report', icon: 'fa-chart-bar', label: 'Report', sub: 'reports' },
-  { key: 'daily_summary', icon: 'fa-calendar-alt', label: 'Daily Summary', sub: 'reports' },
-  { key: 'history', icon: 'fa-history', label: 'History', sub: 'reports' },
-  { key: 'import', icon: 'fa-file-import', label: 'Import', sub: 'record', write: true },
-  { key: 'settings', icon: 'fa-cog', label: 'Settings', sub: 'settings', write: true },
+  { key: 'report', icon: 'fa-chart-column', label: 'Reports', sub: 'reports' },
 ];
-
+const REPORT_PAGES = ['report', 'daily_summary', 'history', 'view_session'];
 function canView(d, sub) {
   const p = d && d.perms;
   if (!p || !p.subs) return true;
   const s = p.subs[sub];
   return s ? !!s.level : true;
 }
-
-function ContribNav({ d }) {
+function CNav({ d }) {
   const u = d.urls;
-  const items = NAV_ITEMS.filter((it) => canView(d, it.sub) && (!it.write || canWrite(d, it.sub)) && u[it.key]);
+  const active = REPORT_PAGES.includes(d.page) ? 'report' : d.page === 'add_payment' ? 'dashboard' : d.page === 'add_expense' ? 'expenses' : d.page === 'student_detail' ? 'dashboard' : d.page;
+  const items = NAV.filter((it) => canView(d, it.sub) && (!it.write || canWrite(d, it.sub)) && u[it.key]);
   return (
-    <nav className="contrib-nav" aria-label="Contributions sections">
+    <nav className="sl-nav" aria-label="Contributions">
       {items.map((it) => (
-        <A key={it.key} to={u[it.key]} className={`contrib-nav-item ${d.page === it.key ? 'active' : ''}`}>
-          <i aria-hidden="true" className={`fas ${it.icon}`} /> {it.label}
-        </A>
-      ))}
-      <a href={u.logout} className="contrib-nav-item contrib-nav-exit"><i aria-hidden="true" className="fas fa-sign-out-alt" /> Exit</a>
+        <A key={it.key} to={u[it.key]} className={active === it.key ? 'on' : ''}><i className={'fas ' + it.icon} aria-hidden="true" /><span>{it.label}</span></A>))}
     </nav>
   );
 }
 
-// ---- Dashboard --------------------------------------------------------------
-function Dashboard({ d }) {
+// ---- Record-a-payment sheet (shared by every screen) ------------------------
+const PayCtx = React.createContext(null);
+function usePay() { return React.useContext(PayCtx); }
+
+function PaySheet({ d, initial, onClose, onDone }) {
+  const [roster, setRoster] = useState(null);
+  const [q, setQ] = useState('');
+  const [stu, setStu] = useState(initial || null);
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(isoToday());
+  const [by, setBy] = useState(lsGet('contrib.receivedBy', ''));
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const amtRef = useRef(null);
+  useEffect(() => {
+    fetch(d.urls.roster, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then((r) => r.json()).then((j) => {
+        setRoster(j);
+        if (initial && initial.id) {
+          const full = (j.students || []).find((s) => s.id === initial.id);
+          if (full) setStu(full);
+        }
+      }).catch(() => setRoster({ students: [], collectors: [] }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (stu && amtRef.current) amtRef.current.focus(); }, [stu && stu.id]); // eslint-disable-line
+  const ql = q.trim().toLowerCase();
+  const matches = roster ? roster.students.filter((s) => !ql || s.name.toLowerCase().includes(ql) || (s.student_id || '').toLowerCase().includes(ql) || (s.arm || '').toLowerCase() === ql).slice(0, 40) : [];
+  const remaining = stu && stu.remaining != null ? stu.remaining : null;
+  const chips = [remaining > 0 && { v: remaining, l: `Full balance · ${money(remaining)}` }, ...[1000, 2000, 5000, 10000].filter((x) => remaining == null || x < remaining).map((x) => ({ v: x, l: money(x) }))].filter(Boolean);
+  const amt = Number(amount) || 0;
+  const save = async (next) => {
+    setErr('');
+    if (!stu) { setErr('Choose a student.'); return; }
+    if (!(amt > 0)) { setErr('Enter the amount received.'); amtRef.current && amtRef.current.focus(); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.add_payment, { student_id: stu.id, amount: amt, payment_date: date, received_by: by.trim(), notes: note.trim() });
+    setBusy(false);
+    if (!r.ok) { setErr(r.error || 'Could not save.'); return; }
+    if (by.trim()) lsSet('contrib.receivedBy', by.trim());
+    onDone({ text: r.message, undo: r.undo_url, student: stu, amount: amt });
+    if (next) {
+      setRoster((ro) => ro && { ...ro, students: ro.students.map((s) => (s.id === stu.id ? { ...s, total_paid: s.total_paid + amt, remaining: Math.max(0, s.remaining - amt) } : s)) });
+      setStu(null); setAmount(''); setNote(''); setQ('');
+    } else onClose();
+  };
+  return (
+    <Sheet title="Record a payment" onClose={onClose}>
+      <div className="ct-pay">
+        {!stu ? (
+          <>
+            <label className="rs-search ct-find"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+              <input autoFocus type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a student by name or ID" aria-label="Search a student" /></label>
+            <div className="ct-pick">
+              {!roster ? <p className="rs-muted ct-p"><i className="fas fa-spinner fa-spin" aria-hidden="true" /> Loading students…</p>
+                : matches.length ? matches.map((s) => (
+                  <button key={s.id} type="button" className="ct-pick-row" onClick={() => setStu(s)}>
+                    <Avatar name={s.name} />
+                    <span className="ct-n"><b>{s.name}</b><small>{s.arm ? s.arm + ' · ' : ''}{s.remaining > 0 ? `owes ${money(s.remaining)}` : 'fully paid'}</small></span>
+                    <StatusPill status={s.status} />
+                  </button>))
+                : <p className="rs-muted ct-p">No SSS3 student matches “{q}”.</p>}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="ct-who">
+              <Avatar name={stu.name} />
+              <span className="ct-n"><b>{stu.name}</b><small>{stu.arm ? stu.arm + ' · ' : ''}paid {money(stu.total_paid || 0)}{remaining != null ? ` · balance ${money(remaining)}` : ''}</small></span>
+              {!initial && <button type="button" className="rs-btn ghost sm" onClick={() => setStu(null)}>Change</button>}
+            </div>
+            {stu.total_paid != null && roster && <Meter value={stu.total_paid} max={roster.max_due} />}
+            <label className="ct-f"><span>Amount received</span>
+              <div className="ct-amt"><b>₦</b><input ref={amtRef} type="number" inputmode="numeric" min="1" step="50" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0"
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(false); } }} /></div></label>
+            <div className="rs-chips ct-chips">{chips.map((c) => (
+              <button key={c.l} type="button" className={'rs-chip' + (amt === c.v ? ' on' : '')} onClick={() => setAmount(String(c.v))}>{c.l}</button>))}</div>
+            {remaining != null && amt > remaining && remaining > 0 && <p className="ct-warn"><i className="fas fa-circle-info" aria-hidden="true" /> That's {money(amt - remaining)} more than the balance.</p>}
+            <div className="ct-row2">
+              <div className="ct-f"><span>Date</span>
+                <div className="ct-dates">
+                  <button type="button" className={'rs-chip' + (date === isoToday() ? ' on' : '')} onClick={() => setDate(isoToday())}>Today</button>
+                  <button type="button" className={'rs-chip' + (date === isoShift(-1) ? ' on' : '')} onClick={() => setDate(isoShift(-1))}>Yesterday</button>
+                  <input type="date" value={date} max={isoToday()} onChange={(e) => setDate(e.target.value)} aria-label="Payment date" />
+                </div></div>
+              <label className="ct-f"><span>Received by</span>
+                <input list="ctCollectors" value={by} onChange={(e) => setBy(e.target.value)} placeholder="Your name" />
+                <datalist id="ctCollectors">{((roster && roster.collectors) || []).map((c) => <option key={c} value={c} />)}</datalist></label>
+            </div>
+            <label className="ct-f"><span>Note <em>(optional)</em></span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. paid by mother, cash" /></label>
+          </>
+        )}
+        {err && <p className="ct-err" role="alert">{err}</p>}
+        {stu && (
+          <div className="ct-acts">
+            <button type="button" className="rs-btn ghost" disabled={busy} onClick={() => save(true)}><i className="fas fa-forward" aria-hidden="true" /> Save &amp; next</button>
+            <button type="button" className="rs-btn primary" disabled={busy} onClick={() => save(false)}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save {amt > 0 ? money(amt) : ''}</button>
+          </div>)}
+      </div>
+    </Sheet>
+  );
+}
+
+// Header actions shared by every screen.
+function HeadActions({ d, extra }) {
+  const pay = usePay();
   const u = d.urls;
-  const s = d.stats;
-  const [search, setSearch] = useState('');
-  const [arm, setArm] = useState('');
-  const [status, setStatus] = useState('');
-  const shown = d.students.filter((st) =>
-    st.name.toLowerCase().includes(search.toLowerCase())
-    && (!arm || st.arm === arm) && (!status || st.status === status));
-  const netTone = s.net_balance >= 0 ? 'success' : 'danger';
+  const rec = canWrite(d, 'record');
   return (
     <>
-      <div className="page-header">
-        <h1><i aria-hidden="true" className="fas fa-hand-holding-usd" /> SSS3 Contributions</h1>
-        <div className="header-actions">
-          {canWrite(d, 'record') && <A to={u.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-bolt" /> Quick Entry</A>}
-          {canWrite(d, 'record') && <A to={u.add_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Payment</A>}
-          <a href={u.export} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
-        </div>
-      </div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-users" tone="primary" value={s.total_students} label="Total Students" />
-        <Stat icon="fa-coins" tone="info" value={money(s.total_expected)} label="Expected" />
-        <Stat icon="fa-hand-holding-usd" tone="success" value={money(s.total_received)} label="Received" />
-        <Stat icon="fa-receipt" tone="warning" value={money(s.total_expenses)} label="Expenses" />
-        <Stat icon="fa-wallet" tone={netTone} value={money(s.net_balance)} label="Net Balance" />
-        <Stat icon="fa-check-circle" tone="success" value={`${s.fully_paid_count}/${s.total_students}`} label="Fully Paid" />
-        <Stat icon="fa-hourglass-half" tone="warning" value={s.in_progress_count} label="In Progress" />
-        <Stat icon="fa-ban" tone="danger" value={s.not_started_count} label="Not Started" />
-      </div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-exclamation-circle" tone="danger" value={money(s.total_outstanding)} label="Outstanding" />
-        <Stat icon="fa-calculator" tone="info" value={money(s.avg_paid)} label="Avg. Paid/Student" />
-        <Stat icon="fa-clipboard-list" tone="primary" value={s.total_payments} label="Total Transactions" />
-        <Stat icon="fa-calendar-day" tone="warning" value={money(s.today_collections)} label="Today's Collection" />
-        <Stat icon="fa-calendar-week" tone="info" value={money(s.week_collections)} label="This Week" />
-        <Stat icon="fa-percentage" tone="primary" value={`${s.collection_rate.toFixed(1)}%`} label="Collection Rate" />
-      </div>
-
-      <div className="card mb-3"><div className="card-body">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span><strong>Collection Progress</strong></span>
-          <strong>{money(s.total_received)} / {money(s.total_expected)}</strong>
-        </div>
-        <div style={{ background: 'var(--border-color)', borderRadius: 10, height: 24, overflow: 'hidden', position: 'relative' }}>
-          <div style={{ background: 'linear-gradient(90deg, #1a5f4a, var(--success))', height: '100%', width: `${s.collection_rate}%` }} />
-          <span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', fontWeight: 'bold', color: s.collection_rate > 50 ? 'white' : '#333' }}>{s.collection_rate.toFixed(1)}%</span>
-        </div>
-      </div></div>
-
-      <div className="card mb-3" style={{ borderLeft: `4px solid ${s.net_balance >= 0 ? 'var(--success)' : 'var(--danger)'}` }}>
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calculator" /> Financial Summary</h3></div>
-        <div className="card-body">
-          <div className="financial-grid">
-            <div className="financial-item"><span className="financial-label">Total Collected</span><span className="financial-value text-success">{money(s.total_received)}</span></div>
-            <div className="financial-item"><span className="financial-label">Total Expenses</span><span className="financial-value text-danger">- {money(s.total_expenses)}</span></div>
-            <div className="financial-item financial-total"><span className="financial-label">Available Balance</span><span className={`financial-value ${netTone === 'success' ? 'text-success' : 'text-danger'}`}>{money(s.net_balance)}</span></div>
-          </div>
-          <div style={{ marginTop: '1rem' }}>
-            <A to={u.expenses} className="btn btn-sm btn-outline-danger"><i aria-hidden="true" className="fas fa-receipt" /> View All Expenses</A>{' '}
-            <A to={u.add_expense} className="btn btn-sm btn-outline-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>
-          </div>
-        </div>
-      </div>
-
-      <div className="data-cards mb-3">
-        {[['payments', 'fa-list', 'All Payments', `${s.total_payments}`, 'primary', 'View and manage payment records'],
-          ['expenses', 'fa-receipt', 'Expenses', `${s.expense_count}`, 'warning', 'Track fund expenses'],
-          ['report', 'fa-chart-bar', 'Report by Arm', null, null, 'Detailed breakdown by class arm'],
-          ['defaulters', 'fa-user-times', 'Defaulters', `${s.total_students - s.fully_paid_count}`, 'danger', 'Students with outstanding balance'],
-          ['daily_summary', 'fa-calendar-alt', 'Daily Summary', null, null, 'Collections by date'],
-          ['history', 'fa-history', 'Session History', null, null, 'View past session records'],
-          ['settings', 'fa-cog', 'Settings', null, null, 'Configure max due, dates']].map(([key, icon, title, badge, tone, sub]) => (
-          <A key={key} to={u[key]} className="data-card" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="data-card-header"><div className="data-card-title"><i aria-hidden="true" className={`fas ${icon}`} /> {title}</div>
-              {badge != null && <span className={`badge badge-${tone}`}>{badge}</span>}</div>
-            <div className="data-card-row">{sub}</div>
-          </A>
-        ))}
-      </div>
-
-      {d.arms_summary.some((a) => a.name) && <div className="card mb-3">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Progress by Arm</h3></div>
-        <div className="card-body">
-          {d.arms_summary.map((a) => (
-            <div className="arm-progress-row" key={a.name}>
-              <div className="arm-info">
-                <span className={`arm-name badge badge-${armColor(a.name)}`}>{a.name}</span>
-                <span className="arm-stats">{a.paid}/{a.total} paid</span>
-              </div>
-              <div className="arm-bar-container">
-                <div className="arm-bar" style={{ width: `${a.percentage}%`, background: a.percentage >= 75 ? 'var(--success)' : a.percentage >= 50 ? 'var(--warning)' : 'var(--danger)' }} />
-              </div>
-              <div className="arm-amount">{money(a.collected)}</div>
-            </div>
-          ))}
-        </div>
-      </div>}
-
-      <div className="row mb-3">
-        <div className="col-md-6"><div className="card h-100">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock" /> Recent Payments</h3>
-            <A to={u.payments} className="btn btn-sm btn-outline-primary">View All</A></div>
-          <div className="card-body" style={{ padding: 0 }}><table className="data-table"><tbody>
-            {d.recent_payments.length ? d.recent_payments.map((p, i) => (
-              <tr key={i}>
-                <td><A to={p.detail_url}>{p.student_name.slice(0, 20)}{p.student_name.length > 20 ? '…' : ''}</A></td>
-                <td><strong>{money(p.amount)}</strong></td>
-                <td><small className="text-muted">{p.date_short}</small></td>
-              </tr>
-            )) : <tr><td colSpan="3" className="text-center text-muted">No payments yet</td></tr>}
-          </tbody></table></div>
-        </div></div>
-        <div className="col-md-6"><div className="card h-100">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-trophy" /> Top Contributors</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><table className="data-table"><tbody>
-            {d.top_contributors.length ? d.top_contributors.map((st, i) => (
-              <tr key={i}>
-                <td><span className={`rank-badge ${i < 3 ? `top-${i + 1}` : ''}`}>{i + 1}</span>
-                  <A to={st.detail_url}>{st.name.slice(0, 18)}{st.name.length > 18 ? '…' : ''}</A></td>
-                <td><strong>{money(st.total_paid)}</strong></td>
-                <td>{st.total_paid >= s.max_due ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /></span> : <small className="text-muted">{(st.total_paid / s.max_due * 100).toFixed(0)}%</small>}</td>
-              </tr>
-            )) : <tr><td colSpan="3" className="text-center text-muted">No payments yet</td></tr>}
-          </tbody></table></div>
-        </div></div>
-      </div>
-
-      <div className="card">
-        <div className="card-header">
-          <h3><i aria-hidden="true" className="fas fa-users" /> All Students ({d.students.length})</h3>
-          <div className="filter-group">
-            <input type="text" className="form-control" placeholder="Search students..." style={{ width: 200 }} value={search} onChange={(e) => setSearch(e.target.value)} />
-            <select className="form-control" style={{ width: 120 }} value={arm} onChange={(e) => setArm(e.target.value)}>
-              <option value="">All Arms</option><option>Iris</option><option>Rose</option><option>Lily</option><option>Daisy</option>
-            </select>
-            <select className="form-control" style={{ width: 140 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All Status</option><option value="Paid">Paid</option>
-              <option value="In Progress">In Progress</option><option value="Not Started">Not Started</option>
-            </select>
-          </div>
-        </div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead><tr><th>#</th><th>Name</th><th>Arm</th><th>Paid</th><th>Remaining</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-              {shown.map((st, i) => (
-                <tr key={st.id}>
-                  <td>{i + 1}</td>
-                  <td><strong>{st.name}</strong></td>
-                  <td>{st.arm ? <span className={`badge badge-${armColor(st.arm)}`}>{st.arm}</span> : <span className="text-muted">—</span>}</td>
-                  <td><strong>{money(st.total_paid)}</strong></td>
-                  <td>{st.remaining > 0 ? <span className="text-danger">{money(st.remaining)}</span> : <span className="text-success">-</span>}</td>
-                  <td style={{ width: 100 }}>
-                    <Bar pct={st.percentage} color={st.percentage >= 100 ? 'var(--success)' : st.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'} />
-                    <small className="text-muted">{st.percentage.toFixed(0)}%</small>
-                  </td>
-                  <td><StatusBadge status={st.status} /></td>
-                  <td>
-                    <A to={st.detail_url} className="btn btn-sm btn-info" title="View"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
-                    {canWrite(d, 'record') && <A to={st.add_payment_url} className="btn btn-sm btn-success" title="Add Payment"><i aria-hidden="true" className="fas fa-plus" /></A>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {rec && <button type="button" className="rs-btn primary" onClick={() => pay.open()}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">Record payment</span></button>}
+      <Menu items={[
+        ...(extra || []),
+        rec && { icon: 'fa-bolt', label: 'Quick entry (many students)', href: u.quick_entry },
+        canWrite(d, 'expenses') && { icon: 'fa-receipt', label: 'Add an expense', href: u.add_expense },
+        { heading: 'Reports' },
+        { icon: 'fa-calendar-day', label: 'Daily summary', href: u.daily_summary },
+        { icon: 'fa-chart-column', label: 'By arm', href: u.report },
+        { icon: 'fa-clock-rotate-left', label: 'Past sessions', href: u.history },
+        { icon: 'fa-file-excel', label: 'Download Excel', href: u.export, native: true },
+        { heading: 'Manage' },
+        rec && { icon: 'fa-file-import', label: 'Import from Excel', href: u.import },
+        canWrite(d, 'settings') && { icon: 'fa-gear', label: 'Settings', href: u.settings },
+        { icon: 'fa-right-from-bracket', label: 'Lock & exit', href: u.logout, native: true },
+      ]} />
     </>
   );
 }
 
-// ---- Quick entry ------------------------------------------------------------
+// ---- Overview --------------------------------------------------------------
+function Dashboard({ d }) {
+  const s = d.stats;
+  const pay = usePay();
+  const phone = usePhone();
+  const [q, setQ] = useState('');
+  const [st, setSt] = useState('');
+  const [arm, setArm] = useState('');
+  const rec = canWrite(d, 'record');
+  const ql = q.trim().toLowerCase();
+  const rows = d.students.filter((x) => (!st || x.status === st) && (!arm || x.arm === arm) && (!ql || x.name.toLowerCase().includes(ql) || (x.student_id || '').toLowerCase().includes(ql)));
+  const arms = d.arms_summary || [];
+  const count = (k) => d.students.filter((x) => x.status === k && (!arm || x.arm === arm)).length;
+  const balance = s.net_balance;
+  return (
+    <div className="rs bx ct">
+      <Head icon="fa-hand-holding-dollar" title="Graduation fund" sub={`SSS3 contributions · ${money(s.max_due)} per student · ${s.total_students} students`}><HeadActions d={d} /></Head>
+      <CNav d={d} />
+      <Tiles items={[
+        { label: 'Collected', value: short(s.total_received), sub: `${pctTxt(s.collection_rate)} of ${short(s.total_expected)}`, tone: s.collection_rate >= 75 ? 'good' : s.collection_rate >= 40 ? 'mid' : 'bad' },
+        { label: 'Still owed', value: short(s.total_outstanding), sub: `${s.not_started_count + s.in_progress_count} students owing` },
+        { label: 'Cash at hand', value: short(balance), sub: `after ${short(s.total_expenses)} spent`, tone: balance < 0 ? 'bad' : '' },
+        { label: 'Today', value: short(s.today_collections), sub: `${short(s.week_collections)} this week` },
+      ]} />
+
+      <section className="rs-card ct-prog">
+        <div className="ct-prog-h"><b>{pctTxt(s.collection_rate)} collected</b><span>{money(s.total_received)} of {money(s.total_expected)}</span></div>
+        <div className="ct-stack" role="img" aria-label="Students by status">
+          {[['Paid', s.fully_paid_count, 'good'], ['In Progress', s.in_progress_count, 'mid'], ['Not Started', s.not_started_count, 'bad']].map(([k, n, t]) => n > 0 && (
+            <button key={k} type="button" className={'ct-seg ' + t + (st === k ? ' on' : '')} style={{ flexGrow: n }} onClick={() => setSt(st === k ? '' : k)} title={`${n} ${STATUS[k][1]}`}>{n}</button>))}
+        </div>
+        <div className="ct-legend">
+          <span><i className="good" /> Paid {s.fully_paid_count}</span><span><i className="mid" /> Part-paid {s.in_progress_count}</span><span><i className="bad" /> Not started {s.not_started_count}</span>
+        </div>
+      </section>
+
+      <div className="ct-two">
+        <section className="rs-card flush">
+          <div className="ct-tools">
+            <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a student" aria-label="Find a student" />
+              {(q || st || arm) && <span className="bx-count">{rows.length} of {d.students.length}</span>}</label>
+            <Seg label="Status" value={st} onChange={setSt} options={[
+              { value: '', label: 'All' }, { value: 'Not Started', label: 'Not started', count: count('Not Started') },
+              { value: 'In Progress', label: 'Part-paid', count: count('In Progress') }, { value: 'Paid', label: 'Paid', count: count('Paid') }]} />
+          </div>
+          {arms.length > 1 && <div className="ct-arms"><Chips label="Arm" value={arm} onChange={(v) => setArm(v === arm ? '' : v)}
+            items={[{ value: '', label: 'All arms' }, ...arms.map((a) => ({ value: a.name, label: a.name, sub: `${a.paid}/${a.total}` }))]} /></div>}
+          <ul className="ct-list">
+            {rows.map((x) => (
+              <li key={x.id} className="ct-li">
+                <button type="button" className="ct-li-main" onClick={() => (rec ? pay.open(x) : null)} disabled={!rec} title={rec ? 'Record a payment' : ''}>
+                  <Avatar name={x.name} />
+                  <span className="ct-n"><b>{x.name}</b><small>{x.arm}{x.arm ? ' · ' : ''}{x.status === 'Paid' ? 'fully paid' : `owes ${money(x.remaining)}`}</small></span>
+                  <span className="ct-amt-col"><Meter value={x.total_paid} max={x.max_due} /><small>{money(x.total_paid)}</small></span>
+                  {!phone && <StatusPill status={x.status} />}
+                </button>
+                <A to={x.detail_url} className="rs-icon-btn" title="History"><i className="fas fa-chevron-right" aria-hidden="true" /></A>
+              </li>))}
+          </ul>
+          {!rows.length && <Blank icon="fa-users" title={d.students.length ? 'No one matches' : 'No SSS3 students'}><p>{d.students.length ? 'Try another search or filter.' : 'Enrol SSS3 students for the active term to start collecting.'}</p></Blank>}
+        </section>
+
+        <div className="ct-side">
+          {arms.length > 0 && (
+            <section className="rs-card">
+              <div className="rs-card-h"><h3><i className="fas fa-people-group" aria-hidden="true" /> By arm</h3></div>
+              <div className="ct-armbars">{arms.map((a) => (
+                <button key={a.name} type="button" className={'ct-armbar' + (arm === a.name ? ' on' : '')} onClick={() => setArm(arm === a.name ? '' : a.name)}>
+                  <span className="t"><b>{a.name || '—'}</b><small>{a.paid}/{a.total} paid · {short(a.collected)}</small></span>
+                  <Meter value={a.percentage} max={100} /><em>{pctTxt(a.percentage)}</em></button>))}</div>
+            </section>)}
+          <section className="rs-card flush">
+            <div className="rs-card-h pad"><h3><i className="fas fa-clock-rotate-left" aria-hidden="true" /> Latest payments</h3><A to={d.urls.payments} className="ct-link">All</A></div>
+            {(d.recent_payments || []).length ? <ul className="ct-mini">{d.recent_payments.map((p, i) => (
+              <li key={i}><A to={p.detail_url}><span>{p.student_name}</span><small>{p.date_short}</small><b>{money(p.amount)}</b></A></li>))}</ul>
+              : <p className="rs-muted ct-p">No payments yet this session.</p>}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Quick entry -----------------------------------------------------------
 function QuickEntry({ d, notify }) {
   const nav = useNav();
-  const save = useSave(notify);
+  const [amounts, setAmounts] = useState({});
   const [date, setDate] = useState(d.today);
-  const [receivedBy, setReceivedBy] = useState('');
-  // Recover a half-entered batch of amounts if the page is reloaded/navigated away.
-  const [amounts, setAmounts, clearAmounts] = useDraft('contrib-quick-entry', {});
-  const [search, setSearch] = useState('');
+  const [by, setBy] = useState(lsGet('contrib.receivedBy', ''));
   const [arm, setArm] = useState('');
-  const [statusF, setStatusF] = useState('');
-  const setAmt = (id, v) => setAmounts((a) => ({ ...a, [id]: v }));
-  const shown = d.students.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) && (!arm || s.arm === arm)
-    && (!statusF || s.status === statusF));
-  const entered = Object.entries(amounts).filter(([, v]) => parseFloat(v) > 0);
-  const total = entered.reduce((t, [, v]) => t + parseFloat(v), 0);
-  const submit = (e) => {
-    e.preventDefault();
-    const fields = { payment_date: date, received_by: receivedBy };
-    entered.forEach(([id, v]) => { fields[`amount_${id}`] = v; });
-    save(d.submit_url, fields, () => { clearAmounts(); setAmounts({}); nav.refresh(); });
+  const [q, setQ] = useState('');
+  const [owingOnly, setOwingOnly] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const arms = [...new Set(d.students.map((s) => s.arm))].filter(Boolean).sort();
+  const ql = q.trim().toLowerCase();
+  const rows = d.students.filter((s) => (!arm || s.arm === arm) && (!owingOnly || s.remaining > 0 || amounts[s.id]) && (!ql || s.name.toLowerCase().includes(ql)));
+  const entered = Object.entries(amounts).filter(([, v]) => Number(v) > 0);
+  const total = entered.reduce((t, [, v]) => t + Number(v), 0);
+  const set = (id, v) => setAmounts((m) => ({ ...m, [id]: v }));
+  const save = async () => {
+    if (!entered.length) { notify('error', 'Type at least one amount.'); return; }
+    if (!await confirm(`Save ${entered.length} payment${entered.length === 1 ? '' : 's'} totalling ${money(total)} for ${date}?`)) return;
+    setBusy(true);
+    const payload = { payment_date: date, received_by: by.trim() };
+    entered.forEach(([id, v]) => { payload['amount_' + id] = v; });
+    const r = await submitJson(d.submit_url, payload);
+    setBusy(false);
+    if (r.ok) { if (by.trim()) lsSet('contrib.receivedBy', by.trim()); notify('success', r.message); setAmounts({}); nav.refresh(); }
+    else notify('error', r.error || 'Could not save.');
   };
-  const clear = () => { clearAmounts(); setAmounts({}); };
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-bolt" /> Quick Payment Entry</h1>
-        <A to={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
-      <div className="card mb-3">
-        <div className="card-header"><h3>Enter Multiple Payments</h3></div>
-        <div className="card-body">
-          <p className="text-muted mb-3">Set the date and receiver, then enter amounts for students who paid.</p>
-          <form onSubmit={submit}>
-            <div className="row mb-3">
-              <div className="col-md-4"><label className="form-label">Payment Date *</label>
-                <input type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
-              <div className="col-md-4"><label className="form-label">Received By</label>
-                <input type="text" className="form-control" placeholder="Name of collector" value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} /></div>
-            </div>
-            <div className="row mb-3">
-              <div className="col-md-4"><input type="text" className="form-control" placeholder="🔍 Search student..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-              <div className="col-md-4"><select className="form-control" value={arm} onChange={(e) => setArm(e.target.value)}>
-                <option value="">All Arms</option><option>Iris</option><option>Rose</option><option>Lily</option><option>Daisy</option></select></div>
-              <div className="col-md-4"><select className="form-control" value={statusF} onChange={(e) => setStatusF(e.target.value)}>
-                <option value="">All Status</option><option value="Not Started">Not Started</option>
-                <option value="In Progress">In Progress</option><option value="Paid">Fully Paid</option></select></div>
-            </div>
-            <div className="students-grid">
-              {shown.map((s) => {
-                const has = parseFloat(amounts[s.id]) > 0;
-                return (
-                  <div className={`student-entry ${has ? 'has-amount' : ''}`} key={s.id}>
-                    <div className="student-info">
-                      <span className="student-name">{s.name}</span>
-                      {s.arm && <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span>}
-                      <StatusBadge status={s.status} />
-                    </div>
-                    <div className="student-status"><small>Paid: {money(s.total_paid)} | Rem: {money(s.remaining)}</small></div>
-                    <div className="student-input">
-                      <input type="number" className="form-control" placeholder="₦ Amount" min="0" step="1"
-                        value={amounts[s.id] || ''} onChange={(e) => setAmt(s.id, e.target.value)} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="entry-summary">
-              <div className="summary-item"><span>Students:</span><strong>{entered.length}</strong></div>
-              <div className="summary-item"><span>Total:</span><strong>{money(total)}</strong></div>
-            </div>
-            <div className="form-actions">
-              <button type="submit" className="btn btn-success btn-lg"><i aria-hidden="true" className="fas fa-save" /> Save All Payments</button>
-              <button type="button" className="btn btn-secondary" onClick={clear}><i aria-hidden="true" className="fas fa-eraser" /> Clear</button>
-              <A to={d.urls.dashboard} className="btn btn-outline-secondary"><i aria-hidden="true" className="fas fa-times" /> Cancel</A>
-            </div>
-          </form>
+    <div className="rs bx ct">
+      <Head icon="fa-bolt" title="Quick entry" sub="Type what each student paid, then save them all at once"><HeadActions d={d} /></Head>
+      <CNav d={d} />
+      <section className="rs-pick">
+        <div className="rs-pick-row">
+          <label className="rs-sel"><span>Date received</span><input type="date" className="ct-in" value={date} max={d.today} onChange={(e) => setDate(e.target.value)} /></label>
+          <label className="rs-sel grow"><span>Received by</span><input className="ct-in" value={by} onChange={(e) => setBy(e.target.value)} placeholder="Your name" /></label>
         </div>
-      </div>
-    </>
+        <div className="ct-tools nopad">
+          <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a student" aria-label="Find a student" /></label>
+          <button type="button" className={'rs-chip' + (owingOnly ? ' on' : '')} onClick={() => setOwingOnly((v) => !v)}><i className="fas fa-filter" aria-hidden="true" /> Owing only</button>
+        </div>
+        {arms.length > 1 && <Chips label="Arm" value={arm} onChange={(v) => setArm(v === arm ? '' : v)} items={[{ value: '', label: 'All arms' }, ...arms.map((a) => ({ value: a, label: a }))]} />}
+      </section>
+      <section className="rs-card flush">
+        <ul className="ct-list">
+          {rows.map((s) => {
+            const v = amounts[s.id] || '';
+            return (
+              <li key={s.id} className={'ct-li ct-qe' + (Number(v) > 0 ? ' on' : '')}>
+                <span className="ct-n"><b>{s.name}</b><small>{s.arm}{s.arm ? ' · ' : ''}{s.remaining > 0 ? `owes ${money(s.remaining)}` : 'fully paid'}</small></span>
+                {s.remaining > 0 && <button type="button" className="rs-chip ct-full" onClick={() => set(s.id, String(s.remaining))} title="Fill the full balance">Full</button>}
+                <span className="ct-amt sm"><b>₦</b><input type="number" inputMode="numeric" min="0" step="50" value={v} placeholder="0" aria-label={`Amount for ${s.name}`}
+                  onChange={(e) => set(s.id, e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const all = Array.from(document.querySelectorAll('.ct-qe input')); const i = all.indexOf(e.currentTarget); if (all[i + 1]) all[i + 1].focus(); } }} /></span>
+              </li>);
+          })}
+        </ul>
+        {!rows.length && <Blank icon="fa-circle-check" title="Nothing to enter"><p>{owingOnly ? 'Everyone shown has fully paid. Untick “Owing only” to see all.' : 'No students match.'}</p></Blank>}
+      </section>
+      <Bar>
+        <div className="rs-bar-t"><b>{entered.length ? `${entered.length} payment${entered.length === 1 ? '' : 's'} · ${money(total)}` : 'Type amounts to save'}</b><small>Enter moves to the next student</small></div>
+        {entered.length > 0 && <button type="button" className="rs-btn ghost" onClick={() => setAmounts({})}>Clear</button>}
+        <button type="button" className="rs-btn primary" disabled={busy || !entered.length} onClick={save}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save all</button>
+      </Bar>
+    </div>
   );
 }
 
-// ---- Add payment ------------------------------------------------------------
-function AddPayment({ d, notify }) {
+// ---- Add payment (deep-link page: opens the sheet) -------------------------
+function AddPayment({ d }) {
+  const pay = usePay();
   const nav = useNav();
-  const save = useSave(notify);
-  const [studentId, setStudentId] = useState(d.preselect ? String(d.preselect) : '');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(d.today);
-  const [receivedBy, setReceivedBy] = useState('');
-  const [notes, setNotes] = useState('');
-  const [info, setInfo] = useState(null);
-  const loadInfo = async (id) => {
-    if (!id) { setInfo(null); return; }
-    try {
-      const res = await fetch(d.info_url_base.replace(/0$/, id), { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' });
-      setInfo(await res.json());
-    } catch (_) { setInfo(null); }
-  };
-  React.useEffect(() => { if (d.preselect) loadInfo(d.preselect); }, []);
-  const onStudent = (e) => { setStudentId(e.target.value); loadInfo(e.target.value); };
-  const submit = (e) => {
-    e.preventDefault();
-    save(d.submit_url, { student_id: studentId, amount, payment_date: date, received_by: receivedBy, notes },
-      (r) => nav.go(r.redirect || d.urls.dashboard));
-  };
-  const quick = [100, 200, 500, 1000, 2000, 5000];
+  useEffect(() => {
+    const s = d.preselect ? (d.students || []).find((x) => x.id === d.preselect) : null;
+    pay.open(s ? { id: s.id, name: s.name.replace(/ \(.*\)$/, '') } : null, () => nav.go(d.urls.dashboard));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-plus-circle" /> Add Payment</h1></div>
-      <div className="card"><div className="card-body"><form onSubmit={submit}>
-        <div className="form-group"><label className="form-label">Student *</label>
-          <select className="form-control" value={studentId} onChange={onStudent} required>
-            <option value="">Select Student</option>
-            {d.students.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select></div>
-        {info && (
-          <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: 8 }}>
-            <div className="info-row"><span>Total Paid:</span> <strong>{money(info.total_paid)}</strong></div>
-            <div className="info-row"><span>Remaining:</span> <strong>{money(info.remaining)}</strong></div>
-          </div>
-        )}
-        <div className="form-group"><label className="form-label">Amount (₦) *</label>
-          <input type="number" className="form-control" required min="1" step="1" placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {quick.map((q) => <button type="button" key={q} className="btn btn-sm btn-outline-secondary" onClick={() => setAmount(String(q))}>₦{q.toLocaleString()}</button>)}
-          </div></div>
-        <div className="form-group"><label className="form-label">Payment Date *</label>
-          <input type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
-        <div className="form-group"><label className="form-label">Received By</label>
-          <input type="text" className="form-control" placeholder="Name of person who received payment" value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Notes</label>
-          <textarea className="form-control" rows="2" placeholder="Any additional notes" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-        <div className="form-actions">
-          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Payment</button>
-          <A to={d.urls.dashboard} className="btn btn-secondary">Cancel</A>
-        </div>
-      </form></div></div>
-    </>
+    <div className="rs bx ct">
+      <Head icon="fa-plus" title="Record a payment" sub="Search the student, enter the amount, save"><HeadActions d={d} /></Head>
+      <CNav d={d} />
+      <Blank icon="fa-hand-holding-dollar" title="Record a payment"><button type="button" className="rs-btn primary" onClick={() => pay.open()}><i className="fas fa-plus" aria-hidden="true" /> Open the payment form</button></Blank>
+    </div>
   );
 }
 
-// ---- Payments list ----------------------------------------------------------
+// ---- Payments ----------------------------------------------------------------
 function PaymentsList({ d, notify }) {
   const nav = useNav();
-  const save = useSave(notify);
-  const [from, setFrom] = useState(d.from_date || '');
-  const [to, setTo] = useState(d.to_date || '');
-  const del = async (p) => { if (await confirm('Delete this payment?')) save(p.delete_url, {}, () => nav.refresh()); };
-  const onFilter = (e) => { const v = e.target.value; nav.go(v ? `${d.urls.payments}?date=${v}` : d.urls.payments); };
-  const applyRange = () => {
-    const p = [];
-    if (from) p.push(`from=${from}`);
-    if (to) p.push(`to=${to}`);
-    nav.go(p.length ? `${d.urls.payments}?${p.join('&')}` : d.urls.payments);
+  const [q, setQ] = useState('');
+  const canDel = canWrite(d, 'record');
+  const today = isoToday();
+  const weekStart = (() => { const x = new Date(); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); return x.toISOString().slice(0, 10); })();
+  const monthStart = today.slice(0, 8) + '01';
+  const range = d.filter_date ? (d.filter_date === today ? 'today' : 'day') : d.from_date === weekStart && !d.to_date ? 'week' : d.from_date === monthStart && !d.to_date ? 'month' : (d.from_date || d.to_date) ? 'custom' : 'all';
+  const goRange = (k) => {
+    const base = d.urls.payments;
+    const qs = k === 'today' ? `?date=${today}` : k === 'week' ? `?from=${weekStart}` : k === 'month' ? `?from=${monthStart}` : '';
+    nav.go(base + qs);
   };
-  const clearRange = () => { setFrom(''); setTo(''); nav.go(d.urls.payments); };
+  const ql = q.trim().toLowerCase();
+  const rows = d.payments.filter((p) => !ql || p.student_name.toLowerCase().includes(ql) || (p.received_by || '').toLowerCase().includes(ql));
+  const days = [];
+  const idx = {};
+  rows.forEach((p) => { if (!(p.iso in idx)) { idx[p.iso] = days.length; days.push({ iso: p.iso, label: p.date, list: [], total: 0 }); } days[idx[p.iso]].list.push(p); days[idx[p.iso]].total += p.amount; });
+  const del = async (p) => {
+    if (!await confirm(`Delete the ${money(p.amount)} payment from ${p.student_name}?`)) return;
+    const r = await submitJson(p.delete_url, {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
+  };
+  const shownTotal = rows.reduce((t, p) => t + p.amount, 0);
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-list" /> All Payments</h1>
-        {canWrite(d, 'record') && <A to={d.urls.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-plus" /> Add Payments</A>}</div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-clipboard-list" tone="primary" value={d.payments.length} label="Payments Shown" />
-        <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_amount)} label="Total Amount" />
-      </div>
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-group">
-          <div className="form-group"><label className="form-label">Exact Date</label>
-            <select className="form-control" value={d.filter_date || ''} onChange={onFilter}>
-              <option value="">All Dates</option>
-              {d.unique_dates.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
-            </select></div>
-          <div className="form-group"><label className="form-label">From</label>
-            <input type="date" className="form-control" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">To</label>
-            <input type="date" className="form-control" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-            <button type="button" className="btn btn-primary btn-sm" onClick={applyRange}><i aria-hidden="true" className="fas fa-filter" /> Apply Range</button>{' '}
-            <button type="button" className="btn btn-secondary btn-sm" onClick={clearRange}>Clear</button>
-          </div>
+    <div className="rs bx ct">
+      <Head icon="fa-list" title="Payments" sub={`${d.payments.length} payment${d.payments.length === 1 ? '' : 's'} · ${money(d.total_amount)}`}><HeadActions d={d} /></Head>
+      <CNav d={d} />
+      <section className="rs-pick">
+        <Seg label="Period" value={range} onChange={goRange} options={[
+          { value: 'today', label: 'Today' }, { value: 'week', label: 'This week' }, { value: 'month', label: 'This month' }, { value: 'all', label: 'All' },
+          ...(range === 'day' || range === 'custom' ? [{ value: range, label: d.filter_date || 'Custom' }] : [])]} />
+        <div className="ct-tools nopad">
+          <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a student or collector" aria-label="Search payments" />
+            {q && <span className="bx-count">{rows.length} · {money(shownTotal)}</span>}</label>
+          <label className="ct-daypick"><span className="rs-hide-sm">Day</span><input type="date" className="ct-in" value={d.filter_date || ''} max={today} onChange={(e) => nav.go(d.urls.payments + (e.target.value ? `?date=${e.target.value}` : ''))} aria-label="Pick a day" /></label>
         </div>
-      </div></div>
-      <div className="card">
-        <div className="card-header"><h3>Payments ({d.payments.length})</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead><tr><th>#</th><th>Date</th><th>Student</th><th>Amount</th><th>Received By</th><th>Notes</th><th>Actions</th></tr></thead>
-            <tbody>
-              {d.payments.length ? d.payments.map((p, i) => (
-                <tr key={p.id}>
-                  <td>{i + 1}</td><td>{p.date}</td>
-                  <td><A to={p.detail_url}>{p.student_name}</A></td>
-                  <td><strong>{money(p.amount)}</strong></td>
-                  <td>{p.received_by}</td><td>{p.notes}</td>
-                  <td>{canWrite(d, 'record') && <button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(p)}><i aria-hidden="true" className="fas fa-trash" /></button>}</td>
-                </tr>
-              )) : <tr><td colSpan="7" className="text-center text-muted">No payments found</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+      </section>
+      {days.length ? days.map((g) => (
+        <section key={g.iso} className="rs-card flush">
+          <div className="rs-card-h pad"><h3>{g.label}</h3><small>{g.list.length} · <b>{money(g.total)}</b></small></div>
+          <ul className="ct-list">{g.list.map((p) => (
+            <li key={p.id} className="ct-li">
+              <A to={p.detail_url} className="ct-li-main"><Avatar name={p.student_name} />
+                <span className="ct-n"><b>{p.student_name}</b><small>{p.received_by !== '-' ? `by ${p.received_by}` : 'collector not recorded'}{p.notes && p.notes !== '-' ? ' · ' + p.notes : ''}</small></span>
+                <b className="ct-money">{money(p.amount)}</b></A>
+              {canDel && <button type="button" className="rs-icon-btn danger" title="Delete" aria-label={`Delete payment from ${p.student_name}`} onClick={() => del(p)}><i className="fas fa-trash" aria-hidden="true" /></button>}
+            </li>))}</ul>
+        </section>
+      )) : <Blank icon="fa-receipt" title="No payments in this period"><p>Pick another period, or record a payment.</p></Blank>}
+    </div>
   );
 }
 
-// ---- Expenses list ----------------------------------------------------------
+// ---- Expenses ----------------------------------------------------------------
+function ExpenseSheet({ d, onClose, onSaved }) {
+  const [f, setF] = useState({ expense_date: isoToday(), description: '', amount: '', notes: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const save = async () => {
+    if (!f.description.trim()) { setErr('What was it for?'); return; }
+    if (!(Number(f.amount) > 0)) { setErr('Enter the amount spent.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.add_expense, { ...f, description: f.description.trim() });
+    setBusy(false);
+    if (r.ok) { onSaved(r.message); onClose(); } else setErr(r.error || 'Could not save.');
+  };
+  const sugg = ['Venue', 'Food & drinks', 'Photography', 'Gowns', 'Printing', 'Decoration', 'Transport', 'Sound'];
+  return (
+    <Sheet title="Add an expense" onClose={onClose}>
+      <div className="ct-pay">
+        <label className="ct-f"><span>What was it for?</span><input autoFocus value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="e.g. Venue deposit" /></label>
+        <div className="rs-chips ct-chips">{sugg.map((x) => <button key={x} type="button" className={'rs-chip' + (f.description === x ? ' on' : '')} onClick={() => set('description', x)}>{x}</button>)}</div>
+        <div className="ct-row2">
+          <label className="ct-f"><span>Amount</span><div className="ct-amt"><b>₦</b><input type="number" inputMode="numeric" min="1" value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" /></div></label>
+          <label className="ct-f"><span>Date</span><input type="date" className="ct-in" value={f.expense_date} max={isoToday()} onChange={(e) => set('expense_date', e.target.value)} /></label>
+        </div>
+        <label className="ct-f"><span>Note <em>(optional)</em></span><input value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Receipt number, who was paid…" /></label>
+        {err && <p className="ct-err" role="alert">{err}</p>}
+        <div className="ct-acts"><button type="button" className="rs-btn ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="rs-btn primary" disabled={busy} onClick={save}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save expense</button></div>
+      </div>
+    </Sheet>
+  );
+}
+
 function Expenses({ d, notify }) {
   const nav = useNav();
-  const save = useSave(notify);
-  const u = d.urls;
-  const del = async (e) => { if (await confirm('Delete this expense?')) save(e.delete_url, {}, () => nav.refresh()); };
+  const [open, setOpen] = useState(false);
+  const can = canWrite(d, 'expenses');
+  const del = async (e) => {
+    if (!await confirm(`Delete “${e.description}” (${money(e.amount)})?`)) return;
+    const r = await submitJson(e.delete_url, {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
+  };
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-receipt" /> Expenses Management</h1>
-        <div className="header-actions">
-          <A to={u.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
-          {canWrite(d, 'expenses') && <A to={u.add_expense} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>}
-        </div></div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_collected)} label="Total Collected" />
-        <Stat icon="fa-money-bill-wave" tone="danger" value={money(d.total_expenses)} label="Total Spent" />
-        <Stat icon="fa-wallet" tone={d.available_balance >= 0 ? 'info' : 'danger'} value={money(d.available_balance)} label="Available Balance" />
-        <Stat icon="fa-percentage" tone="warning" value={`${d.expense_rate.toFixed(1)}%`} label="Expense Rate" />
-      </div>
-      <div className="card mb-3"><div className="card-body">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span><strong>Fund Utilization</strong></span>
-          <span><span className="text-danger">Spent: {money(d.total_expenses)}</span> | <span className="text-success">Available: {money(d.available_balance)}</span></span>
-        </div>
-        <div style={{ background: 'var(--border-color)', borderRadius: 10, height: 24, overflow: 'hidden', display: 'flex' }}>
-          <div style={{ background: 'var(--danger)', height: '100%', width: `${d.expense_rate}%` }} />
-          <div style={{ background: 'var(--success)', height: '100%', width: `${100 - d.expense_rate}%` }} />
-        </div>
-      </div></div>
-      {d.category_summary.length > 0 && (
-        <div className="card mb-3">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Expenses by Category</h3></div>
-          <div className="card-body">
-            {d.category_summary.map((c) => (
-              <div className="category-row" key={c.name}>
-                <span className="category-name">{c.name}</span>
-                <div className="category-bar-container"><div className="category-bar" style={{ width: `${d.total_expenses > 0 ? (c.amount / d.total_expenses * 100) : 0}%` }} /></div>
-                <span className="category-amount">{money(c.amount)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="card">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-list" /> All Expenses ({d.expenses.length})</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Amount</th><th>Notes</th><th>Actions</th></tr></thead>
-            <tbody>
-              {d.expenses.length ? d.expenses.map((e, i) => (
-                <tr key={e.id}>
-                  <td>{i + 1}</td><td>{e.date}</td><td><strong>{e.description}</strong></td>
-                  <td><strong className="text-danger">{money(e.amount)}</strong></td>
-                  <td><small>{e.notes}</small></td>
-                  <td>{canWrite(d, 'expenses') && <button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button>}</td>
-                </tr>
-              )) : <tr><td colSpan="6" className="text-center text-muted">No expenses recorded yet</td></tr>}
-            </tbody>
-            {d.expenses.length > 0 && (
-              <tfoot><tr style={{ background: 'var(--gray-50)', fontWeight: 'bold' }}>
-                <td colSpan="3" className="text-right">Total:</td>
-                <td className="text-danger">{money(d.total_expenses)}</td><td colSpan="2" />
-              </tr></tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-    </>
+    <div className="rs bx ct">
+      <Head icon="fa-receipt" title="Expenses" sub="What the fund has been spent on">
+        {can && <button type="button" className="rs-btn primary" onClick={() => setOpen(true)}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">Add expense</span></button>}
+      </Head>
+      <CNav d={d} />
+      <Tiles items={[
+        { label: 'Collected', value: short(d.total_collected) },
+        { label: 'Spent', value: short(d.total_expenses), sub: `${pctTxt(d.expense_rate)} of collected` },
+        { label: 'Cash at hand', value: short(d.available_balance), tone: d.available_balance < 0 ? 'bad' : 'good' },
+        { label: 'Expenses', value: d.expenses.length, sub: 'recorded' },
+      ]} />
+      {d.category_summary && d.category_summary.length > 1 && (
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-chart-pie" aria-hidden="true" /> Where the money went</h3></div>
+          <div className="an-hbars">{d.category_summary.map((c) => (
+            <div key={c.name} className="ct-armbar static"><span className="t"><b>{c.name}</b><small>{money(c.amount)}</small></span><Meter value={c.amount} max={d.total_expenses} tone="n" /><em>{pctTxt(pct(c.amount, d.total_expenses))}</em></div>))}</div>
+        </section>)}
+      <section className="rs-card flush">
+        {d.expenses.length ? <ul className="ct-list">{d.expenses.map((e) => (
+          <li key={e.id} className="ct-li">
+            <span className="ct-li-main static"><span className="ct-ic"><i className="fas fa-receipt" aria-hidden="true" /></span>
+              <span className="ct-n"><b>{e.description}</b><small>{e.date}{e.notes && e.notes !== '-' ? ' · ' + e.notes : ''}</small></span>
+              <b className="ct-money out">−{money(e.amount)}</b></span>
+            {can && <button type="button" className="rs-icon-btn danger" title="Delete" aria-label={`Delete ${e.description}`} onClick={() => del(e)}><i className="fas fa-trash" aria-hidden="true" /></button>}
+          </li>))}</ul>
+          : <Blank icon="fa-receipt" title="No expenses yet"><p>Record what the fund pays for, so the balance is always right.</p>{can && <button type="button" className="rs-btn primary" onClick={() => setOpen(true)}><i className="fas fa-plus" aria-hidden="true" /> Add expense</button>}</Blank>}
+      </section>
+      {open && <ExpenseSheet d={d} onClose={() => setOpen(false)} onSaved={(m) => { notify('success', m); nav.refresh(); }} />}
+    </div>
   );
 }
 
-// ---- Simple forms (add expense, settings) -----------------------------------
 function AddExpense({ d, notify }) {
   const nav = useNav();
-  const save = useSave(notify);
-  const [f, setF, clearDraft] = useDraft('contrib-add-expense', { expense_date: d.today, description: '', amount: '', notes: '' });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, (r) => { clearDraft(); nav.go(r.redirect || d.back_url); }); };
-  return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-plus-circle" /> Add Expense</h1></div>
-      <div className="card"><div className="card-body"><form onSubmit={submit}>
-        <div className="form-group"><label className="form-label">Date *</label><input type="date" className="form-control" value={f.expense_date} onChange={set('expense_date')} required /></div>
-        <div className="form-group"><label className="form-label">Description *</label><input type="text" className="form-control" value={f.description} onChange={set('description')} required placeholder="What was this expense for?" /></div>
-        <div className="form-group"><label className="form-label">Amount (₦) *</label><input type="number" className="form-control" value={f.amount} onChange={set('amount')} required min="1" step="1" placeholder="Enter amount" /></div>
-        <div className="form-group"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={set('notes')} placeholder="Any additional details" /></div>
-        <div className="form-actions">
-          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Expense</button>
-          <A to={d.back_url} className="btn btn-secondary">Cancel</A>
-        </div>
-      </form></div></div>
-    </>
-  );
+  return <ExpenseSheet d={{ ...d, urls: { ...d.urls, add_expense: d.submit_url } }} onClose={() => nav.go(d.back_url)} onSaved={(m) => notify('success', m)} />;
 }
 
-function Settings({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const [f, setF, clearDraft] = useDraft('contrib-settings', { max_due: d.max_due, start_date: d.start_date, access_code: '' }, { omit: ['access_code'] });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => { clearDraft(); setF({ ...f, access_code: '' }); nav.refresh(); }); };
-  return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-cog" /> Contribution Settings</h1></div>
-      <div className="card"><div className="card-body"><form onSubmit={submit}>
-        <div className="form-group"><label className="form-label">Maximum Due Amount (₦)</label>
-          <input type="number" className="form-control" value={f.max_due} onChange={set('max_due')} min="1000" step="1000" />
-          <small className="text-muted">The total amount each student is expected to pay</small></div>
-        <div className="form-group"><label className="form-label">Start Date (Week 1)</label>
-          <input type="date" className="form-control" value={f.start_date} onChange={set('start_date')} />
-          <small className="text-muted">The date when Week 1 starts (for weekly breakdown)</small></div>
-        <div className="form-group"><label className="form-label">Access Password</label>
-          <input type="password" className="form-control" value={f.access_code} onChange={set('access_code')}
-            placeholder={d.has_custom_code ? 'Leave blank to keep current' : 'Set a password (replaces the default)'} autoComplete="new-password" />
-          <small className="text-muted">The password required to open this Contributions module. {d.has_custom_code ? 'A custom password is set.' : 'Currently using the built-in default.'} Leave blank to keep it unchanged.</small></div>
-        <div className="form-actions">
-          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Settings</button>
-          <A to={d.back_url} className="btn btn-secondary">Cancel</A>
-        </div>
-      </form></div></div>
-    </>
-  );
-}
-
-// ---- Report by arm ----------------------------------------------------------
-function Report({ d }) {
-  return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chart-bar" /> Report by Arm</h1></div>
-      {d.arms.map((a) => {
-        const pct = a.total_expected > 0 ? (a.total_paid / a.total_expected * 100) : 0;
-        return (
-          <div className="card mb-3" key={a.name}>
-            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> {a.name || 'All Students'}</h3>
-              <div><span className="badge badge-primary">{a.total_students} students</span> <span className="badge badge-success">{a.fully_paid} paid</span> <span className="badge badge-danger">{a.not_started} not started</span></div></div>
-            <div className="card-body">
-              <div className="info-grid mb-3">
-                <div className="info-row"><span>Expected:</span><strong>{money(a.total_expected)}</strong></div>
-                <div className="info-row"><span>Received:</span><strong style={{ color: 'var(--success)' }}>{money(a.total_paid)}</strong></div>
-                <div className="info-row"><span>Progress:</span><strong>{pct.toFixed(1)}%</strong></div>
-              </div>
-              <div style={{ background: 'var(--border-color)', borderRadius: 8, height: 16, overflow: 'hidden', marginBottom: '1rem' }}>
-                <div style={{ background: 'linear-gradient(90deg, #1a5f4a, var(--success))', height: '100%', width: `${pct}%` }} />
-              </div>
-              <table className="data-table">
-                <thead><tr><th>#</th><th>Name</th><th>Paid</th><th>Remaining</th><th>Status</th></tr></thead>
-                <tbody>
-                  {a.students.map((s, i) => (
-                    <tr key={i}><td>{i + 1}</td><td>{s.name}</td><td><strong>{money(s.total_paid)}</strong></td>
-                      <td>{s.remaining > 0 ? money(s.remaining) : '-'}</td>
-                      <td><StatusBadge status={s.status} /></td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
-      <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
-    </>
-  );
-}
-
-// ---- Defaulters -------------------------------------------------------------
-function Defaulters({ d }) {
-  const [search, setSearch] = useState('');
+// ---- Defaulters ----------------------------------------------------------------
+function Defaulters({ d, notify }) {
+  const pay = usePay();
+  const [st, setSt] = useState('');
   const [arm, setArm] = useState('');
-  const [status, setStatus] = useState('');
-  const [sort, setSort] = useState('remaining-desc');
-  const list = useMemo(() => {
-    let l = d.defaulters.filter((s) =>
-      s.name.toLowerCase().includes(search.toLowerCase())
-      && (!arm || s.arm === arm) && (!status || s.status === status));
-    l = [...l].sort((a, b) => {
-      switch (sort) {
-        case 'remaining-asc': return a.remaining - b.remaining;
-        case 'name-asc': return a.name.localeCompare(b.name);
-        case 'paid-desc': return b.total_paid - a.total_paid;
-        default: return b.remaining - a.remaining;
-      }
-    });
-    return l;
-  }, [d.defaulters, search, arm, status, sort]);
+  const rec = canWrite(d, 'record');
+  const arms = [...new Set(d.defaulters.map((x) => x.arm))].filter(Boolean).sort();
+  const rows = d.defaulters.filter((x) => (!st || x.status === st) && (!arm || x.arm === arm));
+  const owed = rows.reduce((t, x) => t + x.remaining, 0);
+  const copy = () => {
+    const lines = rows.map((x, i) => `${i + 1}. ${x.name}${x.arm ? ' (' + x.arm + ')' : ''} — owes ${money(x.remaining)}`);
+    const text = `SSS3 graduation fund — still owing${arm ? ' · ' + arm : ''}\n${lines.join('\n')}\nTotal: ${money(owed)}`;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+      () => notify('success', `Copied ${rows.length} names — paste into WhatsApp or SMS.`),
+      () => notify('error', 'Copy is not available in this browser.'));
+  };
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-user-times" /> Defaulters List</h1>
-        <div className="header-actions">
-          <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
-          <a href={d.export_url} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-excel" /> Export List</a>
-        </div></div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-users" tone="danger" value={d.defaulters.length} label="Total Defaulters" />
-        <Stat icon="fa-ban" tone="danger" value={d.not_started_count} label="Never Started" />
-        <Stat icon="fa-coins" tone="warning" value={money(d.total_outstanding)} label="Total Outstanding" />
-        <Stat icon="fa-calculator" tone="info" value={money(d.avg_outstanding)} label="Avg. Outstanding" />
-      </div>
-      <div className="card">
-        <div className="card-header"><h3>Students with Outstanding Balance</h3>
-          <div className="filter-group">
-            <input type="text" className="form-control" placeholder="Search students..." style={{ width: 180 }} value={search} onChange={(e) => setSearch(e.target.value)} />
-            <select className="form-control" style={{ width: 120 }} value={arm} onChange={(e) => setArm(e.target.value)}>
-              <option value="">All Arms</option><option>Iris</option><option>Rose</option><option>Lily</option><option>Daisy</option></select>
-            <select className="form-control" style={{ width: 140 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All Status</option><option value="Not Started">Not Started</option><option value="In Progress">In Progress</option></select>
-            <select className="form-control" style={{ width: 150 }} value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="remaining-desc">Highest Owing</option><option value="remaining-asc">Lowest Owing</option>
-              <option value="name-asc">Name A-Z</option><option value="paid-desc">Most Paid</option></select>
-          </div>
+    <div className="rs bx ct">
+      <Head icon="fa-user-clock" title="Still owing" sub={`${d.defaulters.length} student${d.defaulters.length === 1 ? '' : 's'} with a balance`}>
+        <HeadActions d={d} extra={[{ icon: 'fa-copy', label: 'Copy list for WhatsApp', onClick: copy }, { icon: 'fa-file-excel', label: 'Download owing list', href: d.export_url, native: true }]} />
+      </Head>
+      <CNav d={d} />
+      <Tiles items={[
+        { label: 'Owing', value: d.defaulters.length, sub: `${d.not_started_count} haven't started`, tone: d.defaulters.length ? 'mid' : 'good' },
+        { label: 'Total owed', value: short(d.total_outstanding) },
+        { label: 'Average balance', value: short(d.avg_outstanding), sub: `of ${short(d.max_due)}` },
+      ]} />
+      <section className="rs-card flush">
+        <div className="ct-tools">
+          <Seg label="Status" value={st} onChange={setSt} options={[{ value: '', label: 'All' }, { value: 'Not Started', label: 'Not started', count: d.not_started_count }, { value: 'In Progress', label: 'Part-paid', count: d.defaulters.length - d.not_started_count }]} />
+          <button type="button" className="rs-btn ghost sm" onClick={copy}><i className="fas fa-copy" aria-hidden="true" /> Copy list</button>
         </div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead><tr><th>#</th><th>Name</th><th>Arm</th><th>Status</th><th>Paid</th><th>Outstanding</th><th>Progress</th><th>Last Payment</th><th>Actions</th></tr></thead>
-            <tbody>
-              {list.length ? list.map((s, i) => (
-                <tr key={s.id}>
-                  <td>{i + 1}</td><td><strong>{s.name}</strong></td>
-                  <td>{s.arm ? <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span> : <span className="text-muted">—</span>}</td>
-                  <td><StatusBadge status={s.status} /></td>
-                  <td>{money(s.total_paid)}</td>
-                  <td><strong className="text-danger">{money(s.remaining)}</strong></td>
-                  <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'} /><small>{s.percentage.toFixed(0)}%</small></td>
-                  <td><small>{s.last_payment}</small></td>
-                  <td><A to={s.detail_url} title="View" className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
-                    {canWrite(d, 'record') && <A to={s.add_payment_url} title="Add payment" className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A>}</td>
-                </tr>
-              )) : <tr><td colSpan="9" className="text-center text-success"><i aria-hidden="true" className="fas fa-check-circle" /> No defaulters! All students have paid in full.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+        {arms.length > 1 && <div className="ct-arms"><Chips label="Arm" value={arm} onChange={(v) => setArm(v === arm ? '' : v)} items={[{ value: '', label: 'All arms' }, ...arms.map((a) => ({ value: a, label: a }))]} /></div>}
+        <ul className="ct-list">{rows.map((x) => (
+          <li key={x.id} className="ct-li">
+            <A to={x.detail_url} className="ct-li-main"><Avatar name={x.name} />
+              <span className="ct-n"><b>{x.name}</b><small>{x.arm}{x.arm ? ' · ' : ''}paid {money(x.total_paid)} · last {x.last_payment === 'Never' ? 'never' : x.last_payment}</small></span>
+              <b className="ct-money out">{money(x.remaining)}</b></A>
+            {rec && <button type="button" className="rs-btn primary sm" onClick={() => pay.open(x)}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm"> Pay</span></button>}
+          </li>))}</ul>
+        {!rows.length && <Blank icon="fa-circle-check" title="Nobody owing">{d.defaulters.length ? <p>No one matches this filter.</p> : <p>Every SSS3 student has paid in full.</p>}</Blank>}
+      </section>
+    </div>
   );
 }
 
-// ---- Daily summary ----------------------------------------------------------
+// ---- Reports -------------------------------------------------------------------
+function ReportTabs({ d }) {
+  const u = d.urls;
+  const on = d.page === 'view_session' ? 'history' : d.page;
+  return (
+    <nav className="sl-sub" aria-label="Reports">
+      <A to={u.report} className={on === 'report' ? 'on' : ''}><i className="fas fa-people-group" aria-hidden="true" /> By arm</A>
+      <A to={u.daily_summary} className={on === 'daily_summary' ? 'on' : ''}><i className="fas fa-calendar-day" aria-hidden="true" /> By day</A>
+      <A to={u.history} className={on === 'history' ? 'on' : ''}><i className="fas fa-clock-rotate-left" aria-hidden="true" /> Past sessions</A>
+    </nav>
+  );
+}
+
+function Report({ d }) {
+  const [open, setOpen] = useState('');
+  return (
+    <div className="rs bx ct">
+      <Head icon="fa-chart-column" title="Reports" sub={`By arm · ${money(d.max_due)} per student`}><HeadActions d={d} /></Head>
+      <CNav d={d} /><ReportTabs d={d} />
+      <div className="ct-grid">{d.arms.map((a) => {
+        const p = pct(a.total_paid, a.total_expected);
+        return (
+          <section key={a.name} className="rs-card ct-armcard">
+            <div className="rs-card-h"><h3>{a.name || 'SSS3'}</h3><small>{a.total_students} students</small></div>
+            <div className="ct-prog-h"><b>{pctTxt(p)}</b><span>{money(a.total_paid)} of {money(a.total_expected)}</span></div>
+            <Meter value={p} max={100} />
+            <div className="ct-legend"><span><i className="good" /> {a.fully_paid} paid</span><span><i className="mid" /> {a.total_students - a.fully_paid - a.not_started} part</span><span><i className="bad" /> {a.not_started} not started</span></div>
+            <button type="button" className="ct-link" onClick={() => setOpen(open === a.name ? '' : a.name)}>{open === a.name ? 'Hide students' : 'Show students'}</button>
+            {open === a.name && <ul className="ct-mini">{a.students.map((s) => (
+              <li key={s.name}><span>{s.name}</span><StatusPill status={s.status} /><b>{money(s.total_paid)}</b></li>))}</ul>}
+          </section>);
+      })}</div>
+      {!d.arms.length && <Blank icon="fa-chart-column" title="No SSS3 arms this term" />}
+    </div>
+  );
+}
+
 function DailySummary({ d }) {
+  const max = Math.max(1, ...d.daily_data.map((x) => x.amount));
+  const recent = d.daily_data.slice(0, 14).reverse();
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-calendar-alt" /> Daily Collection Summary</h1>
-        <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-calendar-check" tone="primary" value={d.days_count} label="Collection Days" />
-        <Stat icon="fa-chart-line" tone="success" value={money(d.avg_daily)} label="Avg. Daily Collection" />
-        <Stat icon="fa-arrow-up" tone="info" value={money(d.best_day ? d.best_day.amount : 0)} label={`Best Day${d.best_day ? ` (${d.best_day.date_short})` : ''}`} />
-      </div>
-      <div className="card">
-        <div className="card-header"><h3>Collections by Date</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead><tr><th>Date</th><th>Day</th><th>Transactions</th><th>Amount</th><th>Collectors</th><th>Actions</th></tr></thead>
-            <tbody>
-              {d.daily_data.length ? d.daily_data.map((day, i) => (
-                <tr key={i}>
-                  <td><strong>{day.date}</strong></td><td>{day.day}</td><td>{day.count}</td>
-                  <td><strong className="text-success">{money(day.amount)}</strong></td>
-                  <td><small>{day.collectors}</small></td>
-                  <td><A to={day.view_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /> View</A></td>
-                </tr>
-              )) : <tr><td colSpan="6" className="text-center text-muted">No collections recorded yet</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+    <div className="rs bx ct">
+      <Head icon="fa-calendar-day" title="Reports" sub="Money collected each day"><HeadActions d={d} /></Head>
+      <CNav d={d} /><ReportTabs d={d} />
+      <Tiles items={[
+        { label: 'Collection days', value: d.days_count },
+        { label: 'Average a day', value: short(d.avg_daily) },
+        d.best_day && { label: 'Best day', value: short(d.best_day.amount), sub: d.best_day.date_short, tone: 'good' },
+      ]} />
+      {recent.length > 1 && (
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-chart-column" aria-hidden="true" /> Last {recent.length} collection days</h3></div>
+          <div className="bx-dist ct-days">{recent.map((x) => (
+            <div key={x.date} className="bx-dist-c" title={`${x.date}: ${money(x.amount)}`}>
+              <b>{short(x.amount)}</b><span className="bar"><i className="c4" style={{ height: (x.amount / max * 100).toFixed(1) + '%' }} /></span><small>{x.date.slice(0, 6)}</small></div>))}</div>
+        </section>)}
+      <section className="rs-card flush">
+        <ul className="ct-list">{d.daily_data.map((x) => (
+          <li key={x.date} className="ct-li"><A to={x.view_url} className="ct-li-main">
+            <span className="ct-ic"><i className="fas fa-calendar-day" aria-hidden="true" /></span>
+            <span className="ct-n"><b>{x.day}, {x.date}</b><small>{x.count} payment{x.count === 1 ? '' : 's'} · {x.collectors !== '-' ? 'by ' + x.collectors : 'collector not recorded'}</small></span>
+            <b className="ct-money">{money(x.amount)}</b></A></li>))}</ul>
+        {!d.daily_data.length && <Blank icon="fa-calendar-day" title="No collections yet" />}
+      </section>
+    </div>
   );
 }
 
-// ---- Session history & view -------------------------------------------------
 function History({ d }) {
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-history" /> Contribution History by Session</h1>
-        <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
-      <div className="card">
-        <div className="card-header"><h3>All Sessions with Contribution Data</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead><tr><th>Session</th><th>Status</th><th>Payments</th><th>Collected</th><th>Expenses</th><th>Net Balance</th><th>Actions</th></tr></thead>
-            <tbody>
-              {d.sessions.length ? d.sessions.map((s) => (
-                <tr key={s.id}>
-                  <td><strong>{s.name}</strong></td>
-                  <td>{s.is_active ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Active</span> : <span className="badge badge-secondary">Closed</span>}</td>
-                  <td>{s.payment_count}</td>
-                  <td className="text-success"><strong>{money(s.total_collected)}</strong></td>
-                  <td className="text-danger">{money(s.total_expenses)}</td>
-                  <td><strong className={s.net_balance >= 0 ? 'text-success' : 'text-danger'}>{money(s.net_balance)}</strong></td>
-                  <td><A to={s.view_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /> View</A></td>
-                </tr>
-              )) : <tr><td colSpan="7" className="text-center text-muted">No contribution data found</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+    <div className="rs bx ct">
+      <Head icon="fa-clock-rotate-left" title="Reports" sub="Every session's fund at a glance"><HeadActions d={d} /></Head>
+      <CNav d={d} /><ReportTabs d={d} />
+      <section className="rs-card flush">
+        <ul className="ct-list">{d.sessions.map((s) => (
+          <li key={s.id} className="ct-li"><A to={s.view_url} className="ct-li-main">
+            <span className="ct-ic"><i className="fas fa-graduation-cap" aria-hidden="true" /></span>
+            <span className="ct-n"><b>{s.name} {s.is_active && <span className="sl-pill good">Current</span>}</b><small>{s.payment_count} payments · collected {money(s.total_collected)} · spent {money(s.total_expenses)}</small></span>
+            <b className={'ct-money' + (s.net_balance < 0 ? ' out' : '')}>{money(s.net_balance)}</b></A></li>))}</ul>
+        {!d.sessions.length && <Blank icon="fa-clock-rotate-left" title="No past sessions yet" />}
+      </section>
+    </div>
   );
 }
 
 function ViewSession({ d }) {
-  const s = d.session;
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-calendar-alt" /> {s.name}</h1>
-        <div className="header-actions">
-          {s.is_active ? <span className="badge badge-success" style={{ fontSize: 'var(--text-md)', padding: '0.5rem 1rem' }}><i aria-hidden="true" className="fas fa-check" /> Active Session</span>
-            : <span className="badge badge-secondary" style={{ fontSize: 'var(--text-md)', padding: '0.5rem 1rem' }}>Closed Session</span>}
-          <A to={d.back_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
-        </div></div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-users" tone="primary" value={d.student_totals.length} label="Students" />
-        <Stat icon="fa-receipt" tone="info" value={d.payments_count} label="Payments" />
-        <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_collected)} label="Collected" />
-        <Stat icon="fa-money-bill-wave" tone="danger" value={money(d.total_expenses)} label="Expenses" />
-        <Stat icon="fa-wallet" tone={d.net_balance >= 0 ? 'success' : 'danger'} value={money(d.net_balance)} label="Net Balance" />
+    <div className="rs bx ct">
+      <Head icon="fa-graduation-cap" title={d.session.name} sub={`${d.payments_count} payments`}><HeadActions d={d} /></Head>
+      <CNav d={d} /><ReportTabs d={d} />
+      <Tiles items={[{ label: 'Collected', value: short(d.total_collected) }, { label: 'Spent', value: short(d.total_expenses) }, { label: 'Balance', value: short(d.net_balance), tone: d.net_balance < 0 ? 'bad' : 'good' }]} />
+      <div className="ct-two">
+        <section className="rs-card flush"><div className="rs-card-h pad"><h3>Students</h3></div>
+          <ul className="ct-mini">{d.student_totals.map((s, i) => <li key={i}><span>{s.name}</span><small>{s.payment_count}×</small><b>{money(s.total)}</b></li>)}</ul></section>
+        <section className="rs-card flush"><div className="rs-card-h pad"><h3>Expenses</h3></div>
+          {d.expenses.length ? <ul className="ct-mini">{d.expenses.map((e, i) => <li key={i}><span>{e.description}</span><small>{e.date}</small><b>−{money(e.amount)}</b></li>)}</ul> : <p className="rs-muted ct-p">No expenses.</p>}</section>
       </div>
-      <div className="row">
-        <div className="col-md-8"><div className="card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> Student Contributions</h3></div>
-          <div className="card-body" style={{ padding: 0, overflowX: 'auto', maxHeight: 500 }}>
-            <table className="data-table">
-              <thead><tr><th>#</th><th>Student</th><th>Payments</th><th>Total</th></tr></thead>
-              <tbody>{d.student_totals.map((it, i) => (
-                <tr key={i}><td>{i + 1}</td><td><strong>{it.name}</strong></td><td>{it.payment_count}</td><td><strong className="text-success">{money(it.total)}</strong></td></tr>
-              ))}</tbody>
-            </table>
-          </div>
-        </div></div>
-        <div className="col-md-4"><div className="card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-receipt" /> Expenses</h3></div>
-          <div className="card-body" style={{ padding: 0, maxHeight: 500, overflowY: 'auto' }}>
-            {d.expenses.length ? (
-              <table className="data-table"><tbody>{d.expenses.map((e, i) => (
-                <tr key={i}><td><strong>{e.description}</strong><br /><small className="text-muted">{e.date}</small></td>
-                  <td className="text-danger"><strong>{money(e.amount)}</strong></td></tr>
-              ))}</tbody></table>
-            ) : <div className="text-center text-muted p-3">No expenses recorded</div>}
-          </div>
-        </div></div>
-      </div>
-    </>
+    </div>
   );
 }
 
-// ---- Student detail ---------------------------------------------------------
-function StudentDetail({ d }) {
-  const pct = d.max_due > 0 ? (d.total_paid / d.max_due * 100) : 0;
-  return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-user" /> {d.student.name}</h1></div>
-      <div className="stats-grid mb-3">
-        <Stat icon="fa-bullseye" tone="primary" value={money(d.max_due)} label="Max Due" />
-        <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_paid)} label="Total Paid" />
-        <Stat icon="fa-calculator" tone={d.remaining > 0 ? 'warning' : 'success'} value={money(d.remaining)} label="Remaining" />
-        <Stat icon={d.status === 'Paid' ? 'fa-check-circle' : d.status === 'Not Started' ? 'fa-ban' : 'fa-clock'}
-             tone={d.status === 'Paid' ? 'success' : d.status === 'Not Started' ? 'danger' : 'warning'}
-             value={d.status} label="Status" />
-      </div>
-      <div className="card mb-3"><div className="card-body">
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Payment Progress</span><strong>{pct.toFixed(1)}%</strong></div>
-        <div style={{ background: 'var(--border-color)', borderRadius: 10, height: 24, overflow: 'hidden' }}>
-          <div style={{ background: pct >= 100 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)', height: '100%', width: `${Math.min(100, pct)}%` }} />
-        </div>
-      </div></div>
-      <div className="row">
-        <div className="col-md-6"><div className="card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-history" /> Payment History</h3></div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <table className="data-table"><thead><tr><th>Date</th><th>Amount</th><th>Received By</th></tr></thead>
-              <tbody>{d.payments.length ? d.payments.map((p, i) => (
-                <tr key={i}><td>{p.date}</td><td><strong>{money(p.amount)}</strong></td><td>{p.received_by}</td></tr>
-              )) : <tr><td colSpan="3" className="text-center text-muted">No payments yet</td></tr>}</tbody>
-            </table>
-          </div>
-        </div></div>
-        <div className="col-md-6"><div className="card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calendar-week" /> Weekly Breakdown</h3></div>
-          <div className="card-body" style={{ padding: 0, maxHeight: 400, overflowY: 'auto' }}>
-            <table className="data-table"><thead><tr><th>Week</th><th>Period</th><th>Amount</th></tr></thead>
-              <tbody>{d.weekly_data.map((w, i) => (
-                <tr key={i} style={w.amount > 0 ? { background: '#e8f5e9' } : undefined}>
-                  <td>Week {w.week}</td><td><small>{w.period}</small></td>
-                  <td>{w.amount > 0 ? <strong>{money(w.amount)}</strong> : <span className="text-muted">-</span>}</td></tr>
-              ))}</tbody>
-            </table>
-          </div>
-        </div></div>
-      </div>
-      <div className="mt-3"><A to={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A></div>
-    </>
-  );
-}
-
-// ---- Import -----------------------------------------------------------------
-function Import({ d, notify }) {
+// ---- Student ----------------------------------------------------------------------
+function StudentDetail({ d, notify }) {
+  const pay = usePay();
   const nav = useNav();
-  const save = useSave(notify);
-  const clearAll = async (e) => {
-    e.preventDefault();
-    if (await confirm('Are you sure you want to DELETE ALL contribution payments and expenses? This cannot be undone!')) {
-      save(d.clear_url, {}, () => nav.refresh());
-    }
+  const rec = canWrite(d, 'record');
+  const p = pct(d.total_paid, d.max_due);
+  const maxW = Math.max(1, ...d.weekly_data.map((w) => w.amount));
+  const del = async (x) => {
+    if (!await confirm(`Delete the ${money(x.amount)} payment of ${x.date}?`)) return;
+    const r = await submitJson(x.delete_url, {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
   };
   return (
-    <>
-      <div className="page-header"><h1><i aria-hidden="true" className="fas fa-file-import" /> Import from Excel</h1></div>
-      <div className="card mb-3">
-        <div className="card-header"><h3>Upload Excel File</h3></div>
-        <div className="card-body">
-          <div className="alert alert-info">
-            <h4><i aria-hidden="true" className="fas fa-info-circle" /> Expected Format</h4>
-            <p>Upload your contributions Excel file with the following sheets:</p>
-            <ul>
-              <li><strong>Students</strong> sheet with columns: StudentID, Name, Class, Arm</li>
-              <li><strong>Payments</strong> sheet with columns: PaymentID, StudentID, Name, Date, ReceivedBy, Amount</li>
-            </ul>
-            <p>The system will match students by name to the database and import all payment records.</p>
-          </div>
-          <form method="POST" action={d.submit_url} encType="multipart/form-data">
-            <input type="hidden" name="_csrf_token" value={csrfToken()} />
-            <div className="form-group"><label className="form-label">Select Excel File (.xlsx)</label>
-              <input type="file" name="file" className="form-control" accept=".xlsx" required /></div>
-            <div className="form-actions">
-              <button type="submit" className="btn btn-primary btn-lg"><i aria-hidden="true" className="fas fa-upload" /> Import Payments</button>
-              <A to={d.back_url} className="btn btn-secondary">Cancel</A>
-            </div>
-          </form>
-        </div>
+    <div className="rs bx ct">
+      <Head icon="fa-user" title={d.student.name} sub={`${d.student.student_id || ''} · graduation fund`}>
+        {rec && d.remaining > 0 && <button type="button" className="rs-btn primary" onClick={() => pay.open({ id: d.student.id, name: d.student.name, total_paid: d.total_paid, remaining: d.remaining })}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">Record payment</span></button>}
+      </Head>
+      <CNav d={d} />
+      <section className="rs-card ct-prog">
+        <div className="ct-prog-h"><b>{pctTxt(p)} paid</b><span>{money(d.total_paid)} of {money(d.max_due)}</span><StatusPill status={d.status} /></div>
+        <Meter value={d.total_paid} max={d.max_due} />
+        <p className="rs-muted ct-p0">{d.remaining > 0 ? <>Balance <b>{money(d.remaining)}</b></> : 'Fully paid — thank you!'}</p>
+      </section>
+      <div className="ct-two">
+        <section className="rs-card flush"><div className="rs-card-h pad"><h3><i className="fas fa-list" aria-hidden="true" /> Payments</h3><small>{d.payments.length}</small></div>
+          {d.payments.length ? <ul className="ct-list">{d.payments.map((x) => (
+            <li key={x.id} className="ct-li"><span className="ct-li-main static"><span className="ct-ic"><i className="fas fa-money-bill" aria-hidden="true" /></span>
+              <span className="ct-n"><b>{x.date}</b><small>{x.received_by !== '-' ? 'by ' + x.received_by : ''}{x.notes ? ' · ' + x.notes : ''}</small></span><b className="ct-money">{money(x.amount)}</b></span>
+              {rec && <button type="button" className="rs-icon-btn danger" title="Delete" onClick={() => del(x)}><i className="fas fa-trash" aria-hidden="true" /></button>}</li>))}</ul>
+            : <Blank icon="fa-money-bill" title="No payments yet" />}
+        </section>
+        {d.weekly_data.some((w) => w.amount > 0) && (
+          <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-chart-column" aria-hidden="true" /> Week by week</h3></div>
+            <div className="bx-dist ct-days">{d.weekly_data.slice(-16).map((w) => (
+              <div key={w.week} className="bx-dist-c" title={`Week ${w.week} (${w.period}): ${money(w.amount)}`}>
+                <b>{w.amount ? short(w.amount) : ''}</b><span className="bar"><i className="c4" style={{ height: (w.amount / maxW * 100).toFixed(1) + '%' }} /></span><small>W{w.week}</small></div>))}</div></section>)}
       </div>
-      {canWrite(d, 'settings') && <div className="card">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
-        <div className="card-body">
-          <p className="text-muted">Use this to clear all existing contribution data before re-importing.</p>
-          <form onSubmit={clearAll}><button type="submit" className="btn btn-danger"><i aria-hidden="true" className="fas fa-trash" /> Clear All Data</button></form>
-        </div>
-      </div>}
-    </>
+    </div>
+  );
+}
+
+// ---- Settings / Import --------------------------------------------------------------
+function Settings({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ max_due: d.max_due, start_date: d.start_date, access_code: '' });
+  const [busy, setBusy] = useState(false);
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true);
+    const r = await submitJson(d.submit_url, f);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); setF((x) => ({ ...x, access_code: '' })); nav.refresh(); } else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <div className="rs bx ct">
+      <Head icon="fa-gear" title="Settings" sub="Amount per student, start date and access code"><HeadActions d={d} /></Head>
+      <CNav d={d} />
+      <form className="rs-card ct-form" onSubmit={save}>
+        <label className="ct-f"><span>Amount each student pays</span><div className="ct-amt"><b>₦</b><input type="number" min="0" step="500" value={f.max_due} onChange={(e) => setF({ ...f, max_due: e.target.value })} /></div></label>
+        <label className="ct-f"><span>Collection started on</span><input type="date" className="ct-in" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} /><small>Used for the week-by-week view.</small></label>
+        <label className="ct-f"><span>New access code <em>(leave blank to keep the current one)</em></span><input type="password" className="ct-in" autoComplete="new-password" value={f.access_code} onChange={(e) => setF({ ...f, access_code: e.target.value })} placeholder={d.has_custom_code ? '••••••' : 'Set a code so other staff can open this module'} /></label>
+        <div className="ct-acts"><button type="submit" className="rs-btn primary" disabled={busy}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save settings</button></div>
+      </form>
+    </div>
+  );
+}
+
+function Import({ d, notify }) {
+  const nav = useNav();
+  const isAdmin = d.perms && d.perms.level === 'edit';
+  const clear = async () => {
+    if (!await confirm('Delete EVERY contribution payment and expense? This cannot be undone.')) return;
+    const r = await submitJson(d.clear_url, {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not clear.');
+  };
+  return (
+    <div className="rs bx ct">
+      <Head icon="fa-file-import" title="Import from Excel" sub="Bring in payments from a contributions workbook"><HeadActions d={d} /></Head>
+      <CNav d={d} />
+      <form className="rs-card ct-form" method="POST" action={d.submit_url} encType="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value={csrfToken()} />
+        <p className="rs-muted ct-p0">The workbook needs a <b>Students</b> sheet (ID, Name) and a <b>Payments</b> sheet (Student ID, Date, Received by, Amount). Names are matched to this term's SSS3 students.</p>
+        <label className="ct-file"><i className="fas fa-file-excel" aria-hidden="true" /><span>Choose an .xlsx file</span><input type="file" name="file" accept=".xlsx" required /></label>
+        <div className="ct-acts"><button type="submit" className="rs-btn primary"><i className="fas fa-upload" aria-hidden="true" /> Import</button></div>
+      </form>
+      {isAdmin && (
+        <section className="rs-card ct-danger">
+          <div><b>Clear all contribution data</b><small>Deletes every payment and expense. Download an Excel copy first.</small></div>
+          <button type="button" className="rs-btn danger" onClick={clear}><i className="fas fa-trash" aria-hidden="true" /> Clear all</button>
+        </section>)}
+    </div>
   );
 }
 
@@ -903,16 +748,29 @@ const SCREENS = {
 
 export default function ContributionsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
-  const [msg, setMsg] = useState(null);
-  const notify = (tone, text) => setMsg({ tone, text });
+  const [toast, setToast] = useState(null);
+  const [sheet, setSheet] = useState(null);   // {student, onClose}
+  const notify = (tone, text) => setToast({ tone, text });
   const Screen = SCREENS[d.page] || Dashboard;
+  const pay = useMemo(() => ({ open: (student, onClose) => setSheet({ student: student || null, onClose }) }), []);
+  const undo = async (url) => {
+    setToast(null);
+    const r = await submitJson(url, {});
+    if (r.ok) { setToast({ tone: 'info', text: 'Payment undone.' }); refresh(); } else setToast({ tone: 'error', text: r.error || 'Could not undo.' });
+  };
   return (
     <NavCtx.Provider value={{ go, refresh }}>
-      <SectionShell go={go}>
-        <ContribNav d={d} />
-        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-        <Screen d={d} notify={notify} />
-      </SectionShell>
+      <PayCtx.Provider value={pay}>
+        <SectionShell go={go}>
+          <Screen d={d} notify={notify} />
+          {sheet && <PaySheet d={d} initial={sheet.student} onClose={() => { const cb = sheet.onClose; setSheet(null); if (cb) cb(); }}
+            onDone={(res) => { setToast({ tone: 'success', text: res.text, undo: res.undo }); refresh(); }} />}
+          {toast && (
+            <Toast tone={toast.tone} duration={toast.undo ? 7000 : 4000} onClose={() => setToast(null)}>
+              {toast.text}{toast.undo && <button type="button" className="ct-undo" onClick={() => undo(toast.undo)}>Undo</button>}
+            </Toast>)}
+        </SectionShell>
+      </PayCtx.Provider>
     </NavCtx.Provider>
   );
 }
