@@ -1658,3 +1658,12 @@
 .sp-sub .n{flex:1;display:flex;flex-direction:column;min-width:0}
 .sp-sub .n b{font-size:.88rem}.sp-sub .n small{font-size:.74rem;color:var(--text-muted)}
 @media (max-width:759px){.sp-gbf-r{grid-template-columns:minmax(0,1fr) 44px 56px;padding:.6rem .8rem}.sp-bar{grid-column:1/-1;grid-row:2}}
+/* forecast rows must stack on smaller screens (these come after .pd-row's desktop grid) */
+@media (max-width:900px){
+  .pd-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+  .pd-row .n{grid-column:1/3;grid-row:1}
+  .pd-row>.fa-chevron-right{grid-column:3;grid-row:1;align-self:center}
+  .pd-row .rf-b{grid-column:1/-1}
+}
+@media (max-width:759px){.pd-row{padding:.7rem .8rem;gap:.45rem .8rem}}
+@media (max-width:759px){.bx-mx-chips{flex-wrap:wrap;overflow:visible}}
