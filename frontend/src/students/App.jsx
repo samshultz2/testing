@@ -42,26 +42,43 @@ function exportFilterText(q, filters) {
   if (q.gender) bits.push(q.gender);
   if (q.religion) bits.push(q.religion);
   if (q.stream) bits.push(q.stream);
+  if (q.profile) bits.push(profileLabel(filters, q.profile));
   if (q.search) bits.push('“' + q.search + '”');
   return bits.join(' · ');
+}
+
+function profileLabel(filters, key) {
+  for (const g of (filters && filters.profile) || []) {
+    const o = g.options.find((x) => x.value === key);
+    if (o) return o.label;
+  }
+  return key === 'incomplete' ? 'Incomplete profile' : key;
+}
+
+// Saved filter sets from before the Profile filter used the old
+// `incomplete: '1'` key — carry them over to `profile: 'incomplete'`.
+function migrateQuery(q) {
+  if (!q || !('incomplete' in q)) return q;
+  const { incomplete, ...rest } = q;
+  return { ...rest, profile: rest.profile || (incomplete === '1' ? 'incomplete' : '') };
 }
 
 function startState(applied, page) {
   const base = {
     gender: applied.gender || '', religion: applied.religion || '', stream: applied.stream || '',
     subject: applied.subject || '', class_id: applied.class_id || '', arm_id: applied.arm_id || '',
-    house: applied.house || '', boarding: applied.boarding || '', incomplete: applied.incomplete || '',
+    house: applied.house || '', boarding: applied.boarding || '', profile: applied.profile || '',
     sort: applied.sort || 'surname', order: applied.order || 'asc', search: applied.search || '',
     page: page || 1,
   };
   const urlHasFilters = !!(applied.gender || applied.religion || applied.stream || applied.subject
-    || applied.class_id || applied.arm_id || applied.house || applied.boarding || applied.incomplete
+    || applied.class_id || applied.arm_id || applied.house || applied.boarding || applied.profile
     || applied.search);
   if (!urlHasFilters && cameFromStudentPage()) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(FILTER_KEY) || 'null');
       if (saved && typeof saved === 'object') {
-        return { query: { ...base, ...saved, page: saved.page || 1 }, restored: true };
+        return { query: migrateQuery({ ...base, ...saved, page: saved.page || 1 }), restored: true };
       }
     } catch (e) { /* ignore bad/empty storage */ }
   }
@@ -252,15 +269,15 @@ export default function App({ initial }) {
   const goPage = (p) => setQuery((q) => ({ ...q, page: p }));
   const hasFilters = !!(search || query.gender || query.religion || query.stream
     || query.subject || query.class_id || query.arm_id || query.house || query.boarding
-    || query.incomplete);
+    || query.profile);
   const resetFilters = () => {
     setSearch('');
     setQuery({ gender: '', religion: '', stream: '', subject: '', class_id: '', arm_id: '',
-               house: '', boarding: '', incomplete: '', sort: 'surname', order: 'asc', search: '', page: 1 });
+               house: '', boarding: '', profile: '', sort: 'surname', order: 'asc', search: '', page: 1 });
   };
   // Apply a saved filter set: restore its query and mirror the search box.
   const applySaved = (f) => {
-    const q = { ...query, ...f.query, page: 1 };
+    const q = migrateQuery({ ...query, ...f.query, page: 1 });
     setSearch(q.search || '');
     setQuery(q);
   };
@@ -352,7 +369,7 @@ export default function App({ initial }) {
     query.stream && { k: 'stream', label: query.stream },
     query.house && { k: 'house', label: query.house },
     query.boarding && { k: 'boarding', label: query.boarding },
-    query.incomplete && { k: 'incomplete', label: 'Incomplete profiles' },
+    query.profile && { k: 'profile', label: profileLabel(filters, query.profile) },
     query.subject && { k: 'subject', label: 'WAEC: ' + query.subject },
   ].filter(Boolean);
   // Filters not shown inline on the laptop bar (class / arm / gender are inline).
@@ -408,9 +425,13 @@ export default function App({ initial }) {
           <option value="">All</option><option>Day</option><option>Boarding</option>
         </select>
       </Field>
-      <Field label="Profile">
-        <select className="form-control" value={query.incomplete} onChange={(e) => setFilter('incomplete', e.target.value)}>
-          <option value="">All</option><option value="1">Incomplete only</option>
+      <Field label="Profile & records">
+        <select className="form-control" value={query.profile} onChange={(e) => setFilter('profile', e.target.value)}>
+          <option value="">Any</option>
+          {(filters.profile || []).map((g) => (
+            <optgroup key={g.group} label={g.group}>
+              {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </optgroup>))}
         </select>
       </Field>
       {canSss3 && <Field label="WAEC subject (SSS3)">

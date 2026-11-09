@@ -1649,7 +1649,7 @@ def export_students_data():
         about = []
         filt = ', '.join('%s: %s' % (k, v) for k, v in request.args.items()
                          if k in ('search', 'gender', 'religion', 'stream', 'subject', 'class_id', 'arm_id',
-                                  'house', 'boarding', 'incomplete') and v)
+                                  'house', 'boarding', 'incomplete', 'profile') and v)
         about.append(('Filters', filt or ('Selected rows' if student_ids else 'None — all students')))
         return xlsx_response(SLE.render_xlsx(spec, about), '%s.xlsx' % safe)
     if format_type == 'word':

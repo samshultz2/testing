@@ -1698,6 +1698,87 @@ def _dash_announcements():
 # STUDENT ROUTES
 # ============================================================================
 
+# Students list "Profile" filter: key → label, grouped for the dropdown. Each key
+# maps to a condition in _apply_profile_filter().
+PROFILE_FILTERS = {
+    'incomplete': 'Incomplete profile (no birth date or parent contact)',
+    'no_dob': 'No date of birth',
+    'no_contact': 'No parent / guardian phone',
+    'no_email': 'No parent email',
+    'no_photo': 'No passport photo',
+    'no_address': 'No home address',
+    'has_nin': 'Has NIN',
+    'no_nin': 'No NIN',
+    'no_class': 'Not in a class this term',
+    'in_class': 'In a class this term',
+    'no_portal': 'No portal password (can\'t sign in)',
+    'has_portal': 'Portal password set',
+    'no_jamb_reg': 'No JAMB registration number',
+    'no_waec_reg': 'No WAEC exam number',
+    'no_neco_reg': 'No NECO exam number',
+    'no_waec_subjects': 'No WAEC subjects chosen',
+    'no_jamb_subjects': 'No JAMB subjects chosen',
+    'no_health': 'No blood group or genotype',
+}
+PROFILE_GROUPS = [
+    ('Profile completeness', ['incomplete', 'no_dob', 'no_contact', 'no_email', 'no_photo', 'no_address']),
+    ('NIN', ['has_nin', 'no_nin']),
+    ('Class this term', ['no_class', 'in_class']),
+    ('Portal access', ['no_portal', 'has_portal']),
+    ('Exam details', ['no_jamb_reg', 'no_waec_reg', 'no_neco_reg', 'no_waec_subjects', 'no_jamb_subjects']),
+    ('Health', ['no_health']),
+]
+
+
+def _blank(col):
+    return db.or_(col.is_(None), db.func.trim(col) == '')
+
+
+def _apply_profile_filter(query, key, active_term):
+    from models import StudentPhoto
+    if key == 'incomplete':
+        # Same rule as the dashboard's "incomplete profiles" insight — missing
+        # date of birth or no parent contact on file — so the count and the
+        # list it links to can never disagree.
+        with_contact = db.session.query(ParentContact.student_id).distinct()
+        return query.filter(db.or_(Student.date_of_birth.is_(None), ~Student.id.in_(with_contact)))
+    if key == 'no_dob':
+        return query.filter(Student.date_of_birth.is_(None))
+    if key == 'no_contact':
+        has = db.session.query(ParentContact.student_id).filter(~_blank(ParentContact.phone_number))
+        return query.filter(~Student.id.in_(has))
+    if key == 'no_email':
+        has = db.session.query(ParentContact.student_id).filter(~_blank(ParentContact.email))
+        return query.filter(~Student.id.in_(has))
+    if key == 'no_photo':
+        has = db.session.query(StudentPhoto.student_id)
+        return query.filter(_blank(Student.photo_url), ~Student.id.in_(has))
+    if key == 'no_address':
+        return query.filter(Student.home_address.is_(None))
+    if key == 'has_nin':
+        return query.filter(~_blank(Student.nin))
+    if key == 'no_nin':
+        return query.filter(_blank(Student.nin))
+    if key in ('no_class', 'in_class'):
+        placed = (db.session.query(StudentEnrollment.student_id)
+                  .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                  .filter(StudentEnrollment.is_active == True,  # noqa: E712
+                          ClassArmAssignment.term_id == (active_term.id if active_term else -1)))
+        return query.filter(Student.id.in_(placed) if key == 'in_class' else ~Student.id.in_(placed))
+    if key == 'no_portal':
+        return query.filter(_blank(Student.portal_password_hash))
+    if key == 'has_portal':
+        return query.filter(~_blank(Student.portal_password_hash))
+    col = {'no_jamb_reg': Student.jamb_reg_number, 'no_waec_reg': Student.waec_reg_number,
+           'no_neco_reg': Student.neco_reg_number, 'no_waec_subjects': Student.waec_subjects,
+           'no_jamb_subjects': Student.jamb_subjects}.get(key)
+    if col is not None:
+        return query.filter(_blank(col))
+    if key == 'no_health':
+        return query.filter(db.or_(_blank(Student.blood_group), _blank(Student.genotype)))
+    return query
+
+
 def _students_query():
     """Active-student query with branch/section/teacher scope plus the standard
     list filters (search/gender/religion/stream/subject/class/arm) and sort —
@@ -1712,7 +1793,8 @@ def _students_query():
     subject = request.args.get('subject', '')
     house = request.args.get('house', '')
     boarding = request.args.get('boarding', '')
-    incomplete = request.args.get('incomplete', '') == '1'
+    # ?profile=<key> (see PROFILE_FILTERS); the older ?incomplete=1 still works.
+    profile = request.args.get('profile', '') or ('incomplete' if request.args.get('incomplete') == '1' else '')
     class_id = request.args.get('class_id', '', type=int) or None
     arm_id = request.args.get('arm_id', '', type=int) or None
     sort_by = request.args.get('sort', 'surname')
@@ -1765,14 +1847,8 @@ def _students_query():
         query = query.filter(Student.house == house)
     if boarding:
         query = query.filter(Student.boarding_status == boarding)
-    if incomplete:
-        # Same rule as the dashboard's "incomplete profiles" insight — missing
-        # date of birth or no parent contact on file — so the count and the
-        # list it links to can never disagree.
-        with_contact = db.session.query(ParentContact.student_id).distinct().subquery()
-        query = query.filter(db.or_(
-            Student.date_of_birth.is_(None),
-            ~Student.id.in_(db.session.query(with_contact.c.student_id))))
+    if profile in PROFILE_FILTERS:
+        query = _apply_profile_filter(query, profile, active_term)
 
     # WAEC-subject filter (SSS3 only), via a subquery so it composes with the joins.
     if subject:
@@ -1951,7 +2027,7 @@ def _students_payload():
             'religion': request.args.get('religion', ''), 'stream': request.args.get('stream', ''),
             'subject': request.args.get('subject', ''),
             'house': request.args.get('house', ''), 'boarding': request.args.get('boarding', ''),
-            'incomplete': request.args.get('incomplete', ''),
+            'profile': request.args.get('profile', '') or ('incomplete' if request.args.get('incomplete') == '1' else ''),
             'class_id': request.args.get('class_id', '', type=int) or None,
             'arm_id': request.args.get('arm_id', '', type=int) or None,
             'sort': request.args.get('sort', 'surname'), 'order': request.args.get('order', 'asc'),
@@ -1963,6 +2039,8 @@ def _students_payload():
             'streams': list(STREAMS),
             'subjects': list(WAEC_SUBJECTS),
             'houses': houses,
+            'profile': [{'group': g, 'options': [{'value': k, 'label': PROFILE_FILTERS[k]} for k in keys]}
+                        for g, keys in PROFILE_GROUPS],
         },
         # Generic per-sub-section {level, write} block (utils.spa) so the React
         # app can gate each button (Add/Edit/Delete/Trash/Restore/Purge) on its
