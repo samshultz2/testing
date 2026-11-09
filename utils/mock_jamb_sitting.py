@@ -316,10 +316,102 @@ def subject_items(exam, subject_id, attempt, subject=None):
     (items, served)."""
     cached = _rebuild_from_paper(attempt, subject_id)
     if cached is not None:
+        # A Use of English paper cached short (drawn before the 60-question rule
+        # was enforced, or from a thin pool) is topped up — never trimmed, so any
+        # answers already given stay valid — while the attempt is still open.
+        if getattr(attempt, 'status', None) != 'Submitted' and len(cached[1]) < ENGLISH_TOTAL \
+                and _english_subject(exam, subject_id, subject):
+            items, served = _fit_english(exam, subject_id, attempt, cached[0], cached[1], subject)
+            if len(served) > len(cached[1]):
+                _store_paper_subject(attempt, subject_id, items)
+            return items, served
         return cached
     items, served = _draw_subject_items(exam, subject_id, attempt, subject=subject)
+    if served and _english_subject(exam, subject_id, subject):
+        items, served = _fit_english(exam, subject_id, attempt, items, served, subject)
     if served:
         _store_paper_subject(attempt, subject_id, items)
+    return items, served
+
+
+ENGLISH_TOTAL = 60   # Use of English is always 60 questions in the UTME
+
+
+def _english_subject(exam, subject_id, subject=None):
+    from models import db, Subject
+    from utils.jamb_blueprint import norm_subject
+    if subject is None:
+        subject = db.session.get(Subject, subject_id)
+    return bool(subject) and norm_subject(subject.name) == 'english language'
+
+
+def _fit_english(exam, subject_id, attempt, items, served, subject=None):
+    """Make a Use of English paper exactly 60 questions (or as many as the pool
+    holds). Short → top up from the subject's unused questions: tagged
+    stand-alone questions first (never another year's novel), then untagged,
+    then unused passages (kept together, trimmed to the need). Long → trim
+    stand-alone questions from the end, then the last passage."""
+    items = list(items)
+    served = set(served)
+    if len(served) > ENGLISH_TOTAL:
+        extra = len(served) - ENGLISH_TOTAL
+        for i in range(len(items) - 1, -1, -1):
+            if not extra:
+                break
+            it = items[i]
+            if it['kind'] == 'question':
+                served.discard(it['q'].id); items.pop(i); extra -= 1
+        for i in range(len(items) - 1, -1, -1):
+            if not extra:
+                break
+            it = items[i]
+            if it['kind'] == 'passage':
+                keep = max(0, len(it['questions']) - extra)
+                for q in it['questions'][keep:]:
+                    served.discard(q.id)
+                extra -= len(it['questions']) - keep
+                if keep:
+                    items[i] = {**it, 'questions': it['questions'][:keep]}
+                else:
+                    items.pop(i)
+        return items, served
+    need = ENGLISH_TOTAL - len(served)
+    if need <= 0:
+        return items, served
+    passages, qrows = _subject_pool(exam, subject_id)
+    rng = random.Random(_seed(attempt, subject_id, 'topup'))
+    novel = (getattr(exam, 'novel_title', None) or '').strip().lower()
+    if not novel:
+        novel = (_default_novel([q for q in qrows if (q.section or '') == 'novel']) or '').strip().lower()
+
+    def ok_novel(q):
+        if (q.section or '') != 'novel':
+            return True
+        t = (q.topic or '').strip().lower()
+        return bool(t) and bool(novel) and (novel in t or t in novel)
+
+    loose = [q for q in qrows if not q.passage_id and q.id not in served and ok_novel(q)]
+    tagged = [q for q in loose if (q.section or '').strip()]
+    untagged = [q for q in loose if not (q.section or '').strip()]
+    rng.shuffle(tagged); rng.shuffle(untagged)
+    for q in tagged + untagged:
+        if need <= 0:
+            break
+        items.append({'kind': 'question', 'q': q}); served.add(q.id); need -= 1
+    if need > 0:
+        by_p = {}
+        for q in qrows:
+            if q.passage_id and q.id not in served:
+                by_p.setdefault(q.passage_id, []).append(q)
+        used_p = {it['passage'].id for it in items if it['kind'] == 'passage'}
+        groups = [p for p in passages if p.id in by_p and p.id not in used_p]
+        rng.shuffle(groups)
+        for p in groups:
+            if need <= 0:
+                break
+            qs = by_p[p.id][:need]
+            items.append({'kind': 'passage', 'passage': p, 'questions': qs})
+            served.update(q.id for q in qs); need -= len(qs)
     return items, served
 
 
@@ -420,6 +512,8 @@ def _draw_subject_items(exam, subject_id, attempt, subject=None):
     passage_groups = [{'passage': p, 'questions': by_passage[p.id]}
                       for p in passages if by_passage.get(p.id)]
     cap = exam.questions_per_subject or blueprint_for(subj_name)['total'] or 0
+    if norm_subject(subj_name) == 'english language':
+        cap = ENGLISH_TOTAL   # never the mock's generic per-subject cap
     if cap:
         passage_q = sum(len(g['questions']) for g in passage_groups)
         rem = max(0, cap - passage_q)

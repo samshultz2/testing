@@ -213,8 +213,35 @@ def blueprint_for(subject_name, override=None):
                     s['count'] = max(0, int(override[s['section']]))
                 except (TypeError, ValueError):
                     pass
+    if norm_subject(subject_name) == 'english language':
+        sections = _force_total(sections, ENGLISH_TOTAL)
     total = sum(s['count'] for s in sections)
     return {'total': total, 'sections': sections}
+
+
+# Use of English is ALWAYS a 60-question paper. A per-mock override or an
+# imported syllabus may move questions between sections, but never change the
+# paper size — the difference is put back on / taken off the stand-alone sections.
+ENGLISH_TOTAL = 60
+
+
+def _force_total(sections, target):
+    total = sum(s['count'] for s in sections)
+    if total == target or not sections:
+        return sections
+    flex = [s for s in sections if not s['passage']] or sections
+    if total < target:
+        pref = next((s for s in flex if s['section'] == 'lexis_structure'), None) or max(flex, key=lambda s: s['count'])
+        pref['count'] += target - total
+        return sections
+    extra = total - target
+    for s in sorted(flex, key=lambda s: -s['count']):
+        take = min(extra, s['count'])
+        s['count'] -= take
+        extra -= take
+        if not extra:
+            break
+    return sections
 
 
 def blueprint_total(subject_name, override=None):
