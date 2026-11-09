@@ -60,7 +60,7 @@ export default function WeeklyReport() {
             <div className="ak-hero">
               <Ring pct={ct.weekly_percentage} label="Attendance" />
               <div className="ak-hero-t">
-                <span className="ak-kick">Week {d.week_info.week_number} · {d.week_info.start_date} → {d.week_info.end_date}</span>
+                <span className="ak-kick"><span>Week {d.week_info.week_number}</span><span>{d.week_info.start_date} → {d.week_info.end_date}</span></span>
                 <strong>{d.class_name}</strong>
                 <div className="ak-hero-m">
                   <Meter label="Morning" value={ct.total_morning} max={maxPossible} />

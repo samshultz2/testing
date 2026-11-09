@@ -176,7 +176,7 @@ export function Ring({ pct, label = 'Rate', size = 96 }) {
   const p = Math.round(raw);
   return (
     <div className="ak-ring" style={{ '--p': p, '--c': pctColor(p), width: size, height: size }} role="img" aria-label={`${label} ${fmtPct(raw)}`}>
-      <div><b>{fmtPct(raw)}</b><small>{label}</small></div>
+      <div><b className={fmtPct(raw).length > 4 ? 'long' : ''}>{fmtPct(raw)}</b><small>{label}</small></div>
     </div>
   );
 }
@@ -274,17 +274,29 @@ export function Sheet({ title, onClose, children }) {
 // Classes left out of an analysis because their register has never been taken
 // this term ("no data", not 0%). `classes` = list of names or {class, students}.
 export function UnmarkedNote({ classes, what = 'these figures' }) {
+  const [open, setOpen] = React.useState(false);
   if (!classes || !classes.length) return null;
   const names = classes.map((c) => (typeof c === 'string' ? c : c.class));
+  const students = classes.reduce((t, c) => t + ((c && c.students) || 0), 0);
   const n = names.length;
+  const SHOW = 4;
+  const shown = open ? names : names.slice(0, SHOW);
   return (
     <div className="ak-unmarked" role="note">
-      <i className="fas fa-circle-info" aria-hidden="true" />
-      <div>
-        <b>{n} class{n === 1 ? '' : 'es'} not included in {what}</b>
-        <span>No attendance has been marked for {n === 1 ? 'it' : 'them'} this term yet: {names.join(', ')}.</span>
+      <div className="ak-unmarked-h">
+        <i className="fas fa-circle-info" aria-hidden="true" />
+        <div>
+          <b>{n} class{n === 1 ? '' : 'es'} not in {what}</b>
+          <span>No attendance marked this term yet{students ? ` · ${students} student${students === 1 ? '' : 's'}` : ''}</span>
+        </div>
+        <a className="ak-btn" href="#/mark"><i className="fas fa-user-check" aria-hidden="true" /><span> Mark now</span></a>
       </div>
-      <a className="ak-btn" href="#/mark"><i className="fas fa-user-check" aria-hidden="true" /><span> Mark now</span></a>
+      <div className="ak-unmarked-l">
+        {shown.map((nm) => <span key={nm} className="ak-unmarked-c">{nm}</span>)}
+        {n > SHOW && (
+          <button type="button" className="ak-unmarked-more" onClick={() => setOpen(!open)} aria-expanded={open}>
+            {open ? 'Show less' : `+${n - SHOW} more`}</button>)}
+      </div>
     </div>
   );
 }

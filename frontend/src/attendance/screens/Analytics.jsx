@@ -107,7 +107,7 @@ export default function Analytics() {
             <div className="ak-hero">
               <Ring pct={d.kpis.overall} label="Overall" />
               <div className="ak-hero-t">
-                <span className="ak-kick">{d.kpis.school_days} school days · {d.kpis.classes} classes · {d.kpis.students} students</span>
+                <span className="ak-kick"><span>{d.kpis.school_days} school days</span><span>{d.kpis.classes} classes</span><span>{d.kpis.students} students</span></span>
                 <strong>School attendance</strong>
                 <div className="ak-hero-chips">
                   <span className="ak-chip good"><i className="fas fa-trophy" aria-hidden="true" /> Best: <b>{d.kpis.best_class}</b></span>

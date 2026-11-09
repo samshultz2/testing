@@ -93,7 +93,7 @@ export default function StudentProfile() {
               {d.student.photo_url ? <img className="sp2-av" src={d.student.photo_url} alt="" />
                 : <span className="sp2-av" aria-hidden="true">{initialsOf(d.student.name)}</span>}
               <div className="ak-hero-t">
-                <span className="ak-kick">{d.student.student_id}{d.student.gender ? ' · ' + d.student.gender : ''} · {d.overall.terms} term{d.overall.terms === 1 ? '' : 's'} tracked</span>
+                <span className="ak-kick"><span>{d.student.student_id}</span>{d.student.gender ? <span>{d.student.gender}</span> : null}<span>{d.overall.terms} term{d.overall.terms === 1 ? '' : 's'} tracked</span></span>
                 <strong>{d.student.name}</strong>
                 {d.warning
                   ? <span className="ak-chip bad"><i className="fas fa-triangle-exclamation" aria-hidden="true" /> Below the {d.threshold}% threshold — may need an intervention</span>

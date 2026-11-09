@@ -209,7 +209,7 @@
 .att-bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
 .att-bar-val { font-size: 13px; font-weight: 600; text-align: right; }
 .att-heat { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.att-heat-cell { border-radius: 8px; padding: 12px 4px; text-align: center; background: var(--gray-100, #f1f5f9); }
+.att-heat-cell { border-radius: 8px; padding: 12px 4px; text-align: center; background: var(--gray-100, #f1f5f9); min-width: 0; }
 .att-heat-day { font-size: 12px; font-weight: 600; }
 .att-heat-pct { font-size: 15px; font-weight: 700; margin-top: 2px; }
 
@@ -295,12 +295,16 @@
 .md-btn.ghost{background:var(--bg-card);color:var(--text-secondary)}
 .md-btn.ghost:hover{border-color:var(--primary);color:var(--primary)}
 .md-btn.save{background:var(--primary);border-color:var(--primary);color:#fff;padding:0 1.4rem}
-.ak-unmarked{display:flex;align-items:center;gap:.75rem;padding:.75rem .9rem;margin:0 0 .9rem;border:1px solid color-mix(in srgb,var(--info,#2563eb) 30%,var(--border-color));border-radius:14px;background:color-mix(in srgb,var(--info,#2563eb) 6%,var(--bg-card))}
-.ak-unmarked>i{color:var(--info,#2563eb);font-size:1.05rem;flex:none}
-.ak-unmarked>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:.1rem;font-size:.84rem;line-height:1.35}
-.ak-unmarked span{color:var(--text-muted)}
-.ak-unmarked .ak-btn{flex:none}
-@media (max-width:759px){.ak-unmarked{flex-wrap:wrap}.ak-unmarked .ak-btn{width:100%;justify-content:center}}
+.ak-unmarked{display:flex;flex-direction:column;gap:.55rem;padding:.75rem .9rem;margin:0 0 .9rem;border:1px solid color-mix(in srgb,var(--info,#2563eb) 30%,var(--border-color));border-radius:14px;background:color-mix(in srgb,var(--info,#2563eb) 6%,var(--bg-card))}
+.ak-unmarked-h{display:flex;align-items:center;gap:.7rem}
+.ak-unmarked-h>i{color:var(--info,#2563eb);font-size:1.05rem;flex:none}
+.ak-unmarked-h>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:.05rem;font-size:.84rem;line-height:1.35}
+.ak-unmarked-h span{color:var(--text-muted);font-size:.8rem}
+.ak-unmarked-h .ak-btn{flex:none}
+.ak-unmarked-l{display:flex;flex-wrap:wrap;gap:.35rem;padding-left:1.75rem}
+.ak-unmarked-c{font-size:.76rem;font-weight:600;padding:.2rem .55rem;border-radius:999px;background:var(--bg-card);border:1px solid var(--border-color);white-space:nowrap}
+.ak-unmarked-more{font:inherit;font-size:.76rem;font-weight:700;color:var(--primary);background:none;border:0;padding:.2rem .3rem;cursor:pointer}
+@media (max-width:759px){.ak-unmarked-l{padding-left:0}.ak-unmarked-h .ak-btn span{display:none}.ak-unmarked-h .ak-btn{width:38px;padding:0;justify-content:center}}
 .md-btn.save.is-saved{background:var(--success,#16a34a);border-color:var(--success,#16a34a)}
 .md-btn:disabled{opacity:.55;cursor:not-allowed}
 .md-more{position:relative}
@@ -363,15 +367,18 @@
 .ak-span2{grid-column:1/-1}
 .ak-ring{border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--gray-200) 0)}
 .ak-ring>div{width:76%;height:76%;border-radius:50%;background:var(--bg-card);display:flex;flex-direction:column;align-items:center;justify-content:center}
-.ak-ring b{font-size:1.3rem;font-weight:800;line-height:1}
+.ak-ring b{font-size:1.3rem;font-weight:800;line-height:1;letter-spacing:-.02em;white-space:nowrap}
+.ak-ring b.long{font-size:1.02rem}
 .ak-ring small{font-size:.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
 .ak-hero{display:flex;align-items:center;gap:1.1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1rem 1.1rem;flex-wrap:wrap}
 .ak-hero-t{flex:1;min-width:200px;display:flex;flex-direction:column;gap:.25rem}
 .ak-kick{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.ak-kick:has(>span){display:flex;flex-wrap:wrap;column-gap:.75rem;row-gap:.1rem}.ak-kick>span{white-space:nowrap}
 .ak-hero-t strong{font-size:1.3rem;font-weight:800;letter-spacing:-.01em}
 .ak-hero-m{display:flex;flex-direction:column;gap:.35rem;max-width:420px;margin-top:.2rem}
 .ak-hero-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.2rem}
-.ak-chip{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;border-radius:999px;padding:.28rem .7rem;background:var(--gray-100);color:var(--text-secondary);align-self:flex-start}
+.ak-chip{display:inline-block;line-height:1.35;font-size:.8rem;border-radius:999px;padding:.28rem .7rem;background:var(--gray-100);color:var(--text-secondary);align-self:flex-start}
+.ak-chip i{margin-right:.35rem}
 .ak-chip.good{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
 .ak-chip.bad{background:color-mix(in srgb,var(--danger) 11%,var(--bg-card));color:var(--danger)}
 .ak-meter{display:grid;grid-template-columns:80px 1fr 64px;align-items:center;gap:.5rem;font-size:.8rem}
@@ -533,9 +540,20 @@ button.ak-band{cursor:pointer}
 .ak-x{border:0;background:var(--gray-100);width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--text-secondary)}
 @media (max-width:1099px){.ak-cols,.ak-grid2{grid-template-columns:minmax(0,1fr)}.ak-grid2>span:empty{display:none}}
 @media (max-width:759px){
-  .ak-tiles{display:flex;overflow-x:auto;margin:0 -12px;padding:0 12px 2px;scrollbar-width:none}
-  .ak-tiles::-webkit-scrollbar{display:none}
-  .ak-tile{flex:0 0 auto;min-width:122px;max-width:170px}
+  .ak-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+  .ak-tile{min-width:0}
+  .ak-tile .l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .ak-hero{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:.85rem;row-gap:.6rem}
+  .ak-hero-t{display:contents}
+  .ak-hero .ak-ring{grid-row:1 / span 2}
+  .ak-hero .ak-kick{grid-column:2;align-self:end}
+  .ak-hero-t>strong{grid-column:2;align-self:start;font-size:1.15rem}
+  .ak-hero-chips,.ak-hero-m{grid-column:1 / -1;margin-top:0}
+  .ak-hero .ak-chip{align-self:auto}
+  .ak-ring b.long{font-size:.92rem}
+  .att-heat{gap:4px}
+  .att-heat-cell{padding:9px 2px}
+  .att-heat-pct{font-size:12.5px;letter-spacing:-.02em}
   .ak-card{border-radius:18px}
   .ak-card-h{padding:.75rem .85rem}
   .ak-card-a .ak-btn span,.ak-hero .ak-btn span,.ak-toolbar-r .ak-btn span{display:none}

@@ -88,7 +88,7 @@ export default function TermlyReport() {
             <div className="ak-hero">
               <Ring pct={ct.termly_percentage} label="This term" />
               <div className="ak-hero-t">
-                <span className="ak-kick">{term ? term.name : 'Term'} · {ti.total_weeks} weeks · {ti.total_school_days} school days</span>
+                <span className="ak-kick"><span>{term ? term.name : 'Term'}</span><span>{ti.total_weeks} weeks</span><span>{ti.total_school_days} school days</span></span>
                 <strong>{d.class_name}</strong>
                 <div className="ak-hero-m">
                   <Meter label="Morning" pct={amPct} />
