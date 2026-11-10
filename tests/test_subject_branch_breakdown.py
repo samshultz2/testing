@@ -60,7 +60,7 @@ def test_waec_breakdown_groups_by_subject_and_branch_with_not_offered(app):
     assert 'GB Alpha' in html and 'GB Beta' in html
     assert 'Mathematics' in html and 'English Language' in html
     # Beta never sat Mathematics -> "Not Offered" for that subject/branch pairing
-    assert 'Not Offered' in html
+    assert 'not offered' in html.lower()
     assert 'Overall Credit Pass (A1' in html
 
 
@@ -323,3 +323,20 @@ def test_ranking_table_paginates_across_png_pages_instead_of_dropping_rows():
     assert len(pages) > 1
     for p in pages:
         assert p[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_students_without_a_branch_count_under_the_default_branch(app):
+    """Results of students with no branch set must not vanish from the report."""
+    from models import Branch
+    with app.app_context():
+        s = Student(student_id='NB' + uuid.uuid4().hex[:6].upper(), first_name='Nobranch', surname='Gb',
+                    gender='Female', is_active=True, branch_id=None)
+        db.session.add(s); db.session.flush()
+        db.session.add_all([WAECResult(student_id=s.id, exam_year=2093, subject='Physics', grade='B3'),
+                            WAECResult(student_id=s.id, exam_year=2093, subject='Chemistry', grade='F9')])
+        db.session.commit()
+        name = Branch.get_default().name
+    c = _admin(app)
+    html = c.get('/results/subject-branch-breakdown?exam=waec&year=2093').get_data(as_text=True)
+    assert 'data-name="physics"' in html and 'data-name="chemistry"' in html
+    assert name in html

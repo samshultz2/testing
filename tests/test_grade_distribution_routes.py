@@ -232,5 +232,5 @@ def test_already_stored_alias_mismatch_merges_on_the_live_breakdown_page(app):
     html = c.get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
     # exactly one Mathematics row-group for this branch, not two, and the
     # candidate counts are summed (10 + 6 = 16)
-    assert html.count('>Mathematics<') == 1
+    assert html.count('class="gb-sj" data-name="mathematics"') == 1
     assert '>16<' in html

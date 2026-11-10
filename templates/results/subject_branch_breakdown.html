@@ -3,203 +3,322 @@
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Exam Analytics</a> / <span>Grade Breakdown</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.gb-table { width: 100%; border-collapse: collapse; font-size: .85rem; white-space: nowrap; }
-.gb-table th, .gb-table td { border: 1px solid var(--border-color); padding: .4rem .6rem; text-align: center; }
-.gb-table thead th { background: var(--bg-secondary, var(--gray-50)); font-weight: 700; }
-.gb-table td.gb-subj { text-align: left; font-weight: 600; white-space: normal; vertical-align: middle; }
-.gb-table td.gb-branch { text-align: left; }
-.gb-table td.gb-notoffered { color: var(--text-muted); font-style: italic; }
-/* Band tints: 9-step green -> red -> purple ramp, shared by WAEC's A1-F9 and
-   JAMB's score bands. color-mix() against transparent keeps these readable in
-   both light and dark mode (no hardcoded text colour riding on top). */
-.gb-1 { background: color-mix(in srgb, #16a34a 30%, transparent); }
-.gb-2 { background: color-mix(in srgb, #22c55e 26%, transparent); }
-.gb-3 { background: color-mix(in srgb, #4ade80 22%, transparent); }
-.gb-4 { background: color-mix(in srgb, #eab308 26%, transparent); }
-.gb-5 { background: color-mix(in srgb, #f59e0b 22%, transparent); }
-.gb-6 { background: color-mix(in srgb, #f97316 26%, transparent); }
-.gb-7 { background: color-mix(in srgb, #ef4444 20%, transparent); }
-.gb-8 { background: color-mix(in srgb, #dc2626 26%, transparent); }
-.gb-9 { background: color-mix(in srgb, #9333ea 24%, transparent); }
-thead .gb-1 { background: color-mix(in srgb, #16a34a 55%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-2 { background: color-mix(in srgb, #22c55e 50%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-3 { background: color-mix(in srgb, #4ade80 45%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-4 { background: color-mix(in srgb, #eab308 50%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-5 { background: color-mix(in srgb, #f59e0b 45%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-6 { background: color-mix(in srgb, #f97316 50%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-7 { background: color-mix(in srgb, #ef4444 42%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-8 { background: color-mix(in srgb, #dc2626 50%, var(--bg-secondary, var(--gray-50))); }
-thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, var(--gray-50))); }
-.gb-scroll { overflow-x: auto; }
-.gb-criteria { background: var(--bg-secondary, var(--gray-50)); border: 1px solid var(--border-color);
-  border-radius: var(--radius-md); padding: .75rem 1rem; margin: 0 0 1rem; font-size: .8rem; }
-.gb-criteria strong { color: var(--text-secondary); text-transform: uppercase; font-size: .72rem; letter-spacing: .02em; }
-.gb-criteria ul { margin: .4rem 0 0; padding-left: 1.1rem; }
-.gb-criteria li { margin-bottom: .2rem; color: var(--text-secondary); }
-.gb-selector { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
-/* Base pill-tab layout (style.css only refines the active/hover states on
-   top of this — see its "Pill family" comment). */
-.scope-tabs { display: flex; gap: .4rem; margin-bottom: 1rem; flex-wrap: wrap; }
-.scope-tab { padding: .4rem .9rem; border: 1px solid var(--border-color); border-radius: var(--radius-full);
-  font-size: .8rem; text-decoration: none; color: var(--text-secondary); background: var(--bg-card); cursor: pointer; }
+/* 9-step band ramp (best → worst), shared by WAEC A1–F9 and JAMB score bands */
+.gb{--b1:#15803d;--b2:#22c55e;--b3:#86efac;--b4:#eab308;--b5:#f59e0b;--b6:#f97316;--b7:#ef4444;--b8:#b91c1c;--b9:#7e22ce;max-width:1320px;margin:0 auto}
+.gb .rs-head-t p{white-space:normal}
+.gb-bar{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--gray-100);min-width:80px}
+.gb-bar i{display:block;height:100%}
+.gb-bar i+i{box-shadow:inset 1px 0 0 rgba(255,255,255,.55)}
+.gb-c1{background:var(--b1)}.gb-c2{background:var(--b2)}.gb-c3{background:var(--b3)}.gb-c4{background:var(--b4)}.gb-c5{background:var(--b5)}
+.gb-c6{background:var(--b6)}.gb-c7{background:var(--b7)}.gb-c8{background:var(--b8)}.gb-c9{background:var(--b9)}
+.gb-legend{display:flex;flex-wrap:wrap;gap:.35rem .8rem;font-size:.76rem;color:var(--text-muted);align-items:center}
+.gb-legend span{display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap}
+.gb-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.gb-legend .pass{border-left:1px solid var(--border-color);padding-left:.8rem;font-weight:600;color:var(--text-secondary)}
+
+/* toolbar */
+.gb-bar-top{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.gb-bar-top .rs-seg a{display:inline-flex;align-items:center;height:36px;padding:0 .85rem;border-radius:10px;font-weight:600;font-size:.84rem;color:var(--text-muted);text-decoration:none;white-space:nowrap}
+.gb-bar-top .rs-seg a.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.gb-per{display:flex;align-items:center;gap:.45rem;margin-left:auto}
+.gb-per span{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.gb-per select{height:40px;border:1.5px solid var(--border-color);border-radius:11px;padding:0 .7rem;font:inherit;font-weight:600;background:var(--bg-card);color:var(--text-primary);max-width:240px}
+
+/* export menu */
+.gb-menu{position:relative}
+.gb-menu summary{list-style:none}
+.gb-menu summary::-webkit-details-marker{display:none}
+.gb-menu:not([open]) .rs-menu-pop{display:none}
+
+/* branches */
+.gb-br{display:grid;grid-template-columns:28px minmax(120px,1.1fr) 70px minmax(140px,2.2fr) 82px 70px;gap:.85rem;align-items:center;padding:.6rem .2rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.gb-br:last-child{border-bottom:0}
+.gb-br.h{padding-top:0;font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.gb-rk{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;background:var(--gray-100);color:var(--text-secondary)}
+.gb-rk.top{background:#fef3c7;color:#a16207}
+.gb-nm{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gb-nm small{display:block;font-weight:500;color:var(--text-muted);font-size:.74rem}
+.gb-num{font-variant-numeric:tabular-nums;text-align:right}
+.gb-pass{display:flex;flex-direction:column;align-items:flex-end;gap:.15rem}
+.gb-pass b{font-size:1rem}
+.gb-pass .rs-meter{width:100%;min-width:0}
+.gb-crit summary{cursor:pointer;font-size:.8rem;color:var(--primary);font-weight:600;margin-top:.6rem}
+.gb-crit ul{margin:.4rem 0 0;padding-left:1.1rem;font-size:.8rem;color:var(--text-secondary)}
+
+/* subjects */
+.gb-tools{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.7rem}
+.gb-tools .rs-search{max-width:320px}
+.gb-tools .rs-seg button{height:34px}
+.gb-subjs{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:.65rem}
+.gb-sj{border:1px solid var(--border-color);border-radius:14px;padding:.75rem .85rem;display:flex;flex-direction:column;gap:.45rem;min-width:0}
+.gb-sj-h{display:flex;align-items:baseline;gap:.5rem;min-width:0}
+.gb-sj-h h4{margin:0;font-size:.95rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gb-sj-h .p{font-weight:800;font-family:'Space Grotesk',sans-serif;font-size:1.05rem}
+.gb-sj-h .p small{font-size:.7rem;color:var(--text-muted);font-weight:700;margin-left:.15rem}
+.gb-sj-s{font-size:.75rem;color:var(--text-muted);margin-top:-.3rem}
+.gb-sj-s b{color:var(--text-secondary)}
+.gb-row{display:grid;grid-template-columns:minmax(80px,1fr) 34px minmax(90px,1.8fr) 50px;gap:.55rem;align-items:center;font-size:.82rem}
+.gb-row .n{color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums;font-size:.76rem}
+.gb-row .bn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gb-row .bn i{font-size:.7em;color:var(--text-muted);margin-left:.2rem}
+.gb-row .pp{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.gb-row.best .bn{font-weight:700}
+.gb-row.best .pp{color:var(--success)}
+.gb-row.no .na{grid-column:2/-1;color:var(--text-muted);font-style:italic;font-size:.76rem}
+.tone-good{color:var(--success)}.tone-mid{color:var(--warning)}.tone-bad{color:var(--danger)}
+
+/* full table */
+.gb-scroll{overflow-x:auto;border:1px solid var(--border-color);border-radius:12px}
+.gb-table{width:100%;border-collapse:collapse;font-size:.82rem;white-space:nowrap}
+.gb-table th,.gb-table td{border-bottom:1px solid var(--border-light,var(--border-color));padding:.4rem .55rem;text-align:center}
+.gb-table thead th{background:var(--gray-50,var(--bg-card));font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted);position:sticky;top:0}
+.gb-table th:first-child,.gb-table td:first-child{position:sticky;left:0;background:var(--bg-card);text-align:left;z-index:1}
+.gb-table thead th:first-child{background:var(--gray-50,var(--bg-card));z-index:2}
+.gb-table td.s{font-weight:700;white-space:normal;min-width:120px}
+.gb-table tr.first td{border-top:2px solid var(--border-color)}
+.gb-table td.na{color:var(--text-muted);font-style:italic}
+.gb-table td.h1{background:color-mix(in srgb,var(--b1) 18%,transparent)}.gb-table td.h2{background:color-mix(in srgb,var(--b2) 16%,transparent)}
+.gb-table td.h3{background:color-mix(in srgb,var(--b3) 18%,transparent)}.gb-table td.h4{background:color-mix(in srgb,var(--b4) 16%,transparent)}
+.gb-table td.h5{background:color-mix(in srgb,var(--b5) 14%,transparent)}.gb-table td.h6{background:color-mix(in srgb,var(--b6) 14%,transparent)}
+.gb-table td.h7{background:color-mix(in srgb,var(--b7) 13%,transparent)}.gb-table td.h8{background:color-mix(in srgb,var(--b8) 14%,transparent)}
+.gb-table td.h9{background:color-mix(in srgb,var(--b9) 14%,transparent)}
+.gb-table td.z{color:var(--text-muted);opacity:.6}
+
+@media(max-width:900px){
+  .gb-br{grid-template-columns:26px minmax(0,1fr) 64px 60px;row-gap:.35rem}
+  .gb-br .gb-bar{grid-column:2/-1;grid-row:2}
+  .gb-br .e{display:none}
+  .gb-br.h .bh{display:none}
+}
+@media(max-width:700px){
+  .gb-bar-top{flex-direction:column;align-items:stretch}
+  .gb-bar-top .rs-seg{width:100%}
+  .gb-bar-top .rs-seg a{flex:1;justify-content:center;padding:0 .4rem;font-size:.8rem}
+  .gb-per{margin-left:0}
+  .gb-per select{flex:1;max-width:none}
+  .gb-subjs{grid-template-columns:minmax(0,1fr)}
+  .gb-tools .rs-search{max-width:none;flex-basis:100%}
+  .rs-head{flex-wrap:wrap}
+  .rs-head-a{width:100%}
+  .rs-head-a>*{flex:1}
+  .rs-head-a .rs-btn{width:100%}
+  .gb-legend{font-size:.72rem}
+}
 </style>
 {% endblock %}
 
+{% macro bar(pct, bands) -%}
+<span class="gb-bar" role="img" aria-label="{% for b in bands %}{{ b }} {{ pct[b] }}%{{ ', ' if not loop.last }}{% endfor %}">
+  {%- for b in bands %}{% if pct[b] %}<i class="gb-c{{ loop.index }}" style="width:{{ pct[b] }}%" title="{{ b }}: {{ pct[b] }}%"></i>{% endif %}{% endfor -%}
+</span>
+{%- endmacro %}
+{% macro tone(p) %}{{ 'good' if p >= 60 else 'mid' if p >= 40 else 'bad' }}{% endmacro %}
+
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Subject-Wise Performance &amp; Grade Breakdown</h1>
-        <p class="text-muted text-sm">Per-subject, per-branch {{ band_label|lower }} percentage distribution</p>
+{% set R = result %}
+{% set pshort = 'Credit' if band_label == 'Grade' else 'Pass' %}
+{% set has = R and R.subjects %}
+{% set export_args = {'exam': exam} %}
+{% if exam in ('waec', 'jamb') %}{% set _ = export_args.update({'year': selected_year}) %}
+{% elif selected_mock %}{% set _ = export_args.update({'mock': selected_mock.session_id ~ '_' ~ selected_mock.exam_number}) %}{% endif %}
+<div class="rs gb">
+  <div class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-table-cells" aria-hidden="true"></i></span>
+    <div class="rs-head-t">
+      <h1>Grade breakdown</h1>
+      <p>{{ exam_label }}{% if period_label %} · {{ period_label }}{% endif %}{% if has %} · {{ R.branches|length }} branch{{ 'es' if R.branches|length != 1 }} · {{ R.subjects|length }} subjects{% endif %}</p>
     </div>
-    <div class="page-header-actions">
-        <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-sm" title="Import a branch's own summary sheet (for branches that don't enter individual results)"><i class="fas fa-file-import"></i> Import Branch Report</a>
-        <a href="{{ url_for('results.grade_distribution_manage', exam=exam) }}" class="btn btn-secondary btn-sm" title="View, edit or delete previously imported reports"><i class="fas fa-list-check"></i> Manage Imports</a>
-        {% if result and result.subjects %}
-        {% set export_args = {'exam': exam} %}
-        {% if exam in ('waec', 'jamb') %}{% set _ = export_args.update({'year': selected_year}) %}
-        {% elif selected_mock %}{% set _ = export_args.update({'mock': selected_mock.session_id ~ '_' ~ selected_mock.exam_number}) %}{% endif %}
-        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='pdf', **export_args) }}" class="btn btn-secondary btn-sm" title="Download PDF"><i class="fas fa-file-pdf"></i> PDF</a>
-        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}" class="btn btn-secondary btn-sm" title="Download Word"><i class="fas fa-file-word"></i> Word</a>
-        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}" class="btn btn-secondary btn-sm" title="Download Excel"><i class="fas fa-file-excel"></i> Excel</a>
-        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='png', **export_args) }}" class="btn btn-secondary btn-sm" title="Download HD Image"><i class="fas fa-file-image"></i> Image</a>
-        {% endif %}
+    <div class="rs-head-a">
+      {% if has %}
+      <details class="gb-menu rs-menu">
+        <summary class="rs-btn ghost"><i class="fas fa-download" aria-hidden="true"></i> Export</summary>
+        <div class="rs-menu-pop"><div class="rs-menu-list" role="menu">
+          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='pdf', **export_args) }}"><i class="fas fa-file-pdf"></i><span>PDF</span></a>
+          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}"><i class="fas fa-file-word"></i><span>Word</span></a>
+          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}"><i class="fas fa-file-excel"></i><span>Excel</span></a>
+          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='png', **export_args) }}"><i class="fas fa-file-image"></i><span>HD image</span></a>
+        </div></div>
+      </details>
+      {% endif %}
+      <a class="rs-btn ghost" href="{{ url_for('results.grade_distribution_manage', exam=exam) }}" title="View, edit or delete imported branch reports"><i class="fas fa-list-check" aria-hidden="true"></i> Imports</a>
+      <a class="rs-btn primary" href="{{ url_for('results.grade_distribution_import', exam=exam) }}" title="Import a branch's own summary sheet"><i class="fas fa-file-import" aria-hidden="true"></i> Import report</a>
     </div>
-</div>
+  </div>
 
-<div class="scope-tabs">
-    <a href="{{ url_for('results.subject_branch_breakdown', exam='waec') }}" class="scope-tab{{ ' active' if exam == 'waec' else '' }}">WAEC</a>
-    <a href="{{ url_for('results.subject_branch_breakdown', exam='jamb') }}" class="scope-tab{{ ' active' if exam == 'jamb' else '' }}">JAMB</a>
-    <a href="{{ url_for('results.subject_branch_breakdown', exam='mock_waec') }}" class="scope-tab{{ ' active' if exam == 'mock_waec' else '' }}">Mock WAEC</a>
-    <a href="{{ url_for('results.subject_branch_breakdown', exam='mock_jamb') }}" class="scope-tab{{ ' active' if exam == 'mock_jamb' else '' }}">Mock JAMB</a>
-</div>
-
-{% if exam in ('waec', 'jamb') %}
-<form method="GET" class="gb-selector">
-    <input type="hidden" name="exam" value="{{ exam }}">
-    <label class="form-label mb-0">Year</label>
-    <select name="year" class="form-control" style="max-width:130px;" data-autosubmit>
-        {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
-    </select>
-</form>
-{% else %}
-<form method="GET" class="gb-selector">
-    <input type="hidden" name="exam" value="{{ exam }}">
-    <label class="form-label mb-0">Mock sitting</label>
-    <select name="mock" class="form-control" style="max-width:260px;" data-autosubmit>
+  <div class="gb-bar-top">
+    <nav class="rs-seg" aria-label="Exam">
+      {% for k, l in [('waec', 'WAEC'), ('jamb', 'JAMB'), ('mock_waec', 'Mock WAEC'), ('mock_jamb', 'Mock JAMB')] %}
+      <a href="{{ url_for('results.subject_branch_breakdown', exam=k) }}" class="{{ 'on' if exam == k }}" {% if exam == k %}aria-current="page"{% endif %}>{{ l }}</a>
+      {% endfor %}
+    </nav>
+    <form method="GET" class="gb-per">
+      <input type="hidden" name="exam" value="{{ exam }}">
+      {% if exam in ('waec', 'jamb') %}
+      <span>Year</span>
+      <select name="year" data-autosubmit aria-label="Exam year">
+        {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% else %}<option>—</option>{% endfor %}
+      </select>
+      {% else %}
+      <span>Sitting</span>
+      <select name="mock" data-autosubmit aria-label="Mock sitting">
         {% for o in mock_options %}
-        <option value="{{ o.session_id }}_{{ o.exam_number }}"
-            {% if selected_mock and selected_mock.session_id == o.session_id and selected_mock.exam_number == o.exam_number %}selected{% endif %}>
-            {{ o.label }}
-        </option>
-        {% endfor %}
-    </select>
-</form>
-{% endif %}
+        <option value="{{ o.session_id }}_{{ o.exam_number }}" {% if selected_mock and selected_mock.session_id == o.session_id and selected_mock.exam_number == o.exam_number %}selected{% endif %}>{{ o.label }}</option>
+        {% else %}<option>—</option>{% endfor %}
+      </select>
+      {% endif %}
+    </form>
+  </div>
 
-{% if not result or not result.subjects %}
-<div class="card"><div class="card-body text-muted">
-    <i class="fas fa-info-circle"></i>
-    No {{ 'JAMB' if 'jamb' in exam else 'WAEC' }} results recorded for this {{ 'sitting' if 'mock' in exam else 'year' }} yet.
-</div></div>
-{% else %}
-<div class="card mb-3"><div class="gb-scroll">
-<table class="gb-table">
-    <thead>
-        <tr>
-            <th rowspan="2">Subject</th>
-            <th rowspan="2">Branch</th>
-            <th rowspan="2">Candidates<br>(N)</th>
-            <th colspan="{{ result.bands|length }}">{{ band_label }} Percentage Breakdown</th>
-        </tr>
-        <tr>
-            {% for b in result.bands %}<th class="gb-{{ loop.index }}">{{ b }}<br>(%)</th>{% endfor %}
-        </tr>
-    </thead>
-    <tbody>
-        {% for subj in result.subjects %}
-        {% for br in result.branches %}
-        <tr>
-            {% set cell = result.table[subj][br] %}
-            {% if loop.first %}<td class="gb-subj" rowspan="{{ result.branches|length }}">{{ subj }}</td>{% endif %}
-            <td class="gb-branch">{{ br }}{% if cell and cell.uploaded %} <i class="fas fa-file-import text-muted" style="font-size:.75em;" title="From an imported branch report"></i>{% endif %}</td>
-            {% if cell is none %}
-            <td colspan="{{ result.bands|length + 1 }}" class="gb-notoffered">Not Offered</td>
-            {% else %}
-            <td>{{ cell.n }}</td>
-            {% for b in result.bands %}<td class="gb-{{ loop.index }}">{{ cell.pct[b] }}%</td>{% endfor %}
-            {% endif %}
-        </tr>
-        {% endfor %}
-        {% endfor %}
-    </tbody>
-</table>
-</div></div>
+  {% if not has %}
+  <div class="rs-blank">
+    <span><i class="fas fa-table-cells" aria-hidden="true"></i></span>
+    <h3>No {{ 'JAMB' if 'jamb' in exam else 'WAEC' }} results recorded for this {{ 'sitting' if 'mock' in exam else 'year' }} yet</h3>
+    <p>Results entered for students appear here automatically, by branch. A branch that only has a summary sheet can import it instead.</p>
+    <a class="rs-btn primary" href="{{ url_for('results.grade_distribution_import', exam=exam) }}"><i class="fas fa-file-import" aria-hidden="true"></i> Import a branch report</a>
+  </div>
+  {% else %}
+  {% set O = R.overall %}
+  {% set top = R.ranking[0] if R.ranking else None %}
+  {% set so = R.subject_overall %}
+  <div class="rs-tiles">
+    <div class="rs-tile {{ tone(O.pass_pct) }}"><span class="l">{{ pshort }} rate</span><span class="v">{{ O.pass_pct }}<small>%</small></span><span class="s">{{ O.pass_n }} of {{ O.n }} subject entries</span></div>
+    <div class="rs-tile"><span class="l">Subject entries</span><span class="v">{{ O.n }}</span><span class="s">{{ R.subjects|length }} subjects · {{ R.branches|length }} branch{{ 'es' if R.branches|length != 1 }}</span></div>
+    {% if top %}<div class="rs-tile"><span class="l">Top branch</span><span class="v" style="font-size:1.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ top.branch }}</span><span class="s">weighted GPA {{ '%.2f'|format(top.gpa) }} · {{ top.pass_pct }}% pass</span></div>{% endif %}
+    {% set ns = namespace(best=None, worst=None) %}
+    {% for s in R.subjects %}{% set o = so[s] %}{% if o.n >= 5 %}
+      {% if ns.best is none or o.pass_pct > so[ns.best].pass_pct %}{% set ns.best = s %}{% endif %}
+      {% if ns.worst is none or o.pass_pct < so[ns.worst].pass_pct %}{% set ns.worst = s %}{% endif %}
+    {% endif %}{% endfor %}
+    {% if ns.worst and R.subjects|length > 1 %}<div class="rs-tile bad"><span class="l">Weakest subject</span><span class="v" style="font-size:1.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ns.worst }}</span><span class="s">{{ so[ns.worst].pass_pct }}% {{ pshort|lower }}{% if ns.best and ns.best != ns.worst %} · best: {{ ns.best }} {{ so[ns.best].pass_pct }}%{% endif %}</span></div>{% endif %}
+  </div>
 
-<div class="card mb-3">
-    <div class="card-header"><h3>Overall {{ band_label }} Percentage Summary by Branch</h3></div>
-    <div class="gb-scroll">
-    <table class="gb-table">
-        <thead>
-            <tr>
-                <th>Branch</th>
-                <th>Total Subject<br>Entries (N)</th>
-                {% for b in result.bands %}<th class="gb-{{ loop.index }}">{{ b }}<br>(%)</th>{% endfor %}
-                <th>{{ pass_label }}</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for br in result.branches %}
-            <tr>
-                <td class="gb-branch">{{ br }}</td>
-                <td>{{ result.summary[br].n }}</td>
-                {% for b in result.bands %}<td class="gb-{{ loop.index }}">{{ result.summary[br].pct[b] }}%</td>{% endfor %}
-                <td><strong>{{ result.summary[br].pass_pct }}%</strong> <span class="text-muted">({{ result.summary[br].pass_n }})</span></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+  <div class="gb-legend" aria-label="{{ band_label }} colours">
+    {% for b in R.bands %}<span><i class="gb-c{{ loop.index }}"></i>{{ b }}</span>{% endfor %}
+    <span class="pass">{{ pass_label }}</span>
+  </div>
+
+  <div class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-ranking-star" aria-hidden="true"></i> Branches</h3><small>ranked by weighted GPA</small></div>
+    <div class="gb-br h"><span>#</span><span>Branch</span><span class="gb-num e">Entries</span><span class="bh">{{ band_label }} mix</span><span class="gb-num">{{ pshort }}</span><span class="gb-num">GPA</span></div>
+    {% for r in R.ranking %}{% set sm = R.summary[r.branch] %}
+    <div class="gb-br">
+      <span class="gb-rk {{ 'top' if r.rank == 1 }}">{{ r.rank }}</span>
+      <span class="gb-nm">{{ r.branch }}<small>{{ r.top3_pct }}% at {{ R.ranking_criteria.top3_col|replace(' %', '') }}</small></span>
+      <span class="gb-num e">{{ r.n }}</span>
+      {{ bar(sm.pct, R.bands) }}
+      <span class="gb-pass"><b class="tone-{{ tone(r.pass_pct) }}">{{ r.pass_pct }}%</b><span class="rs-meter {{ tone(r.pass_pct) }}"><i style="width:{{ r.pass_pct }}%"></i></span></span>
+      <span class="gb-num"><b>{{ '%.2f'|format(r.gpa) }}</b></span>
     </div>
-</div>
+    {% endfor %}
+    <details class="gb-crit"><summary>How the ranking works</summary><p style="margin:.4rem 0 0;font-size:.8rem"><b>{{ R.ranking_title }}</b> — <strong>Criteria &amp; Weighting System</strong></p><ul>{% for b in R.ranking_criteria.bullets %}<li>{{ b }}</li>{% endfor %}</ul></details>
+  </div>
 
-{% if result.ranking %}
-<div class="card">
-    <div class="card-header"><h3>{{ result.ranking_title }}</h3></div>
-    <div class="card-body" style="padding-bottom:0;">
-        <div class="gb-criteria">
-            <strong>Criteria &amp; Weighting System</strong>
-            <ul>
-                {% for b in result.ranking_criteria.bullets %}<li>{{ b }}</li>{% endfor %}
-            </ul>
+  <div class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> By subject</h3><small>{{ pshort|lower }} rate per branch · best branch highlighted</small></div>
+    <div class="gb-tools">
+      <label class="rs-search"><i class="fas fa-search" aria-hidden="true"></i><input type="search" id="gbQ" placeholder="Find a subject" aria-label="Find a subject"></label>
+      <div class="rs-seg" role="tablist" aria-label="Sort subjects">
+        <button type="button" class="on" data-sort="n">Most entries</button>
+        <button type="button" data-sort="low">Weakest first</button>
+        <button type="button" data-sort="gap">Biggest gap</button>
+      </div>
+      <div class="rs-seg" role="tablist" aria-label="View" style="margin-left:auto">
+        <button type="button" class="on" data-view="cards"><i class="fas fa-grip" aria-hidden="true"></i> Cards</button>
+        <button type="button" data-view="table"><i class="fas fa-table" aria-hidden="true"></i> Full table</button>
+      </div>
+    </div>
+
+    <div class="gb-subjs" id="gbCards">
+      {% for s in R.subjects %}{% set o = so[s] %}
+      <div class="gb-sj" data-name="{{ s|lower }}" data-n="{{ o.n }}" data-p="{{ o.pass_pct }}" data-gap="{{ o.spread or 0 }}" data-i="{{ loop.index }}">
+        <div class="gb-sj-h"><h4 title="{{ s }}">{{ s }}</h4><span class="p tone-{{ tone(o.pass_pct) }}">{{ o.pass_pct }}%<small>{{ pshort|lower }}</small></span></div>
+        <div class="gb-sj-s"><b>{{ o.n }}</b> entries{% if o.spread is not none %} · gap between branches <b>{{ o.spread }} pts</b>{% endif %}</div>
+        {% for br in R.branches %}{% set c = R.table[s][br] %}
+        {% if c %}
+        <div class="gb-row {{ 'best' if o.best == br }}">
+          <span class="bn" title="{{ br }}">{{ br }}{% if c.uploaded %}<i class="fas fa-file-import" title="From an imported branch report"></i>{% endif %}</span>
+          <span class="n">{{ c.n }}</span>
+          {{ bar(c.pct, R.bands) }}
+          <span class="pp">{{ c.pass_pct }}%</span>
         </div>
+        {% else %}
+        <div class="gb-row no"><span class="bn">{{ br }}</span><span class="na">Not offered</span></div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endfor %}
     </div>
-    <div class="gb-scroll">
-    <table class="gb-table">
-        <thead>
-            <tr>
-                <th>Rank</th>
-                <th>Branch</th>
-                <th>Total Entries<br>(N)</th>
-                <th>Weighted GPA</th>
-                <th>{{ result.ranking_criteria.top3_col }}</th>
-                <th>{{ result.ranking_criteria.pass_col }}</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in result.ranking %}
-            <tr>
-                <td>{{ r.rank }}</td>
-                <td class="gb-branch">{{ r.branch }}</td>
-                <td>{{ r.n }}</td>
-                <td><strong>{{ '%.2f'|format(r.gpa) }}</strong></td>
-                <td>{{ r.top3_pct }}%</td>
-                <td>{{ r.pass_pct }}%</td>
-            </tr>
-            {% endfor %}
+    <p class="rs-muted" id="gbNone" hidden style="text-align:center;padding:1rem">No subject matches.</p>
+
+    <div id="gbTable" hidden>
+      <div class="gb-scroll">
+      <table class="gb-table">
+        <thead><tr><th>Subject</th><th>Branch</th><th>N</th>{% for b in R.bands %}<th>{{ b }} %</th>{% endfor %}<th>{{ pshort }} %</th></tr></thead>
+        {% for s in R.subjects %}
+        <tbody data-name="{{ s|lower }}">
+        {% for br in R.branches %}{% set c = R.table[s][br] %}
+          <tr class="{{ 'first' if loop.first }}">
+            {% if loop.first %}<td class="s" rowspan="{{ R.branches|length }}">{{ s }}</td>{% endif %}
+            <td style="text-align:left">{{ br }}{% if c and c.uploaded %} <i class="fas fa-file-import" style="font-size:.7em;color:var(--text-muted)" title="From an imported branch report"></i>{% endif %}</td>
+            {% if c %}
+            <td>{{ c.n }}</td>
+            {% for b in R.bands %}<td class="{{ ('h' ~ loop.index) if c.pct[b] else 'z' }}">{{ c.pct[b] }}</td>{% endfor %}
+            <td><b>{{ c.pass_pct }}</b></td>
+            {% else %}<td colspan="{{ R.bands|length + 2 }}" class="na">Not offered</td>{% endif %}
+          </tr>
+        {% endfor %}
         </tbody>
-    </table>
+        {% endfor %}
+      </table>
+      </div>
     </div>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
-{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  // Export menu: close on outside click / Escape.
+  document.querySelectorAll('.gb-menu').forEach(function (d) {
+    document.addEventListener('click', function (e) { if (d.open && !d.contains(e.target)) d.open = false; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') d.open = false; });
+  });
+  var cards = document.getElementById('gbCards'); if (!cards) return;
+  var table = document.getElementById('gbTable'), none = document.getElementById('gbNone'), q = document.getElementById('gbQ');
+  function filter() {
+    var t = (q.value || '').trim().toLowerCase(), shown = 0;
+    cards.querySelectorAll('.gb-sj').forEach(function (c) { var ok = !t || c.dataset.name.indexOf(t) !== -1; c.hidden = !ok; shown += ok; });
+    table.querySelectorAll('tbody').forEach(function (b) { b.hidden = !!t && b.dataset.name.indexOf(t) === -1; });
+    none.hidden = shown > 0;
+  }
+  q.addEventListener('input', filter);
+  document.querySelectorAll('[data-sort]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-sort]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      var k = b.dataset.sort, items = Array.prototype.slice.call(cards.children);
+      items.sort(function (a, c) {
+        if (k === 'low') return a.dataset.p - c.dataset.p;
+        if (k === 'gap') return c.dataset.gap - a.dataset.gap;
+        return a.dataset.i - c.dataset.i;
+      });
+      items.forEach(function (x) { cards.appendChild(x); });
+    });
+  });
+  document.querySelectorAll('[data-view]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-view]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      var tbl = b.dataset.view === 'table';
+      cards.hidden = tbl; table.hidden = !tbl;
+      document.querySelectorAll('[data-sort]').forEach(function (x) { x.disabled = tbl; });
+      try { localStorage.setItem('gbView', b.dataset.view); } catch (e) {}
+      filter();
+    });
+  });
+  try { if (localStorage.getItem('gbView') === 'table') document.querySelector('[data-view="table"]').click(); } catch (e) {}
+})();
+</script>
 {% endblock %}

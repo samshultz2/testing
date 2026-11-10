@@ -1560,8 +1560,28 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
             if not n:
                 table[subj][br] = None
             else:
+                pn = sum(counter.get(b, 0) for b in pass_bands)
                 table[subj][br] = {'n': n, 'uploaded': (subj, br) in uploaded_pairs,
-                                   'pct': {b: round(counter.get(b, 0) / n * 100, 1) for b in bands}}
+                                   'pct': {b: round(counter.get(b, 0) / n * 100, 1) for b in bands},
+                                   'pass_n': pn, 'pass_pct': round(pn / n * 100, 1)}
+
+    # Every branch together, per subject (for the on-screen overview).
+    subject_overall = {}
+    for subj in subjects:
+        c = Counter()
+        for br in branches:
+            c.update(subj_branch[subj].get(br) or {})
+        n = sum(c.values())
+        pn = sum(c.get(b, 0) for b in pass_bands)
+        cells = [(br, table[subj][br]) for br in branches if table[subj][br]]
+        best = max(cells, key=lambda x: (x[1]['pass_pct'], x[1]['n'])) if len(cells) > 1 else None
+        subject_overall[subj] = {
+            'n': n, 'pass_n': pn, 'pass_pct': round(pn / n * 100, 1) if n else 0,
+            'pct': {b: round(c.get(b, 0) / n * 100, 1) if n else 0 for b in bands},
+            'best': best[0] if best else None,
+            'spread': (round(max(x[1]['pass_pct'] for x in cells) - min(x[1]['pass_pct'] for x in cells), 1)
+                       if len(cells) > 1 else None),
+        }
 
     summary = {}
     for br in branches:
@@ -1619,7 +1639,14 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
         'pass_col': f'{credit_col} % ({pass_range})' if pass_range else f'{credit_col} %',
     }
 
+    all_n = sum(branch_n[br] for br in branches)
+    all_pass = sum(summary[br]['pass_n'] for br in branches)
+    overall = {'n': all_n, 'pass_n': all_pass, 'pass_pct': round(all_pass / all_n * 100, 1) if all_n else 0,
+               'pct': {b: round(sum(branch_all[br].get(b, 0) for br in branches) / all_n * 100, 1) if all_n else 0
+                       for b in bands}}
     return {'subjects': subjects, 'branches': branches, 'bands': bands,
+            'pass_bands': [b for b in bands if b in pass_bands],
+            'subject_overall': subject_overall, 'overall': overall,
             'table': table, 'summary': summary,
             'ranking': ranking, 'ranking_title': ranking_title, 'ranking_criteria': ranking_criteria}
 
@@ -1682,6 +1709,11 @@ def _load_grade_breakdown(exam):
         exam = 'waec'
     bid = viewing_branch_id()
     branch_names = {b.id: b.name for b in Branch.query.all()}
+    # Students with no branch set (older records, single-branch schools) count
+    # under the default branch instead of silently dropping out of the report.
+    default_branch = Branch.get_default()
+    if default_branch is not None:
+        branch_names[None] = default_branch.name
 
     result = None
     years = []
