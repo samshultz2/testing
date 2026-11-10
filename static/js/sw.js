@@ -125,10 +125,15 @@ self.addEventListener('message', (e) => {
   }
 });
 
+const AUTH_PAGES = /^\/(login|logout|forgot-password|reset-password|parent\/login|exam\/login|alumni\/login|check-result)(\/|$)/;
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;                    // never cache mutations
   const url = new URL(req.url);
+  // Sign-in / recovery pages carry a one-time security (CSRF) token: never store
+  // them or replay a saved copy, or a stale token makes the next sign-in fail.
+  if (url.origin === self.location.origin && AUTH_PAGES.test(url.pathname)) return;
 
   // Remaining third-party CDN assets (Google Fonts, MathJax): cache-first with
   // background refresh. Only successful (or opaque cross-origin) responses are

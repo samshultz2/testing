@@ -4,8 +4,12 @@ from tests.conftest import login_token, page_token
 
 
 def test_login_requires_csrf(client):
-    # No token -> rejected
-    assert client.post('/login', data={'password': Config.ADMIN_PASSWORD}).status_code == 400
+    # No token -> not signed in: sent back to the sign-in form (fresh token,
+    # "session expired" notice) rather than a dead-end error page.
+    r = client.post('/login', data={'password': Config.ADMIN_PASSWORD})
+    assert r.status_code == 303 and r.headers['Location'].endswith('/login')
+    with client.session_transaction() as s:
+        assert not s.get('logged_in')
 
 
 def test_login_with_csrf_succeeds(client):

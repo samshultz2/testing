@@ -80,6 +80,9 @@
 </div>
 <script nonce="{{ csp_nonce }}">
 (function () {
+    // Restored from the back/forward cache (old tab, Back button): reload so the
+    // form carries a current security token instead of an expired one.
+    window.addEventListener('pageshow', function (e) { if (e.persisted) window.location.reload(); });
     // preload → stylesheet without an onload="" attribute (CSP has no unsafe-inline)
     var fa = document.getElementById('faPreload'); if (fa) fa.rel = 'stylesheet';
     // Show / hide password: any [data-eye] button toggles the input beside it.
