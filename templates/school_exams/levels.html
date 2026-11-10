@@ -4,7 +4,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.xl{max-width:1320px;margin:0 auto}
+.xl{max-width:1320px;margin:0 auto;min-width:0}
 .xl-jump{display:none}
 .xl-att{display:grid;grid-template-columns:1fr;column-gap:1.4rem}
 @media(min-width:1100px){.xl-att{grid-template-columns:1fr 1fr}.xl-att-row:nth-last-child(2):nth-child(odd){border-bottom:0}}
@@ -18,8 +18,9 @@
 .xl-more{display:none;width:100%;justify-content:center;margin-top:.5rem}
 .xl-att-row a{font-weight:700;font-size:.82rem;white-space:nowrap;text-decoration:none}
 
-.xl-lvs{display:grid;grid-template-columns:1fr;gap:.9rem}
-@media(min-width:1100px){.xl-lvs{grid-template-columns:1fr 1fr}.xl-lv.wide{grid-column:1/-1}}
+.xl-lvs{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem}
+.xl-lvs>.xl-lv,.xl-grid>.xl-ex,.xl-lv-h>*{min-width:0}
+@media(min-width:1100px){.xl-lvs{grid-template-columns:repeat(2,minmax(0,1fr))}.xl-lv.wide{grid-column:1/-1}}
 .xl-lv{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--rs-r);padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.85rem;scroll-margin-top:calc(var(--header-height,64px) + 12px)}
 .xl-lv-h{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
 .xl-lv-ic{width:42px;height:42px;border-radius:13px;flex:none;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
@@ -72,22 +73,28 @@
   .xl-jump .rs-seg{width:100%;box-shadow:0 2px 10px rgba(15,23,42,.06)}
   .xl-jump .rs-seg a{flex:1;justify-content:center;display:inline-flex;align-items:center;height:36px;border-radius:10px;font-weight:600;font-size:.84rem;color:var(--text-muted);text-decoration:none;white-space:nowrap;padding:0 .6rem}
   .xl-lv{padding:.85rem .85rem}
-  .xl-grid{grid-template-columns:1fr 1fr;gap:.5rem}
+  .xl-grid,.xl-lv.wide .xl-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+  .xl-ex .xl-facts,.xl-ex:not(.empty) .xl-act{display:none}
+  .xl-ex:not(.empty)::after{content:"\f054";font-family:"Font Awesome 6 Free";font-weight:900;position:absolute;right:.75rem;top:.85rem;font-size:.65rem;color:var(--text-muted)}
+  .xl-ex .rs-meter{margin-bottom:0}
+  .rs-head-t p{white-space:normal}
   .xl-ex{padding:.7rem .7rem .65rem}
   .xl-val strong{font-size:1.45rem}
   .xl-facts{grid-template-columns:1fr 1fr}
   .xl-facts div:nth-child(3){display:none}
   .xl-ex-top{flex-wrap:wrap;row-gap:.2rem}
-  .xl-ex-top b{white-space:normal;font-size:.86rem;line-height:1.25;flex-basis:100%}
+  .xl-ex-top b{white-space:normal;font-size:.86rem;line-height:1.25;flex-basis:100%;padding-right:.9rem}
   .xl-per{margin-left:0;max-width:100%}
   .xl-val{flex-wrap:wrap;row-gap:.2rem}
   .xl-att:not(.open) .xl-att-row:nth-child(n+4){display:none}
   .xl-more{display:flex}
-  .xl-links{width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -.1rem}
-  .xl-links a{flex:none}
+  .xl-links{width:100%}
+  .xl-links a{height:30px;padding:0 .6rem;font-size:.74rem}
+  .xl-act{gap:.3rem .7rem;flex-wrap:wrap}
+  .xl-lv-t{min-width:0;flex-basis:0}
   .rs-head-a .rs-btn span{display:none}
 }
-@media(max-width:380px){.xl-grid{grid-template-columns:1fr}}
+@media(max-width:340px){.xl-grid,.xl-lv.wide .xl-grid{grid-template-columns:minmax(0,1fr)}}
 </style>
 {% endblock %}
 
