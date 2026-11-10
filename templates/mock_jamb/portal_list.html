@@ -1,74 +1,126 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}Mock JAMB{% endblock %}
 {% block head_extra %}<style>
-.mj-hello{color:#fff;margin:-.2rem .1rem 1rem;display:flex;align-items:flex-end;gap:.8rem}
+.mj-hello{color:#fff;margin:-.2rem .1rem 1.1rem;display:flex;align-items:flex-end;gap:.8rem}
 .mj-hello>div{flex:1;min-width:0}
-.mj-hello h1{margin:0;color:#fff;font-size:1.5rem;font-family:'Space Grotesk',sans-serif}
+.mj-hello h1{margin:0;color:#fff;font-size:1.55rem;font-family:'Space Grotesk',sans-serif}
 .mj-hello p{margin:.2rem 0 0;opacity:.85;font-size:.9rem}
 .mj-back{flex:none;display:inline-flex;align-items:center;gap:.4rem;color:#fff;text-decoration:none;font-weight:700;font-size:.85rem;background:rgba(255,255,255,.16);border-radius:999px;padding:.45rem .85rem}
 .mj-back:hover{background:rgba(255,255,255,.28)}
-.mj-list{display:flex;flex-direction:column;gap:.8rem}
-.mj-card{background:#fff;border-radius:18px;padding:1.1rem 1.15rem;box-shadow:0 6px 20px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:.8rem;border:2px solid transparent}
-.mj-card.open,.mj-card.prog{border-color:#c7d2fe}
+.mj-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem}
+@media (min-width:980px){.mj-layout.two{grid-template-columns:minmax(0,1fr) 360px;align-items:start}.mj-side{position:sticky;top:1rem}}
+.mj-col{display:flex;flex-direction:column;gap:.8rem;min-width:0}
+.mj-h{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin:.2rem .2rem 0}
+.mj-layout>.mj-col>.mj-h:first-child{color:#e2e8f0}
+
+/* exam cards */
+.mj-card{background:#fff;border-radius:18px;padding:1rem 1.1rem;box-shadow:0 6px 20px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:.75rem;border:2px solid transparent}
+.mj-card.open{border-color:#c7d2fe}
+.mj-card.prog{border-color:#fcd34d}
 .mj-top{display:flex;align-items:flex-start;gap:.8rem}
 .mj-ic{width:46px;height:46px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.15rem;background:#eef2ff;color:var(--px)}
+.mj-card.prog .mj-ic{background:#fef3c7;color:#b45309}
 .mj-card.done .mj-ic{background:#dcfce7;color:#16a34a}
 .mj-t{flex:1;min-width:0}
 .mj-t strong{display:block;font-size:1.06rem;line-height:1.3}
 .mj-t small{color:#64748b;font-size:.84rem}
-.mj-pill{flex:none;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
+.mj-pill{flex:none;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
 .mj-pill.open{background:#dcfce7;color:#15803d}.mj-pill.prog{background:#fef3c7;color:#b45309}.mj-pill.done{background:#e0e7ff;color:#4338ca}
 .mj-facts{display:flex;flex-wrap:wrap;gap:.4rem}
 .mj-facts span{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;background:#f8fafc;border:1px solid #eef2f7;border-radius:9px;padding:.28rem .6rem;color:#334155}
 .mj-facts i{color:#94a3b8;font-size:.75rem}
-.mj-act{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.mj-foot{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;justify-content:space-between;border-top:1px solid #f1f5f9;padding-top:.75rem}
+.mj-foot .p-btn{min-width:140px}
 .mj-score{display:flex;align-items:center;gap:.6rem}
 .mj-score b{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:1.35rem}
 .mj-score small{font-size:.8rem;color:#64748b;font-weight:600}
 .mj-meter{width:90px;height:7px;border-radius:99px;background:#f1f5f9;overflow:hidden}
 .mj-meter i{display:block;height:100%;border-radius:99px}
+.mj-note{font-size:.8rem;color:#92400e;display:flex;gap:.4rem;align-items:center}
 .mj-empty{text-align:center;padding:2rem 1rem}
 .mj-empty i{font-size:2.2rem;color:#94a3b8}
 .mj-empty h3{margin:.7rem 0 .3rem}
-.mj-how{margin-top:.9rem;background:#fff;border-radius:18px;padding:1rem 1.15rem;box-shadow:0 6px 20px rgba(15,23,42,.06)}
-.mj-how h4{margin:0 0 .6rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
-.mj-how ul{list-style:none;margin:0;padding:0;display:grid;gap:.55rem}
-.mj-how li{display:flex;gap:.65rem;align-items:flex-start;font-size:.9rem;color:#334155}
+
+/* record */
+.mj-rec{background:#fff;border-radius:18px;padding:1rem 1.1rem;box-shadow:0 6px 20px rgba(15,23,42,.08)}
+.mj-rec h3{margin:0 0 .75rem;font-size:1rem;display:flex;align-items:center;gap:.45rem}
+.mj-rec h3 i{color:var(--px)}
+.mj-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;margin-bottom:.9rem}
+.mj-kpi div{background:#f8fafc;border-radius:12px;padding:.6rem .55rem;text-align:center;min-width:0}
+.mj-kpi b{display:block;font-family:'Space Grotesk',sans-serif;font-size:1.3rem;line-height:1.15}
+.mj-kpi span{font-size:.66rem;font-weight:800;text-transform:uppercase;color:#64748b;letter-spacing:.04em}
+.mj-kpi .up{color:#15803d}.mj-kpi .down{color:#dc2626}
+.mj-chart{display:block;width:100%;height:auto;margin:.1rem 0 .4rem}
+.mj-chart .gl{stroke:#eef2f7}.mj-chart .tl{stroke:#16a34a;stroke-dasharray:4 4;stroke-width:1.4}
+.mj-chart .tt{fill:#16a34a;font-size:10px;font-weight:700}
+.mj-chart .bar{fill:#c7d2fe}.mj-chart .bar.last{fill:var(--px)}
+.mj-chart .v{font-size:11px;font-weight:800;fill:#1e293b;font-family:'Space Grotesk',sans-serif}
+.mj-chart .x{font-size:10px;fill:#64748b}
+.mj-hist{list-style:none;margin:0;padding:0;border-top:1px solid #f1f5f9}
+.mj-hist li{display:flex;align-items:center;gap:.6rem;padding:.55rem 0;border-bottom:1px solid #f1f5f9;font-size:.88rem}
+.mj-hist li:last-child{border-bottom:0}
+.mj-hist .nm{flex:1;min-width:0}
+.mj-hist .nm b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mj-hist .nm small{color:#94a3b8;font-size:.76rem}
+.mj-hist .sc{font-family:'Space Grotesk',sans-serif;font-weight:800;font-variant-numeric:tabular-nums}
+.mj-hist .sc small{color:#94a3b8;font-weight:600;font-size:.75rem}
+.mj-hist a{color:var(--px);font-size:.8rem;font-weight:700;text-decoration:none;white-space:nowrap}
+.mj-focus{display:flex;gap:.6rem;align-items:flex-start;background:#eef2ff;color:#3730a3;border-radius:12px;padding:.7rem .8rem;font-size:.86rem;margin-top:.8rem}
+.mj-focus i{margin-top:.15rem}
+
+/* how it works */
+.mj-how{background:#fff;border-radius:18px;box-shadow:0 6px 20px rgba(15,23,42,.06)}
+.mj-how summary{list-style:none;cursor:pointer;padding:.85rem 1.1rem;display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.92rem}
+.mj-how summary::-webkit-details-marker{display:none}
+.mj-how summary i.fa-circle-info{color:var(--px)}
+.mj-how summary .chev{margin-left:auto;color:#94a3b8;transition:transform .2s}
+.mj-how[open] summary .chev{transform:rotate(180deg)}
+.mj-how ul{list-style:none;margin:0;padding:0 1.1rem 1rem;display:grid;gap:.55rem}
+.mj-how li{display:flex;gap:.65rem;align-items:flex-start;font-size:.88rem;color:#334155}
 .mj-how li i{width:30px;height:30px;border-radius:9px;background:#f1f5f9;color:#475569;display:flex;align-items:center;justify-content:center;flex:none;font-size:.8rem}
+
 /* ready sheet */
 .mj-sheet{position:fixed;inset:0;z-index:200;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;padding:1rem}
 .mj-sheet.open{display:flex}
-.mj-sheet-card{background:#fff;border-radius:22px;max-width:440px;width:100%;padding:1.3rem;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.mj-sheet-card{background:#fff;border-radius:22px;max-width:460px;width:100%;padding:1.3rem;box-shadow:0 24px 60px rgba(0,0,0,.3)}
 .mj-sheet-card h3{margin:0 0 .25rem;font-size:1.2rem;font-family:'Space Grotesk',sans-serif}
-.mj-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin:.9rem 0}
-.mj-grid div{background:#f8fafc;border-radius:12px;padding:.7rem;text-align:center}
-.mj-grid b{display:block;font-size:1.35rem;font-family:'Space Grotesk',sans-serif}
-.mj-grid span{font-size:.72rem;font-weight:800;text-transform:uppercase;color:#64748b;letter-spacing:.04em}
+.mj-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.9rem 0}
+.mj-grid div{background:#f8fafc;border-radius:12px;padding:.7rem .4rem;text-align:center}
+.mj-grid b{display:block;font-size:1.3rem;font-family:'Space Grotesk',sans-serif}
+.mj-grid span{font-size:.68rem;font-weight:800;text-transform:uppercase;color:#64748b;letter-spacing:.04em}
+.mj-check{list-style:none;margin:0 0 1rem;padding:0;display:grid;gap:.45rem}
+.mj-check li{display:flex;gap:.55rem;align-items:flex-start;font-size:.86rem;color:#334155}
+.mj-check li i{color:#16a34a;margin-top:.2rem}
 .mj-warn{display:flex;gap:.55rem;align-items:flex-start;background:#fffbeb;color:#92400e;border-radius:12px;padding:.7rem .8rem;font-size:.86rem;margin-bottom:1rem}
 .mj-sheet-a{display:flex;gap:.6rem}
 .mj-sheet-a .p-btn{flex:1}
-@media (min-width:700px){.mj-card{flex-direction:row;align-items:center;flex-wrap:wrap}.mj-top{flex:1 1 300px}.mj-facts{flex:0 1 auto}.mj-act{flex:none}}
+@media (min-width:980px){.portal-wrap{max-width:1120px}}
 @media (max-width:600px){
+  .mj-hello h1{font-size:1.35rem}
+  .mj-back span{display:none}
+  .mj-foot .p-btn{flex:1}
   .mj-sheet{align-items:flex-end;padding:0}
   .mj-sheet-card{border-radius:22px 22px 0 0;max-width:none;padding-bottom:calc(1.2rem + env(safe-area-inset-bottom,0px))}
 }
 </style>{% endblock %}
 {% block content %}
+{% set R = record %}
 <div class="mj-hello">
     <div>
         <h1>Mock JAMB</h1>
-        <p>Sit all your subjects in one timed session, just like the real UTME.</p>
+        <p>{% if R %}{{ R['items']|length }} mock{{ 's' if R['items']|length != 1 }} sat · best {{ R.best.total }}{% else %}Sit all your subjects in one timed session, just like the real UTME.{% endif %}</p>
     </div>
-    <a href="{{ url_for('cbt_portal.home') }}" class="mj-back"><i class="fas fa-arrow-left"></i> My tests</a>
+    <a href="{{ url_for('cbt_portal.home') }}" class="mj-back" aria-label="Back to my tests"><i class="fas fa-arrow-left"></i> <span>My tests</span></a>
 </div>
 
-{% if rows %}
-<div class="mj-list">
+<div class="mj-layout {{ 'two' if R }}">
+<div class="mj-col">
+    {% if rows %}
     {% for r in rows %}{% set e = r.exam %}
     {% set kind = 'done' if r.submitted else ('prog' if r.in_progress else 'open') %}
     <div class="mj-card {{ kind }}">
         <div class="mj-top">
-            <span class="mj-ic"><i class="fas {{ 'fa-circle-check' if kind == 'done' else 'fa-file-contract' }}"></i></span>
+            <span class="mj-ic"><i class="fas {{ 'fa-circle-check' if kind == 'done' else ('fa-hourglass-half' if kind == 'prog' else 'fa-file-contract') }}"></i></span>
             <div class="mj-t">
                 <strong>{{ e.display_name }}</strong>
                 {% if e.exam_date %}<small>{{ e.exam_date.strftime('%A, %d %b %Y') }}</small>{% endif %}
@@ -80,34 +132,79 @@
             <span><i class="fas fa-stopwatch"></i> {{ e.duration_minutes or 120 }} min</span>
             <span><i class="fas fa-star"></i> {{ r.subjects * 100 }} marks</span>
         </div>
-        <div class="mj-act">
+        <div class="mj-foot">
             {% if kind == 'done' %}
                 {% set sc = r.score or 0 %}{% set pc = (sc / (r.subjects * 100) * 100) if r.subjects else 0 %}
                 <span class="mj-score"><b>{{ sc }}</b><small>/ {{ r.subjects * 100 }}</small>
                     <span class="mj-meter"><i style="width:{{ pc|round|int }}%;background:{{ '#16a34a' if pc >= 50 else ('#d97706' if pc >= 45 else '#dc2626') }}"></i></span></span>
-                <a href="{{ url_for('mock_jamb_portal.portal_done', exam_id=e.id) }}" class="p-btn sm ghost">See result</a>
+                <a href="{{ url_for('mock_jamb_portal.portal_done', exam_id=e.id) }}" class="p-btn sm ghost">See result <i class="fas fa-arrow-right"></i></a>
             {% elif kind == 'prog' %}
+                <span class="mj-note"><i class="fas fa-clock"></i> Your timer is still running</span>
                 <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=e.id) }}" class="p-btn"><i class="fas fa-play"></i> Resume</a>
             {% else %}
+                <span></span>
                 <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=e.id) }}" class="p-btn" data-ready
                    data-name="{{ e.display_name }}" data-subjects="{{ r.subjects }}" data-min="{{ e.duration_minutes or 120 }}">Start <i class="fas fa-arrow-right"></i></a>
             {% endif %}
         </div>
     </div>
     {% endfor %}
-</div>
-{% else %}
-<div class="portal-card mj-empty"><i class="fas fa-inbox"></i><h3>No Mock JAMB open</h3><p class="p-muted">There’s no Mock JAMB open for you right now. Check back when your school publishes one.</p></div>
-{% endif %}
+    {% else %}
+    <div class="portal-card mj-empty"><i class="fas fa-inbox"></i><h3>No Mock JAMB open</h3><p class="p-muted">There’s no Mock JAMB open for you right now. Check back when your school publishes one.</p></div>
+    {% endif %}
 
-<div class="mj-how">
-    <h4>How it works</h4>
-    <ul>
-        <li><i class="fas fa-layer-group"></i><span>Your subjects appear as tabs. Move between them freely — you don’t have to finish one before the next.</span></li>
-        <li><i class="fas fa-cloud-arrow-up"></i><span>Every answer saves as you go. If you lose network or close the page, just come back and resume.</span></li>
-        <li><i class="fas fa-keyboard"></i><span>On a computer, use <b>A–D</b> to answer, <b>N</b>/<b>P</b> for next/previous and <b>S</b> to submit — like the real CBT.</span></li>
-        <li><i class="fas fa-hourglass-end"></i><span>When time runs out, your paper submits automatically.</span></li>
-    </ul>
+    <details class="mj-how" {{ 'open' if not R }}>
+        <summary><i class="fas fa-circle-info"></i> How the mock works <i class="fas fa-chevron-down chev"></i></summary>
+        <ul>
+            <li><i class="fas fa-layer-group"></i><span>Your subjects appear as tabs. Move between them freely — you don’t have to finish one before the next.</span></li>
+            <li><i class="fas fa-cloud-arrow-up"></i><span>Every answer saves as you go. If you lose network or close the page, just come back and resume.</span></li>
+            <li><i class="fas fa-keyboard"></i><span>On a computer, use <b>A–D</b> to answer, <b>N</b>/<b>P</b> for next/previous and <b>S</b> to submit — like the real CBT.</span></li>
+            <li><i class="fas fa-hourglass-end"></i><span>When time runs out, your paper submits automatically.</span></li>
+        </ul>
+    </details>
+</div>
+
+{% if R %}
+<aside class="mj-side">
+    <div class="mj-rec">
+        <h3><i class="fas fa-chart-column"></i> Your mock record</h3>
+        <div class="mj-kpi">
+            <div><b>{{ R.last.total }}</b><span>Latest</span></div>
+            <div><b>{{ R.best.total }}</b><span>Best</span></div>
+            <div>{% if R.change is not none %}<b class="{{ 'up' if R.change > 0 else 'down' if R.change < 0 }}">{{ '+' if R.change > 0 }}{{ R.change }}</b>{% else %}<b>—</b>{% endif %}<span>Change</span></div>
+        </div>
+        {% set its = R['items'][-6:] %}{% set n = its|length %}
+        {% set W, H, L, B, T = 320, 130, 4, 20, 16 %}
+        {% set top = R.top %}
+        {% set bw = ((W - L * 2) / n * 0.56) %}
+        <svg class="mj-chart" viewBox="0 0 {{ W }} {{ H }}" role="img" aria-label="Total score in each mock">
+            {% set y200 = T + (H - T - B) * (1 - 200 / top) %}
+            <line class="gl" x1="0" x2="{{ W }}" y1="{{ H - B }}" y2="{{ H - B }}"/>
+            <line class="tl" x1="0" x2="{{ W }}" y1="{{ y200 }}" y2="{{ y200 }}"/>
+            <text class="tt" x="{{ W - 2 }}" y="{{ y200 - 4 }}" text-anchor="end">200</text>
+            {% for it in its %}
+            {% set cx = L + (W - L * 2) / n * (loop.index0 + 0.5) %}
+            {% set h = (H - T - B) * (it.total / top) %}
+            <rect class="bar {{ 'last' if loop.last }}" x="{{ cx - bw / 2 }}" y="{{ H - B - h }}" width="{{ bw }}" height="{{ [h, 1]|max }}" rx="5"/>
+            <text class="v" x="{{ cx }}" y="{{ H - B - h - 4 }}" text-anchor="middle">{{ it.total }}</text>
+            <text class="x" x="{{ cx }}" y="{{ H - 6 }}" text-anchor="middle">M{{ loop.index + (R['items']|length - n) }}</text>
+            {% endfor %}
+        </svg>
+        <ul class="mj-hist">
+            {% for it in R['items']|reverse %}
+            <li>
+                <span class="nm"><b>{{ it.name }}</b>{% if it.date %}<small>{{ it.date.strftime('%d %b %Y') }}</small>{% endif %}</span>
+                <span class="sc">{{ it.total }}<small>/{{ it.max }}</small></span>
+                {% if it.online %}<a href="{{ url_for('mock_jamb_portal.portal_done', exam_id=it.exam_id) }}">View</a>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% if R.weakest and R.weakest.score < 70 %}
+        <div class="mj-focus"><i class="fas fa-lightbulb"></i><span>Last time your lowest subject was <b>{{ R.weakest.name }}</b> ({{ R.weakest.score }}). Give it extra practice before the next mock.</span></div>
+        {% endif %}
+    </div>
+</aside>
+{% endif %}
 </div>
 
 <div class="mj-sheet" id="readySheet" role="dialog" aria-modal="true" aria-labelledby="readyTitle">
@@ -117,7 +214,13 @@
         <div class="mj-grid">
             <div><b id="readySubj">4</b><span>Subjects</span></div>
             <div><b id="readyMin">120</b><span>Minutes</span></div>
+            <div><b id="readyMarks">400</b><span>Marks</span></div>
         </div>
+        <ul class="mj-check">
+            <li><i class="fas fa-check"></i><span>Your phone or laptop is charged and your network is on.</span></li>
+            <li><i class="fas fa-check"></i><span>You have rough paper and a pen for working.</span></li>
+            <li><i class="fas fa-check"></i><span>You won’t be interrupted for the whole session.</span></li>
+        </ul>
         <div class="mj-warn"><i class="fas fa-triangle-exclamation" style="margin-top:.15rem"></i><span>The timer starts as soon as you begin and keeps running even if you leave the page.</span></div>
         <div class="mj-sheet-a">
             <button type="button" class="p-btn ghost" id="readyNo">Not yet</button>
@@ -130,19 +233,22 @@
 <script nonce="{{ csp_nonce }}">
 (function(){
     var sh = document.getElementById('readySheet'); if(!sh) return;
+    var last = null;
     document.addEventListener('click', function(e){
         var a = e.target.closest && e.target.closest('[data-ready]'); if(!a) return;
-        e.preventDefault();
+        e.preventDefault(); last = a;
         document.getElementById('readyName').textContent = a.dataset.name;
         document.getElementById('readySubj').textContent = a.dataset.subjects;
         document.getElementById('readyMin').textContent = a.dataset.min;
+        document.getElementById('readyMarks').textContent = (parseInt(a.dataset.subjects, 10) || 4) * 100;
         document.getElementById('readyGo').href = a.href;
         sh.classList.add('open');
+        document.getElementById('readyGo').focus();
     });
-    function close(){ sh.classList.remove('open'); }
+    function close(){ sh.classList.remove('open'); if (last) last.focus(); }
     document.getElementById('readyNo').addEventListener('click', close);
     sh.addEventListener('click', function(e){ if(e.target === sh) close(); });
-    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && sh.classList.contains('open')) close(); });
 })();
 </script>
 {% endblock %}

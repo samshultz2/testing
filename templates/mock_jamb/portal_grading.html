@@ -11,6 +11,12 @@
         <i class="fas fa-circle-check" style="margin-top:.15rem"></i>
         <span>Your answers are saved. We’re marking your paper now — this page updates by itself.</span>
     </div>
+    <ol style="list-style:none;margin:1.1rem 0 0;padding:0;display:grid;gap:.5rem;text-align:left;font-size:.88rem">
+        <li style="display:flex;gap:.55rem;align-items:center;color:#166534"><i class="fas fa-circle-check"></i> Answers received</li>
+        <li style="display:flex;gap:.55rem;align-items:center;color:#4338ca;font-weight:700"><i class="fas fa-spinner fa-spin"></i> Marking each subject</li>
+        <li style="display:flex;gap:.55rem;align-items:center;color:#94a3b8"><i class="far fa-circle"></i> Your score and subject breakdown</li>
+    </ol>
+    <p class="p-muted" style="font-size:.8rem;margin:1rem 0 0">Please don’t close this page. It usually takes a few seconds.</p>
 </div>
 <script nonce="{{ csp_nonce }}">
   // Poll the done page until grading completes (server redirects/renders the

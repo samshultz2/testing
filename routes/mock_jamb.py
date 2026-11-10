@@ -2876,8 +2876,42 @@ def portal_list():
                          'submitted': bool(att and att.status == 'Submitted'),
                          'in_progress': bool(att and att.status != 'Submitted'),
                          'score': att.total_score if att and att.status == 'Submitted' else None})
-        return render_template('mock_jamb/portal_list.html', student=student, rows=rows)
+        return render_template('mock_jamb/portal_list.html', student=student, rows=rows,
+                               record=_portal_record(student))
     return _inner()
+
+
+def _portal_record(student):
+    """The candidate's Mock JAMB history for the portal landing page: every
+    recorded result in date order (one query), plus best / latest / change and
+    whether each has an online result page to open. Best-effort."""
+    from models import MockJAMBAttempt, MockJAMBResult
+    try:
+        rows = (db.session.query(MockJAMBResult, MockJAMBExam)
+                .join(MockJAMBExam, MockJAMBResult.mock_exam_id == MockJAMBExam.id)
+                .filter(MockJAMBResult.student_id == student.id)
+                .order_by(MockJAMBExam.exam_date, MockJAMBExam.id).all())
+        if not rows:
+            return None
+        online = {a.mock_exam_id for a in MockJAMBAttempt.query.filter(
+            MockJAMBAttempt.student_id == student.id, MockJAMBAttempt.status == 'Submitted',
+            MockJAMBAttempt.mock_exam_id.in_([e.id for _r, e in rows])).all()}
+        items = []
+        for r, e in rows:
+            n = len(r.subjects_list) or 4
+            items.append({'name': e.display_name, 'date': e.exam_date, 'total': r.total_score or 0,
+                          'max': n * 100, 'exam_id': e.id, 'online': e.id in online,
+                          'subjects': r.subjects_list})
+        last = items[-1]
+        best = max(items, key=lambda x: x['total'])
+        change = (last['total'] - items[-2]['total']) if len(items) > 1 else None
+        weakest = min(last['subjects'], key=lambda s: s['score']) if last['subjects'] else None
+        return {'items': items, 'last': last, 'best': best, 'change': change, 'weakest': weakest,
+                # chart scale: room above the best score and the 200 line
+                'top': max(240, int(max(x['total'] for x in items) * 1.18))}
+    except Exception:
+        db.session.rollback()
+        return None
 
 
 @mock_jamb_portal_bp.route('/<int:exam_id>')
@@ -3144,7 +3178,8 @@ def _portal_done_stats(exam, student, att):
                .order_by(MockJAMBExam.exam_date.desc(), MockJAMBExam.id.desc()).first())
         if row:
             prev = {'name': row.exam.display_name if row.exam else 'last mock',
-                    'total': row.total_score}
+                    'total': row.total_score,
+                    'subjects': {x['name']: x['score'] for x in row.subjects_list}}
     except Exception:
         prev = None
     return stats, prev

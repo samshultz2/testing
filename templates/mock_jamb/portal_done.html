@@ -2,6 +2,7 @@
 {% block title %}Result — {{ exam.display_name }}{% endblock %}
 {% block head_extra %}<style>
 .mr-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem}
+.mr-side{display:grid;gap:.9rem;min-width:0}
 .mr-hero{text-align:center;padding:1.5rem 1.3rem 1.3rem}
 .mr-ring{--p:0;--c:#4f46e5;width:170px;height:170px;margin:.2rem auto .8rem;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),#eef2f7 0);display:flex;align-items:center;justify-content:center}
 .mr-ring>div{width:136px;height:136px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
@@ -28,6 +29,17 @@
 .mr-tip{display:flex;gap:.7rem;align-items:flex-start;background:#eef2ff;color:#3730a3;border-radius:14px;padding:.85rem 1rem;font-size:.9rem;margin-top:1rem}
 .mr-tip i{margin-top:.15rem}
 .mr-act{display:flex;gap:.6rem;flex-wrap:wrap}
+.mr-scale{padding:1rem 1.2rem 1.1rem}
+.mr-scale h2{margin:0 0 .5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+.mr-track{position:relative;height:12px;border-radius:99px;background:linear-gradient(90deg,#fecaca 0 45%,#fde68a 45% 50%,#bbf7d0 50% 62.5%,#86efac 62.5% 75%,#4ade80 75%);margin:1.9rem 0 1.4rem}
+.mr-pin{position:absolute;top:50%;width:22px;height:22px;border-radius:50%;background:#fff;border:4px solid #1e293b;transform:translate(-50%,-50%);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.mr-pin b{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;font-size:.74rem;font-weight:800;padding:.1rem .45rem;border-radius:6px;white-space:nowrap}
+.mr-tick{position:absolute;top:100%;transform:translateX(-50%);font-size:.7rem;font-weight:700;color:#64748b;padding-top:.35rem}
+.mr-tick::before{content:"";position:absolute;left:50%;top:-14px;width:2px;height:12px;background:rgba(30,41,59,.25)}
+.mr-next{font-size:.88rem;color:#334155;margin:0}
+.mr-next b{color:#1e293b}
+.mr-dl{font-size:.74rem;font-weight:800;border-radius:7px;padding:.05rem .35rem;margin-left:.35rem;vertical-align:2px}
+.mr-dl.up{background:#dcfce7;color:#15803d}.mr-dl.down{background:#fee2e2;color:#b91c1c}.mr-dl.flat{background:#f1f5f9;color:#64748b}
 .mr-act .p-btn{flex:1;min-width:150px}
 @media (min-width:820px){
   .mr-wrap{grid-template-columns:320px minmax(0,1fr);align-items:start}
@@ -55,6 +67,17 @@
                 {% endif %}
             </div>
         </div>
+        {% if maxs == 400 %}
+        {% set nxt = 200 if total < 200 else 250 if total < 250 else 300 if total < 300 else None %}
+        <div class="portal-card mr-scale">
+            <h2>Where you stand</h2>
+            <div class="mr-track" role="img" aria-label="Your score {{ total }} on a 0 to 400 scale">
+                <span class="mr-pin" style="left:{{ [[total / 4, 2]|max, 98]|min }}%"><b>{{ total }}</b></span>
+                {% for t in (200, 250, 300) %}<span class="mr-tick" style="left:{{ t / 4 }}%">{{ t }}</span>{% endfor %}
+            </div>
+            <p class="mr-next">{% if nxt %}<b>{{ nxt - total }} more</b> mark{{ 's' if nxt - total != 1 }} to reach <b>{{ nxt }}</b>{{ ' — the usual minimum for most universities' if nxt == 200 else ' — competitive for most courses' if nxt == 250 else ' — top-tier courses' }}.{% else %}<b>300+</b> — you’re in the top band. Keep it up.{% endif %}</p>
+        </div>
+        {% endif %}
         <div class="mr-act">
             <a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="p-btn ghost"><i class="fas fa-list"></i> More mocks</a>
             <a href="{{ url_for('cbt_portal.home') }}" class="p-btn">My tests</a>
@@ -72,7 +95,8 @@
             {% if ns.lo is none or sc < ns.lo.score %}{% set ns.lo = s %}{% endif %}
             <div class="mr-subj">
                 <span class="n">{{ s.name }}</span>
-                <span class="s" style="color:{{ c }}">{{ sc }}<small> /100</small></span>
+                {% set pv = prev.subjects.get(s.name) if prev and prev.subjects else None %}
+                <span class="s" style="color:{{ c }}">{{ sc }}<small> /100</small>{% if pv is not none %}{% set dd = sc - pv %}<span class="mr-dl {{ 'up' if dd > 0 else 'down' if dd < 0 else 'flat' }}" title="{{ prev.name }}: {{ pv }}">{{ '+' if dd > 0 }}{{ dd }}</span>{% endif %}</span>
                 <span class="m"><i style="width:{{ sc }}%;background:{{ c }}"></i></span>
                 {% if st %}<span class="d"><span><b>{{ st.correct }}</b> of {{ st.total }} correct</span>{% if st.total - st.answered %}<span><b>{{ st.total - st.answered }}</b> left blank</span>{% endif %}</span>{% endif %}
             </div>

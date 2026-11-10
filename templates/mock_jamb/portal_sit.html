@@ -32,6 +32,7 @@ body{background:#eef2f7}
 .mjs-tabs::-webkit-scrollbar{display:none}
 .mjs-tab{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;min-width:130px;padding:.55rem .85rem .6rem;border-radius:14px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;font:inherit;text-align:left}
 .mjs-tab b{font-size:.86rem;white-space:nowrap}
+.mjs-tab .short{display:none}
 .mjs-tab .cnt{font-size:.72rem;color:var(--muted);font-weight:600}
 .mjs-tab .bar{width:100%;height:4px;border-radius:9px;background:#f1f5f9;overflow:hidden}
 .mjs-tab .bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .2s}
@@ -146,7 +147,12 @@ body{background:#eef2f7}
   .mj-wrap{grid-template-columns:minmax(0,1fr);padding:58px .75rem 6.2rem}
   .mj-bar{height:58px;padding:0 .75rem;gap:.45rem}
   .mjs-tabs{top:58px;padding:.55rem 0 .6rem;margin:0 -.75rem;padding-left:.75rem;padding-right:.75rem}
-  .mjs-tab{min-width:112px;padding:.45rem .7rem .5rem}
+  .mjs-tabs{gap:.35rem}
+  .mjs-tab{min-width:0;position:relative;flex-direction:row;align-items:center;gap:.35rem;padding:.42rem .65rem .5rem;border-radius:999px;overflow:hidden}
+  .mjs-tab .full{display:none}.mjs-tab .short{display:inline}
+  .mjs-tab b{font-size:.84rem}
+  .mjs-tab .cnt{font-size:.7rem}
+  .mjs-tab .bar{position:absolute;left:0;right:0;bottom:0;height:3px;border-radius:0;background:transparent}
   .mj-save span,.mj-bbtn span{display:none}
   .mj-bbtn{width:38px;padding:0;justify-content:center}
   .mj-timer{padding:.4rem .7rem;font-size:.95rem}
@@ -203,7 +209,8 @@ body{background:#eef2f7}
     <div class="mjs-tabs" id="tabs" role="tablist">
         {% for s in subjects %}
         <button type="button" role="tab" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">
-            <b>{{ s.subject.name }}</b><span class="cnt" data-total="{{ s.count }}">0/{{ s.count }}</span><span class="bar"><i></i></span>
+            {% set nm = s.subject.name %}{% set short = {'English Language': 'English', 'Use of English': 'English', 'Mathematics': 'Maths', 'Further Mathematics': 'Further Maths', 'Literature in English': 'Literature', 'Christian Religious Studies': 'CRS', 'Islamic Religious Studies': 'IRS', 'Agricultural Science': 'Agric', 'Civic Education': 'Civic', 'Computer Studies': 'Computer', 'Commerce': 'Commerce'}.get(nm, nm.split(' ')[0]) %}
+            <b><span class="full">{{ nm }}</span><span class="short" aria-hidden="true">{{ short }}</span></b><span class="cnt" data-total="{{ s.count }}">0/{{ s.count }}</span><span class="bar"><i></i></span>
         </button>
         {% endfor %}
     </div>
