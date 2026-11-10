@@ -21,7 +21,8 @@ def test_daily_percentage_uses_morning_and_afternoon(app):
         caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id, branch_id=Branch.get_default().id)
         db.session.add(caa); db.session.flush()
         day = date(2026, 11, 9)
-        wk = Week(term_id=term.id, week_number=90, start_date=day, end_date=date(2026, 11, 13))
+        day2 = date(2026, 11, 10)
+        wk = Week(term_id=term.id, week_number=90, start_date=day, end_date=day2)
         db.session.add(wk); db.session.flush()
         for i in range(31):
             st = Student(student_id=f'DP{tag}{i:02d}', first_name='S', surname=f'Dp{i}', gender='Male', is_active=True)
@@ -29,7 +30,16 @@ def test_daily_percentage_uses_morning_and_afternoon(app):
             en = StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True)
             db.session.add(en); db.session.flush()
             db.session.add(Attendance(enrollment_id=en.id, week_id=wk.id, date=day, morning_present=i >= 2, afternoon_present=i >= 4))
+            db.session.add(Attendance(enrollment_id=en.id, week_id=wk.id, date=day2, morning_present=i >= 2, afternoon_present=i >= 2))
         db.session.commit()
         s = get_daily_attendance_summary(caa.id, day)
         assert (s['morning_present'], s['afternoon_present']) == (29, 27)
         assert s['attendance_percentage'] == 90.32
+        s2 = get_daily_attendance_summary(caa.id, day2)
+        assert s2['attendance_percentage'] == 93.55          # 29 AM / 29 PM — a different day, rightly higher
+        # Weekly (Mon + Tue): (29 + 27 + 29 + 29) / (31 x 4 sessions) = 114 / 124 = 91.94%
+        from utils.calculations import get_weekly_attendance_summary
+        w = get_weekly_attendance_summary(caa.id, wk.id)
+        ct = w.get('class_totals') or w
+        assert ct['total_morning'] == 58 and ct['total_afternoon'] == 56
+        assert ct['weekly_percentage'] == 91.94
