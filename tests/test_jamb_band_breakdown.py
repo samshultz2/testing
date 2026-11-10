@@ -88,3 +88,35 @@ def test_mock_jamb_breakdown(app):
     labels = {r[0].value: r[1].value for r in ws.iter_rows() if r[0].value}
     assert labels['250 – 299'] == 1 and labels['100 – 149'] == 1 and labels['Total'] == 2
     assert c.get(base + 'format=word&type=subjects').data[:2] == b'PK'
+
+
+def test_totals_only_results_export_without_crashing(app):
+    """Results saved with a total but no subject scores (e.g. imported totals)
+    used to divide by zero while laying out the subject-scores column."""
+    _clean_limits(app)
+    a, b = _students(app, ['Totalonly1', 'Totalonly2'])
+    with app.app_context():
+        ss = AcademicSession.query.filter_by(is_active=True).first() or AcademicSession(name='TO 72/73', is_active=True)
+        db.session.add(ss); db.session.flush()
+        ex = MockJAMBExam(name='TO Mock', exam_number=11, session_id=ss.id, exam_date=date(2072, 3, 1))
+        db.session.add(ex); db.session.flush()
+        for sid, tot in ((a, 251), (b, 188)):
+            db.session.add(MockJAMBResult(student_id=sid, mock_exam_id=ex.id, total_score=tot))
+        db.session.commit()
+        eid = ex.id
+    c = _client(app)
+    base = f'/mock-jamb/exam/{eid}/export?'
+    r = c.get(base + 'format=pdf&type=students')
+    assert r.status_code == 200
+    txt = _text(r.data)
+    assert 'Totalonly1' in txt and 'SUBJECT SCORES' not in txt and '2 candidates in this export' in txt
+    assert c.get(base + 'format=word&type=students').status_code == 200
+    assert c.get(base + 'format=image&type=students').data[:4] == b'\x89PNG'
+    assert c.get(base + 'format=pdf&type=subjects').status_code == 200
+    # The grades flowable itself is safe too, if the column is ever forced in.
+    from utils import student_list_export as SLE
+    ctx = {'school': {'name': 'X'}, 'colors': SLE.colors_for({}), 'tag': 'T', 'exam': 'E'}
+    doc = ERD.score_students_doc(ctx, [{'name': 'A', 'student_id': '1', 'total': 200, 'results': []}],
+                                 {'subjects', 'rank'})
+    doc['columns'].append({'key': 'grades', 'label': 'Subject scores', 'kind': 'grades'})
+    assert ERD.render_pdf(doc)[:4] == b'%PDF'

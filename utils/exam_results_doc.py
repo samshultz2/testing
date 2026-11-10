@@ -451,7 +451,8 @@ def score_students_doc(ctx, cands, cols):
         columns.append({'key': 'pos', 'label': 'Pos', 'kind': 'pos'})
     columns.append({'key': 'name', 'label': 'Candidate', 'kind': 'name'})
     columns.append({'key': 'total', 'label': 'Score', 'kind': 'frac'})
-    if 'subjects' in cols:
+    # Totals-only results (no subject breakdown recorded): no empty column.
+    if 'subjects' in cols and subjects:
         columns.append({'key': 'grades', 'label': 'Subject scores', 'kind': 'grades'})
     if 'level' in cols:
         columns.append({'key': 'level', 'label': 'Level', 'kind': 'text', 'center': True})
@@ -784,7 +785,10 @@ def render_pdf(doc):
             self.items = items
 
         def wrap(self, aw, ah):
-            lines = max(1, math.ceil(len(self.items) / per_row)) if per_row else 1
+            if not per_row or not self.items:          # nobody has subject scores
+                self.h, self.cw = 0, 0
+                return 0, 0
+            lines = max(1, math.ceil(len(self.items) / per_row))
             self.h = lines * 19 * K - 1.5
             self.cw = min(aw / per_row, chip_w * 1.3)
             return per_row * self.cw, self.h
