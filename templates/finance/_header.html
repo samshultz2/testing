@@ -1,59 +1,90 @@
 {# Shared finance module header: identity + quick actions + section tabs.
    Include with a `fin_active` variable set to the current section key. #}
-<div class="fin-shell">
-  <div class="fin-bar">
-    <div class="fin-id"><i aria-hidden="true" class="fas fa-coins"></i> Finance</div>
-    <form class="fin-search" method="get" action="{{ url_for('finance.search') }}" role="search">
-      <i aria-hidden="true" class="fas fa-magnifying-glass"></i>
-      <input type="search" name="q" placeholder="Search finance…  ( / )" aria-label="Search finance"
-             value="{{ q if fin_active == 'search' else '' }}" data-fin-search autocomplete="off">
-    </form>
-    <div class="fin-quick">
-      <a href="{{ url_for('finance.record_payment') }}" data-native class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-cash-register"></i> Collect payment</a>
-      <a href="{{ url_for('finance.expenses_list') }}" data-native class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-money-bill-wave"></i> Record expense</a>
-      <a href="{{ url_for('finance.billing_tools') }}" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-wand-magic-sparkles"></i> Bill / charge</a>
-      <a href="{{ url_for('finance.defaulters') }}" data-native class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> Defaulters</a>
+{% set _fh = {
+  'overview': ('fa-book', 'Ledger', 'Every term and branch: revenue, spending and net position', 'reports'),
+  'accounting': ('fa-scale-balanced', 'Accounting', 'Income statement, cash flow and balance — built from your records', 'reports'),
+  'billing': ('fa-wand-magic-sparkles', 'Charges & penalties', 'Extra charges, credit notes and late-payment penalties', 'structure'),
+  'installments': ('fa-calendar-check', 'Installments', 'When each part of the fees is due — and who is overdue', 'structure'),
+  'search': ('fa-magnifying-glass', 'Search finance', 'Students, receipts, references, expenses and charges', ''),
+}.get(fin_active, ('fa-coins', 'Finance', '', '')) %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<div class="rs fin-shell">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas {{ _fh[0] }}" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>{{ _fh[1] }}</h1>{% if _fh[2] %}<p>{{ _fh[2] }}</p>{% endif %}</div>
+    <div class="rs-head-a">
+      <form class="fin-search" method="get" action="{{ url_for('finance.search') }}" role="search">
+        <i aria-hidden="true" class="fas fa-magnifying-glass"></i>
+        <input type="search" name="q" placeholder="Search finance  ( / )" aria-label="Search finance"
+               value="{{ q if fin_active == 'search' else '' }}" data-fin-search autocomplete="off">
+      </form>
+      <a href="{{ url_for('finance.record_payment') }}" data-native class="rs-btn primary"><i aria-hidden="true" class="fas fa-cash-register"></i><span>Take payment</span></a>
     </div>
-  </div>
-  <nav class="fin-tabs" aria-label="Finance sections">
-    <a href="{{ url_for('finance.dashboard') }}" data-native class="{{ 'on' if fin_active == 'dashboard' }}">Dashboard</a>
-    <a href="{{ url_for('finance.overview') }}" class="{{ 'on' if fin_active == 'overview' }}">Reports &amp; Ledger</a>
+  </header>
+  <nav class="sl-nav fin-nav" aria-label="Finance">
+    {% for k, ep, ic, label in [('dashboard','finance.dashboard','fa-gauge-high','Overview'), ('record_payment','finance.record_payment','fa-cash-register','Take payment'),
+        ('payments','finance.payments_list','fa-receipt','Payments'), ('defaulters','finance.defaulters','fa-user-clock','Owing'),
+        ('expenses','finance.expenses_list','fa-money-bill-trend-up','Expenses'), ('structure','finance.structure','fa-table-list','Fee setup'),
+        ('reports','finance.reports','fa-chart-column','Reports')] %}
+    <a href="{{ url_for(ep) }}" data-native class="{{ 'on' if _fh[3] == k }}"><i class="fas {{ ic }}" aria-hidden="true"></i><span>{{ label }}</span></a>
+    {% endfor %}
+  </nav>
+  {% if _fh[3] == 'reports' %}
+  <nav class="sl-sub" aria-label="Reports pages">
+    <a href="{{ url_for('finance.reports') }}" data-native>Term summary</a>
+    <a href="{{ url_for('finance.collections') }}" data-native>Collections</a>
+    <a href="{{ url_for('finance.overview') }}" class="{{ 'on' if fin_active == 'overview' }}">Ledger</a>
     <a href="{{ url_for('finance.accounting') }}" class="{{ 'on' if fin_active == 'accounting' }}">Accounting</a>
-    <a href="{{ url_for('finance.billing_tools') }}" class="{{ 'on' if fin_active == 'billing' }}">Billing Tools</a>
+  </nav>
+  {% elif _fh[3] == 'structure' %}
+  <nav class="sl-sub" aria-label="Fee setup pages">
+    <a href="{{ url_for('finance.structure') }}" data-native>Fee structure</a>
+    <a href="{{ url_for('finance.items_list') }}" data-native>Fee items</a>
+    <a href="{{ url_for('finance.billing_tools') }}" class="{{ 'on' if fin_active == 'billing' }}">Charges &amp; penalties</a>
     <a href="{{ url_for('finance.installments') }}" class="{{ 'on' if fin_active == 'installments' }}">Installments</a>
   </nav>
+  {% endif %}
 </div>
 <style>
-  .fin-shell{margin-bottom:18px}
-  .fin-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
-  .fin-id{font-family:var(--font-display,inherit);font-weight:800;font-size:20px;display:flex;align-items:center;gap:9px;letter-spacing:-.01em}
-  .fin-id i{color:var(--primary,#0d6a4e)}
-  .fin-search{position:relative;display:flex;align-items:center;min-width:220px;flex:0 1 300px}
-  .fin-search i{position:absolute;left:11px;font-size:12px;color:var(--text-secondary,#889);pointer-events:none}
-  .fin-search input{width:100%;padding:8px 12px 8px 30px;border:1px solid var(--border,#d7dde5);
-                    border-radius:9px;font-size:13px;background:var(--surface,#fff);color:inherit}
-  .fin-quick{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
-  .fin-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--border,#e5e7eb)}
-  .fin-tabs a{padding:9px 14px;font-size:13.5px;font-weight:600;color:var(--text-secondary,#667);
-              text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
-  .fin-tabs a:hover{color:var(--text-primary,#223)}
-  .fin-tabs a.on{color:var(--primary,#0d6a4e);border-bottom-color:var(--primary,#0d6a4e)}
-  @media (max-width:640px){
-    .fin-search{order:3;flex-basis:100%;min-width:0}
-    .fin-quick{width:100%;margin-left:0}
-    .fin-tabs{overflow-x:auto}
+  /* Server-rendered finance pages share the React app's look (results kit). */
+  .fin-shell{margin-bottom:1rem}
+  .fin-search{position:relative;display:flex;align-items:center;width:250px}
+  .fin-search i{position:absolute;left:.8rem;font-size:.8rem;color:var(--text-muted);pointer-events:none}
+  .fin-search input{width:100%;height:42px;padding:0 .8rem 0 2.1rem;border:1.5px solid var(--border-color);border-radius:12px;font:inherit;font-size:.86rem;background:var(--bg-card);color:var(--text-primary)}
+  .fin-search input:focus{outline:none;border-color:var(--primary)}
+  .fin-nav a{flex:1 0 auto}
+  /* page bodies: bring the older panels / KPIs / filter bars in line with the kit */
+  .fo-wrap,.ac-wrap,.bt-wrap,.in-wrap,.fs-wrap{max-width:1320px!important;margin:0 auto}
+  .fin-shell~.page-header{display:flex;justify-content:flex-end;margin:-.4rem 0 .8rem;min-height:0}
+  .fin-shell~.page-header h1{display:none}
+  .fin-shell~.page-header:not(:has(.page-header-actions)){display:none}
+  .fin-shell~.page-header .btn{border-radius:12px;font-weight:700}
+  .panel,.card-x,.bt-wrap .card,.in-wrap .card,.fs-group{border-radius:16px!important;border:1px solid var(--border-color)!important;background:var(--bg-card)!important;box-shadow:none}
+  .panel h3{font-size:.98rem!important;padding:.9rem 1.1rem!important}
+  .kpis{gap:.6rem!important;grid-template-columns:repeat(auto-fill,minmax(178px,1fr))!important}
+  .fo-wrap .kpi{display:block!important;min-width:0}
+  .fo-wrap .kpi .val{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.2rem}
+  .kpi{border-radius:14px!important;padding:.75rem .9rem!important;border:1px solid var(--border-color)!important;background:var(--bg-card)!important}
+  .kpi .lab{font-size:.7rem!important;font-weight:800!important;letter-spacing:.05em!important;color:var(--text-muted)!important}
+  .kpi .val{font-family:'Space Grotesk',sans-serif;font-size:1.3rem!important}
+  .fo-filters,.ac-filters,.bt-term,.in-pick{background:var(--bg-card)!important;border:1px solid var(--border-color)!important;border-radius:16px!important;padding:.85rem 1rem!important}
+  .fo-filters select,.fo-filters input,.ac-filters select,.ac-filters input,.bt-term select,.in-pick select{height:42px;border:1.5px solid var(--border-color)!important;border-radius:12px!important;padding:0 .7rem!important;font-weight:600}
+  @media (max-width:759px){
+    .fin-shell .rs-head{flex-wrap:wrap}
+    .fin-shell .rs-head-a{width:100%}
+    .fin-search{flex:1;width:auto}
+    .fin-shell .rs-head-a .rs-btn span{display:none}
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .kpi .val{font-size:1.1rem!important}
   }
-  .fin-kbd-help{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;z-index:1000;
-                align-items:center;justify-content:center}
+  .fin-kbd-help{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;z-index:1000;align-items:center;justify-content:center}
   .fin-kbd-help.on{display:flex}
-  .fin-kbd-card{background:var(--surface,#fff);color:inherit;border-radius:14px;padding:20px 24px;
-                max-width:380px;width:90%;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+  .fin-kbd-card{background:var(--bg-card,#fff);color:inherit;border-radius:16px;padding:20px 24px;max-width:380px;width:90%;box-shadow:0 18px 50px rgba(0,0,0,.3)}
   .fin-kbd-card h4{margin:0 0 12px;font-size:15px}
   .fin-kbd-card table{width:100%;border-collapse:collapse;font-size:13.5px}
-  .fin-kbd-card td{padding:5px 4px;border-bottom:1px solid var(--border,#f0f2f6)}
-  .fin-kbd-card kbd{font-family:ui-monospace,monospace;background:var(--surface-2,#eef1f5);color:#334;
-                    border-radius:5px;padding:1px 7px;font-size:12px;font-weight:700}
-  .fin-kbd-card .cls{margin-top:14px;font-size:12px;color:var(--text-secondary,#889);text-align:right}
+  .fin-kbd-card td{padding:5px 4px;border-bottom:1px solid var(--border-color,#f0f2f6)}
+  .fin-kbd-card kbd{font-family:ui-monospace,monospace;background:var(--gray-100,#eef1f5);border-radius:5px;padding:1px 7px;font-size:12px;font-weight:700}
+  .fin-kbd-card .cls{margin-top:14px;font-size:12px;color:var(--text-muted,#889);text-align:right}
 </style>
 
 <div class="fin-kbd-help" id="finKbdHelp" aria-hidden="true">
@@ -62,9 +93,9 @@
     <table><tbody>
       <tr><td><kbd>/</kbd></td><td>Focus search</td></tr>
       <tr><td><kbd>g</kbd> <kbd>d</kbd></td><td>Dashboard</td></tr>
-      <tr><td><kbd>g</kbd> <kbd>r</kbd></td><td>Reports &amp; Ledger</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>r</kbd></td><td>Ledger</td></tr>
       <tr><td><kbd>g</kbd> <kbd>a</kbd></td><td>Accounting</td></tr>
-      <tr><td><kbd>g</kbd> <kbd>b</kbd></td><td>Billing Tools</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>b</kbd></td><td>Charges &amp; penalties</td></tr>
       <tr><td><kbd>g</kbd> <kbd>i</kbd></td><td>Installments</td></tr>
       <tr><td><kbd>n</kbd> <kbd>p</kbd></td><td>New payment</td></tr>
       <tr><td><kbd>n</kbd> <kbd>e</kbd></td><td>New expense</td></tr>

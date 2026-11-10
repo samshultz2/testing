@@ -70,7 +70,11 @@ def _nav_urls():
             'payments': url_for('finance.payments_list'), 'structure': url_for('finance.structure'),
             'items': url_for('finance.items_list'), 'expenses': url_for('finance.expenses_list'),
             'defaulters': url_for('finance.defaulters'), 'collections': url_for('finance.collections'),
-            'reports': url_for('finance.reports')}
+            'reports': url_for('finance.reports'),
+            # server-rendered finance pages, reached from the app's "More" menu
+            'overview': url_for('finance.overview'), 'accounting': url_for('finance.accounting'),
+            'billing_tools': url_for('finance.billing_tools'), 'installments': url_for('finance.installments'),
+            'search': url_for('finance.search')}
 
 
 def _collections_query(from_date, to_date, term_id=None):
@@ -533,6 +537,7 @@ def payments_list():
         'payments': [{'id': p.id, 'date': p.payment_date.strftime('%d %b %Y'), 'receipt_no': p.receipt_no,
                       'student': p.student.full_name if p.student else '—',
                       'student_id': p.student.student_id if p.student else '',
+                      'gender': (p.student.gender or '') if p.student else '',
                       'method': p.method, 'received_by': p.received_by or '—', 'amount': p.amount,
                       'receipt_url': url_for('finance.receipt', payment_id=p.id),
                       'edit_url': url_for('finance.edit_payment', payment_id=p.id),
@@ -622,11 +627,12 @@ def record_payment():
         'methods': PAYMENT_METHODS, 'today': timeutil.today().isoformat(),
         'current_user': session.get('user', ''),
         'student': ({'id': student.id, 'full_name': student.full_name,
-                     'student_id': student.student_id} if student else None),
+                     'student_id': student.student_id, 'gender': student.gender or ''} if student else None),
         'bill': _bill_json(bill),
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'roster': [{'id': r['student'].id, 'full_name': r['student'].full_name,
                     'student_id': r['student'].student_id, 'balance': r['balance'],
+                    'billed': r['billed'], 'paid': r['paid'], 'gender': r['student'].gender or '',
                     'pick_url': url_for('finance.record_payment', student_id=r['student'].id, term_id=term_id)}
                    for r in roster],
         'self_url': url_for('finance.record_payment'),
@@ -973,6 +979,7 @@ def defaulters():
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],
         'rows': [{'student': r['student'].full_name, 'student_id': r['student'].student_id,
+                  'gender': r['student'].gender or '',
                   'class_name': r['class_name'], 'arm_name': r['arm_name'],
                   'billed': r['billed'], 'paid': r['paid'], 'balance': r['balance'],
                   'statement_url': url_for('finance.statement', student_id=r['student'].id, term_id=term_id),
