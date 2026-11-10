@@ -16,27 +16,26 @@
            school and never carries the EduSyncra brand colour. */
         :root{--portal-primary:#334155;--portal-primary-dark:#1e293b;--portal-soft:#f1f5f9;--portal-ink:#334155;--px:#4f46e5}
         body{background:#eef2f7;min-height:100vh;margin:0;font-family:'DM Sans',sans-serif;color:#1e293b}
-        body::before{content:'';position:fixed;inset:0 0 auto 0;height:220px;background:linear-gradient(135deg,var(--portal-primary),var(--portal-primary-dark));z-index:-1;border-radius:0 0 28px 28px}
         .portal-wrap{max-width:860px;margin:0 auto;padding:.8rem 1rem 2rem}
-        .portal-top{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:.5rem .1rem 1rem;gap:.6rem}
+        .portal-top{display:flex;justify-content:space-between;align-items:center;color:var(--portal-primary-dark);padding:.5rem .1rem 1rem;gap:.6rem}
         .portal-top .brand{display:flex;align-items:center;gap:.6rem;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.08rem;min-width:0}
-        .portal-top .brand img{width:38px;height:38px;border-radius:10px;object-fit:contain;background:#fff;flex:none}
-        .portal-top .brand .brand-mark{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:1rem;flex:none}
+        .portal-top .brand img{width:38px;height:38px;border-radius:10px;object-fit:contain;background:#fff;flex:none;border:1px solid #e2e8f0}
+        .portal-top .brand .brand-mark{width:38px;height:38px;border-radius:10px;background:#e2e8f0;color:var(--portal-primary-dark);display:flex;align-items:center;justify-content:center;font-size:1rem;flex:none}
         .portal-top .brand .brand-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .portal-top a{color:#fff;text-decoration:none}
+        .portal-top a{color:inherit;text-decoration:none}
         .p-user{display:flex;align-items:center;gap:.55rem;min-width:0;flex:none;max-width:60%}
-        .p-user .av{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;flex:none}
+        .p-user .av{width:36px;height:36px;border-radius:50%;background:#e2e8f0;color:var(--portal-primary-dark);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;flex:none}
         .p-user .nm{display:flex;flex-direction:column;line-height:1.2;min-width:0}
         .p-user .nm b{font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .p-user .nm small{font-size:.72rem;opacity:.8}
-        .p-out{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.16);display:inline-flex;align-items:center;justify-content:center;flex:none}
-        .p-out:hover{background:rgba(255,255,255,.28)}
+        .p-user .nm small{font-size:.72rem;color:#64748b}
+        .p-out{width:36px;height:36px;border-radius:10px;background:#fff;border:1px solid #e2e8f0;color:var(--portal-primary-dark);display:inline-flex;align-items:center;justify-content:center;flex:none}
+        .p-out:hover{background:#f1f5f9}
         .portal-card{background:var(--bg-card,#fff);border-radius:18px;padding:1.4rem;box-shadow:0 10px 30px rgba(15,23,42,.12)}
         .portal-card h1{margin:0 0 .3rem;font-size:1.35rem;font-family:'Space Grotesk',sans-serif}
         .flash-message{margin-bottom:.7rem;border-radius:12px}
         .pmenu-wrap{position:relative}
-        .pmenu-btn{width:42px;height:42px;border-radius:12px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:1.05rem;cursor:pointer}
-        .pmenu-btn:hover{background:rgba(255,255,255,.28)}
+        .pmenu-btn{width:42px;height:42px;border-radius:12px;border:1px solid #e2e8f0;background:#fff;color:var(--portal-primary-dark);font-size:1.05rem;cursor:pointer}
+        .pmenu-btn:hover{background:#f1f5f9}
         .pmenu-panel{position:absolute;top:50px;right:0;z-index:30;background:#fff;border-radius:14px;box-shadow:0 16px 36px rgba(0,0,0,.3);min-width:230px;overflow:hidden;display:none}
         .pmenu-panel.open{display:block}
         .pmenu-panel a{display:flex;align-items:center;gap:.7rem;padding:.85rem 1rem;color:#333;text-decoration:none;font-size:.92rem;border-bottom:1px solid #f0f0f0}
