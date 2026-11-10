@@ -390,6 +390,42 @@ def score_kind(v):
     return 'd' if v >= 70 else 'c' if v >= 50 else 'p' if v >= 40 else 'f'
 
 
+# Total-score bands for the end-of-document breakdown (JAMB / Mock JAMB).
+BREAKDOWN_BANDS = [(300, '300 and above'), (250, '250 – 299'), (200, '200 – 249'),
+                   (150, '150 – 199'), (100, '100 – 149'), (0, 'Below 100')]
+BREAKDOWN_INK = [0, .32, .58, '#d97706', '#ea580c', FAIL]   # number → brand colour mixed with white
+
+
+def band_inks(primary):
+    """Hex colour per breakdown band: brand shades for 200+, warm tones below."""
+    pr = SLE._hex(primary)
+    out = []
+    for v in BREAKDOWN_INK:
+        if isinstance(v, str):
+            out.append(v)
+        else:
+            out.append('#%02x%02x%02x' % tuple(round(c + (255 - c) * v) for c in pr))
+    return out
+
+
+def score_breakdown(totals):
+    """Counts of the exported candidates per total-score band, with % and the
+    running "at or above" figure. ``totals``: the total score of each candidate
+    in the export (None ignored)."""
+    totals = [t for t in totals if t is not None]
+    n = len(totals)
+    rows, cum, upper = [], 0, None
+    for lo, label in BREAKDOWN_BANDS:
+        k = sum(1 for t in totals if t >= lo and (upper is None or t < upper))
+        if lo == 0:                       # anything below 100, negatives included
+            k = sum(1 for t in totals if t < 100)
+        cum += k
+        rows.append({'label': label, 'lo': lo, 'n': k, 'pct': _pct(k, n),
+                     'cum': cum, 'cum_pct': _pct(cum, n)})
+        upper = lo
+    return {'n': n, 'rows': rows, 'top': max((r['n'] for r in rows), default=0)}
+
+
 def score_level(total):
     if total is None:
         return ''
@@ -448,6 +484,7 @@ def score_students_doc(ctx, cands, cols):
         'footer_title': ' · '.join(b for b in (ctx['exam'], ctx.get('cls')) if b),
         'kpis': kpis, 'key': SCORE_KEY, 'key_title': 'SCORE KEY', 'columns': columns, 'rows': out,
         'codes': used if 'subjects' in cols else [],
+        'breakdown': score_breakdown(totals) if 'breakdown' in cols and n else None,
     }
 
 
@@ -550,6 +587,7 @@ def score_subjects_doc(ctx, by_subject, cols, prev_avg=None, prev_label=None):
         'kpis': kpis, 'key': SCORE_KEY, 'key_title': 'SCORE KEY', 'columns': columns, 'rows': out, 'total': total,
         'chart': chart, 'chart_title': 'Average score by subject (out of 100)', 'chart_suffix': '',
         'insights': insights,
+        'breakdown': (score_breakdown(ctx['totals']) if 'breakdown' in cols and ctx.get('totals') else None),
     }
 
 
@@ -909,6 +947,79 @@ def render_pdf(doc):
             cv.setFillColor(hx(INK2)); cv.setFont(F['Body'], 7.4)
             cv.drawString(10, 9, sub)
 
+
+    class Breakdown(Flowable):
+        """Score-band breakdown card: a 100% stacked strip, then one row per
+        band with a proportion bar, count, share and the running "at or above"."""
+        RH = 22
+
+        def __init__(self, bd, w):
+            super().__init__()
+            self.bd, self.w = bd, w
+            self.h = 64 + self.RH * len(bd['rows']) + 20
+
+        def wrap(self, aw, ah):
+            return self.w, self.h
+
+        def draw(self):
+            cv, bd, w, h = self.canv, self.bd, self.w, self.h
+            ink = band_inks(C['primary'])
+            cv.setStrokeColor(hx(LINE)); cv.setFillColor(colors.white); cv.setLineWidth(.8)
+            cv.roundRect(0, 0, w, h, 9, stroke=1, fill=1)
+            cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 6.8)
+            cv.drawString(14, h - 18, 'SCORE-BAND BREAKDOWN', charSpace=.7)
+            cv.setFillColor(hx(INK2)); cv.setFont(F['Body'], 7.4)
+            cv.drawRightString(w - 14, h - 18, '%d candidate%s in this export · total score out of 400'
+                               % (bd['n'], '' if bd['n'] == 1 else 's'))
+            # 100% strip
+            sx, sw, sy = 14, w - 28, h - 38
+            cv.setFillColor(hx(LINE2)); cv.roundRect(sx, sy, sw, 9, 4.5, stroke=0, fill=1)
+            p = cv.beginPath(); p.roundRect(sx, sy, sw, 9, 4.5)
+            cv.saveState(); cv.clipPath(p, stroke=0, fill=0)
+            x = sx
+            for i, r in enumerate(bd['rows']):
+                seg = sw * r['n'] / bd['n'] if bd['n'] else 0
+                if seg > 0:
+                    cv.setFillColor(hx(ink[i])); cv.rect(x, sy, seg, 9, stroke=0, fill=1)
+                    if x > sx:
+                        cv.setFillColor(colors.white); cv.rect(x - .4, sy, .8, 9, stroke=0, fill=1)
+                x += seg
+            cv.restoreState()
+            # column heads
+            lab_w, cnt_w, pct_w, cum_w = 112, 52, 48, 104
+            bar_x = 14 + lab_w
+            bar_w = w - 28 - lab_w - cnt_w - pct_w - cum_w - 12
+            hy = h - 56
+            cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 6.2)
+            cv.drawString(14, hy, 'TOTAL SCORE', charSpace=.5)
+            cv.drawString(bar_x, hy, 'SHARE OF CANDIDATES', charSpace=.5)
+            cv.drawRightString(w - 14 - cum_w - pct_w, hy, 'STUDENTS', charSpace=.5)
+            cv.drawRightString(w - 14 - cum_w, hy, '%', charSpace=.5)
+            cv.drawRightString(w - 14, hy, 'AT OR ABOVE', charSpace=.5)
+            top = max(1, bd['top'])
+            for i, r in enumerate(bd['rows']):
+                y = hy - 8 - self.RH * (i + 1)
+                if i % 2 == 0:
+                    cv.setFillColor(hx(ZEBRA)); cv.rect(6, y - 1, w - 12, self.RH, stroke=0, fill=1)
+                mid = y + self.RH / 2 - 3
+                cv.setFillColor(hx(ink[i])); cv.roundRect(14, mid - .5, 8, 8, 2, stroke=0, fill=1)
+                cv.setFillColor(hx(INK)); cv.setFont(F['BodyBold'], 8.6)
+                cv.drawString(28, mid, r['label'])
+                cv.setFillColor(hx(LINE2)); cv.roundRect(bar_x, mid - .5, bar_w, 8, 4, stroke=0, fill=1)
+                if r['n']:
+                    cv.setFillColor(hx(ink[i]))
+                    cv.roundRect(bar_x, mid - .5, max(8, bar_w * r['n'] / top), 8, 4, stroke=0, fill=1)
+                cv.setFillColor(hx(INK if r['n'] else MUTED)); cv.setFont(F['Display'], 10)
+                cv.drawRightString(w - 14 - cum_w - pct_w, mid - .5, str(r['n']) if r['n'] else '–')
+                cv.setFillColor(hx(INK2)); cv.setFont(F['Body'], 8)
+                cv.drawRightString(w - 14 - cum_w, mid, '%.1f%%' % r['pct'])
+                cv.setFillColor(hx(MUTED if i == len(bd['rows']) - 1 else INK2)); cv.setFont(F['Body'], 7.6)
+                cum = ('all %d' % r['cum']) if i == len(bd['rows']) - 1 else ('%d · %.1f%%' % (r['cum'], r['cum_pct']))
+                cv.drawRightString(w - 14, mid, cum)
+            cv.setFillColor(hx(MUTED)); cv.setFont(F['Body'], 6.8)
+            cv.drawString(14, 9, 'Counts only the candidates included in this export. '
+                          '"At or above" = candidates scoring at least the bottom of that band.')
+
     # ---- cells -------------------------------------------------------------------
     def cell(col, row, bold=False):
         k, v = col['kind'], row.get(col['key'])
@@ -1029,6 +1140,8 @@ def render_pdf(doc):
         it.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                                 ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0)]))
         story += [Spacer(1, 12), it]
+    if doc.get('breakdown'):
+        story += [Spacer(1, 14), KeepTogether([Breakdown(doc['breakdown'], avail_w)])]
 
     buf = io.BytesIO()
     d = BaseDocTemplate(buf, pagesize=(PW, PH), leftMargin=margin, rightMargin=margin,
@@ -1078,7 +1191,7 @@ def render_images(doc, zoom=2.0, only_page=None):
 def render_docx(doc):
     from docx import Document
     from docx.enum.section import WD_ORIENT
-    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
@@ -1254,6 +1367,50 @@ def render_docx(doc):
             p2 = cell.add_paragraph(); r = p2.add_run(v); r.bold = True; r.font.size = Pt(10.5)
             r.font.color.rgb = rgb(SLE.INK)
             p3 = cell.add_paragraph(); r = p3.add_run(s); r.font.size = Pt(7.5); r.font.color.rgb = rgb(SLE.INK2)
+    if doc.get('breakdown'):
+        bd = doc['breakdown']
+        ink = band_inks(C['primary'])
+        hp = para('SCORE-BAND BREAKDOWN', 8, True, SLE.MUTED, space_after=1)
+        hp.paragraph_format.space_before = Pt(12); hp.paragraph_format.keep_with_next = True
+        para('%d candidate%s in this export · total score out of 400' % (bd['n'], '' if bd['n'] == 1 else 's'),
+             8, False, SLE.INK2, space_after=4).paragraph_format.keep_with_next = True
+        bt = d.add_table(rows=len(bd['rows']) + 1, cols=5)
+        bt.alignment = WD_TABLE_ALIGNMENT.CENTER
+        borders(bt)
+        widths = [Cm(3.6), Cm(7.0), Cm(2.0), Cm(1.8), Cm(2.9)]
+        bt.autofit = False
+        grid = bt._tbl.tblGrid
+        for gc, wd in zip(grid.findall(qn('w:gridCol')), widths):
+            gc.set(qn('w:w'), str(int(wd.twips)))
+        top = max(1, bd['top'])
+        for j, h in enumerate(('Total score', 'Share of candidates', 'Students', '%', 'At or above')):
+            c = bt.rows[0].cells[j]; shade(c, C['primary']); c.width = widths[j]
+            pp = c.paragraphs[0]
+            pp.alignment = WD_ALIGN_PARAGRAPH.RIGHT if j >= 2 else None
+            r = pp.add_run(h.upper()); r.bold = True; r.font.size = Pt(7); r.font.color.rgb = rgb('#ffffff')
+        last = len(bd['rows']) - 1
+        for i, b in enumerate(bd['rows']):
+            cells = bt.rows[i + 1].cells
+            for j, c in enumerate(cells):
+                c.width = widths[j]
+                c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                if i % 2:
+                    shade(c, SLE.ZEBRA)
+                c.paragraphs[0].paragraph_format.keep_with_next = True
+            r = cells[0].paragraphs[0].add_run('\u25a0 '); r.font.color.rgb = rgb(ink[i]); r.font.size = Pt(10)
+            r = cells[0].paragraphs[0].add_run(b['label']); r.bold = True; r.font.size = Pt(9)
+            r.font.color.rgb = rgb(SLE.INK)
+            blocks = round(22 * b['n'] / top) if b['n'] else 0
+            r = cells[1].paragraphs[0].add_run('\u2588' * max(blocks, 1 if b['n'] else 0))
+            r.font.size = Pt(7); r.font.color.rgb = rgb(ink[i])
+            for j, (txt, bold) in enumerate(((str(b['n']) if b['n'] else '–', True), ('%.1f%%' % b['pct'], False),
+                                             (('all %d' % b['cum']) if i == last else
+                                              '%d · %.1f%%' % (b['cum'], b['cum_pct']), False)), 2):
+                pp = cells[j].paragraphs[0]; pp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                r = pp.add_run(txt); r.bold = bold; r.font.size = Pt(10 if bold else 8.5)
+                r.font.color.rgb = rgb(SLE.INK if bold else SLE.INK2)
+        para('Counts only the candidates included in this export. "At or above" = candidates scoring at '
+             'least the bottom of that band.', 7, False, SLE.MUTED).paragraph_format.space_before = Pt(3)
     foot = sec.footer.paragraphs[0]
     r = foot.add_run('%s · %s%s · Confidential — for school use' % (
         school.get('name') or 'School', doc['footer_title'],
@@ -1288,11 +1445,13 @@ def file_response(doc, fmt, stem):
 SCORE_COLS = {
     'students': [('rank', 'Position', True), ('student_id', 'Student ID', True),
                  ('subjects', 'Subject scores', True), ('level', 'Performance level', False),
-                 ('cutoff', 'Scored 200+', True)],
+                 ('cutoff', 'Scored 200+', True),
+                 ('breakdown', 'Score-band breakdown', True)],
     'subjects': [('total', 'Candidates', True), ('bands', 'Score bands (70+ / 50–69 / 40–49 / <40)', True),
                  ('spread', 'Score spread bar', True), ('avg', 'Average', True), ('high', 'Highest', True),
                  ('low', 'Lowest', True), ('pass', '50+ %', True), ('delta', 'Change vs last sitting', True),
-                 ('chart', 'Chart & highlights', True)],
+                 ('chart', 'Chart & highlights', True),
+                 ('breakdown', 'Score-band breakdown (totals)', True)],
 }
 
 WAEC_COLS = {
@@ -1310,6 +1469,68 @@ WAEC_COLS = {
                    ('avgpts', 'Avg points', True), ('delta', 'Change vs last sitting', True),
                    ('chart', 'Chart & highlights', True)],
 }
+
+
+def brand_primary():
+    try:
+        from utils.school import document_branding
+        return SLE.colors_for(document_branding())['primary']
+    except Exception:          # noqa: BLE001 — branding is cosmetic
+        return '#0d6a4e'
+
+
+def xlsx_breakdown(ws, totals, row, primary=None):
+    """Append the score-band breakdown under a results sheet, starting at
+    ``row`` (column A). Returns the next free row."""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.formatting.rule import DataBarRule
+    bd = score_breakdown(totals)
+    ink = [h.lstrip('#') for h in band_inks(primary or brand_primary())]
+    thin = Side(style='thin', color='E2E8F0')
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+    head_fill = PatternFill('solid', start_color=ink[0], end_color=ink[0])
+    ws.cell(row=row, column=1, value='Score-band breakdown').font = Font(bold=True, size=13, color='111827')
+    ws.cell(row=row + 1, column=1, value='%d candidate%s in this export · total score out of 400' % (
+        bd['n'], '' if bd['n'] == 1 else 's')).font = Font(size=9, color='6B7280')
+    hr = row + 3
+    for j, h in enumerate(('Total score', 'Students', '% of total', 'At or above', 'At or above %'), 1):
+        c = ws.cell(row=hr, column=j, value=h)
+        c.font = Font(bold=True, color='FFFFFF'); c.fill = head_fill; c.border = box
+        c.alignment = Alignment(horizontal='left' if j == 1 else 'center', vertical='center', wrap_text=True)
+    ws.row_dimensions[hr].height = 32
+    for i, b in enumerate(bd['rows']):
+        r = hr + 1 + i
+        lab = ws.cell(row=r, column=1, value=b['label'])
+        lab.font = Font(bold=True, color='FFFFFF' if i in (0, 4, 5) else '111827')
+        lab.fill = PatternFill('solid', start_color=ink[i], end_color=ink[i])
+        vals = (b['n'], b['pct'] / 100, b['cum'], b['cum_pct'] / 100)
+        for j, v in enumerate(vals, 2):
+            c = ws.cell(row=r, column=j, value=v)
+            c.alignment = Alignment(horizontal='center')
+            if j in (3, 5):
+                c.number_format = '0.0%'
+            if j == 2:
+                c.font = Font(bold=True)
+        for j in range(1, 6):
+            ws.cell(row=r, column=j).border = box
+    end = hr + len(bd['rows'])
+    tr = end + 1
+    ws.cell(row=tr, column=1, value='Total').font = Font(bold=True)
+    ws.cell(row=tr, column=2, value=bd['n']).font = Font(bold=True)
+    ws.cell(row=tr, column=3, value=1 if bd['n'] else 0).number_format = '0.0%'
+    for j in range(1, 6):
+        c = ws.cell(row=tr, column=j)
+        c.border = Border(top=Side(style='medium', color='111827'))
+        if j > 1:
+            c.alignment = Alignment(horizontal='center')
+    ws.conditional_formatting.add('C%d:C%d' % (hr + 1, end),
+                                  DataBarRule(start_type='num', start_value=0, end_type='num', end_value=1,
+                                              color=ink[1]))
+    ws.cell(row=tr + 1, column=1, value='Counts only the candidates included in this export.'
+            ).font = Font(italic=True, size=8, color='6B7280')
+    if (ws.column_dimensions['A'].width or 0) < 16:
+        ws.column_dimensions['A'].width = 16
+    return tr + 2
 
 
 def picked(cols_arg, spec):

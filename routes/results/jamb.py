@@ -651,6 +651,7 @@ def _jamb_branded_export(year, fmt):
                         pb[s].append(v)
             prev_avg = {s: sum(v) / len(v) for s, v in pb.items() if v}
         ctx['candidates'] = len(results)
+        ctx['totals'] = [r.total_score for r in results]
         doc = ERD.score_subjects_doc(ctx, by, cols, prev_avg, prev)
     else:
         cands = [{'name': r.student.full_name, 'student_id': r.student.student_id, 'total': r.total_score,
@@ -678,8 +679,13 @@ def export_jamb():
     if fmt in ('pdf', 'image', 'word'):
         return _jamb_branded_export(year, fmt)
 
-    results = (scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
-               .options(joinedload(JAMBResult.student)).join(Student)
+    q = scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
+    lo, hi = request.args.get('min_score', type=int), request.args.get('max_score', type=int)
+    if lo is not None:
+        q = q.filter(JAMBResult.total_score >= lo)
+    if hi is not None:
+        q = q.filter(JAMBResult.total_score <= hi)
+    results = (q.options(joinedload(JAMBResult.student)).join(Student)
                .order_by(JAMBResult.total_score.desc()).all())
 
     wb = Workbook()
@@ -720,4 +726,7 @@ def export_jamb():
         ws.cell(row=row, column=12, value=r.subject4_score or '-').border = border
     
     ws.delete_cols(2)        # drop the admission-number column from the printout
+    from utils import exam_results_doc as ERD
+    if 'breakdown' in ERD.picked(request.args.get('cols'), ERD.SCORE_COLS['students']) and results:
+        ERD.xlsx_breakdown(ws, [r.total_score for r in results], len(results) + 6)
     return xlsx_response(wb, f'jamb_results_{year}.xlsx')

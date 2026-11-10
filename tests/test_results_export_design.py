@@ -74,7 +74,7 @@ def test_jamb_branded_exports(app):
     # Subject analysis with change vs last year, chart and highlights
     txt = _text(c.get(base + '&format=pdf&type=subjects').data)
     assert 'Subject Analysis' in txt and 'All subjects' in txt and 'VS 2060' in txt and 'STRONGEST SUBJECT' in txt
-    img = c.get(base + '&format=image&type=subjects&size=l')
+    img = c.get(base + '&format=image&type=subjects&size=l&cols=total,bands,spread,avg,high,low,pass,delta,chart')
     assert img.data[:4] == b'\x89PNG' and img.headers.get('X-Total-Pages') == '1'
     doc = Document(BytesIO(c.get(base + '&format=word&type=students').data))
     assert any('Jambhigh' in cell.text for t in doc.tables for row in t.rows for cell in row.cells)

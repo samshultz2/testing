@@ -2514,6 +2514,7 @@ def _branded_export(exam, results, fmt):
                         pb[s_].append(v)
             prev_avg = {k: sum(v) / len(v) for k, v in pb.items() if v}
         ctx['candidates'] = len(results)
+        ctx['totals'] = [r.total_score for r in results]
         doc = ERD.score_subjects_doc(ctx, by, cols, prev_avg, ('Mock %d' % prev.exam_number) if prev else None)
     else:
         cands = [{'name': r.student.full_name, 'student_id': r.student.student_id, 'total': r.total_score,
@@ -2538,6 +2539,8 @@ def export_results(exam_id):
     fmt = request.args.get('format', 'excel')
     if fmt in ('pdf', 'image', 'word'):
         return _branded_export(exam, results, fmt)
+    lo, hi = request.args.get('min_score', type=int), request.args.get('max_score', type=int)
+    results = [r for r in results if (lo is None or r.total_score >= lo) and (hi is None or r.total_score <= hi)]
 
     wb = Workbook()
     ws = wb.active
@@ -2604,6 +2607,9 @@ def export_results(exam_id):
     filename = f"mock_jamb_{exam.exam_number}_{exam.session.name.replace('/', '_')}.xlsx"
 
     ws.delete_cols(2)        # drop the admission-number column from the printout
+    from utils import exam_results_doc as ERD
+    if 'breakdown' in ERD.picked(request.args.get('cols'), ERD.SCORE_COLS['students']) and results:
+        ERD.xlsx_breakdown(ws, [r.total_score for r in results], len(results) + 7)
     return xlsx_response(wb, filename)
 
 
