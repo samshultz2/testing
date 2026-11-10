@@ -118,6 +118,9 @@ def get_daily_attendance_summary(class_arm_assignment_id, target_date):
         'morning_absent': total_students - morning_present,
         'afternoon_present': afternoon_present,
         'afternoon_absent': total_students - afternoon_present,
+        # Both sessions count: (AM present + PM present) / (2 x students).
+        'attendance_percentage': (round((morning_present + afternoon_present) / (2 * total_students) * 100, 2)
+                                  if total_students else 0),
         'students': students_data
     }
 

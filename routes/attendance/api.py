@@ -454,6 +454,7 @@ def api_week_totals():
                     'total': s['total_students'],
                     'am_present': s['morning_present'], 'am_absent': s['morning_absent'],
                     'pm_present': s['afternoon_present'], 'pm_absent': s['afternoon_absent'],
+                    'pct': s['attendance_percentage'],
                 })
             d += timedelta(days=1)
     return jsonify({'week_number': week.week_number if week else None, 'days': days})

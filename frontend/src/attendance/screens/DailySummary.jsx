@@ -99,7 +99,9 @@ export default function DailySummary() {
     : v ? <Pill tone="green">Present</Pill> : <Pill tone="red">Absent</Pill>;
 
   const total = d ? d.total_students : 0;
-  const rateAm = d && total ? d.morning_present / total * 100 : 0;
+  // A day has two sessions: (AM present + PM present) / (2 x students).
+  const dayRate = (am, pm, n) => (n ? (am + pm) / (2 * n) * 100 : 0);
+  const rateDay = d ? (d.attendance_percentage ?? dayRate(d.morning_present, d.afternoon_present, total)) : 0;
   const isAbs = (s) => s.morning_present === false || s.afternoon_present === false;
   const absentCount = d ? d.students.filter(isAbs).length : 0;
   const shown = d ? d.students.filter((s) => (show === 'absent' ? isAbs(s) : show === 'present' ? !isAbs(s) : true)) : [];
@@ -122,7 +124,7 @@ export default function DailySummary() {
             {days.length > 0 && (
               <div className="ak-week" role="tablist" aria-label={`Week ${week.data.week_number || ''} at a glance`}>
                 {days.map((wd) => {
-                  const p = pct(wd.am_present, wd.total);
+                  const p = wd.pct ?? dayRate(wd.am_present, wd.pm_present, wd.total);
                   return (
                     <button key={wd.date} type="button" role="tab" aria-selected={wd.date === date}
                             className={'ak-wday' + (wd.date === date ? ' on' : '')} onClick={() => setDate(wd.date)}>
@@ -145,7 +147,7 @@ export default function DailySummary() {
             )}
 
             <Tiles items={[
-              { label: 'Attendance', value: fmtPct(rateAm), sub: prettyDate(d.date), tone: total ? (rateAm >= 75 ? 'good' : rateAm >= 50 ? 'warn' : 'bad') : '' },
+              { label: 'Attendance', value: fmtPct(rateDay), sub: `${prettyDate(d.date)} · AM + PM`, tone: total ? (rateDay >= 75 ? 'good' : rateDay >= 50 ? 'warn' : 'bad') : '' },
               { label: 'Morning', value: d.morning_present, unit: `/${total}`, sub: `${d.morning_absent} absent`, tone: d.morning_absent ? 'warn' : 'good' },
               { label: 'Afternoon', value: d.afternoon_present, unit: `/${total}`, sub: `${d.afternoon_absent} absent`, tone: d.afternoon_absent ? 'warn' : 'good' },
               { label: 'Students', value: total, sub: d.class_name },
