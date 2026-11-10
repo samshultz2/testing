@@ -1497,7 +1497,11 @@ def passwords():
 
 def _password_directory(term):
     """Every active student the viewer may manage, with this term's class and
-    arm, so the page can filter by class / arm / status live in the browser."""
+    arm, so the page can filter by class / arm / status live in the browser.
+
+    Built for speed on big schools: three narrow column queries (placements,
+    classes+arms, students) and no ORM objects — loading full Student rows would
+    also decrypt every student's address / medical fields for nothing."""
     from utils.branch_scope import scope_query
     placed = {}
     if term:
@@ -1505,24 +1509,32 @@ def _password_directory(term):
                                              ClassArmAssignment.arm_id)
                             .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
                             .filter(StudentEnrollment.is_active == True,  # noqa: E712
-                                    ClassArmAssignment.term_id == term.id), ClassArmAssignment).all())
+                                    ClassArmAssignment.term_id == term.id), ClassArmAssignment)
+                .order_by(StudentEnrollment.id).all())
         for sid, cid, aid in rows:
             placed.setdefault(sid, (cid, aid))
-    cls = {c.id: c for c in SchoolClass.query.all()}
-    arms = {a.id: a for a in ClassArm.query.all()}
+    cls = {cid: (name, level) for cid, name, level in
+           db.session.query(SchoolClass.id, SchoolClass.name, SchoolClass.level).all()}
+    arms = {aid: (name if not is_def else '') for aid, name, is_def in
+            db.session.query(ClassArm.id, ClassArm.name, ClassArm.is_default).all()}
+    students = (scope_query(db.session.query(
+        Student.id, Student.surname, Student.first_name, Student.middle_name, Student.student_id,
+        Student.gender, (func.coalesce(Student.portal_password_hash, '') != '').label('has_pw'))
+        .filter(Student.is_active == True), Student).all())  # noqa: E712
     out = []
-    for st in scope_query(Student.query.filter_by(is_active=True), Student).all():
-        cid, aid = placed.get(st.id, (None, None))
-        c = cls.get(cid); a = arms.get(aid)
-        arm_name = a.name if a and not a.is_default else ''
-        out.append({'id': st.id, 'name': st.full_name, 'student_id': st.student_id,
-                    'gender': st.gender or '', 'set': bool(st.portal_password_hash),
-                    'class_id': cid or 0, 'class_name': c.name if c else '',
-                    'level': (c.level if c and c.level is not None else 999),
+    for sid, sur, first, mid, code, gender, has_pw in students:
+        cid, aid = placed.get(sid, (None, None))
+        cname, level = cls.get(cid, ('', None))
+        arm_name = arms.get(aid, '') if aid else ''
+        name = ' '.join(x for x in (sur, first, mid) if x)
+        out.append({'id': sid, 'name': name, 'student_id': code or '',
+                    'gender': gender or '', 'set': bool(has_pw),
+                    'class_id': cid or 0, 'class_name': cname,
                     'arm_id': (aid if arm_name else 0), 'arm_name': arm_name,
-                    'where': ' '.join(x for x in [c.name if c else '', arm_name] if x) or 'Not in a class',
-                    '_sort': f"{(st.surname or '').lower()} {(st.first_name or '').lower()}"})
-    out.sort(key=lambda r: (r['level'], r['class_name'], r['arm_name'], r['_sort']))
+                    'where': ' '.join(x for x in [cname, arm_name] if x) or 'Not in a class',
+                    '_sort': (level if level is not None else 999, cname, arm_name,
+                              (sur or '').lower(), (first or '').lower())})
+    out.sort(key=lambda r: r['_sort'])
     return out
 
 

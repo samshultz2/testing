@@ -1770,3 +1770,7 @@ span.sj-teacher{cursor:default}
   .sj-pick .sj-pick-l .sj-name{flex-basis:auto}
   .sj-pick .sj-tin,.sj-pick .sj-teacher{flex-basis:100%}
 }
+
+/* The `hidden` attribute must always win over a component's display rule
+   (rows/forms/cards set display:flex|grid, which otherwise overrides it). */
+.rs [hidden],.bx [hidden]{display:none!important}
