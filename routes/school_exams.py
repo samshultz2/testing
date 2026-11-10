@@ -760,16 +760,10 @@ def _heal_levels():
 @exam_levels_bp.route('/')
 @login_required
 def index():
-    """Level selector: SSS3 (WAEC/JAMB) · JSS3 (BECE) · Basic 6 (Common Entrance)."""
-    from models import WAECResult, JAMBResult
-    from models import NECOResult
-    sss3 = {'waec': WAECResult.query.count(), 'neco': NECOResult.query.count(),
-            'jamb': JAMBResult.query.count()}
-    levels = []
-    for level in ('jss3', 'basic6'):
-        cls = svc.find_level_class(level)
-        levels.append({'meta': _LiveMeta(level), 'bp': f'{level}_exams',
-                       'class_name': cls.name if cls else None,
-                       'students': len(svc.level_students(level, include_with_results=False)),
-                       'overview': svc.level_overview(level)})
-    return render_template('school_exams/levels.html', levels=levels, sss3=sss3)
+    """External exams hub: every public exam by class level (SSS3 · JSS3 ·
+    Basic 5/6) with the latest year, the change since the one before and
+    what needs attention. Branch-scoped to the branch being viewed."""
+    from utils.branch_scope import viewing_branch_id
+    from utils import exam_levels_overview as XO
+    data = XO.build(_LiveMeta, viewing_branch_id())
+    return render_template('school_exams/levels.html', hub=data)

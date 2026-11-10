@@ -1,78 +1,196 @@
 {% extends "base.html" %}
-{% block title %}External Exams by Level - {{ app_name }}{% endblock %}
+{% block title %}External Exams - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>External Exams</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.level-selector{display:grid;grid-template-columns:1fr;gap:1.25rem;max-width:1150px;margin:0 auto}
-@media(min-width:900px){.level-selector{grid-template-columns:repeat(3,1fr)}}
-.level-card{background:var(--bg-card);border-radius:var(--radius-lg);border:2px solid var(--border-color);overflow:hidden;transition:all .25s ease;color:inherit;display:flex;flex-direction:column}
-.level-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.12);border-color:var(--primary)}
-.level-card-header{padding:1.5rem;text-align:center;color:#fff;text-decoration:none;display:block}
-.level-icon{font-size:2.6rem;margin-bottom:.6rem}
-.level-title{font-size:1.4rem;font-weight:700;margin:0;color:#fff}
-.level-subtitle{font-size:.85rem;opacity:.92;margin-top:.2rem}
-.level-card-body{padding:1.1rem 1.25rem;flex:1}
-.level-exam{border:1px solid var(--border-light);border-radius:var(--radius-md);padding:.65rem .75rem;margin-bottom:.6rem}
-.level-exam h4{margin:0 0 .35rem;font-size:.92rem;display:flex;justify-content:space-between;gap:.5rem}
-.level-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center}
-.level-mini .v{font-weight:700;font-size:1.05rem}.level-mini .l{font-size:.65rem;color:var(--text-muted);text-transform:uppercase}
-.level-actions{padding:.8rem 1.25rem;background:var(--gray-50);display:flex;gap:.5rem;flex-wrap:wrap}
-.page-intro{text-align:center;margin-bottom:1.5rem}
-.page-intro p{color:var(--text-muted);max-width:620px;margin:0 auto}
+.xl{max-width:1320px;margin:0 auto}
+.xl-jump{display:none}
+.xl-att{display:grid;grid-template-columns:1fr;column-gap:1.4rem}
+@media(min-width:1100px){.xl-att{grid-template-columns:1fr 1fr}.xl-att-row:nth-last-child(2):nth-child(odd){border-bottom:0}}
+.xl-att-row{display:flex;align-items:center;gap:.75rem;padding:.6rem .1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.xl-att-row:last-child{border-bottom:0}
+.xl-att-ic{width:32px;height:32px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-size:.85rem}
+.xl-att-row.bad .xl-att-ic{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.xl-att-row.mid .xl-att-ic{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
+.xl-att-row.good .xl-att-ic{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
+.xl-att-row p{flex:1;margin:0;font-size:.88rem;min-width:0}
+.xl-more{display:none;width:100%;justify-content:center;margin-top:.5rem}
+.xl-att-row a{font-weight:700;font-size:.82rem;white-space:nowrap;text-decoration:none}
+
+.xl-lvs{display:grid;grid-template-columns:1fr;gap:.9rem}
+@media(min-width:1100px){.xl-lvs{grid-template-columns:1fr 1fr}.xl-lv.wide{grid-column:1/-1}}
+.xl-lv{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--rs-r);padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.85rem;scroll-margin-top:calc(var(--header-height,64px) + 12px)}
+.xl-lv-h{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.xl-lv-ic{width:42px;height:42px;border-radius:13px;flex:none;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.xl-lv-t{flex:1;min-width:180px}
+.xl-lv-t h2{margin:0;font-size:1.12rem}
+.xl-lv-t p{margin:.1rem 0 0;color:var(--text-muted);font-size:.82rem}
+.xl-lv-t p b{color:var(--text-secondary)}
+.xl-lv-t p.warn{color:var(--warning)}
+.xl-links{display:flex;gap:.35rem;flex-wrap:wrap}
+.xl-links a{display:inline-flex;align-items:center;gap:.35rem;height:32px;padding:0 .7rem;border-radius:999px;border:1px solid var(--border-color);font-size:.78rem;font-weight:600;color:var(--text-secondary);text-decoration:none;background:var(--bg-card)}
+.xl-links a:hover{border-color:var(--primary);color:var(--primary)}
+.xl-links i{font-size:.75rem;color:var(--text-muted)}
+
+.xl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.65rem}
+.xl-lv.wide .xl-grid{grid-template-columns:repeat(auto-fit,minmax(186px,1fr))}
+.xl-ex{position:relative;border:1px solid var(--border-color);border-radius:14px;padding:.8rem .9rem .75rem;display:flex;flex-direction:column;gap:.3rem;min-width:0;background:var(--bg-card);transition:border-color .15s,box-shadow .15s}
+.xl-ex:hover{border-color:color-mix(in srgb,var(--primary) 55%,var(--border-color));box-shadow:0 6px 18px rgba(15,23,42,.07)}
+.xl-ex-top{display:flex;align-items:center;gap:.4rem;min-width:0}
+.xl-ex-top b{font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.xl-ex-top b a{color:inherit;text-decoration:none}
+.xl-ex-top b a::after{content:"";position:absolute;inset:0;border-radius:14px}
+.xl-tag{font-size:.64rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:.12rem .45rem;border-radius:999px;background:var(--gray-100);color:var(--text-muted);flex:none}
+.xl-tag.mock{background:color-mix(in srgb,var(--info,#2563eb) 12%,var(--bg-card));color:var(--info,#2563eb)}
+.xl-per{margin-left:auto;flex:none;font-size:.72rem;color:var(--text-muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:48%;background:var(--gray-100);border-radius:7px;padding:.1rem .4rem;align-self:center}
+.xl-val{display:flex;align-items:baseline;gap:.35rem;margin-top:.15rem;min-width:0}
+.xl-d{order:2}
+.xl-val strong{font-size:1.75rem;font-family:'Space Grotesk',sans-serif;line-height:1.05;color:var(--text-primary)}
+.xl-val strong small{font-size:.85rem;color:var(--text-muted);font-weight:700;margin-left:.05rem}
+.xl-ex.good .xl-val strong{color:var(--success)}.xl-ex.bad .xl-val strong{color:var(--danger)}.xl-ex.mid .xl-val strong{color:var(--warning)}
+.xl-d{font-size:.74rem;font-weight:800;padding:.1rem .4rem;border-radius:7px;white-space:nowrap}
+.xl-d.up{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
+.xl-d.down{background:color-mix(in srgb,var(--danger) 11%,var(--bg-card));color:var(--danger)}
+.xl-d.flat{background:var(--gray-100);color:var(--text-muted)}
+.xl-lab{font-size:.78rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xl-wip{color:var(--warning);font-weight:700}
+.xl-ex.partial .xl-val strong{color:var(--text-muted)}
+.xl-ex .rs-meter{margin:.25rem 0 .1rem}
+.xl-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:.3rem;border-top:1px solid var(--border-light,var(--border-color));padding-top:.5rem;margin-top:.2rem}
+.xl-facts div{min-width:0}
+.xl-facts span{display:block;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xl-facts b{font-size:.88rem}
+.xl-act{display:flex;gap:.8rem;margin-top:.15rem;position:relative;z-index:1}
+.xl-act a{font-size:.78rem;font-weight:700;text-decoration:none;display:inline-flex;gap:.3rem;align-items:center}
+.xl-ex.empty{border-style:dashed;background:var(--gray-50,var(--bg-card));justify-content:space-between}
+.xl-ex.empty .xl-none{font-size:.84rem;color:var(--text-muted);margin:.4rem 0 .5rem}
+.xl-ex.empty:hover{box-shadow:none}
+
+@media(max-width:700px){
+  .xl-jump{display:flex;position:sticky;top:calc(var(--header-height,56px) + 4px);z-index:15}
+  .xl-jump .rs-seg{width:100%;box-shadow:0 2px 10px rgba(15,23,42,.06)}
+  .xl-jump .rs-seg a{flex:1;justify-content:center;display:inline-flex;align-items:center;height:36px;border-radius:10px;font-weight:600;font-size:.84rem;color:var(--text-muted);text-decoration:none;white-space:nowrap;padding:0 .6rem}
+  .xl-lv{padding:.85rem .85rem}
+  .xl-grid{grid-template-columns:1fr 1fr;gap:.5rem}
+  .xl-ex{padding:.7rem .7rem .65rem}
+  .xl-val strong{font-size:1.45rem}
+  .xl-facts{grid-template-columns:1fr 1fr}
+  .xl-facts div:nth-child(3){display:none}
+  .xl-ex-top{flex-wrap:wrap;row-gap:.2rem}
+  .xl-ex-top b{white-space:normal;font-size:.86rem;line-height:1.25;flex-basis:100%}
+  .xl-per{margin-left:0;max-width:100%}
+  .xl-val{flex-wrap:wrap;row-gap:.2rem}
+  .xl-att:not(.open) .xl-att-row:nth-child(n+4){display:none}
+  .xl-more{display:flex}
+  .xl-links{width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -.1rem}
+  .xl-links a{flex:none}
+  .rs-head-a .rs-btn span{display:none}
+}
+@media(max-width:380px){.xl-grid{grid-template-columns:1fr}}
 </style>
 {% endblock %}
-{% block content %}
-<div class="page-intro">
-  <h1><i class="fas fa-layer-group"></i> External Examinations</h1>
-  <p>Each class that sits a public examination has its own self-contained area — results, analytics and settings never mix between levels.</p>
+
+{% macro exam_tile(e) -%}
+{% if e.empty %}
+<div class="xl-ex empty">
+  <div class="xl-ex-top"><b><a href="{{ e.href }}">{{ e.name }}</a></b></div>
+  <p class="xl-none">No results yet</p>
+  <div class="xl-act"><a href="{{ e.add_href }}"><i class="fas fa-plus" aria-hidden="true"></i> {{ e.add_label or 'Add results' }}</a></div>
 </div>
-<div class="level-selector">
-  <div class="level-card">
-    <a class="level-card-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)" href="{{ url_for('results.index') }}">
-      <div class="level-icon"><i class="fas fa-graduation-cap"></i></div>
-      <h2 class="level-title">SSS3</h2><div class="level-subtitle">WAEC · NECO · JAMB · Mock WAEC · Mock JAMB</div>
-    </a>
-    <div class="level-card-body">
-      <div class="level-exam"><h4>WAEC (WASSCE)</h4><div class="level-mini"><div><div class="v">{{ sss3.waec }}</div><div class="l">results</div></div></div></div>
-      <div class="level-exam"><h4>NECO (SSCE)</h4><div class="level-mini"><div><div class="v">{{ sss3.neco }}</div><div class="l">results</div></div></div></div>
-      <div class="level-exam"><h4>JAMB (UTME)</h4><div class="level-mini"><div><div class="v">{{ sss3.jamb }}</div><div class="l">results</div></div></div></div>
+{% else %}
+<div class="xl-ex {{ 'partial' if e.partial else e.tone }}">
+  <div class="xl-ex-top">
+    <b><a href="{{ e.href }}" title="Open {{ e.name }}">{{ e.name }}</a></b>
+    <span class="xl-per" title="Latest: {{ e.period }}">{{ e.period }}</span>
+  </div>
+  <div class="xl-val">
+    <strong>{{ e.value }}<small>{{ e.unit }}</small></strong>
+    {% if e.delta is not none %}
+      {% set cls = 'up' if e.delta > 0 else 'down' if e.delta < 0 else 'flat' %}
+      <span class="xl-d {{ cls }}" title="Change since {{ e.prev_period }}">{% if e.delta > 0 %}▲ +{% elif e.delta < 0 %}▼ {% endif %}{{ e.delta }}{{ e.delta_unit }}</span>
+    {% endif %}
+  </div>
+  <div class="xl-lab">{{ e.label }}{% if e.partial %} · <span class="xl-wip" title="Fewer candidates than last time so far — results still being entered">in progress</span>{% elif e.prev_period %} · vs {{ e.prev_period }}{% endif %}</div>
+  <span class="rs-meter {{ e.tone }}" title="{{ e.meter }}%"><i style="width:{{ [e.meter or 0, 100]|min }}%"></i></span>
+  <div class="xl-facts">
+    {% for l, v in e.facts %}<div><span>{{ l }}</span><b>{{ v }}</b></div>{% endfor %}
+  </div>
+  <div class="xl-act">
+    <a href="{{ e.add_href }}"><i class="fas fa-plus" aria-hidden="true"></i> {{ e.add_label or 'Add results' }}</a>
+    {% if e.analytics and e.analytics != e.href %}<a href="{{ e.analytics }}"><i class="fas fa-chart-simple" aria-hidden="true"></i> Analytics</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% block content %}
+{% set T = hub.totals %}
+<div class="rs xl">
+  <div class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+    <div class="rs-head-t">
+      <h1>External exams</h1>
+      <p>{% if T.exams %}{{ T.exams }} exam{{ 's' if T.exams != 1 }} with results · {{ T.candidates }} candidates in the latest sittings{% else %}WAEC, NECO, JAMB, BECE and Common Entrance — by class level{% endif %}</p>
     </div>
-    <div class="level-actions">
-      <a class="btn btn-sm btn-primary" href="{{ url_for('results.waec_list') }}">WAEC</a>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('results.neco_list') }}">NECO</a>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('results.jamb_list') }}">JAMB</a>
-      <a class="btn btn-sm btn-secondary" href="{{ url_for('results.analytics_hub') }}">Analytics</a>
+    <div class="rs-head-a">
+      <a class="rs-btn ghost" href="{{ url_for('results.analytics_trends') }}" title="Year on year"><i class="fas fa-chart-line" aria-hidden="true"></i><span>Year on year</span></a>
+      <a class="rs-btn primary" href="{{ url_for('results.analytics_hub') }}" title="Analytics"><i class="fas fa-chart-pie" aria-hidden="true"></i><span>Analytics</span></a>
     </div>
   </div>
-  {% for lv in levels %}{% set L = lv.meta %}
-  <div class="level-card">
-    <a class="level-card-header" style="background:{{ L.gradient }}" href="{{ url_for(lv.bp ~ '.dashboard') }}">
-      <div class="level-icon"><i class="fas {{ L.icon }}"></i></div>
-      <h2 class="level-title">{{ L.class_label }}</h2><div class="level-subtitle">{{ L.bodies.state.name }} · {{ L.bodies.federal.name }}</div>
-    </a>
-    <div class="level-card-body">
-      <p class="text-muted" style="font-size:.8rem;margin-top:0">
-        {% if lv.class_name %}Class <strong>{{ lv.class_name }}</strong> · {{ lv.students }} enrolled this term{% else %}<i class="fas fa-exclamation-circle"></i> No {{ L.class_label }} class found — create one in Academics.{% endif %}
-      </p>
-      {% for b in ['state', 'federal'] %}{% set o = lv.overview[b] %}
-      <div class="level-exam">
-        <h4><a href="{{ url_for(lv.bp ~ '.dashboard', body=b) }}">{{ L.bodies[b].name }}</a><span class="text-muted" style="font-weight:400;font-size:.75rem">{{ b|title }}{% if o.latest %} · {{ o.latest }}{% endif %}</span></h4>
-        {% if o.kpis %}
-        <div class="level-mini">
-          <div><div class="v">{{ o.kpis.candidates }}</div><div class="l">candidates</div></div>
-          <div><div class="v">{{ o.kpis.core_credit_rate }}%</div><div class="l">Eng+Maths</div></div>
-          <div><div class="v">{{ o.kpis.benchmark_rate }}%</div><div class="l">benchmark</div></div>
-        </div>
-        {% else %}<div class="text-muted" style="font-size:.8rem">No results yet</div>{% endif %}
+
+  <nav class="xl-jump" aria-label="Jump to level"><div class="rs-seg">
+    {% for lv in hub.levels %}<a href="#lv-{{ lv.key }}">{{ lv.title }}</a>{% endfor %}
+  </div></nav>
+
+  {% if hub.attention %}
+  <div class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-bell" aria-hidden="true"></i> Needs attention</h3><small>from the latest results</small></div>
+    <div class="xl-att" id="xlAtt">
+      {% for a in hub.attention %}
+      <div class="xl-att-row {{ a.tone }}">
+        <span class="xl-att-ic"><i class="fas {{ a.icon }}" aria-hidden="true"></i></span>
+        <p>{{ a.text }}</p>
+        {% if a.href %}<a href="{{ a.href }}">{{ a.action }} <i class="fas fa-chevron-right" aria-hidden="true" style="font-size:.65rem"></i></a>{% endif %}
       </div>
       {% endfor %}
     </div>
-    <div class="level-actions">
-      <a class="btn btn-sm btn-primary" href="{{ url_for(lv.bp ~ '.dashboard') }}">Dashboard</a>
-      <a class="btn btn-sm btn-secondary" href="{{ url_for(lv.bp ~ '.analytics') }}">Analytics</a>
-      <a class="btn btn-sm btn-secondary" href="{{ url_for(lv.bp ~ '.compare') }}">State vs Federal</a>
-    </div>
+    {% if hub.attention|length > 3 %}<button type="button" class="rs-btn sm ghost xl-more" id="xlMore" aria-controls="xlAtt" aria-expanded="false">Show all {{ hub.attention|length }}</button>{% endif %}
   </div>
-  {% endfor %}
+  {% endif %}
+
+  <div class="xl-lvs">
+    {% for lv in hub.levels %}
+    <section class="xl-lv {{ 'wide' if lv.key == 'sss3' }}" id="lv-{{ lv.key }}" aria-labelledby="lvh-{{ lv.key }}">
+      <div class="xl-lv-h">
+        <span class="xl-lv-ic"><i class="fas {{ lv.icon }}" aria-hidden="true"></i></span>
+        <div class="xl-lv-t">
+          <h2 id="lvh-{{ lv.key }}">{{ lv.title }}</h2>
+          {% if lv.key == 'sss3' %}<p>{{ lv.sub }}</p>
+          {% elif lv.missing_class %}<p class="warn"><i class="fas fa-circle-exclamation" aria-hidden="true"></i> No {{ lv.title }} class found — create one in Academics.</p>
+          {% else %}<p>{{ lv.sub }} · Class <b>{{ lv.class_name }}</b> · {{ lv.students }} enrolled this term</p>{% endif %}
+        </div>
+        <div class="xl-links">
+          {% for ic, label, href in lv.links %}<a href="{{ href }}"><i class="fas {{ ic }}" aria-hidden="true"></i>{{ label }}</a>{% endfor %}
+        </div>
+      </div>
+      <div class="xl-grid">
+        {% for e in lv.exams %}{{ exam_tile(e) }}{% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var b = document.getElementById('xlMore'); if (!b) return;
+  b.addEventListener('click', function () {
+    var open = document.getElementById('xlAtt').classList.toggle('open');
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    b.textContent = open ? 'Show fewer' : 'Show all {{ hub.attention|length }}';
+  });
+})();
+</script>
 {% endblock %}
