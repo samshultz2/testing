@@ -30,12 +30,28 @@
 .ph-empty i{font-size:2.2rem;color:#94a3b8}
 .ph-empty h3{margin:.7rem 0 .3rem}
 @media (min-width:700px){.ph-test{flex-direction:row;align-items:center}.ph-test-top{flex:1}.ph-act{flex:none}}
+@media (max-width:600px){
+  .ph-test{position:relative}
+  .ph-pill{position:absolute;top:1rem;right:1rem}
+  .ph-t strong{padding-right:96px}
+  .ph-act .p-btn{flex:1}
+}
 </style>{% endblock %}
 {% block content %}
 {% set hour = (now_hour if now_hour is defined else 12) %}
-<div class="ph-hello">
+{% set ns = namespace(open=0, done=0) %}
+{% for row in rows %}{% set a = row.attempt %}
+  {% if a and a.status != 'In progress' %}{% set ns.done = ns.done + 1 %}{% elif row.state == 'open' %}{% set ns.open = ns.open + 1 %}{% endif %}
+{% endfor %}
+<div class="p-hero">
+    {% include "cbt/_hero_art.html" %}
     <h1>Hi {{ student.first_name or student.full_name }} 👋</h1>
-    <p>{{ rows|length }} test{{ '' if rows|length == 1 else 's' }} for your class today · you’ll need each test’s password from your teacher.</p>
+    <p>{% if rows %}You’ll need each test’s password from your teacher. Good luck!{% else %}Your tests for today will appear here.{% endif %}</p>
+    <div class="p-hero-chips">
+        <span><b>{{ rows|length }}</b> test{{ '' if rows|length == 1 else 's' }} today</span>
+        <span><b>{{ ns.open }}</b> open now</span>
+        <span><b>{{ ns.done }}</b> done</span>
+    </div>
 </div>
 
 {% if not has_class %}

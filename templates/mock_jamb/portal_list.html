@@ -101,15 +101,44 @@
   .mj-sheet{align-items:flex-end;padding:0}
   .mj-sheet-card{border-radius:22px 22px 0 0;max-width:none;padding-bottom:calc(1.2rem + env(safe-area-inset-bottom,0px))}
 }
+
+.mj-duo{display:grid;grid-template-columns:minmax(0,1fr);gap:.8rem}
+@media (min-width:700px){.mj-duo{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}
+.mj-sub{margin-left:auto;font-size:.74rem;color:#94a3b8;font-weight:600}
+.mj-sbar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.25rem .6rem;align-items:center;padding:.4rem 0}
+.mj-sbar .n{font-size:.88rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mj-sbar b{font-family:'Space Grotesk',sans-serif;font-size:1rem}
+.mj-sbar .m{grid-column:1/-1;height:7px;border-radius:99px;background:#f1f5f9;overflow:hidden}
+.mj-sbar .m i{display:block;height:100%;border-radius:99px}
+.mj-guide{list-style:none;margin:0;padding:0;display:grid;gap:.45rem}
+.mj-guide li{display:flex;gap:.6rem;align-items:center;font-size:.84rem;color:#334155}
+.mj-guide .b{flex:none;width:52px;text-align:center;border-radius:8px;padding:.2rem 0;font-weight:800;font-family:'Space Grotesk',sans-serif;font-size:.84rem}
+.mj-guide .g3{background:#dcfce7;color:#15803d}.mj-guide .g2{background:#e0f2fe;color:#0369a1}.mj-guide .g1{background:#eef2ff;color:#4338ca}.mj-guide .g0{background:#fef3c7;color:#b45309}
+.mj-tips-h{margin:1rem 0 .5rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
 </style>{% endblock %}
 {% block content %}
 {% set R = record %}
-<div class="mj-hello">
-    <div>
-        <h1>Mock JAMB</h1>
-        <p>{% if R %}{{ R['items']|length }} mock{{ 's' if R['items']|length != 1 }} sat · best {{ R.best.total }}{% else %}Sit all your subjects in one timed session, just like the real UTME.{% endif %}</p>
+<div class="p-hero">
+    {% include "cbt/_hero_art.html" %}
+    <div class="p-hero-row">
+        <div>
+            <h1>Mock JAMB</h1>
+            <p>Sit all your subjects in one timed session, just like the real UTME — then see exactly where to improve.</p>
+        </div>
+        <a href="{{ url_for('cbt_portal.home') }}" class="p-hero-btn" aria-label="Back to my tests"><i class="fas fa-arrow-left"></i> <span>My tests</span></a>
     </div>
-    <a href="{{ url_for('cbt_portal.home') }}" class="mj-back" aria-label="Back to my tests"><i class="fas fa-arrow-left"></i> <span>My tests</span></a>
+    <div class="p-hero-chips">
+        {% set open_n = rows|selectattr('submitted', 'equalto', false)|list|length %}
+        <span><b>{{ open_n }}</b> open for you</span>
+        {% if R %}
+        <span><b>{{ R['items']|length }}</b> mock{{ 's' if R['items']|length != 1 }} sat</span>
+        <span><b>{{ R.best.total }}</b> best score</span>
+        {% set gap = 200 - R.last.total %}
+        <span>{% if gap > 0 %}<b>{{ gap }}</b> marks to 200{% else %}<b>200+</b> reached{% endif %}</span>
+        {% else %}
+        <span><b>400</b> marks · 4 subjects</span>
+        {% endif %}
+    </div>
 </div>
 
 <div class="mj-layout {{ 'two' if R }}">
@@ -161,6 +190,36 @@
             <li><i class="fas fa-hourglass-end"></i><span>When time runs out, your paper submits automatically.</span></li>
         </ul>
     </details>
+
+    <div class="mj-duo">
+        {% if R and R.last.subjects %}
+        <div class="mj-rec">
+            <h3><i class="fas fa-bullseye"></i> Subject strength <small class="mj-sub">{{ R.last.name }}</small></h3>
+            {% for sj in R.last.subjects|sort(attribute='score', reverse=true) %}
+            {% set c = '#16a34a' if sj.score >= 60 else ('#d97706' if sj.score >= 45 else '#dc2626') %}
+            <div class="mj-sbar">
+                <span class="n">{{ sj.name }}</span><b style="color:{{ c }}">{{ sj.score }}</b>
+                <span class="m"><i style="width:{{ sj.score }}%;background:{{ c }}"></i></span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="mj-rec">
+            <h3><i class="fas fa-ranking-star"></i> UTME score guide</h3>
+            <ul class="mj-guide">
+                <li><span class="b g3">300+</span><span>Top band — open to the most competitive courses.</span></li>
+                <li><span class="b g2">250+</span><span>Strong — competitive for most courses.</span></li>
+                <li><span class="b g1">200+</span><span>The usual minimum for most universities.</span></li>
+                <li><span class="b g0">&lt;200</span><span>Keep practising — every mock moves you closer.</span></li>
+            </ul>
+            <h4 class="mj-tips-h">Exam-day tips</h4>
+            <ul class="mj-check">
+                <li><i class="fas fa-check"></i><span>Answer every question — there’s no penalty for a wrong answer.</span></li>
+                <li><i class="fas fa-check"></i><span>Flag tough questions and come back to them.</span></li>
+                <li><i class="fas fa-check"></i><span>Aim for about 1 minute per question.</span></li>
+            </ul>
+        </div>
+    </div>
 </div>
 
 {% if R %}

@@ -16,6 +16,26 @@
            school and never carries the EduSyncra brand colour. */
         :root{--portal-primary:#334155;--portal-primary-dark:#1e293b;--portal-soft:#f1f5f9;--portal-ink:#334155;--px:#4f46e5}
         body{background:#eef2f7;min-height:100vh;margin:0;font-family:'DM Sans',sans-serif;color:#1e293b}
+        /* faint science doodles (benzene, atom, fractal, waves, formulas) behind
+           every portal page; the exam screen turns this off (body::before). */
+        body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.11;
+          background:url("{{ url_for('static', filename='img/portal-science.svg') }}") 0 0/420px 420px repeat}
+        /* illustrated hero card shared by portal pages */
+        .p-hero{position:relative;overflow:hidden;border-radius:22px;padding:1.35rem 1.4rem;color:#fff;margin-bottom:1rem;
+          background:radial-gradient(120% 140% at 100% 0%,#7c3aed 0%,transparent 55%),linear-gradient(135deg,#4f46e5 0%,#3730a3 100%);
+          box-shadow:0 14px 34px rgba(79,70,229,.28)}
+        .p-hero>*{position:relative;z-index:1}
+        .p-hero .p-hero-art{position:absolute;z-index:0;right:-18px;top:50%;transform:translateY(-50%);width:260px;height:260px;opacity:.28;pointer-events:none}
+        .p-hero h1{margin:0;font-size:1.6rem;font-family:'Space Grotesk',sans-serif;color:#fff;line-height:1.2}
+        .p-hero p{margin:.3rem 0 0;color:#e0e7ff;font-size:.92rem;max-width:520px}
+        .p-hero-chips{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1rem}
+        .p-hero-chips span{display:inline-flex;align-items:baseline;gap:.35rem;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(4px);border-radius:12px;padding:.4rem .7rem;font-size:.78rem;color:#e0e7ff}
+        .p-hero-chips b{font-family:'Space Grotesk',sans-serif;font-size:1.1rem;color:#fff}
+        .p-hero-row{display:flex;align-items:flex-start;gap:.8rem}
+        .p-hero-row>div{flex:1;min-width:0}
+        .p-hero-btn{flex:none;display:inline-flex;align-items:center;gap:.4rem;color:#fff;text-decoration:none;font-weight:700;font-size:.84rem;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:.45rem .85rem}
+        .p-hero-btn:hover{background:rgba(255,255,255,.26)}
+        @media (max-width:600px){.p-hero{padding:1.15rem 1.1rem;border-radius:20px}.p-hero h1{font-size:1.35rem}.p-hero .p-hero-art{width:190px;height:190px;right:-40px;top:30%}.p-hero-btn span{display:none}}
         .portal-wrap{max-width:860px;margin:0 auto;padding:.8rem 1rem 2rem}
         .portal-top{display:flex;justify-content:space-between;align-items:center;color:var(--portal-primary-dark);padding:.5rem .1rem 1rem;gap:.6rem}
         .portal-top .brand{display:flex;align-items:center;gap:.6rem;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.08rem;min-width:0}
