@@ -11,129 +11,6 @@ function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
 }
 
-// ---- Users ------------------------------------------------------------------
-function Users({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const del = async (u) => {
-    if (!await confirm(`Delete user ${u.username}?`)) return;
-    save(u.delete_url, {}, () => nav.refresh());
-  };
-  return (
-    <>
-      <div className="page-header"><h1>User Management</h1>
-        <a href={d.add_url} onClick={(e) => { e.preventDefault(); nav.go(d.add_url); }} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add User</a></div>
-      <div className="card"><div className="card-body" style={{ padding: 0 }}>
-        {d.users.length ? (
-          <div className="data-cards" style={{ padding: '1rem' }}>
-            {d.users.map((u) => (
-              <div className="data-card" key={u.id}>
-                <div className="data-card-header">
-                  <div className="data-card-title">{u.full_name || u.username}</div>
-                  <span className={`badge ${u.role === 'admin' ? 'badge-danger' : 'badge-info'}`}>{u.role}</span>
-                </div>
-                <div className="data-card-row"><span className="data-card-label">Username</span><span>{u.username}</span></div>
-                <div className="data-card-row"><span className="data-card-label">Email</span><span>{u.email || '-'}</span></div>
-                <div className="data-card-row"><span className="data-card-label">Status</span><span className={`badge ${u.is_active ? 'badge-success' : 'badge-secondary'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></div>
-                <div className="data-card-actions">
-                  <a href={u.edit_url} onClick={(e) => { e.preventDefault(); nav.go(u.edit_url); }} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
-                  <button type="button" className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => del(u)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Empty icon="fa-users" title="No Users">Add your first user</Empty>
-        )}
-      </div></div>
-    </>
-  );
-}
-
-// ---- Add / edit user --------------------------------------------------------
-function AddUser({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const [f, setF] = useState({ username: '', full_name: '', email: '', role: 'teacher', password: '' });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, (r) => nav.go(r.redirect || d.back_url)); };
-  return (
-    <>
-      <div className="page-header"><h1>Add User</h1></div>
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Username <span className="required">*</span></label>
-              <input type="text" className="form-control" value={f.username} onChange={set('username')} required placeholder="username" /></div>
-            <div className="form-group"><label className="form-label">Full Name</label>
-              <input type="text" className="form-control" value={f.full_name} onChange={set('full_name')} placeholder="John Doe" /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Email</label>
-              <input type="email" className="form-control" value={f.email} onChange={set('email')} placeholder="user@school.com" /></div>
-            <div className="form-group"><label className="form-label">Role</label>
-              <select className="form-control" value={f.role} onChange={set('role')}>
-                <option value="teacher">Teacher</option><option value="admin">Admin</option><option value="readonly">Read Only</option>
-              </select></div>
-          </div>
-          <div className="form-group"><label className="form-label">Password <span className="required">*</span></label>
-            <input type="password" className="form-control" value={f.password} onChange={set('password')} required placeholder="Enter password" /></div>
-          <Actions>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Create User</button>
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Cancel</a>
-          </Actions>
-        </form>
-      </div></div>
-    </>
-  );
-}
-
-function EditUser({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const u = d.user;
-  const [f, setF] = useState({ full_name: u.full_name || '', email: u.email || '', role: u.role, password: '', is_active: u.is_active });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const submit = (e) => {
-    e.preventDefault();
-    const fields = { full_name: f.full_name, email: f.email, role: f.role, password: f.password };
-    if (f.is_active) fields.is_active = 'on';
-    save(d.submit_url, fields, (r) => nav.go(r.redirect || d.back_url));
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Edit User: {u.username}</h1></div>
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Username</label>
-              <input type="text" className="form-control" value={u.username} disabled /></div>
-            <div className="form-group"><label className="form-label">Full Name</label>
-              <input type="text" className="form-control" value={f.full_name} onChange={set('full_name')} /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Email</label>
-              <input type="email" className="form-control" value={f.email} onChange={set('email')} /></div>
-            <div className="form-group"><label className="form-label">Role</label>
-              <select className="form-control" value={f.role} onChange={set('role')}>
-                <option value="teacher">Teacher</option><option value="admin">Admin</option><option value="readonly">Read Only</option>
-              </select></div>
-          </div>
-          <div className="form-group"><label className="form-label">New Password</label>
-            <input type="password" className="form-control" value={f.password} onChange={set('password')} placeholder="Leave blank to keep current" /></div>
-          <div className="form-check mb-3">
-            <input type="checkbox" id="is_active" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} />{' '}
-            <label htmlFor="is_active">Active</label></div>
-          <Actions>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Cancel</a>
-          </Actions>
-        </form>
-      </div></div>
-    </>
-  );
-}
-
 // ---- AI Vision OCR settings -------------------------------------------------
 function Ocr({ d, notify }) {
   const nav = useNav();
@@ -233,7 +110,7 @@ function Ocr({ d, notify }) {
 const SCREENS = {
   index: Index, school: School, academic: Academic, grades: Grades, traits: Traits,
   assessments: Assessments, timetable_slots: TimetableSlots, backup: Backup,
-  branches: Branches, users: Users, add_user: AddUser, edit_user: EditUser,
+  branches: Branches,
   audit: Audit, ocr: Ocr,
 };
 

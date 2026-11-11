@@ -69,7 +69,7 @@ def index():
             'traits': url_for('settings.traits_list'),
             'assessments': url_for('settings.assessments_list'),
             'timetable_slots': url_for('settings.timetable_slots'),
-            'users': url_for('settings.users_list'),
+            'users': url_for('users.index'),
             'branches': url_for('settings.branches'),
             'backup': url_for('settings.backup_page'),
             'audit': url_for('settings.audit_log'),
@@ -1737,25 +1737,12 @@ def restore_backup():
 # USER MANAGEMENT
 # ============================================================================
 
-def _user_dict(u):
-    return {'id': u.id, 'username': u.username, 'full_name': u.full_name,
-            'email': u.email, 'role': u.role, 'is_active': u.is_active}
-
-
 @settings_bp.route('/users')
 @central_admin_required
 def users_list():
-    """List all users"""
-    users = User.query.order_by(User.role, User.username).all()
-    return _render({
-        'page': 'users',
-        'add_url': url_for('settings.add_user'),
-        'back_url': url_for('settings.index'),
-        'users': [{**_user_dict(u),
-                   'edit_url': url_for('settings.edit_user', user_id=u.id),
-                   'delete_url': url_for('settings.delete_user', user_id=u.id)}
-                  for u in users],
-    })
+    """Users live in the Users section (directory, permissions, groups); this
+    old Settings copy now just takes you there."""
+    return redirect(url_for('users.index'))
 
 
 @settings_bp.route('/users/add', methods=['GET', 'POST'])
@@ -1768,7 +1755,8 @@ def add_user():
             email = request.form.get('email', '').strip().lower()
             full_name = request.form.get('full_name', '').strip()
             password = request.form.get('password', '')
-            role = request.form.get('role', 'teacher')
+            from routes.users import _safe_role
+            role = _safe_role(request.form.get('role', 'teacher'))
 
             if not username or not password:
                 return _err('Username and password are required.', url_for('settings.add_user'))
@@ -1788,16 +1776,13 @@ def add_user():
             db.session.add(user)
             db.session.commit()
 
-            return _ok(f'User {username} created!', url_for('settings.users_list'))
+            log_action('user.create', target_type='user', target_label=username)
+            return _ok(f'User {username} created!', url_for('users.view_user', user_id=user.id))
         except Exception as e:
             db.session.rollback()
             return _err(f'Error: {str(e)}', url_for('settings.add_user'))
 
-    return _render({
-        'page': 'add_user',
-        'submit_url': url_for('settings.add_user'),
-        'back_url': url_for('settings.users_list'),
-    })
+    return redirect(url_for('users.add_user'))
 
 
 @settings_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -1808,10 +1793,15 @@ def edit_user(user_id):
 
     if request.method == 'POST':
         try:
+            from routes.users import _safe_role
+            from flask import session as _sess
             user.email = request.form.get('email', '').strip().lower() or None
             user.full_name = request.form.get('full_name', '').strip() or None
-            user.role = request.form.get('role', 'teacher')
-            user.is_active = request.form.get('is_active') == 'on'
+            user.role = _safe_role(request.form.get('role'), existing=user.role)
+            active = request.form.get('is_active') == 'on'
+            if not active and user.id == _sess.get('user_id'):
+                return _err('You can’t switch off your own account.', url_for('users.edit_user', user_id=user_id))
+            user.is_active = active
 
             # Update password if provided
             new_password = request.form.get('password', '').strip()
@@ -1819,17 +1809,13 @@ def edit_user(user_id):
                 user.set_password(new_password)
 
             db.session.commit()
-            return _ok('User updated!', url_for('settings.users_list'))
+            log_action('user.update', target_type='user', target_label=user.username)
+            return _ok('User updated!', url_for('users.view_user', user_id=user.id))
         except Exception as e:
             db.session.rollback()
-            return _err(f'Error: {str(e)}', url_for('settings.edit_user', user_id=user_id))
+            return _err(f'Error: {str(e)}', url_for('users.edit_user', user_id=user_id))
 
-    return _render({
-        'page': 'edit_user',
-        'user': _user_dict(user),
-        'submit_url': url_for('settings.edit_user', user_id=user.id),
-        'back_url': url_for('settings.users_list'),
-    })
+    return redirect(url_for('users.edit_user', user_id=user.id))
 
 
 @settings_bp.route('/users/<int:user_id>/delete', methods=['POST'])
@@ -1837,20 +1823,24 @@ def edit_user(user_id):
 def delete_user(user_id):
     """Delete user"""
     user = db.get_or_404(User, user_id)
+    from flask import session as _sess
+    if user.id == _sess.get('user_id'):
+        return _err('You can’t delete your own account.', url_for('users.index'))
 
     # Prevent deleting last admin
     if user.role == 'admin':
         admin_count = User.query.filter_by(role='admin', is_active=True).count()
         if admin_count <= 1:
-            return _err('Cannot delete the last admin user!', url_for('settings.users_list'))
+            return _err('Cannot delete the last admin user!', url_for('users.index'))
 
     try:
         db.session.delete(user)
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        return _err(f'Error: {str(e)}', url_for('settings.users_list'))
-    return _ok('User deleted!', url_for('settings.users_list'))
+        return _err(f'Error: {str(e)}', url_for('users.index'))
+    log_action('user.delete', target_type='user', target_label=user.username)
+    return _ok('User deleted!', url_for('users.index'))
 
 
 @settings_bp.route('/notifications', methods=['GET', 'POST'])

@@ -32,24 +32,25 @@ def test_settings_shells_render(app):
         '/settings/backup': 'backup',
         '/settings/audit': 'audit',
         '/settings/branches': 'branches',
-        '/settings/users': 'users',
-        '/settings/users/add': 'add_user',
     }.items():
         html = client.get(url).get_data(as_text=True)
         assert 'settings-app' in html and 'settings-data' in html, url
         assert f'"page": "{page}"' in html, url
 
 
-def test_edit_user_shell_renders(app):
+def test_old_settings_user_pages_open_the_users_section(app):
     client = _admin(app)
     with app.app_context():
-        u = User(username='shelluser', role='teacher', full_name='Shell User')
-        u.set_password('secret123')
-        db.session.add(u)
-        db.session.commit()
+        u = User.query.filter_by(username='shelluser').first()
+        if not u:
+            u = User(username='shelluser', role='teacher', full_name='Shell User')
+            u.set_password('secret123')
+            db.session.add(u)
+            db.session.commit()
         uid = u.id
-    html = client.get(f'/settings/users/{uid}/edit').get_data(as_text=True)
-    assert '"page": "edit_user"' in html and 'shelluser' in html
+    assert client.get('/settings/users').headers['Location'].endswith('/users/')
+    assert client.get('/settings/users/add').headers['Location'].endswith('/users/add')
+    assert client.get(f'/settings/users/{uid}/edit').headers['Location'].endswith(f'/users/{uid}/edit')
 
 
 def test_add_user_json(app):
@@ -57,9 +58,22 @@ def test_add_user_json(app):
     r = client.post('/settings/users/add', headers={'X-Requested-With': 'fetch'},
                     data={'username': 'JsonUser', 'password': 'secret123',
                           'role': 'teacher', '_csrf_token': _ptoken(client)}).get_json()
-    assert r['ok'] and r['redirect'].endswith('/settings/users')
+    assert r['ok'] and '/users/' in r['redirect']
     with app.app_context():
         assert User.query.filter_by(username='jsonuser').first() is not None
+
+
+def test_old_settings_user_endpoints_protect_own_account(app):
+    client = _admin(app)
+    with client.session_transaction() as sess:
+        uid = sess.get('user_id')
+    if not uid:
+        return
+    r = client.post(f'/settings/users/{uid}/delete', headers={'X-Requested-With': 'fetch'},
+                    data={'_csrf_token': _ptoken(client)}).get_json()
+    assert not r['ok']
+    with app.app_context():
+        assert db.session.get(User, uid) is not None
 
 
 def test_audit_json_lists_and_filters(app):
