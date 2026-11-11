@@ -124,7 +124,7 @@ def test_new_session_with_terms_copies_dates_a_year_on(app):
 def test_classes_and_arms_pages_payloads(app):
     from models import db, SchoolClass
     with app.app_context():
-        for n, lv in (('ZZ1', 41), ('ZZ2', 41)):
+        for n, lv in (('ZZ1', -9), ('ZZ2', -9)):
             if not SchoolClass.query.filter_by(name=n).first():
                 db.session.add(SchoolClass(name=n, level=lv))
         db.session.commit()
@@ -132,7 +132,7 @@ def test_classes_and_arms_pages_payloads(app):
     d = c.get('/academics/classes', headers={'X-Requested-With': 'fetch'}).get_json()
     d = d.get('data', d)
     assert d['page'] == 'classes'
-    assert any('share level 41' in a['text'] for a in d['alerts'])
+    assert any('share level -9' in a['text'] for a in d['alerts'])
     row = next(r for r in d['classes'] if r['name'] == 'ZZ1')
     assert {'section', 'arms', 'students', 'subjects', 'edit_url'} <= set(row)
     # quick-add a suggested standard class with its section

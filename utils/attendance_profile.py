@@ -83,6 +83,38 @@ def warning_threshold():
         return 75.0
 
 
+class _Day:
+    """One school day for a student, merged across their enrollments."""
+    __slots__ = ('morning_present', 'afternoon_present')
+
+    def __init__(self, m, a):
+        self.morning_present, self.afternoon_present = m, a
+
+
+def _merged_records(enrollment_ids, school_days):
+    """date -> _Day for a student's enrollments in one term. A student moved
+    between arms (or removed and re-added) mid-term has more than one
+    enrollment; their register rows are split across them, so a day counts as
+    present in a session if ANY of their enrollments says so."""
+    out = {}
+    if not enrollment_ids or not school_days:
+        return out
+    for r in Attendance.query.filter(Attendance.enrollment_id.in_(list(enrollment_ids)),
+                                     Attendance.date.in_(school_days)).all():
+        cur = out.get(r.date)
+        m, a = bool(r.morning_present), bool(r.afternoon_present)
+        out[r.date] = _Day(m or (cur.morning_present if cur else False),
+                           a or (cur.afternoon_present if cur else False))
+    return out
+
+
+def _pick_primary(enrollments):
+    """The enrollment that names the student's class for a term: the active
+    one (latest if several), else the latest."""
+    act = [e for e in enrollments if getattr(e, 'is_active', True)]
+    return max(act or enrollments, key=lambda e: e.id)
+
+
 def _term_stats(enrollment, term_id, want_calendar=False):
     """Per-term attendance for one enrollment. Percentage and day counts only
     ever look at school days up to today (via _term_school_days' default) —
@@ -94,9 +126,8 @@ def _term_stats(enrollment, term_id, want_calendar=False):
     school_days = _term_school_days(term_id)
     if not school_days:
         return None
-    recs = {r.date: r for r in Attendance.query.filter(
-        Attendance.enrollment_id == enrollment.id,
-        Attendance.date.in_(school_days)).all()}
+    ids = [e.id for e in enrollment] if isinstance(enrollment, (list, tuple)) else [enrollment.id]
+    recs = _merged_records(ids, school_days)
     total_opened = len(school_days) * 2
     present_sessions = full_days = late_days = absent_days = 0
     for d in school_days:
@@ -132,15 +163,15 @@ def student_term_percentage(student_id, term_id):
     school days). Used by the intervention tracker to compare against a baseline."""
     if not term_id:
         return None
-    enr = (StudentEnrollment.query
-           .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-           .filter(StudentEnrollment.student_id == student_id,
-                   ClassArmAssignment.term_id == term_id).first())
-    if enr and enr.class_arm_assignment_id not in marked_class_ids(term_id, [enr.class_arm_assignment_id]):
-        return None   # class register never taken this term — no data, not 0%
-    if not enr:
+    enrs = (StudentEnrollment.query
+            .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .filter(StudentEnrollment.student_id == student_id,
+                    ClassArmAssignment.term_id == term_id).all())
+    if not enrs:
         return None
-    stats = _term_stats(enr, term_id)
+    if not marked_class_ids(term_id, [e.class_arm_assignment_id for e in enrs]):
+        return None   # class register never taken this term — no data, not 0%
+    stats = _term_stats(enrs, term_id)
     return stats['percentage'] if stats else None
 
 
@@ -159,20 +190,26 @@ def bulk_term_percentages(student_ids, term_id):
                    .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
                    .filter(StudentEnrollment.student_id.in_(student_ids),
                            ClassArmAssignment.term_id == term_id).all())
-    enr_by_student = {}
+    by_student = {}
     for e in enrollments:
-        enr_by_student.setdefault(e.student_id, e)   # first match, same as student_term_percentage()'s .first()
-    # Students whose class has never marked attendance this term have no %.
-    marked = marked_class_ids(term_id, list({e.class_arm_assignment_id for e in enr_by_student.values()}))
-    enr_by_student = {sid: e for sid, e in enr_by_student.items() if e.class_arm_assignment_id in marked}
-    present = {e.id: 0 for e in enr_by_student.values()}
-    if present:
-        for a in Attendance.query.filter(Attendance.enrollment_id.in_(list(present)),
+        by_student.setdefault(e.student_id, []).append(e)
+    # Students whose class(es) never marked attendance this term have no %.
+    marked = marked_class_ids(term_id, list({e.class_arm_assignment_id for e in enrollments}))
+    by_student = {sid: es for sid, es in by_student.items()
+                  if any(e.class_arm_assignment_id in marked for e in es)}
+    owner = {e.id: sid for sid, es in by_student.items() for e in es}
+    days = {}   # (student, date) -> [morning, afternoon], merged across enrollments
+    if owner:
+        for a in Attendance.query.filter(Attendance.enrollment_id.in_(list(owner)),
                                          Attendance.date.in_(school_days)).all():
-            if a.enrollment_id in present:
-                present[a.enrollment_id] += (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
-    return {sid: round(present[e.id] / total_opened * 100, 2)
-            for sid, e in enr_by_student.items()}
+            k = (owner[a.enrollment_id], a.date)
+            cur = days.setdefault(k, [False, False])
+            cur[0] = cur[0] or bool(a.morning_present)
+            cur[1] = cur[1] or bool(a.afternoon_present)
+    present = {sid: 0 for sid in by_student}
+    for (sid, _d), (m, af) in days.items():
+        present[sid] += int(m) + int(af)
+    return {sid: round(present[sid] / total_opened * 100, 2) for sid in by_student}
 
 
 def build_student_profile(student_id, focus_term_id=None):
@@ -206,20 +243,31 @@ def build_student_profile(student_id, focus_term_id=None):
     marked = set()
     for tid, ids in marked_by_term.items():
         marked |= marked_class_ids(tid, ids)
-    term_rows = []
+    # One row per TERM: a student moved between arms mid-term has several
+    # enrollments in it; their attendance is merged and the class shown is the
+    # one they're in now.
+    by_term, order = {}, []
     for e in enrollments:
         caa = e.class_arm_assignment
-        term = caa.term if caa else None
-        if not term:
+        if not caa or not caa.term:
             continue
-        if caa.id not in marked:
+        if caa.term_id not in by_term:
+            order.append(caa.term_id)
+        by_term.setdefault(caa.term_id, []).append(e)
+    term_rows, groups = [], {}
+    for tid in order:
+        es = by_term[tid]
+        if not any(e.class_arm_assignment_id in marked for e in es):
             continue   # register never taken for this class/term — no data
-        stats = _term_stats(e, term.id)
+        term = es[0].class_arm_assignment.term
+        stats = _term_stats(es, tid)
         if stats is None:
             continue
-        term_rows.append({'enrollment_id': e.id, 'term_id': term.id,
+        prim = _pick_primary(es)
+        groups[tid] = es
+        term_rows.append({'enrollment_id': prim.id, 'term_id': tid,
                           'term': term.name, 'session': (term.session.name if term.session else ''),
-                          'class': caa.display_name, **stats})
+                          'class': prim.class_arm_assignment.display_name, **stats})
 
     # Overall aggregates across all terms.
     tot_open = sum(r['total_opened'] for r in term_rows)
@@ -231,8 +279,7 @@ def build_student_profile(student_id, focus_term_id=None):
     focus = None
     if term_rows:
         focus_row = next((r for r in term_rows if r['term_id'] == focus_term_id), term_rows[0])
-        focus_enr = db.session.get(StudentEnrollment, focus_row['enrollment_id'])
-        focus = _term_stats(focus_enr, focus_row['term_id'], want_calendar=True)
+        focus = _term_stats(groups[focus_row['term_id']], focus_row['term_id'], want_calendar=True)
         focus.update({'term_id': focus_row['term_id'], 'term': focus_row['term'],
                       'class': focus_row['class']})
 

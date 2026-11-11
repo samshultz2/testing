@@ -2233,6 +2233,7 @@ def _student_attendance_summary(sid):
         'late_days': latest.get('late_days', 0),
         'absent_days': latest.get('absent_days', 0),
         'term_name': latest.get('term'),
+        'session_name': latest.get('session'),
         'warning': bool(thresh is not None and latest_pct is not None and latest_pct < thresh),
         'threshold': thresh,
         # Cross-term — secondary context (a "since we started tracking" line).

@@ -743,6 +743,41 @@ def view_term(term_id):
     })
 
 
+def _rebuild_weeks(term):
+    """Rebuild a term's Mon–Fri weeks from its dates WITHOUT losing attendance.
+    Register rows point at a week, so existing Week rows are reused (renumbered
+    and re-dated) rather than deleted, every attendance row is re-pointed at the
+    week that now contains its date, and only weeks nothing refers to are
+    removed. Returns the number of weeks."""
+    from models import Attendance
+    ranges = get_weeks_in_range(term.start_date, term.end_date)
+    old = Week.query.filter_by(term_id=term.id).order_by(Week.start_date, Week.id).all()
+    weeks = []
+    for i, (num, mon, fri) in enumerate(ranges):
+        if i < len(old):
+            w = old[i]
+            w.week_number, w.start_date, w.end_date = num, mon, fri
+        else:
+            w = Week(term_id=term.id, week_number=num, start_date=mon, end_date=fri)
+            db.session.add(w)
+        weeks.append(w)
+    db.session.flush()
+    spare = old[len(ranges):]
+    all_ids = [w.id for w in old] + [w.id for w in weeks]
+    if all_ids:
+        for a in Attendance.query.filter(Attendance.week_id.in_(set(all_ids))).all():
+            home = next((w for w in weeks if w.start_date <= a.date <= w.end_date + timedelta(days=2)), None)
+            if home is not None and a.week_id != home.id:
+                a.week_id = home.id
+    db.session.flush()
+    for w in spare:
+        if not Attendance.query.filter_by(week_id=w.id).first():
+            db.session.delete(w)
+        else:   # attendance outside the new dates: keep it, after the last week
+            w.week_number = len(ranges) + 1 + spare.index(w)
+    return len(ranges)
+
+
 @academics_bp.route('/terms/<int:term_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_term(term_id):
@@ -761,20 +796,8 @@ def edit_term(term_id):
             
             # Optionally regenerate weeks
             if regenerate_weeks and start_date and end_date:
-                # Delete existing weeks
-                Week.query.filter_by(term_id=term.id).delete()
-                
-                # Generate new weeks
-                weeks = get_weeks_in_range(start_date, end_date)
-                for week_num, mon, fri in weeks:
-                    week = Week(
-                        term_id=term.id,
-                        week_number=week_num,
-                        start_date=mon,
-                        end_date=fri
-                    )
-                    db.session.add(week)
-            
+                _rebuild_weeks(term)
+
             db.session.commit()
             return _ok('Term updated successfully!', url_for('academics.view_term', term_id=term_id))
 
@@ -890,20 +913,7 @@ def generate_weeks(term_id):
         return _err('Please set term start and end dates first.', url_for('academics.view_term', term_id=term_id))
 
     try:
-        # Delete existing weeks
-        Week.query.filter_by(term_id=term_id).delete()
-        
-        # Generate new weeks
-        weeks = get_weeks_in_range(term.start_date, term.end_date)
-        for week_num, mon, fri in weeks:
-            week = Week(
-                term_id=term.id,
-                week_number=week_num,
-                start_date=mon,
-                end_date=fri
-            )
-            db.session.add(week)
-        
+        weeks = range(_rebuild_weeks(term))
         db.session.commit()
         return _ok(f'{len(weeks)} weeks generated successfully!', url_for('academics.view_term', term_id=term_id))
     except Exception as e:

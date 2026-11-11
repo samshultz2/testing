@@ -343,7 +343,7 @@ export default function ViewApp({ initial }) {
   const jamb = (d.jamb || {}).latest;
   const stats = [
     att && { k: 'att', label: 'Attendance', value: att.percentage + '%', tone: att.warning ? 'bad' : 'good',
-             sub: att.term_name || 'This term', go: phone ? 'overview' : null },
+             sub: [att.term_name, att.session_name].filter(Boolean).join(' · ') || 'This term', go: phone ? 'overview' : null },
     { k: 'jamb', label: 'JAMB', value: jamb ? jamb.score : '—', sub: jamb ? `${jamb.year} · of 400` : 'No result', go: 'exams' },
     { k: 'waec', label: 'WAEC', value: (d.waec || {}).count || 0, sub: 'subjects', go: 'exams' },
     d.neco && { k: 'neco', label: 'NECO', value: d.neco.count || 0, sub: 'subjects', go: 'exams' },
