@@ -1088,7 +1088,50 @@ def traits_list():
         'save_url': url_for('settings.save_traits'),
         'back_url': url_for('settings.index'),
         'traits': [{'key': t.key, 'label': t.label, 'is_active': t.is_active} for t in traits],
+        'defaults': [{'key': k, 'label': l} for k, l in _default_traits()],
+        'rating_labels': _rating_labels(),
+        'rate_url': _safe_url('subjects.affective'),
+        **_trait_usage(),
     })
+
+
+def _default_traits():
+    from utils.report_card import AFFECTIVE_TRAITS
+    return AFFECTIVE_TRAITS
+
+
+def _rating_labels():
+    from utils.report_card import RATING_LABELS
+    return [[k, v] for k, v in sorted(RATING_LABELS.items(), reverse=True)]
+
+
+def _trait_usage():
+    """How each trait was rated this term (count + average), so the editor can
+    show which traits teachers actually use before one is hidden or renamed."""
+    try:
+        from models import TermSummary
+        from utils.helpers import get_active_term
+        t = get_active_term()
+        if not t:
+            return {'usage': {}, 'rated': 0, 'usage_term': None}
+        usage, rated = {}, 0
+        for ts in TermSummary.query.filter_by(term_id=t.id).filter(TermSummary.affective != None).all():  # noqa: E711
+            m = ts.affective_map
+            if m:
+                rated += 1
+            for k, v in m.items():
+                try:
+                    v = int(v)
+                except (TypeError, ValueError):
+                    continue
+                u = usage.setdefault(k, {'n': 0, 'sum': 0})
+                u['n'] += 1
+                u['sum'] += v
+        out = {k: {'n': u['n'], 'avg': round(u['sum'] / u['n'], 1)} for k, u in usage.items() if u['n']}
+        sess = getattr(t, 'session', None)
+        return {'usage': out, 'rated': rated, 'usage_term': f"{t.name}{' ' + sess.name if sess else ''}"}
+    except Exception:
+        return {'usage': {}, 'rated': 0, 'usage_term': None}
 
 
 @settings_bp.route('/traits/save', methods=['POST'])

@@ -71,19 +71,24 @@ def test_school_page_suggests_next_term_start(app):
         t = get_active_term()
         if not t:
             return
-        if not t.end_date:
-            t.end_date = date(2031, 7, 20)
-        sess = AcademicSession.query.filter_by(name='2099/2100').first()
-        if not sess:
-            sess = AcademicSession(name='2099/2100')
-            db.session.add(sess); db.session.flush()
-            db.session.add(Term(name='First Term', session_id=sess.id, start_date=date(2099, 9, 14), end_date=date(2099, 12, 15)))
-        db.session.commit()
-        expected = Term.query.filter(Term.start_date > t.end_date).order_by(Term.start_date).first()
-    client = _admin(app)
-    d = _json(client, '/settings/school')
-    assert d['next_term'] and d['next_term']['begins'] == f"{expected.start_date.day} {expected.start_date.strftime('%B %Y')}"
-
+        old_end = t.end_date
+        t.end_date = date(2098, 7, 20)
+        sess = AcademicSession(name='2098/2099 hubtest')
+        db.session.add(sess); db.session.flush()
+        nxt = Term(name='First Term', term_number=1, session_id=sess.id,
+                   start_date=date(2098, 9, 14), end_date=date(2098, 12, 15))
+        db.session.add(nxt); db.session.commit()
+        ids = (t.id, sess.id, nxt.id)
+    try:
+        client = _admin(app)
+        d = _json(client, '/settings/school')
+        assert d['next_term'] and d['next_term']['begins'] == '14 September 2098'
+    finally:
+        with app.app_context():
+            db.session.delete(db.session.get(Term, ids[2]))
+            db.session.delete(db.session.get(AcademicSession, ids[1]))
+            db.session.get(Term, ids[0]).end_date = old_end
+            db.session.commit()
 
 def test_academic_page_has_decision_context(app):
     client = _admin(app)

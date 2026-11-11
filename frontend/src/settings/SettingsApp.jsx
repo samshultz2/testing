@@ -4,56 +4,11 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Index, Branches, Backup, Audit, School, Academic, Grades } from './Hub';
+import { Index, Branches, Backup, Audit, School, Academic, Grades, Traits } from './Hub';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-// ---- Behavioural traits -----------------------------------------------------
-function Traits({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const blanks = [0, 1, 2].map(() => ({ key: '', label: '', is_active: true }));
-  const [rows, setRows] = useState([...(d.traits || []).map((t) => ({ ...t })), ...blanks]);
-  const setLabel = (i) => (e) => setRows(rows.map((r, j) => (j === i ? { ...r, label: e.target.value } : r)));
-  const toggle = (i) => () => setRows(rows.map((r, j) => (j === i ? { ...r, is_active: !r.is_active } : r)));
-  const submit = (e) => {
-    e.preventDefault();
-    const active = rows.map((r, i) => (r.is_active ? String(i) : null)).filter((x) => x !== null);
-    save(d.save_url, {
-      'key[]': rows.map((r) => r.key || ''), 'label[]': rows.map((r) => r.label),
-      'active[]': active,
-    }, () => nav.refresh());
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Behavioural Traits</h1>
-        <p className="text-muted text-sm">Affective domain traits rated on report cards. Unchecked = hidden (ratings kept).</p></div>
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <table className="data-table">
-            <thead><tr><th>Trait</th><th style={{ width: 90, textAlign: 'center' }}>Active</th></tr></thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i}>
-                  <td><input type="text" className="form-control" value={r.label} onChange={setLabel(i)} placeholder="New trait…" /></td>
-                  <td style={{ textAlign: 'center' }}><input type="checkbox" checked={!!r.is_active} onChange={toggle(i)} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-3">
-            {canWrite(d, 'traits_edit') && <>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save traits</button>{' '}
-            </>}
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back to Settings</a>
-          </div>
-        </form>
-      </div></div>
-    </>
-  );
 }
 
 // ---- Assessment types -------------------------------------------------------

@@ -8,7 +8,7 @@ import { csrfToken } from '../lib/api';
 import { useNav, navParams } from '../lib/section';
 import { confirm } from '../components/ui';
 import { Head, Tiles, Chips, Seg, Sheet, Blank, Bar, usePhone } from '../subjects/results';
-import { A, Field, Toggle, Pill, SearchBox, plural } from '../components/appkit';
+import { A, Field, Toggle, Switch, Pill, SearchBox, plural } from '../components/appkit';
 
 const ago = (n) => (n == null ? 'Never' : n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n} days ago`);
 
@@ -803,6 +803,129 @@ export function Grades({ d, notify }) {
             <p className="cm-mute">This replaces the bands on screen. Nothing is saved until you tap Save.</p>
           </div>
         </Sheet>)}
+    </div>
+  );
+}
+
+// ---- Behaviour traits -------------------------------------------------------
+// Traits on report cards vs hidden, in print order, each with how teachers
+// rated it this term; a live report-card preview; suggested traits to add.
+export function Traits({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const can = canWrite(d, 'traits_edit');
+  // Nothing saved yet → report cards use the built-in list, so start from it.
+  const builtIn = !(d.traits || []).length;
+  const init = builtIn ? (d.defaults || []).map((t) => ({ key: t.key, label: t.label, is_active: true }))
+    : d.traits.map((t) => ({ key: t.key, label: t.label, is_active: !!t.is_active }));
+  const [rows, setRows] = useState(init);
+  const [base, setBase] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const [text, setText] = useState('');
+  const usage = d.usage || {};
+  const dirty = JSON.stringify(rows) !== JSON.stringify(base);
+  const shown = rows.filter((r) => r.is_active), hidden = rows.filter((r) => !r.is_active);
+  const lc = (x) => x.trim().toLowerCase();
+  const dupe = (label, self) => rows.some((r) => r !== self && lc(r.label) === lc(label));
+  const blank = rows.some((r) => !r.label.trim());
+  const dupes = rows.some((r) => r.label.trim() && dupe(r.label, r));
+  const upd = (r, patch) => setRows(rows.map((x) => (x === r ? { ...x, ...patch } : x)));
+  const move = (r, dir) => {
+    const list = [...shown]; const i = list.indexOf(r); const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    setRows([...list, ...hidden]);
+  };
+  const add = (label, key = '') => {
+    const l = label.trim();
+    if (!l || dupe(l)) return;
+    setRows([...shown, { key, label: l, is_active: true }, ...hidden]);
+    setText('');
+  };
+  const suggestions = (d.defaults || []).filter((x) => !rows.some((r) => r.key === x.key || lc(r.label) === lc(x.label)));
+  const submit = async () => {
+    const order = [...shown, ...hidden];
+    setSaving(true);
+    const r = await save(d.save_url, {
+      'key[]': order.map((x) => x.key || ''), 'label[]': order.map((x) => x.label.trim()),
+      'active[]': order.map((x, i) => (x.is_active ? String(i) : null)).filter((x) => x !== null),
+    }, () => nav.refresh());
+    setSaving(false);
+    if (r && r.ok) { setRows(order); setBase(order); }
+  };
+  const Row = ({ r, i, list }) => {
+    const u = r.key && usage[r.key];
+    return (
+      <div className={'tr-row' + (r.is_active ? '' : ' off')}>
+        {r.is_active && can ? (
+          <span className="tr-mv">
+            <button type="button" onClick={() => move(r, -1)} disabled={i === 0} aria-label={`Move ${r.label} up`}><i className="fas fa-chevron-up" aria-hidden="true" /></button>
+            <button type="button" onClick={() => move(r, 1)} disabled={i === list.length - 1} aria-label={`Move ${r.label} down`}><i className="fas fa-chevron-down" aria-hidden="true" /></button>
+          </span>) : <span className="tr-mv" />}
+        <span className="tr-l">
+          <input value={r.label} maxLength={80} disabled={!can} aria-label="Trait name" aria-invalid={(!r.label.trim() || dupe(r.label, r)) || undefined}
+                 onChange={(e) => upd(r, { label: e.target.value })} />
+          <small>{u ? <>Rated for {plural(u.n, 'student')} · average <b>{u.avg}</b> / 5</> : r.key ? 'Not rated this term' : 'New'}{!r.label.trim() ? ' · needs a name' : dupe(r.label, r) ? ' · same name as another trait' : ''}</small>
+        </span>
+        {u && <span className="tr-avg" title={`Average ${u.avg} of 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= Math.round(u.avg) ? 'on' : ''} />)}</span>}
+        <Switch on={r.is_active} onChange={(v) => setRows(v ? [...shown, { ...r, is_active: true }, ...hidden.filter((x) => x !== r)] : [...shown.filter((x) => x !== r), { ...r, is_active: false }, ...hidden])}
+                disabled={!can} label={r.is_active ? `Hide ${r.label}` : `Show ${r.label}`} />
+      </div>);
+  };
+  return (
+    <div className="rs cm sx tr">
+      <Head icon="fa-star-half-stroke" title="Behaviour traits" sub="The affective domain rated 1–5 on every report card. Hiding a trait keeps its past ratings." >
+        {d.rate_url && <A to={d.rate_url} native className="rs-btn ghost"><i className="fas fa-pen" aria-hidden="true" /> Rate students</A>}
+      </Head>
+      <Tiles items={[
+        { label: 'On report cards', value: shown.length, tone: shown.length > 14 ? 'warn' : null, sub: shown.length > 14 ? 'Long lists can push the card to a 2nd page' : null },
+        { label: 'Hidden', value: hidden.length },
+        { label: d.usage_term ? `Students rated · ${d.usage_term}` : 'Students rated', value: d.rated || 0 },
+      ]} />
+      <div className="tr-wrap">
+        <div className="tr-main">
+          <section className="rs-card tr-list">
+            <div className="tr-h"><h3><i className="fas fa-eye" aria-hidden="true" /> On report cards</h3><span className="cm-mute">in print order</span></div>
+            {shown.map((r, i) => <React.Fragment key={r.key || 'n' + i}>{Row({ r, i, list: shown })}</React.Fragment>)}
+            {builtIn && !dirty && <p className="cm-mute tr-note"><i className="fas fa-circle-info" aria-hidden="true" /> These are the app’s standard traits. Change any of them and save to make the list your own.</p>}
+            {!shown.length && <p className="cm-mute sx-empty">Nothing selected — report cards will use the app’s standard traits.</p>}
+            {can && (
+              <form className="tr-add" onSubmit={(e) => { e.preventDefault(); add(text); }}>
+                <input value={text} onChange={(e) => setText(e.target.value)} maxLength={80} placeholder="Add a trait, e.g. Leadership" aria-label="New trait" />
+                <button type="submit" className="rs-btn sm primary" disabled={!text.trim() || dupe(text)}><i className="fas fa-plus" aria-hidden="true" /> Add</button>
+              </form>)}
+            {can && suggestions.length > 0 && (
+              <div className="tr-sug"><span className="cm-mute">Suggested:</span>
+                {suggestions.map((x) => <button key={x.key} type="button" onClick={() => add(x.label, x.key)}><i className="fas fa-plus" aria-hidden="true" /> {x.label}</button>)}</div>)}
+          </section>
+          {hidden.length > 0 && (
+            <section className="rs-card tr-list">
+              <div className="tr-h"><h3><i className="fas fa-eye-slash" aria-hidden="true" /> Hidden</h3><span className="cm-mute">not printed · ratings kept</span></div>
+              {hidden.map((r, i) => <React.Fragment key={r.key || 'h' + i}>{Row({ r, i, list: hidden })}</React.Fragment>)}
+            </section>)}
+        </div>
+        <aside className="sc-side">
+          <section className="rs-card sc-prev">
+            <span className="k">Report card preview</span>
+            <div className="sc-paper tr-paper">
+              <table>
+                <thead><tr><th>Affective domain</th>{(d.rating_labels || []).map(([k]) => <th key={k}>{k}</th>)}</tr></thead>
+                <tbody>{shown.slice(0, 16).map((r, i) => (
+                  <tr key={i}><td>{r.label || '—'}</td>{(d.rating_labels || []).map(([k]) => <td key={k}>{k === [4, 5, 3, 4, 5, 4][i % 6] ? '✓' : ''}</td>)}</tr>))}
+                  {shown.length > 16 && <tr><td colSpan={6}>+ {shown.length - 16} more…</td></tr>}</tbody>
+              </table>
+              <p className="tr-key">{(d.rating_labels || []).map(([k, v]) => `${k} ${v}`).join(' · ')}</p>
+            </div>
+          </section>
+        </aside>
+      </div>
+      {can && dirty && (
+        <Bar>
+          <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> Unsaved changes</span>
+          <button type="button" className="rs-btn ghost" onClick={() => setRows(base)}>Undo</button>
+          <button type="button" className="rs-btn primary" disabled={saving || blank || dupes} onClick={submit}>
+            <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {saving ? 'Saving…' : 'Save'}</button>
+        </Bar>)}
     </div>
   );
 }
