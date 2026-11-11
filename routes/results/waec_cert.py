@@ -141,6 +141,7 @@ def waec_cert_generator():
     student = _load_student(student_id)
     years = W.available_years(student)
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     ctx = W.build_context(student, year) if year else None
     groups = W.available_components(ctx) if ctx else []
     rec = _recommend_template(year, student.branch_id) if ctx else None
@@ -406,6 +407,7 @@ def waec_cert_bulk():
     years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct()
              .order_by(WAECResult.exam_year.desc()).all()]
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     q = (request.args.get('q') or '').strip()
     students = []
     if year:

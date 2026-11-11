@@ -716,7 +716,8 @@ def analytics_insights():
     waec_years = model.years()
     year = resolve_exam_year(request.args.get('year', type=int), waec_years)
     bid = viewing_branch_id()
-    data = DI.build(year, bid, waec_years, model=model) if year else {'errors': {}}
+    data = DI.build(year, bid, waec_years, model=model) if year else {'errors': {}}   # data years only
+    waec_years = years_with(waec_years, year)  # keep the shown year in the dropdown
     sess = session_for_exam_year(year) if year else None
     risk = None
     if model.has_mocks:                          # the at-risk list is the SSS3 (mock-based) one
@@ -766,6 +767,7 @@ def analytics_by_class():
     jamb_years = [y[0] for y in db.session.query(JAMBResult.exam_year).distinct().all()]
     years = sorted(set(waec_years + jamb_years), reverse=True)
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     data = exam_class_league(year, viewing_branch_id()) if year else None
     return render_template('results/analytics_by_class.html',
                            data=data, years=years, selected_year=year)
@@ -1281,6 +1283,7 @@ def waec_broadsheet():
     """On-screen WAEC broadsheet: grade matrix + per-subject and cohort summary."""
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     # {stream: [subjects students in that stream actually offered]} so the custom-
     # download modal can auto-tick a stream's subjects when the stream is picked.
@@ -1309,6 +1312,7 @@ def waec_broadsheet_pdf():
     from utils.school import school_profile, logo_path
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
         flash(f'No {_bname()} results recorded for that year.', 'warning')
@@ -1344,6 +1348,7 @@ def waec_broadsheet_export():
     from openpyxl import Workbook
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
         flash(f'No {_bname()} results recorded for that year.', 'warning')
@@ -1389,6 +1394,7 @@ def waec_broadsheet_download():
     from flask import Response
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    years = years_with(years, year)  # keep the shown year in the dropdown
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
         flash(f'No {_bname()} results recorded for that year.', 'warning')
@@ -1792,9 +1798,9 @@ def _load_grade_breakdown(exam):
         # keep it in the dropdown, or the browser displays the first listed
         # year while the page is really on another (and choosing that year
         # then does nothing, since it already looks selected).
-        if years and selected_year and selected_year not in years:
+        if selected_year and selected_year not in years:
             from utils.helpers import view_session_override
-            if view_session_override() is None:
+            if years and view_session_override() is None:
                 latest_year = years[0]   # offered as a shortcut on the empty page
             years = sorted(set(years) | {selected_year}, reverse=True)
         period_label = f'Exam Year {selected_year}' if selected_year else None

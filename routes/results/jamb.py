@@ -12,6 +12,7 @@ def jamb_subject(subject):
     years = [y[0] for y in db.session.query(JAMBResult.exam_year)
              .distinct().order_by(JAMBResult.exam_year.desc()).all()]
     exam_year = resolve_exam_year(exam_year, years)
+    years = years_with(years, exam_year)  # keep the shown year in the dropdown
     from utils.access_control import exam_student_scope
     from utils.branch_scope import viewing_branch_id
     scope_ids = exam_student_scope()
@@ -47,6 +48,7 @@ def jamb_list():
 
     exam_year = resolve_exam_year(exam_year, years)
 
+    years = years_with(years, exam_year)  # keep the shown year in the dropdown
     students_data = []
     school_stats = None
     correlation = None

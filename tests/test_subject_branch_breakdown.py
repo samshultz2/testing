@@ -480,3 +480,39 @@ def test_empty_session_year_is_selected_in_dropdown_with_shortcut_to_latest(app)
             s = AcademicSession.query.filter_by(is_active=True).first()
             s.name = old_name
             db.session.commit()
+
+
+def test_years_with_keeps_the_shown_year():
+    from utils.helpers import years_with
+    assert years_with([2026, 2025], 2027) == [2027, 2026, 2025]
+    assert years_with([2026, 2025], 2025) == [2026, 2025]
+    assert years_with([], 2027) == [2027]
+    assert years_with([2026], None) == [2026]
+
+
+def test_waec_and_jamb_lists_select_the_session_year_even_with_no_results(app):
+    """Same bug as the grade breakdown on the WAEC and JAMB lists: the page
+    shows the live session's year, so the dropdown must have it selected."""
+    with app.app_context():
+        sess = _active_session()
+        old_name = sess.name
+        sess.name = '2095/2099'
+        b = _branch('GB List Year')
+        db.session.flush()
+        s1 = _student(b.id, 'ListYear')
+        db.session.flush()
+        db.session.add(WAECResult(student_id=s1.id, exam_year=2093, subject='Biology', grade='B3'))
+        db.session.add(JAMBResult(student_id=s1.id, exam_year=2093, total_score=200,
+                                  subject1='English', subject1_score=60))
+        db.session.commit()
+    try:
+        c = _admin(app)
+        for url in ('/results/waec', '/results/jamb'):
+            html = c.get(url).get_data(as_text=True)
+            assert '<option value="2099" selected>' in html, url
+            assert '<option value="2093" >' in html or '<option value="2093">' in html, url
+    finally:
+        with app.app_context():
+            s = AcademicSession.query.filter_by(is_active=True).first()
+            s.name = old_name
+            db.session.commit()

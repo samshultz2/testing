@@ -66,6 +66,7 @@ def waec_list():
     # Scope to the active (or time-travelled) academic session by default.
     exam_year = resolve_exam_year(exam_year, years)
     
+    years = years_with(years, exam_year)  # keep the shown year in the dropdown
     students_data = []
     subject_stats = []
     school_stats = None
@@ -315,6 +316,7 @@ def waec_subject(subject):
              .distinct().order_by(WAECResult.exam_year.desc()).all()]
     exam_year = resolve_exam_year(exam_year, years)
 
+    years = years_with(years, exam_year)  # keep the shown year in the dropdown
     from utils.access_control import exam_student_scope
     from utils.branch_scope import viewing_branch_id
     scope_ids = exam_student_scope()
@@ -1085,6 +1087,7 @@ def waec_analytics():
 
     year = resolve_exam_year(year, years)
 
+    years = years_with(years, year)  # keep the shown year in the dropdown
     stats = None
     year_comparison = None
     

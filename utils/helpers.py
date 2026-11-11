@@ -616,6 +616,17 @@ def resolve_exam_year(requested, years):
     return years[0] if years else None
 
 
+def years_with(years, year):
+    """``years`` (newest first) with ``year`` added if missing. Pages default to
+    the live session's exam year even before it has results; that year must be
+    in the Year dropdown, or the browser shows the first listed year while the
+    page is really on another (and picking that year then does nothing)."""
+    years = list(years or [])
+    if year and year not in years:
+        years = sorted(set(years) | {year}, reverse=True)
+    return years
+
+
 def exam_year_choices():
     """Session picker for external-exam entry: a list of ``(exam_year, label)``
     newest first, where the label is the academic-session name (e.g.
