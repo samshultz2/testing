@@ -936,7 +936,46 @@ def academic_settings():
         'submit_url': url_for('settings.academic_settings'),
         'back_url': url_for('settings.index'),
         'active_session_name': active_session.name if active_session else None,
+        **_academic_context(),
     })
+
+
+def _academic_context():
+    """Facts that help decide the academic settings: which branch codes
+    override the ID prefix, the newest ID issued, whether arms are actually in
+    use (before switching them off), and where the knock-on pages live."""
+    out = {'branches': [], 'latest_id': None, 'arms_in_use': 0, 'slots': 0, 'urls': {}}
+    try:
+        from models import Branch
+        out['branches'] = [{'name': b.name, 'code': (b.code or '').strip().upper()}
+                           for b in Branch.query.filter_by(is_active=True).order_by(Branch.name).all()]
+    except Exception:
+        pass
+    try:
+        last = Student.query.filter(Student.student_id != None).order_by(Student.id.desc()).first()  # noqa: E711
+        out['latest_id'] = last.student_id if last else None
+    except Exception:
+        pass
+    try:
+        from models import ClassArmAssignment, ClassArm
+        from utils.helpers import get_active_term
+        t = get_active_term()
+        if t:
+            out['arms_in_use'] = (db.session.query(ClassArmAssignment.arm_id)
+                                  .join(ClassArm, ClassArm.id == ClassArmAssignment.arm_id)
+                                  .filter(ClassArmAssignment.term_id == t.id, ClassArm.is_default == False)  # noqa: E712
+                                  .distinct().count())
+    except Exception:
+        pass
+    try:
+        from models import TimetableSlot
+        out['slots'] = TimetableSlot.query.count()
+    except Exception:
+        pass
+    out['urls'] = {'slots': _safe_url('settings.timetable_slots'), 'promotion': _safe_url('promotion.index'),
+                   'branches': url_for('settings.branches') if is_admin() else None,
+                   'arms': _safe_url('academics.arms_list')}
+    return out
 
 
 # ============================================================================

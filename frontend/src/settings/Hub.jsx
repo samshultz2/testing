@@ -473,3 +473,183 @@ export function School({ d, notify }) {
     </div>
   );
 }
+
+// ---- Academic rules ---------------------------------------------------------
+// School day planner (does the timetable fit the day?), pass/promotion marks on
+// one scale, a live student-ID preview per branch, and the arms switch with a
+// warning when arms are in use.
+const toMin = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+const fmtMin = (m, fmt) => {
+  const h = Math.floor(m / 60) % 24, mm = String(m % 60).padStart(2, '0');
+  if (fmt === '12h') return `${(h % 12) || 12}:${mm} ${h < 12 ? 'am' : 'pm'}`;
+  return `${String(h).padStart(2, '0')}:${mm}`;
+};
+const dur = (m) => { m = Math.abs(m); const h = Math.floor(m / 60); return [h && `${h} h`, (m % 60) && `${m % 60} min`].filter(Boolean).join(' ') || '0 min'; };
+
+function Stepper({ value, onChange, min, max, step = 1, unit, label, disabled }) {
+  const v = Number(value) || 0;
+  const clamp = (x) => String(Math.max(min, Math.min(max, x)));
+  return (
+    <div className="ac-step" role="group" aria-label={label}>
+      <button type="button" onClick={() => onChange(clamp(v - step))} disabled={disabled || v <= min} aria-label={`Less ${label}`}><i className="fas fa-minus" aria-hidden="true" /></button>
+      <input inputMode="numeric" value={value} disabled={disabled} aria-label={label}
+             onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, ''))} onBlur={() => onChange(clamp(v))} />
+      {unit && <em>{unit}</em>}
+      <button type="button" onClick={() => onChange(clamp(v + step))} disabled={disabled || v >= max} aria-label={`More ${label}`}><i className="fas fa-plus" aria-hidden="true" /></button>
+    </div>
+  );
+}
+
+const shortCode = (name) => { const m = /^(\d{4})\/(\d{4})$/.exec((name || '').trim()); return m ? m[1].slice(2) + m[2].slice(2) : null; };
+
+export function Academic({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const s = d.settings || {};
+  const can = canWrite(d, 'academic_config');
+  const str = (v, dflt) => (v === undefined || v === null || v === '' ? dflt : String(v));
+  const on = (v, dflt) => (str(v, dflt) !== 'false' && str(v, dflt) !== '0' ? '1' : '0');
+  const init = {
+    school_day_start: str(s.school_day_start, '08:20'), school_day_end: str(s.school_day_end, '14:10'),
+    period_duration: str(s.period_duration, '40'), break_duration: str(s.break_duration, '30'),
+    periods_per_day: str(s.periods_per_day, '8'), pass_mark: str(s.pass_mark, '50'),
+    promotion_threshold: str(s.promotion_threshold, '50'),
+    student_id_prefix: str(s.student_id_prefix, 'STU'), student_id_digits: str(s.student_id_digits, '5'),
+    student_id_include_session: on(s.student_id_include_session, 'false'),
+    uses_class_arms: on(s.uses_class_arms, 'true'),
+  };
+  const [f, setF] = useState(init);
+  const [base, setBase] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const put = (k) => (v) => setF((o) => ({ ...o, [k]: v }));
+  const dirty = Object.keys(f).some((k) => f[k] !== base[k]);
+  const submit = async (e) => {
+    e && e.preventDefault();
+    setSaving(true);
+    const r = await save(d.submit_url, f, () => nav.refresh());
+    setSaving(false);
+    if (r && r.ok) setBase(f);
+  };
+  const tf = s.time_format === '12h' ? '12h' : '24h';
+
+  // Day plan: periods + one break, against the set school day.
+  const start = toMin(f.school_day_start), end = toMin(f.school_day_end);
+  const P = Math.max(0, parseInt(f.periods_per_day, 10) || 0), L = Math.max(0, parseInt(f.period_duration, 10) || 0), Br = Math.max(0, parseInt(f.break_duration, 10) || 0);
+  const need = P * L + Br;
+  const finish = start != null ? start + need : null;
+  const spare = start != null && end != null ? end - finish : null;
+  const span = start != null && end != null && end > start ? Math.max(end - start, need) : need || 1;
+  const half = Math.ceil(P / 2);
+  const segs = [];
+  for (let i = 0; i < P; i++) {
+    segs.push({ k: 'p' + i, w: L, label: String(i + 1) });
+    if (i === half - 1 && Br) segs.push({ k: 'br', w: Br, label: 'Break', br: true });
+  }
+  const dayBad = start == null || end == null || end <= start;
+
+  // Marks.
+  const pass = Number(f.pass_mark) || 0, promo = Number(f.promotion_threshold) || 0;
+
+  // Student IDs.
+  const code = f.student_id_include_session === '1' ? shortCode(d.active_session_name) : null;
+  const digits = Math.max(3, Math.min(parseInt(f.student_id_digits, 10) || 5, 12));
+  const idFor = (prefix) => `${prefix}${code || ''}${'1'.padStart(digits, '0')}`;
+  const prefix = (f.student_id_prefix || 'STU').toUpperCase();
+  const prefixBad = !!f.student_id_prefix && !/^[A-Z0-9]{1,10}$/.test(f.student_id_prefix);
+  const branches = d.branches || [];
+  const armsOff = f.uses_class_arms === '0';
+
+  return (
+    <div className="rs cm sx sc ac">
+      <Head icon="fa-sliders" title="Academic rules" sub="The school day, pass marks, student ID format and how classes are split." />
+      <form onSubmit={submit} className="ac-grid">
+        <fieldset disabled={!can} className="sc-fs ac-col">
+          <section className="rs-card sc-sec">
+            <h3><i className="fas fa-sun" aria-hidden="true" /> School day</h3>
+            <div className="sc-2">
+              <Field label="Starts"><input type="time" value={f.school_day_start} onChange={(e) => put('school_day_start')(e.target.value)} /></Field>
+              <Field label="Ends"><input type="time" value={f.school_day_end} onChange={(e) => put('school_day_end')(e.target.value)} /></Field>
+            </div>
+            <div className="ac-3">
+              <div className="cm-f"><span>Periods a day</span><Stepper label="periods a day" value={f.periods_per_day} onChange={put('periods_per_day')} min={4} max={12} /></div>
+              <div className="cm-f"><span>Each period</span><Stepper label="period length" value={f.period_duration} onChange={put('period_duration')} min={20} max={90} step={5} unit="min" /></div>
+              <div className="cm-f"><span>Break</span><Stepper label="break length" value={f.break_duration} onChange={put('break_duration')} min={5} max={60} step={5} unit="min" /></div>
+            </div>
+            <div className="ac-day" aria-hidden="true">
+              {segs.map((g) => <span key={g.k} className={g.br ? 'br' : ''} style={{ flexGrow: g.w }}>{g.label}</span>)}
+              {spare > 0 && <span className="free" style={{ flexGrow: spare }} />}
+            </div>
+            <div className="ac-day-ax"><span>{start != null ? fmtMin(start, tf) : '—'}</span><span>{end != null ? fmtMin(end, tf) : '—'}</span></div>
+            {dayBad ? <div className="cm-attn-i bad"><i className="fas fa-circle-xmark" aria-hidden="true" /><span>The day must end after it starts.</span></div>
+              : spare < 0 ? <div className="cm-attn-i bad"><i className="fas fa-triangle-exclamation" aria-hidden="true" /><span><b>Doesn’t fit.</b> {P} periods and the break finish at {fmtMin(finish, tf)} — {dur(spare)} after school ends. Shorten periods, drop one, or end later.</span></div>
+              : <div className="cm-attn-i good"><i className="fas fa-circle-check" aria-hidden="true" /><span><b>Fits.</b> Lessons end at {fmtMin(finish, tf)}{spare > 0 ? `, ${dur(spare)} before the day ends` : ', exactly at the end of the day'}.</span></div>}
+            {d.urls && d.urls.slots && <small className="cm-mute">Timetable periods are built from these numbers{d.slots ? ` — ${plural(d.slots, 'period')} set up now` : ''}. <A to={d.urls.slots}>Open timetable periods</A></small>}
+          </section>
+
+          <section className="rs-card sc-sec">
+            <h3><i className="fas fa-graduation-cap" aria-hidden="true" /> Pass &amp; promotion</h3>
+            <div className="ac-scale" aria-hidden="true">
+              <i className="fail" style={{ width: Math.min(pass, promo) + '%' }} />
+              <b className="pm" style={{ left: pass + '%' }}><em>Pass {pass}%</em></b>
+              <b className="pr" style={{ left: promo + '%' }}><em>Promote {promo}%</em></b>
+            </div>
+            <div className="sc-2">
+              <div className="cm-f"><span>Pass mark</span><Stepper label="pass mark" value={f.pass_mark} onChange={put('pass_mark')} min={30} max={70} unit="%" />
+                <small>A subject score below this shows as a fail on report cards.</small></div>
+              <div className="cm-f"><span>Promotion average</span><Stepper label="promotion average" value={f.promotion_threshold} onChange={put('promotion_threshold')} min={30} max={70} unit="%" />
+                <small>Students with a yearly average at or above this are recommended for promotion.</small></div>
+            </div>
+            {promo < pass && <div className="cm-attn-i mid"><i className="fas fa-circle-info" aria-hidden="true" /><span>Promotion is lower than the pass mark, so a student can be promoted with a failing average.</span></div>}
+            {d.urls && d.urls.promotion && <small className="cm-mute">See who this affects in <A to={d.urls.promotion} native>Promotion</A>.</small>}
+          </section>
+        </fieldset>
+
+        <fieldset disabled={!can} className="sc-fs ac-col">
+          <section className="rs-card sc-sec">
+            <h3><i className="fas fa-id-card" aria-hidden="true" /> Student ID format</h3>
+            <div className="ac-id">
+              <span className="k">Next new ID</span>
+              <code>{prefix}<em>{code || ''}</em>{'1'.padStart(digits, '0')}</code>
+              <small>{d.latest_id ? <>Most recent ID: <b>{d.latest_id}</b> · </> : null}Existing IDs never change.</small>
+            </div>
+            <div className="sc-2">
+              <Field label="Prefix" hint={prefixBad ? 'Letters and digits only, up to 10' : 'Blank uses STU'}>
+                <input value={f.student_id_prefix} maxLength={10} aria-invalid={prefixBad || undefined}
+                       onChange={(e) => put('student_id_prefix')(e.target.value.toUpperCase().replace(/\s/g, ''))} placeholder="STU" /></Field>
+              <div className="cm-f"><span>Number length</span><Stepper label="number length" value={f.student_id_digits} onChange={put('student_id_digits')} min={3} max={12} unit="digits" /></div>
+            </div>
+            <Toggle title="Add the session to each ID" on={f.student_id_include_session === '1'} onChange={(v) => put('student_id_include_session')(v ? '1' : '0')}
+                    sub={d.active_session_name && shortCode(d.active_session_name)
+                      ? `${d.active_session_name} adds ${shortCode(d.active_session_name)} — numbering restarts from 1 each session`
+                      : 'No active session yet — this takes effect once one is set'} />
+            {branches.length > 0 && (
+              <div className="ac-br">
+                <span className="k">By branch</span>
+                {branches.map((b) => (
+                  <div key={b.name}><span>{b.name}</span><code>{idFor(b.code || prefix)}</code>
+                    {b.code ? <small>own code</small> : <small>school prefix</small>}</div>))}
+                {d.urls && d.urls.branches && <small className="cm-mute">A branch’s own code replaces the prefix. <A to={d.urls.branches}>Edit branch codes</A></small>}
+              </div>)}
+          </section>
+
+          <section className="rs-card sc-sec">
+            <h3><i className="fas fa-code-branch" aria-hidden="true" /> Class structure</h3>
+            <Toggle title="Classes are split into arms" sub="e.g. JSS 1A, JSS 1B. Turn off if each class is a single group." on={!armsOff} onChange={(v) => put('uses_class_arms')(v ? '1' : '0')} />
+            {armsOff && d.arms_in_use > 0 && base.uses_class_arms === '1' && (
+              <div className="cm-attn-i mid"><i className="fas fa-triangle-exclamation" aria-hidden="true" />
+                <span>{plural(d.arms_in_use, 'arm is', 'arms are')} in use this term. Existing classes keep their arms; this only hides arms when setting up new classes.</span></div>)}
+            {d.urls && d.urls.arms && !armsOff && <small className="cm-mute"><A to={d.urls.arms}>Manage arms</A></small>}
+          </section>
+        </fieldset>
+
+        {can && dirty && (
+          <Bar>
+            <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> Unsaved changes</span>
+            <button type="button" className="rs-btn ghost" onClick={() => setF(base)}>Undo</button>
+            <button type="button" className="rs-btn primary" disabled={saving || prefixBad} onClick={submit}>
+              <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {saving ? 'Saving…' : 'Save'}</button>
+          </Bar>)}
+      </form>
+    </div>
+  );
+}

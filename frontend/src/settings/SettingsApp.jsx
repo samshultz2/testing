@@ -4,117 +4,11 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Index, Branches, Backup, Audit, School } from './Hub';
+import { Index, Branches, Backup, Audit, School, Academic } from './Hub';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-// "2025/2026" -> "2526" (last 2 digits of each year), mirroring
-// models/models/student.py::_session_short_code. null if not that shape.
-function sessionShortCode(name) {
-  const m = /^(\d{4})\/(\d{4})$/.exec((name || '').trim());
-  return m ? m[1].slice(2) + m[2].slice(2) : null;
-}
-
-// ---- Academic settings ------------------------------------------------------
-function Academic({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const s = d.settings || {};
-  const [f, setF] = useState({
-    school_day_start: s.school_day_start || '08:20', school_day_end: s.school_day_end || '14:10',
-    period_duration: s.period_duration || '40', break_duration: s.break_duration || '30',
-    periods_per_day: s.periods_per_day || '8', pass_mark: s.pass_mark || '50',
-    promotion_threshold: s.promotion_threshold || '50',
-    student_id_prefix: s.student_id_prefix || 'STU',
-    student_id_digits: s.student_id_digits || '5',
-    student_id_include_session: (s.student_id_include_session ?? 'false') !== 'false' ? '1' : '0',
-    uses_class_arms: (s.uses_class_arms ?? 'true') !== 'false' ? '1' : '0',
-  });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const toggle = (k) => (e) => setF({ ...f, [k]: e.target.checked ? '1' : '0' });
-  const submit = (e) => { e.preventDefault(); save(d.submit_url, f, () => nav.refresh()); };
-  return (
-    <>
-      <div className="page-header"><h1>Academic Settings</h1></div>
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <h4 style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>School Hours</h4>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">School Day Start</label>
-              <input type="time" className="form-control" value={f.school_day_start} onChange={set('school_day_start')} /></div>
-            <div className="form-group"><label className="form-label">School Day End</label>
-              <input type="time" className="form-control" value={f.school_day_end} onChange={set('school_day_end')} /></div>
-          </div>
-          <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Period Configuration</h4>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Period Duration (minutes)</label>
-              <input type="number" className="form-control" value={f.period_duration} onChange={set('period_duration')} min="20" max="90" /></div>
-            <div className="form-group"><label className="form-label">Break Duration (minutes)</label>
-              <input type="number" className="form-control" value={f.break_duration} onChange={set('break_duration')} min="5" max="60" /></div>
-            <div className="form-group"><label className="form-label">Periods Per Day</label>
-              <input type="number" className="form-control" value={f.periods_per_day} onChange={set('periods_per_day')} min="4" max="12" /></div>
-          </div>
-          <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Grading & Promotion</h4>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Pass Mark (%)</label>
-              <input type="number" className="form-control" value={f.pass_mark} onChange={set('pass_mark')} min="30" max="70" /></div>
-            <div className="form-group"><label className="form-label">Promotion Threshold (%)</label>
-              <input type="number" className="form-control" value={f.promotion_threshold} onChange={set('promotion_threshold')} min="30" max="70" step="0.1" />
-              <small className="text-muted">Minimum average to be promoted</small></div>
-          </div>
-          <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Student ID Format</h4>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">ID Prefix</label>
-              <input type="text" className="form-control" value={f.student_id_prefix}
-                     onChange={(e) => setF({ ...f, student_id_prefix: e.target.value.toUpperCase() })}
-                     maxLength={10} placeholder="e.g. PIO" />
-              <small className="text-muted">Default prefix, letters/digits up to 10 (e.g. PIO). Blank = STU. A
-                branch with its own Code (Settings → Branches) uses that instead — e.g. a "New Benin" branch
-                coded NB and a "Jemila" branch coded JM get NB##### / JM##### ids automatically.</small></div>
-            <div className="form-group"><label className="form-label">Minimum Digits</label>
-              <input type="number" className="form-control" value={f.student_id_digits} onChange={set('student_id_digits')} min="3" max="12" />
-              <small className="text-muted">Zero-padded width — e.g. 6 → {(f.student_id_prefix || 'STU')}{'000001'}. Numbers grow past this if needed.</small></div>
-          </div>
-          <div className="form-group">
-            <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-              <input type="checkbox" checked={f.student_id_include_session === '1'} onChange={toggle('student_id_include_session')} />
-              <span>Include the academic session in new student IDs</span>
-            </label>
-            <small className="text-muted d-block">
-              {d.active_session_name && sessionShortCode(d.active_session_name)
-                ? <>e.g. the {d.active_session_name} session inserts <strong>{sessionShortCode(d.active_session_name)}</strong> right
-                    after the prefix (a later session, e.g. 2026/2027, inserts 2627 instead) — each session then starts its own
-                    numbering from 1.</>
-                : <>e.g. a 2025/2026 session inserts <strong>2526</strong> right after the prefix (2026/2027 inserts 2627 instead)
-                    — each session then starts its own numbering from 1. No active session is set right now, so this can't take
-                    effect until one is.</>}
-            </small>
-          </div>
-          <p className="text-muted" style={{ fontSize: '.82rem', marginTop: '-.4rem' }}>
-            Next new ID (default prefix, no branch override) will look like <strong>{(f.student_id_prefix || 'STU')}
-            {(f.student_id_include_session === '1' && d.active_session_name && sessionShortCode(d.active_session_name)) || ''}
-            {'1'.padStart(Math.max(3, Math.min(parseInt(f.student_id_digits, 10) || 5, 12)), '0')}</strong>. Existing IDs are never changed.
-          </p>
-
-          <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Class Structure</h4>
-          <div className="form-group">
-            <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-              <input type="checkbox" checked={f.uses_class_arms === '1'} onChange={toggle('uses_class_arms')} />
-              <span>This school streams classes into arms (e.g. SSS1 A, SSS1 B)</span>
-            </label>
-            <small className="text-muted d-block">Turn off if your classes are just SSS1, SSS2… with no arms — then set them up under Academics → Class Setup.</small>
-          </div>
-          <Actions>
-            {canWrite(d, 'academic_config') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
-          </Actions>
-        </form>
-      </div></div>
-    </>
-  );
 }
 
 // ---- Grade scale ------------------------------------------------------------

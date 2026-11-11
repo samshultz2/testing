@@ -83,3 +83,10 @@ def test_school_page_suggests_next_term_start(app):
     client = _admin(app)
     d = _json(client, '/settings/school')
     assert d['next_term'] and d['next_term']['begins'] == f"{expected.start_date.day} {expected.start_date.strftime('%B %Y')}"
+
+
+def test_academic_page_has_decision_context(app):
+    client = _admin(app)
+    d = _json(client, '/settings/academic')
+    assert {'branches', 'latest_id', 'arms_in_use', 'slots', 'urls'} <= set(d)
+    assert d['urls']['slots']
