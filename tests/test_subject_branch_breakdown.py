@@ -447,3 +447,36 @@ def test_composite_ranking_lists_small_branches_unranked_after_the_others():
     r2 = _branch_grade_breakdown([('Commerce', 'A1', 'A')] * 2 + [('Commerce', 'C6', 'B')] * 3,
                                  WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
     assert [x['rank'] for x in r2['ranking']] == [1, 2] and not r2['ranking_criteria']['has_small']
+
+
+def test_empty_session_year_is_selected_in_dropdown_with_shortcut_to_latest(app):
+    """The page defaults to the live session's exam year even before it has
+    results. That year must be the one selected in the dropdown — otherwise
+    the browser shows the first listed year while the page is really on
+    another, and picking that year does nothing. The empty page links to the
+    latest year that has results."""
+    with app.app_context():
+        sess = _active_session()
+        old_name = sess.name
+        sess.name = '2097/2098'
+        b = _branch('GB Year Pick')
+        db.session.flush()
+        s1 = _student(b.id, 'YearPick')
+        db.session.flush()
+        db.session.add(WAECResult(student_id=s1.id, exam_year=2096, subject='Biology', grade='B3'))
+        db.session.commit()
+    try:
+        c = _admin(app)
+        html = c.get('/results/subject-branch-breakdown?exam=waec').get_data(as_text=True)
+        assert 'Exam Year 2098' in html
+        assert '<option value="2098" selected>' in html
+        assert 'No WAEC results recorded for this year yet' in html
+        assert 'results</a>' in html and 'year=' in html   # "View <latest> results" shortcut
+        # choosing a year that has data works directly
+        html2 = c.get('/results/subject-branch-breakdown?exam=waec&year=2096').get_data(as_text=True)
+        assert '<option value="2096" selected>' in html2 and 'GB Year Pick' in html2
+    finally:
+        with app.app_context():
+            s = AcademicSession.query.filter_by(is_active=True).first()
+            s.name = old_name
+            db.session.commit()

@@ -1766,6 +1766,7 @@ def _load_grade_breakdown(exam):
     years = []
     mock_options = []
     selected_year = None
+    latest_year = None
     selected_mock = None
     pass_label = 'Overall Credit Pass (A1–C6)' if exam in ('waec', 'mock_waec') else 'Overall ≥50 Rate'
     band_label = 'Grade' if exam in ('waec', 'mock_waec') else 'Score Band'
@@ -1787,6 +1788,15 @@ def _load_grade_breakdown(exam):
         years |= {y[0] for y in uyq.all() if y[0] is not None}
         years = sorted(years, reverse=True)
         selected_year = resolve_exam_year(request.args.get('year', type=int), years)
+        # The live session's exam year is shown even before it has results;
+        # keep it in the dropdown, or the browser displays the first listed
+        # year while the page is really on another (and choosing that year
+        # then does nothing, since it already looks selected).
+        if years and selected_year and selected_year not in years:
+            from utils.helpers import view_session_override
+            if view_session_override() is None:
+                latest_year = years[0]   # offered as a shortcut on the empty page
+            years = sorted(set(years) | {selected_year}, reverse=True)
         period_label = f'Exam Year {selected_year}' if selected_year else None
         if selected_year:
             q = (db.session.query(Model, Student.branch_id)
@@ -1866,7 +1876,7 @@ def _load_grade_breakdown(exam):
                                              pass_label=pass_label, band_label=band_label)
 
     return {'exam': exam, 'exam_label': exam_label, 'period_label': period_label,
-           'result': result, 'years': years, 'selected_year': selected_year,
+           'result': result, 'years': years, 'selected_year': selected_year, 'latest_year': latest_year,
            'mock_options': mock_options, 'selected_mock': selected_mock,
            'pass_label': pass_label, 'band_label': band_label}
 

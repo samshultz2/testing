@@ -198,7 +198,10 @@
     <span><i class="fas fa-table-cells" aria-hidden="true"></i></span>
     <h3>No {{ 'JAMB' if 'jamb' in exam else 'WAEC' }} results recorded for this {{ 'sitting' if 'mock' in exam else 'year' }} yet</h3>
     <p>Results entered for students appear here automatically, by branch. A branch that only has a summary sheet can import it instead.</p>
-    <a class="rs-btn primary" href="{{ url_for('results.grade_distribution_import', exam=exam) }}"><i class="fas fa-file-import" aria-hidden="true"></i> Import a branch report</a>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center">
+      {% if latest_year %}<a class="rs-btn primary" href="{{ url_for('results.subject_branch_breakdown', exam=exam, year=latest_year) }}"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> View {{ latest_year }} results</a>{% endif %}
+      <a class="rs-btn {{ 'ghost' if latest_year else 'primary' }}" href="{{ url_for('results.grade_distribution_import', exam=exam) }}"><i class="fas fa-file-import" aria-hidden="true"></i> Import a branch report</a>
+    </div>
   </div>
   {% else %}
   {% set O = R.overall %}
