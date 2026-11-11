@@ -158,3 +158,24 @@ def test_dashboard_exposes_operational_stats(app):
     for key in ('issued_today', 'returned_today', 'added_month', 'active_borrowers',
                 'lost', 'damaged', 'most_borrowed'):
         assert key in html
+
+
+def test_loans_status_filter_matches_loan_status_not_book_status(app):
+    """The loans query is joined to Book (for branch scoping); filtering on the
+    loan's status must not accidentally filter on Book.status ('Available')."""
+    from models import db, Book, BookLoan, Student
+    from utils import timeutil
+    with app.app_context():
+        st = Student.query.filter_by(is_active=True).first()
+        if st is None:
+            st = Student(student_id='LBQ1', surname='Loan', first_name='Filter', is_active=True)
+            db.session.add(st); db.session.flush()
+        b = Book(title='Status Filter Book', copies_total=2, copies_available=1, is_active=True)
+        db.session.add(b); db.session.flush()
+        db.session.add(BookLoan(book_id=b.id, borrower_type='student', student_id=st.id,
+                                borrowed_date=timeutil.today(), due_date=timeutil.today(), status='Borrowed'))
+        db.session.commit()
+    c = _admin(app)
+    r = c.get('/library/loans?status=Borrowed', headers={'X-Requested-With': 'fetch', 'Accept': 'application/json'})
+    d = r.get_json(); d = d.get('data', d)
+    assert any(l['book'] == 'Status Filter Book' for l in d['loans'])

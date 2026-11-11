@@ -4,6 +4,7 @@ Reports and data management routes
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
 from utils.helpers import get_active_term, get_active_session, session_terms
 from models import db, Student, ParentContact, Term
+from sqlalchemy import func
 from utils.helpers import login_required
 from utils.excel_utils import (
     export_students_to_excel, create_student_import_template,
@@ -21,6 +22,16 @@ def _wants_json():
 
 def _render(payload):
     from utils.spa import render_or_json
+    # Every screen gets the section-nav links.
+    payload['urls'] = {
+        'index': url_for('reports.index'),
+        'summary': url_for('reports.summary_report'),
+        'export_class': url_for('reports.export_class_students'),
+        'import': url_for('reports.import_students'),
+        'export_students': url_for('reports.export_students'),
+        'export_template': url_for('reports.export_template'),
+        **(payload.get('urls') or {}),
+    }
     return render_or_json('reports/app.html', 'reports_json', payload)
 
 
@@ -473,41 +484,230 @@ def api_jamb_score_distribution():
 @reports_bp.route('/summary')
 @login_required
 def summary_report():
-    """Generate summary report"""
-    from models import ClassArmAssignment, StudentEnrollment, WAECResult, JAMBResult
-    
+    """School at a glance: students, attendance, fees, results, staff, library,
+    events and communication for the active term — each block only for people
+    who can open that part of the app, and each computed independently so one
+    failing section never blanks the page."""
+    from flask import current_app
+    from utils.access_control import can_access_module
     active_session = get_active_session()
-    active_term = get_active_term()
-    
-    # Student statistics (branch-scoped)
-    _bid = viewing_branch_id()
-    total_students = scope_query(Student.query.filter_by(is_active=True), Student).count()
-    male_students = scope_query(Student.query.filter_by(is_active=True, gender='Male'), Student).count()
-    female_students = scope_query(Student.query.filter_by(is_active=True, gender='Female'), Student).count()
+    term = get_active_term()
+    out = {'page': 'summary',
+           'session': active_session.name if active_session else '',
+           'term': term.name if term else '', 'term_id': term.id if term else None,
+           'blocks': {}, 'links': {}}
 
-    # Enrollment statistics
-    active_enrollments = 0
-    if active_term:
-        _eq = StudentEnrollment.query.join(ClassArmAssignment).filter(
-            ClassArmAssignment.term_id == active_term.id,
-            StudentEnrollment.is_active == True)
-        if _bid is not None:
-            _eq = _eq.filter(ClassArmAssignment.branch_id == _bid)
-        active_enrollments = _eq.count()
+    def block(key, module, fn):
+        if module and not can_access_module(module):
+            return
+        try:
+            out['blocks'][key] = fn()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('summary block %s failed', key)
 
-    # Results statistics
-    students_with_waec = scope_by_student(db.session.query(WAECResult.student_id), WAECResult).distinct().count()
-    students_with_jamb = scope_by_student(db.session.query(JAMBResult.student_id), JAMBResult).distinct().count()
-    
-    return _render({
-        'page': 'summary',
-        'kpis': {'total': total_students, 'male': male_students, 'female': female_students,
-                 'enrolled': active_enrollments},
-        'quick_info': {
-            'session': active_session.name if active_session else 'Not Set',
-            'term': active_term.name if active_term else 'Not Set',
-            'with_waec': students_with_waec, 'with_jamb': students_with_jamb,
-        },
-        'chart_urls': {'gender': url_for('reports.api_gender_distribution'),
-                       'attendance': url_for('reports.api_attendance_trend')},
-    })
+    block('students', 'students', lambda: _sum_students(term))
+    block('attendance', 'attendance', lambda: _sum_attendance(term))
+    block('finance', 'finance', lambda: _sum_finance(term))
+    block('results', 'external_exams', _sum_results)
+    block('staff', 'hr', _sum_staff)
+    block('library', 'library', _sum_library)
+    block('events', 'events', _sum_events)
+    block('comms', 'communication', _sum_comms)
+
+    def _u(ep, **kw):
+        try:
+            return url_for(ep, **kw)
+        except Exception:
+            return None
+    out['links'] = {k: v for k, v in {
+        'students': _u('main.students_list'), 'attendance': _u('attendance.index'),
+        'finance': _u('finance.dashboard'), 'defaulters': _u('finance.defaulters'),
+        'waec': _u('results.waec_list'), 'jamb': _u('results.jamb_list'),
+        'staff': _u('hr.dashboard'), 'library': _u('library.dashboard'),
+        'overdue': _u('library.loans', status='Overdue'), 'events': _u('events.calendar'),
+        'comms': _u('comms.dashboard'), 'contacts_missing': _u('comms.contacts', missing=1),
+        'export_students': _u('reports.export_students'), 'export_class': _u('reports.export_class_students'),
+        'import': _u('reports.import_students'), 'index': _u('reports.index'),
+    }.items() if v}
+    return _render(out)
+
+
+def _sum_students(term):
+    from models import ClassArmAssignment, StudentEnrollment, SchoolClass
+    base = scope_query(Student.query.filter_by(is_active=True), Student)
+    total = base.count()
+    male = base.filter(Student.gender == 'Male').count()
+    female = base.filter(Student.gender == 'Female').count()
+    by_class, enrolled = [], 0
+    if term:
+        q = (db.session.query(SchoolClass.name, Student.gender, func.count(StudentEnrollment.id))
+             .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+             .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
+             .join(Student, StudentEnrollment.student_id == Student.id)
+             .filter(ClassArmAssignment.term_id == term.id, StudentEnrollment.is_active.is_(True)))
+        bid = viewing_branch_id()
+        if bid is not None:
+            q = q.filter(ClassArmAssignment.branch_id == bid)
+        agg = {}
+        order = {c.name: (getattr(c, 'level', None) or 0, c.id) for c in SchoolClass.query.all()}
+        for name, g, n in q.group_by(SchoolClass.name, Student.gender).all():
+            r = agg.setdefault(name, {'name': name, 'total': 0, 'male': 0, 'female': 0})
+            r['total'] += n
+            if g == 'Male':
+                r['male'] += n
+            elif g == 'Female':
+                r['female'] += n
+        by_class = sorted(agg.values(), key=lambda r: order.get(r['name'], (0, 0)))
+        enrolled = sum(r['total'] for r in by_class)
+    new_term = 0
+    if term and term.start_date and hasattr(Student, 'created_at'):
+        from datetime import datetime as _dt, time as _t
+        new_term = base.filter(Student.created_at >= _dt.combine(term.start_date, _t.min)).count()
+    return {'total': total, 'male': male, 'female': female, 'enrolled': enrolled,
+            'not_enrolled': max(total - enrolled, 0), 'new_term': new_term, 'by_class': by_class}
+
+
+def _sum_attendance(term):
+    from models import Attendance, ClassArmAssignment, StudentEnrollment, SchoolClass, Week
+    from utils import timeutil
+
+    def scoped(q):
+        q = (q.join(StudentEnrollment, Attendance.enrollment_id == StudentEnrollment.id)
+              .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id))
+        bid = viewing_branch_id()
+        if bid is not None:
+            q = q.filter(ClassArmAssignment.branch_id == bid)
+        return q
+    pres = func.sum(db.case((Attendance.morning_present.is_(True), 1), else_=0)) \
+        + func.sum(db.case((Attendance.afternoon_present.is_(True), 1), else_=0))
+
+    def rate(q):
+        p, n = q.with_entities(pres, func.count(Attendance.id)).one()
+        return (round((p or 0) / (n * 2) * 100, 1) if n else None), n
+    today = timeutil.today()
+    today_rate, today_n = rate(scoped(db.session.query(Attendance)).filter(Attendance.date == today))
+    if not term:
+        return {'today_rate': today_rate, 'today_marked': today_n}
+    tq = scoped(db.session.query(Attendance)).filter(ClassArmAssignment.term_id == term.id)
+    term_rate, term_n = rate(tq)
+    weekly = []
+    for wk, p, n in (tq.join(Week, Attendance.week_id == Week.id)
+                     .with_entities(Week.week_number, pres, func.count(Attendance.id))
+                     .group_by(Week.week_number).order_by(Week.week_number).all()):
+        if n:
+            weekly.append({'label': f'Wk {wk}', 'rate': round((p or 0) / (n * 2) * 100, 1)})
+    classes = []
+    for name, p, n in (tq.join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
+                       .with_entities(SchoolClass.name, pres, func.count(Attendance.id))
+                       .group_by(SchoolClass.name).all()):
+        if n:
+            classes.append({'name': name, 'rate': round((p or 0) / (n * 2) * 100, 1)})
+    classes.sort(key=lambda c: c['rate'])
+    return {'term_rate': term_rate, 'term_records': term_n, 'today_rate': today_rate, 'today_marked': today_n,
+            'weekly': weekly[-10:], 'low_classes': classes[:4], 'high_classes': classes[::-1][:2]}
+
+
+def _sum_finance(term):
+    if not term:
+        return None
+    from routes.finance import _term_fee_summary, _term_expense_summary
+    from utils.finance import defaulters_summary
+    fees = _term_fee_summary(term.id)
+    exp = _term_expense_summary(term.id)
+    payable = max(fees['expected'] - fees['discounts'], 0)
+    collected = fees['collected']
+    dflt = defaulters_summary(term.id)
+    return {'payable': round(payable, 2), 'collected': round(collected, 2),
+            'outstanding': round(max(payable - collected, 0), 2),
+            'rate': round(collected / payable * 100, 1) if payable else None,
+            'expenses': round(exp['expenses'], 2), 'net': round(collected - exp['expenses'], 2),
+            'defaulters': dflt.get('count', 0), 'owed': round(dflt.get('balance', 0) or 0, 2)}
+
+
+def _sum_results():
+    from models import WAECResult, JAMBResult
+    out = {'with_waec': scope_by_student(db.session.query(WAECResult.student_id), WAECResult).distinct().count(),
+           'with_jamb': scope_by_student(db.session.query(JAMBResult.student_id), JAMBResult).distinct().count()}
+    # The latest sitting with a real cohort (a stray early entry for next year
+    # shouldn't hide this year's results).
+    yrs = (scope_by_student(db.session.query(WAECResult.exam_year, func.count(func.distinct(WAECResult.student_id))), WAECResult)
+           .group_by(WAECResult.exam_year).order_by(WAECResult.exam_year.desc()).all())
+    yr = next((y for y, n in yrs if n >= 5), yrs[0][0] if yrs else None)
+    if yr:
+        rows = scope_by_student(db.session.query(WAECResult.student_id, WAECResult.subject, WAECResult.grade)
+                                .filter(WAECResult.exam_year == yr), WAECResult).all()
+        credit = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+        per = {}
+        for sid, subj, g in rows:
+            st = per.setdefault(sid, {'credits': 0, 'eng': False, 'maths': False})
+            if g in credit:
+                st['credits'] += 1
+                sl = (subj or '').lower()
+                if 'english' in sl:
+                    st['eng'] = True
+                if 'math' in sl:
+                    st['maths'] = True
+        n = len(per)
+        five = sum(1 for v in per.values() if v['credits'] >= 5 and v['eng'] and v['maths'])
+        out.update({'waec_year': yr, 'waec_candidates': n,
+                    'waec_five_credits': five, 'waec_five_rate': round(five / n * 100, 1) if n else None,
+                    'waec_credit_rate': round(sum(1 for _s, _j, g in rows if g in credit) / len(rows) * 100, 1) if rows else None})
+    jyr = db.session.query(func.max(JAMBResult.exam_year)).scalar()
+    if jyr:
+        tot = [t for (t,) in scope_by_student(db.session.query(JAMBResult.total_score)
+                                              .filter(JAMBResult.exam_year == jyr), JAMBResult).all() if t is not None]
+        if tot:
+            out.update({'jamb_year': jyr, 'jamb_candidates': len(tot), 'jamb_avg': round(sum(tot) / len(tot), 1),
+                        'jamb_200': sum(1 for t in tot if t >= 200)})
+    return out
+
+
+def _sum_staff():
+    from models import StaffMember, StaffAttendance
+    from utils import timeutil
+    base = scope_query(StaffMember.query.filter(StaffMember.status == 'Active'), StaffMember)
+    total = base.count()
+    teaching = base.filter(StaffMember.staff_type == 'Teaching').count()
+    today = timeutil.today()
+    ids = [i for (i,) in base.with_entities(StaffMember.id).all()]
+    att = (db.session.query(StaffAttendance.status, func.count(StaffAttendance.id))
+           .filter(StaffAttendance.date == today, StaffAttendance.staff_id.in_(ids or [0]))
+           .group_by(StaffAttendance.status).all())
+    by = {k: n for k, n in att}
+    return {'total': total, 'teaching': teaching, 'non_teaching': total - teaching,
+            'present_today': by.get('Present', 0) + by.get('Late', 0), 'late_today': by.get('Late', 0),
+            'absent_today': by.get('Absent', 0), 'marked_today': sum(by.values())}
+
+
+def _sum_library():
+    from models import Book, BookLoan
+    from utils import timeutil
+    books = scope_query(Book.query.filter_by(is_active=True), Book)
+    loans = scope_query(BookLoan.query.join(Book, BookLoan.book_id == Book.id), Book)
+    return {'titles': books.count(),
+            'copies': int(scope_query(db.session.query(func.coalesce(func.sum(Book.copies_total), 0)), Book).scalar() or 0),
+            'on_loan': loans.filter(BookLoan.status == 'Borrowed').count(),
+            'overdue': loans.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < timeutil.today()).count()}
+
+
+def _sum_events():
+    from models import SchoolEvent
+    from utils import timeutil
+    today = timeutil.today()
+    rows = (SchoolEvent.query.filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= today)
+            .order_by(SchoolEvent.start_date).limit(5).all())
+    return {'upcoming': [{'title': e.title, 'category': e.category, 'color': e.color,
+                          'date': e.start_date.isoformat(), 'end': e.end_date.isoformat() if e.end_date else '',
+                          'time': e.start_time if (e.start_time and not e.all_day) else ''} for e in rows]}
+
+
+def _sum_comms():
+    from models import Message, MessageRecipient
+    from utils import comms
+    cov = comms.coverage_stats()
+    sent = (scope_query(db.session.query(func.count(MessageRecipient.id))
+                        .join(Message, MessageRecipient.message_id == Message.id), Message)
+            .filter(MessageRecipient.status == 'Sent').scalar() or 0)
+    return {'coverage': cov.get('pct', 0), 'without_contact': cov.get('without_contact', 0),
+            'campaigns': scope_query(Message.query, Message).count(), 'delivered': int(sent)}

@@ -72,3 +72,24 @@ def test_disabling_event_added_automation_skips_notification(app):
     finally:
         with app.app_context():
             automations.set_enabled('event_added', True)
+
+
+def test_duplicate_event_to_new_date_and_ics_export(app):
+    client = _admin(app)
+    client.post('/events/add', headers={'X-Requested-With': 'fetch'},
+                data={'title': 'PTA, Term 1', 'start_date': '2026-01-10', 'end_date': '2026-01-11',
+                      'category': 'Meeting', '_csrf_token': _ptoken(client)})
+    with app.app_context():
+        src = SchoolEvent.query.filter_by(title='PTA, Term 1').first()
+        sid = src.id
+    r = client.post(f'/events/{sid}/duplicate', headers={'X-Requested-With': 'fetch'},
+                    data={'start_date': '2026-05-02', '_csrf_token': _ptoken(client)})
+    assert r.status_code == 200
+    with app.app_context():
+        copies = SchoolEvent.query.filter_by(title='PTA, Term 1').order_by(SchoolEvent.id).all()
+        assert len(copies) == 2
+        assert copies[1].start_date == date(2026, 5, 2) and copies[1].end_date == date(2026, 5, 3)
+    ics = client.get('/events/calendar.ics')
+    body = ics.get_data(as_text=True)
+    assert ics.status_code == 200 and 'text/calendar' in ics.content_type
+    assert 'BEGIN:VCALENDAR' in body and 'SUMMARY:PTA\\, Term 1' in body

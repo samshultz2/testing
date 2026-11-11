@@ -121,7 +121,21 @@ def dashboard():
                 .filter(Book.is_active == True), Book).group_by(Book.category).all())
     cat_chart = [{'name': c or 'Uncategorised', 'count': n} for c, n in cat_rows]
     recent = (_scope_loans(BookLoan.query).order_by(BookLoan.created_at.desc()).limit(8).all())
+    # What needs doing today: books due back soon, and the most overdue.
+    due_soon = (_loans(BookLoan.status == 'Borrowed', BookLoan.due_date >= today,
+                       BookLoan.due_date <= today + _dt.timedelta(days=2))
+                .order_by(BookLoan.due_date).limit(8).all())
+    overdue_list = (_loans(BookLoan.status == 'Borrowed', BookLoan.due_date < today)
+                    .order_by(BookLoan.due_date).limit(8).all())
+    from models import BookReservation
+    res_ready = scope_query(BookReservation.query.join(Book, BookReservation.book_id == Book.id), Book) \
+        .filter(BookReservation.status == 'Ready').count()
+    res_queued = scope_query(BookReservation.query.join(Book, BookReservation.book_id == Book.id), Book) \
+        .filter(BookReservation.status == 'Queued').count()
     return _render({
+        'due_soon': [_loan_row(l, short=True) for l in due_soon],
+        'overdue_list': [_loan_row(l, short=True) for l in overdue_list],
+        'res_ready': res_ready, 'res_queued': res_queued, 'settings': _settings(),
         'page': 'dashboard', 'titles': titles, 'copies': int(copies), 'available': int(available),
         'on_loan': on_loan, 'overdue': overdue, 'lost': int(lost), 'damaged': int(damaged),
         'issued_today': issued_today, 'returned_today': returned_today,
@@ -546,10 +560,16 @@ def loans():
     if status == 'Overdue':
         q = q.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < timeutil.today())
     elif status in ('Borrowed', 'Returned', 'Lost', 'Damaged'):
-        q = q.filter_by(status=status)
+        q = q.filter(BookLoan.status == status)   # not filter_by: the query is joined to Book, which has its own status
     rows = q.order_by(BookLoan.borrowed_date.desc(), BookLoan.id.desc()).limit(500).all()
+    today = timeutil.today()
+    base = _scope_loans(BookLoan.query)
+    counts = {'Borrowed': base.filter(BookLoan.status == 'Borrowed').count(),
+              'Overdue': base.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < today).count(),
+              'Lost': base.filter(BookLoan.status == 'Lost').count(),
+              'Damaged': base.filter(BookLoan.status == 'Damaged').count()}
     return _render({
-        'page': 'loans', 'status': status, 'settings': _settings(),
+        'page': 'loans', 'status': status, 'settings': _settings(), 'counts': counts,
         'loans': [_loan_row(l) for l in rows],
     })
 

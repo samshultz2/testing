@@ -53,13 +53,41 @@ def _render(payload):
 
 
 def _event_json(e):
+    date_label = e.start_date.strftime('%a, %d %b %Y') if e.start_date else ''
+    if e.end_date and e.end_date != e.start_date:
+        date_label += ' – ' + e.end_date.strftime('%a, %d %b')
+    time_label = ''
+    if e.start_time and not e.all_day:
+        time_label = e.start_time + (('–' + e.end_time) if e.end_time else '')
     return {
         'id': e.id, 'title': e.title, 'category': e.category, 'color': e.color,
-        'audience': e.audience, 'location': e.location,
-        'start_time': e.start_time, 'end_time': e.end_time, 'all_day': bool(e.all_day),
+        'audience': e.audience, 'location': e.location or '',
+        'start_time': e.start_time or '', 'end_time': e.end_time or '', 'all_day': bool(e.all_day),
+        'start_date': e.start_date.isoformat() if e.start_date else '',
+        'end_date': e.end_date.isoformat() if e.end_date else '',
+        'description': e.description or '', 'term_id': e.term_id or '',
+        'date_label': date_label, 'time_label': time_label,
+        'created_by': e.created_by or '',
         'edit_url': url_for('events.edit_event', event_id=e.id),
         'delete_url': url_for('events.delete_event', event_id=e.id),
+        'duplicate_url': url_for('events.duplicate_event', event_id=e.id),
     }
+
+
+def _form_meta():
+    """What the add/edit sheet needs, sent with every Events page."""
+    return {'categories': CATEGORIES, 'category_colors': CATEGORY_COLORS, 'audiences': AUDIENCES,
+            'terms': [{'id': t.id, 'label': t.full_name} for t in session_terms()],
+            'add_url': url_for('events.add_event'), 'ics_url': url_for('events.export_ics'),
+            'today': timeutil.today().isoformat()}
+
+
+def _upcoming(limit=8):
+    today = timeutil.today()
+    rows = (SchoolEvent.query
+            .filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= today)
+            .order_by(SchoolEvent.start_date, SchoolEvent.start_time).limit(limit).all())
+    return [_event_json(e) for e in rows]
 
 
 @events_bp.route('/')
@@ -103,12 +131,12 @@ def calendar():
     } for day in week] for week in weeks]
     return _render({
         'page': 'calendar', 'year': year, 'month': month, 'month_name': _cal.month_name[month],
-        'weeks': weeks_json, 'categories': CATEGORIES, 'category_colors': CATEGORY_COLORS,
+        'weeks': weeks_json, **_form_meta(), 'upcoming': _upcoming(),
         'nav': {'prev_url': url_for('events.calendar', year=prev_m.year, month=prev_m.month),
                 'next_url': url_for('events.calendar', year=next_m.year, month=next_m.month),
                 'today_url': url_for('events.calendar')},
         'urls': {'import': url_for('events.import_calendar'), 'agenda': url_for('events.agenda'),
-                 'add_event': url_for('events.add_event')},
+                 'calendar': url_for('events.calendar'), 'add_event': url_for('events.add_event')},
     })
 
 
@@ -124,19 +152,12 @@ def agenda():
         q = q.filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= timeutil.today())
     events = q.order_by(SchoolEvent.start_date, SchoolEvent.start_time).all()
 
-    def row(e):
-        date_label = e.start_date.strftime('%a, %d %b %Y')
-        if e.end_date:
-            date_label += ' – ' + e.end_date.strftime('%d %b')
-        time_label = ''
-        if e.start_time and not e.all_day:
-            time_label = e.start_time + (('–' + e.end_time) if e.end_time else '')
-        return {**_event_json(e), 'date_label': date_label, 'time_label': time_label,
-                'description': e.description}
+    row = _event_json
     return _render({
         'page': 'agenda', 'events': [row(e) for e in events],
-        'category': category or '', 'upcoming': upcoming, 'categories': CATEGORIES,
+        'category': category or '', 'upcoming': upcoming, **_form_meta(),
         'urls': {'calendar': url_for('events.calendar'), 'add_event': url_for('events.add_event'),
+                 'agenda': url_for('events.agenda'), 'import': url_for('events.import_calendar'),
                  'self': url_for('events.agenda')},
     })
 
@@ -199,10 +220,11 @@ def _form_payload(e, preset=''):
         } if e else None),
         'preset': preset,
         'terms': [{'id': t.id, 'label': t.full_name} for t in session_terms()],
-        'categories': CATEGORIES, 'audiences': AUDIENCES,
+        **_form_meta(),
         'submit_url': url_for('events.edit_event', event_id=e.id) if e else url_for('events.add_event'),
         'delete_url': url_for('events.delete_event', event_id=e.id) if e else None,
-        'urls': {'agenda': url_for('events.agenda'), 'calendar': url_for('events.calendar')},
+        'urls': {'agenda': url_for('events.agenda'), 'calendar': url_for('events.calendar'),
+                 'import': url_for('events.import_calendar')},
     }
 
 
@@ -213,7 +235,7 @@ def edit_event(event_id):
     if request.method == 'POST':
         _read(e)
         db.session.commit()
-        return _ok('Event updated.', url_for('events.agenda'))
+        return _ok('Event updated.', url_for('events.calendar', year=e.start_date.year, month=e.start_date.month))
     return _render(_form_payload(e))
 
 
@@ -263,8 +285,9 @@ def import_calendar():
                             'save_url': url_for('events.import_save')})
         return render_template('events/import_review.html', rows=parsed,
             categories=CATEGORIES, terms=session_terms())
-    return _render({'page': 'import', 'upload_url': url_for('events.import_calendar'),
-                    'urls': {'calendar': url_for('events.calendar')}})
+    return _render({'page': 'import', 'upload_url': url_for('events.import_calendar'), **_form_meta(),
+                    'urls': {'calendar': url_for('events.calendar'), 'agenda': url_for('events.agenda'),
+                             'import': url_for('events.import_calendar')}})
 
 
 @events_bp.route('/import/save', methods=['POST'])
@@ -290,3 +313,50 @@ def import_save():
         saved += 1
     db.session.commit()
     return _ok(f'Imported {saved} event(s) into the calendar.', url_for('events.agenda'))
+
+
+@events_bp.route('/<int:event_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate_event(event_id):
+    """Copy an event (e.g. this term's PTA meeting for next term), optionally to a new date."""
+    src = db.get_or_404(SchoolEvent, event_id)
+    start = _d(request.form.get('start_date')) or src.start_date
+    span = (src.end_date - src.start_date) if src.end_date else None
+    e = SchoolEvent(title=src.title, description=src.description, category=src.category,
+                    start_date=start, end_date=(start + span) if span else None,
+                    start_time=src.start_time, end_time=src.end_time, all_day=src.all_day,
+                    location=src.location, audience=src.audience, term_id=src.term_id,
+                    created_by=_current_user())
+    db.session.add(e)
+    db.session.commit()
+    return _ok('Event copied.', url_for('events.calendar', year=e.start_date.year, month=e.start_date.month))
+
+
+@events_bp.route('/calendar.ics')
+@login_required
+def export_ics():
+    """The school calendar as an .ics file — opens in Google/Apple/Outlook calendars."""
+    from flask import Response
+    def esc(v):
+        return (v or '').replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//School//Calendar//EN', 'CALSCALE:GREGORIAN']
+    stamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
+    for e in SchoolEvent.query.order_by(SchoolEvent.start_date).all():
+        lines += ['BEGIN:VEVENT', f'UID:event-{e.id}@school', f'DTSTAMP:{stamp}', f'SUMMARY:{esc(e.title)}']
+        if e.all_day or not e.start_time:
+            lines.append('DTSTART;VALUE=DATE:' + e.start_date.strftime('%Y%m%d'))
+            lines.append('DTEND;VALUE=DATE:' + (e.last_date + timedelta(days=1)).strftime('%Y%m%d'))
+        else:
+            st = e.start_time.replace(':', '')
+            lines.append(f"DTSTART:{e.start_date.strftime('%Y%m%d')}T{st}00")
+            et = (e.end_time or e.start_time).replace(':', '')
+            lines.append(f"DTEND:{e.last_date.strftime('%Y%m%d')}T{et}00")
+        if e.location:
+            lines.append('LOCATION:' + esc(e.location))
+        if e.description:
+            lines.append('DESCRIPTION:' + esc(e.description))
+        lines.append('CATEGORIES:' + esc(e.category))
+        lines.append('END:VEVENT')
+    lines.append('END:VCALENDAR')
+    return Response('\r\n'.join(lines) + '\r\n', mimetype='text/calendar',
+                    headers={'Content-Disposition': 'attachment; filename=school-calendar.ics'})

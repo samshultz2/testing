@@ -35,3 +35,15 @@ def test_import_students_json_rejects_bad_file(app):
     r = client.post('/reports/import/students', headers={'X-Requested-With': 'fetch'},
                     data=data, content_type='multipart/form-data')
     assert r.status_code == 400 and r.get_json()['ok'] is False
+
+
+def test_summary_payload_has_school_blocks_and_nav(app):
+    client = _admin(app)
+    d = client.get('/reports/summary', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['page'] == 'summary'
+    for key in ('students', 'attendance', 'finance', 'staff', 'library', 'events', 'comms'):
+        assert key in d['blocks'], key
+    assert {'total', 'male', 'female', 'by_class'} <= set(d['blocks']['students'])
+    assert {'summary', 'index', 'export_class', 'import'} <= set(d['urls'])
+    assert d['links']['students'].startswith('/')

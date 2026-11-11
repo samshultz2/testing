@@ -1,145 +1,208 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { chartPalette } from '../lib/hooks';
+// Library — one React app for the whole section: overview, catalogue, add /
+// edit book (ISBN lookup + barcode scan), issue, loans, holds, borrowers,
+// reading lists, reports and settings. Built on the results kit + app kit so
+// it feels native on phones (bottom sheets, pinned action bars, tap targets)
+// and on laptops (dense lists, side summaries). Endpoints are unchanged.
+import React, { useState, useMemo, useRef } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, promptDialog, Banner, PageHeader, Empty, SectionTabs, Autocomplete, SectionShell, Table, Modal } from '../components/ui';
+import { confirm, promptDialog, SectionShell, Toast } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, Meter, usePhone, initials } from '../subjects/results';
+import { A, SecNav, Field, Toggle, Pill, SearchBox, Lookup, plural } from '../components/appkit';
 
-const TABS = [
-  ['dashboard', 'fa-chart-pie', 'Overview'],
-  ['books', 'fa-book', 'Catalogue'],
-  ['issue', 'fa-hand-holding', 'Issue'],
-  ['loans', 'fa-rotate-left', 'Loans'],
-  ['reservations', 'fa-bookmark', 'Reservations'],
-  ['borrowers', 'fa-users', 'Borrowers'],
-  ['reading_lists', 'fa-list-check', 'Reading lists'],
-  ['reports', 'fa-chart-line', 'Reports'],
-  ['settings', 'fa-gear', 'Settings'],
-];
-const ACTIVE = { dashboard: 'dashboard', books: 'books', book_form: 'books', issue: 'issue', loans: 'loans', reservations: 'reservations', borrowers: 'borrowers', borrower: 'borrowers', reading_lists: 'reading_lists', reports: 'reports', settings: 'settings' };
-const Tabs = ({ urls, page }) => { const { go } = useNav(); return <SectionTabs tabs={TABS} urls={urls} active={ACTIVE[page]} go={go} />; };
+// ---- helpers -----------------------------------------------------------------
+const HUES = [210, 160, 25, 280, 340, 190, 45, 120, 0, 250];
+const hue = (s) => HUES[[...String(s || '')].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
+const Cover = ({ title, size }) => (
+  <span className={'lb-cover' + (size ? ' ' + size : '')} style={{ '--h': hue(title) }} aria-hidden="true">{initials(title)}</span>
+);
+function loanTone(l) {
+  if (l.status === 'Lost') return ['bad', 'Lost'];
+  if (l.status === 'Damaged') return ['mid', 'Damaged'];
+  if (l.status === 'Returned') return ['good', 'Returned'];
+  return l.is_overdue ? ['bad', `${plural(l.days_overdue, 'day')} late`] : ['info', `Due ${l.due}`];
+}
+const LoanPill = ({ l }) => { const [t, x] = loanTone(l); return <Pill tone={t}>{x}</Pill>; };
 
-function statusBadge(l) {
-  if (l.status === 'Lost') return <span className="badge badge-danger">Lost</span>;
-  if (l.status === 'Damaged') return <span className="badge badge-warning">Damaged</span>;
-  const cls = l.status === 'Returned' ? 'badge-success' : (l.is_overdue ? 'badge-danger' : 'badge-warning');
-  return <span className={'badge ' + cls}>{l.is_overdue ? 'Overdue' : l.status}</span>;
+function LNav({ d, active }) {
+  const u = d.urls || {};
+  return <SecNav label="Library" active={active} items={[
+    ['dashboard', 'fa-house', 'Overview', u.dashboard],
+    ['books', 'fa-book', 'Catalogue', u.books],
+    ['issue', 'fa-hand-holding', 'Issue', canWrite(d, 'circulation_issue') ? u.issue : null],
+    ['loans', 'fa-rotate-left', 'Loans', u.loans],
+    ['reservations', 'fa-bookmark', 'Holds', u.reservations],
+    ['borrowers', 'fa-users', 'Borrowers', u.borrowers],
+    ['reading_lists', 'fa-list-check', 'Reading lists', u.reading_lists],
+    ['reports', 'fa-chart-line', 'Reports', u.reports, { x: true }],
+    ['settings', 'fa-gear', 'Settings', u.settings, { x: true }],
+  ]} />;
+}
+const ACTIVE = { book_form: 'books', borrower: 'borrowers' };
+const Page = ({ d, children, className }) => (
+  <div className={'rs cm lb ' + (className || '')}><LNav d={d} active={ACTIVE[d.page] || d.page} />{children}</div>
+);
+
+// Loan actions (return / renew / lost / damaged), shared by every loan list.
+function useLoanActions(d, notify) {
+  const nav = useNav();
+  const [busy, setBusy] = useState(null);
+  const act = async (l, url, fields, msg) => {
+    setBusy(l.id);
+    const r = await submitJson(url, fields || {});
+    setBusy(null);
+    if (r.ok) { notify('success', r.message || msg || 'Done.'); nav.refresh(); } else notify('error', r.error || 'That didn’t work.');
+  };
+  const ret = async (l) => {
+    if (l.is_overdue && d.settings && Number(d.settings.fine_per_day)) {
+      const fine = Number(d.settings.fine_per_day) * l.days_overdue;
+      const charge = await confirm({ title: 'Return late book', message: `“${l.book}” is ${plural(l.days_overdue, 'day')} late. Charge the ${naira(fine)} fine?`,
+        confirmText: 'Charge fine', cancelText: 'Waive fine' });
+      act(l, l.return_url, charge ? {} : { waive: '1' }, 'Returned.');
+    } else act(l, l.return_url, {}, 'Returned.');
+  };
+  const mark = async (l, kind) => {
+    const cost = await promptDialog({ title: `Mark as ${kind.toLowerCase()}`, label: `${kind === 'Lost' ? 'Replacement cost' : 'Charge'} to bill the borrower (₦)`,
+      placeholder: 'Blank = the book’s price', inputType: 'number', required: false });
+    if (cost === null) return;
+    act(l, l.mark_url, { kind, cost });
+  };
+  const canRet = canWrite(d, 'circulation_return');
+  const actions = (l, compact) => (l.status === 'Borrowed' && canRet ? (
+    <span className="lb-acts">
+      <button type="button" className={'rs-btn primary sm' + (compact ? ' icon' : '')} disabled={busy === l.id} onClick={() => ret(l)} aria-label={'Return ' + l.book}>
+        <i className={'fas ' + (busy === l.id ? 'fa-spinner fa-spin' : 'fa-rotate-left')} aria-hidden="true" />{!compact && ' Return'}</button>
+      <Menu label="More" items={[
+        { icon: 'fa-arrows-rotate', label: 'Renew', onClick: () => act(l, l.renew_url, {}, 'Renewed.') },
+        { icon: 'fa-triangle-exclamation', label: 'Mark lost', onClick: () => mark(l, 'Lost') },
+        { icon: 'fa-screwdriver-wrench', label: 'Mark damaged', onClick: () => mark(l, 'Damaged') },
+        l.borrower_url && { icon: 'fa-user', label: 'Borrower history', onClick: () => nav.go(l.borrower_url) },
+      ]} />
+    </span>) : null);
+  return { actions };
 }
 
-// ---- Dashboard -------------------------------------------------------------
-function Dashboard({ d }) {
-  const ref = useRef();
-  useEffect(() => {
-    if (!ref.current || !window.Chart || !d.cat_chart.length) return;
-    window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
-    const chart = new window.Chart(ref.current, {
-      type: 'doughnut',
-      data: { labels: d.cat_chart.map((x) => x.name), datasets: [{ data: d.cat_chart.map((x) => x.count),
-        backgroundColor: chartPalette().categorical, borderWidth: 0 }] },
-      options: { maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } },
-    });
-    return () => chart.destroy();
-  }, [d.cat_chart]);
-
-  const kpis = [
-    ['blue', 'fa-book', d.titles, 'Titles', d.urls.books],
-    ['green', 'fa-layer-group', `${d.available}/${d.copies}`, 'Available', d.urls.books + '?avail=1'],
-    ['amber', 'fa-hand-holding', d.on_loan, 'On loan', d.urls.loans + '?status=Borrowed'],
-    ['red', 'fa-clock', d.overdue, 'Overdue', d.urls.loans + '?status=Overdue'],
-    ['green', 'fa-arrow-up-from-bracket', d.issued_today, 'Issued today', null],
-    ['green', 'fa-arrow-down-to-bracket', d.returned_today, 'Returned today', null],
-    ['blue', 'fa-plus', d.added_month, 'Added this month', null],
-    ['blue', 'fa-users', d.active_borrowers, 'Active borrowers', null],
-    ['red', 'fa-triangle-exclamation', d.lost, 'Lost', d.urls.loans + '?status=Lost'],
-    ['amber', 'fa-screwdriver-wrench', d.damaged, 'Damaged', d.urls.loans + '?status=Damaged'],
-  ];
-  const quick = [
-    ...(canWrite(d, 'catalogue_create') ? [[d.urls.add_book, 'fa-plus', 'Register book', 'btn-primary']] : []),
-    ...(canWrite(d, 'circulation_issue') ? [[d.urls.issue, 'fa-hand-holding', 'Issue', 'btn-secondary']] : []),
-    ...(canWrite(d, 'circulation_return') ? [[d.urls.loans + '?status=Borrowed', 'fa-rotate-left', 'Return', 'btn-secondary']] : []),
-    [d.urls.loans + '?status=Overdue', 'fa-clock', 'Overdue', 'btn-secondary'],
-    [d.urls.books, 'fa-magnifying-glass', 'Search books', 'btn-secondary'],
-    ...(canWrite(d, 'catalogue_export') ? [[d.urls.export, 'fa-file-csv', 'Export', 'btn-secondary', true]] : []),
-  ];
+function LoanRow({ l, actions, hideBorrower }) {
   return (
-    <>
-      <PageHeader title="Library" actions={<>
-        {canWrite(d, 'circulation_issue') && <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>}
-        {canWrite(d, 'catalogue_create') && <a href={d.urls.add_book} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>}
-      </>} />
-      <Tabs urls={d.urls} page="dashboard" />
-      <div className="d-flex gap-2 flex-wrap mb-3">
-        {quick.map(([href, ic, label, cls, native]) => (
-          <a key={label} href={href} {...(native ? { 'data-native': true } : {})} className={'btn btn-sm ' + cls}><i aria-hidden="true" className={'fas ' + ic} /> {label}</a>))}
-      </div>
-      <div className="kpi-row">
-        {kpis.map(([c, ic, v, l, href]) => {
-          const inner = <><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
-            <div><div className="v">{v}</div><div className="l">{l}</div></div></>;
-          return href ? <a className="kpi" key={l} href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
-            : <div className="kpi" key={l}>{inner}</div>;
-        })}
-      </div>
-
-      <div className="cm-grid split">
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-shapes" /> By category</h3></div>
-          <div className="wb"><div className="chart-box">
-            {d.cat_chart.length ? <canvas ref={ref} /> : <Empty icon="fa-book" title="No books yet" />}
-          </div></div>
-        </div>
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-fire" /> Most borrowed</h3></div>
-          <div className="wb" style={{ padding: 0 }}>
-            {(d.most_borrowed || []).length ? (
-              <table className="data-table"><tbody>{d.most_borrowed.map((b, i) => (
-                <tr key={i}><td>{b.title}</td><td className="text-right"><span className="badge badge-secondary">{b.count}</span></td></tr>))}
-              </tbody></table>
-            ) : <Empty icon="fa-fire" title="No loans yet" />}
-          </div>
-        </div>
-      </div>
-
-      <div className="widget">
-        <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent loans</h3><a href={d.urls.loans} className="text-sm">View all</a></div>
-        <div className="wb" style={{ padding: 0 }}>
-          <Table rowKey={(l) => l.id} rows={d.recent}
-            empty={<Empty icon="fa-hand-holding" title="No loans yet" />}
-            columns={[
-              { key: 'book', label: 'Book', render: (l) => l.book },
-              { key: 'student', label: 'Borrower', render: (l) => <>{l.student}{l.borrower_type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}</> },
-              { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
-              { key: 'due', label: 'Due', render: (l) => l.due },
-              { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
-            ]} />
-        </div>
-      </div>
-    </>
+    <div className={'lb-row' + (l.is_overdue && l.status === 'Borrowed' ? ' late' : '')}>
+      <Cover title={l.book} />
+      <span className="lb-row-t"><b>{l.book}</b>
+        <small>{!hideBorrower && <>{l.borrower_url ? <A to={l.borrower_url}>{l.student}</A> : l.student}{l.borrower_type === 'staff' && ' (staff)'} · </>}
+          out {l.borrowed}{l.renew_count > 0 ? ` · renewed ×${l.renew_count}` : ''}{l.returned ? ` · back ${l.returned}` : ''}</small></span>
+      <span className="lb-row-s"><LoanPill l={l} />{(l.fine || l.replacement_cost) ? <small>{naira(l.fine || l.replacement_cost)}</small> : null}</span>
+      {actions && actions(l)}
+    </div>
   );
 }
 
-// ---- Catalogue -------------------------------------------------------------
+// ============================================================================
+// Overview
+// ============================================================================
+function Dashboard({ d, notify }) {
+  const { actions } = useLoanActions(d, notify);
+  const u = d.urls;
+  const catMax = Math.max(1, ...(d.cat_chart || []).map((c) => c.count));
+  const topMax = Math.max(1, ...(d.most_borrowed || []).map((c) => c.count));
+  const qa = [
+    canWrite(d, 'circulation_issue') && { to: u.issue, ic: 'fa-hand-holding', tone: 'sms', t: 'Issue a book', s: 'Scan or search, pick a borrower' },
+    canWrite(d, 'circulation_return') && { to: u.loans + '?status=Borrowed', ic: 'fa-rotate-left', tone: 'wa', t: 'Return a book', s: `${plural(d.on_loan, 'copy', 'copies')} out now` },
+    canWrite(d, 'catalogue_create') && { to: u.add_book, ic: 'fa-barcode', tone: 'app', t: 'Add a book', s: 'Type or scan the ISBN' },
+    { to: u.books, ic: 'fa-magnifying-glass', tone: 'em', t: 'Find a book', s: `${plural(d.titles, 'title')} · ${d.available} on the shelf` },
+  ].filter(Boolean);
+  const attn = [
+    d.overdue ? { to: u.loans + '?status=Overdue', ic: 'fa-clock', tone: 'bad', t: `${plural(d.overdue, 'book')} overdue` } : null,
+    d.res_ready ? { to: u.reservations + '?status=Ready', ic: 'fa-bookmark', tone: 'good', t: `${plural(d.res_ready, 'hold')} ready to collect` } : null,
+    d.res_queued ? { to: u.reservations + '?status=Queued', ic: 'fa-hourglass-half', tone: 'info', t: `${plural(d.res_queued, 'person', 'people')} waiting for a copy` } : null,
+    (d.lost + d.damaged) ? { to: u.loans + '?status=Lost', ic: 'fa-triangle-exclamation', tone: 'mid', t: `${d.lost} lost · ${d.damaged} damaged` } : null,
+  ].filter(Boolean);
+  return (
+    <Page d={d}>
+      <Head icon="fa-book-open" title="Library" sub={`${plural(d.titles, 'title')} · ${plural(d.copies, 'copy', 'copies')}`}>
+        {canWrite(d, 'circulation_issue') && <A to={u.issue} className="rs-btn primary"><i className="fas fa-hand-holding" aria-hidden="true" /> Issue a book</A>}
+        <Menu items={[
+          canWrite(d, 'catalogue_create') && { icon: 'fa-plus', label: 'Add a book', href: u.add_book },
+          canWrite(d, 'catalogue_export') && { icon: 'fa-file-csv', label: 'Export catalogue (CSV)', href: u.export, native: true },
+          { icon: 'fa-chart-line', label: 'Reports', href: u.reports },
+        ]} />
+      </Head>
+      <div className="cm-qa lb-qa">{qa.map((q) => (
+        <A key={q.t} to={q.to} className="cm-qa-i"><span className={'cm-ch lg ' + q.tone}><i className={'fas ' + q.ic} aria-hidden="true" /></span>
+          <span><b>{q.t}</b><small>{q.s}</small></span></A>))}</div>
+      <div className="cm-grid2">
+        <section className="rs-card cm-cov">
+          <div className="cm-cov-t"><span className="k">On the shelf</span>
+            <strong>{d.available}<small> of {d.copies} copies</small></strong>
+            <Meter value={d.available} max={d.copies || 1} tone="good" />
+            <span className="cm-mute">{d.on_loan} out on loan · {d.active_borrowers} active borrowers</span></div>
+          {attn.length > 0 && <div className="cm-attn"><span className="k">Needs attention</span>
+            {attn.map((a) => <A key={a.t} to={a.to} className={'cm-attn-i ' + a.tone}><i className={'fas ' + a.ic} aria-hidden="true" />{a.t}<i className="fas fa-chevron-right" aria-hidden="true" /></A>)}</div>}
+        </section>
+        <Tiles items={[
+          { label: 'Issued today', value: d.issued_today || 0, sub: `${d.returned_today || 0} returned today` },
+          { label: 'Overdue', value: d.overdue || 0, tone: d.overdue ? 'bad' : 'good', sub: d.overdue ? 'tap Needs attention' : 'all on time' },
+          { label: 'New this month', value: d.added_month || 0, sub: 'titles added' },
+          { label: 'Borrowers', value: d.active_borrowers || 0, sub: 'with a book out' },
+        ]} />
+      </div>
+      <div className="cm-grid2">
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-calendar-day" aria-hidden="true" /> Due back soon</h3><A to={u.loans + '?status=Borrowed'} className="cm-link">All loans</A></div>
+          {(d.due_soon || []).length ? <div className="cm-list">{d.due_soon.map((l) => <LoanRow key={l.id} l={l} actions={(x) => actions(x, true)} />)}</div>
+            : <p className="cm-mute">Nothing due in the next two days.</p>}
+        </section>
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-clock" aria-hidden="true" /> Overdue</h3>{d.overdue > 0 && <A to={u.loans + '?status=Overdue'} className="cm-link">All {d.overdue}</A>}</div>
+          {(d.overdue_list || []).length ? <div className="cm-list">{d.overdue_list.map((l) => <LoanRow key={l.id} l={l} actions={(x) => actions(x, true)} />)}</div>
+            : <p className="cm-mute">No overdue books. 🎉</p>}
+        </section>
+      </div>
+      <div className="cm-grid2">
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-fire" aria-hidden="true" /> Most borrowed</h3></div>
+          {(d.most_borrowed || []).length ? <div className="lb-bars">{d.most_borrowed.map((b, i) => (
+            <div key={i} className="lb-bar"><span className="n">{i + 1}</span><span className="t">{b.title}</span>
+              <span className="b"><i style={{ width: (b.count / topMax * 100) + '%' }} /></span><b>{b.count}</b></div>))}</div>
+            : <p className="cm-mute">No loans yet.</p>}
+        </section>
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-shapes" aria-hidden="true" /> By category</h3></div>
+          {(d.cat_chart || []).length ? <div className="lb-bars">{[...d.cat_chart].sort((a, b) => b.count - a.count).map((c) => (
+            <A key={c.name} to={u.books + '?category=' + encodeURIComponent(c.name === 'Uncategorised' ? '' : c.name)} className="lb-bar link">
+              <Cover title={c.name} size="xs" /><span className="t">{c.name}</span>
+              <span className="b"><i style={{ width: (c.count / catMax * 100) + '%' }} /></span><b>{c.count}</b></A>))}</div>
+            : <p className="cm-mute">No books yet.</p>}
+        </section>
+      </div>
+      <section className="rs-card">
+        <div className="rs-card-h"><h3><i className="fas fa-clock-rotate-left" aria-hidden="true" /> Recent loans</h3><A to={u.loans + '?status=all'} className="cm-link">View all</A></div>
+        {(d.recent || []).length ? <div className="cm-list">{d.recent.map((l) => <LoanRow key={l.id} l={l} />)}</div>
+          : <Blank icon="fa-hand-holding" title="No loans yet">{canWrite(d, 'circulation_issue') && <A to={u.issue} className="rs-btn primary">Issue the first book</A>}</Blank>}
+      </section>
+    </Page>
+  );
+}
+
+// ============================================================================
+// Catalogue
+// ============================================================================
 function Books({ d, notify }) {
   const nav = useNav();
   const [q, setQ] = useState(d.q || '');
   const [category, setCategory] = useState(d.category || '');
   const [subject, setSubject] = useState(d.subject || '');
-  const [availOnly, setAvailOnly] = useState(d.avail === '1');
-  const [busy, setBusy] = useState(false);
+  const [avail, setAvail] = useState(d.avail === '1' ? '1' : '');
+  const [limit, setLimit] = useState(60);
   const [reserving, setReserving] = useState(null);
+  const [busy, setBusy] = useState(false);
   const fileRef = useRef();
-
   const del = async (b) => {
-    if (!await confirm(`Remove ${b.title}?`)) return;
-    setBusy(true);
+    if (!await confirm({ title: 'Remove book?', message: `“${b.title}” will be taken out of the catalogue.`, tone: 'danger', confirmText: 'Remove' })) return;
     const r = await submitJson(b.delete_url, {});
-    setBusy(false);
-    if (r.ok) nav.refresh();
-    else notify('error', r.error || 'Could not remove the book.');
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not remove the book.');
   };
-
   const onImport = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
@@ -147,71 +210,115 @@ function Books({ d, notify }) {
     setBusy(true);
     const r = await postFile(d.urls.import, file);
     setBusy(false);
-    if (r.ok) { notify('success', r.message || 'Imported.'); nav.refresh(); }
-    else notify('error', r.error || 'Could not import that file.');
+    if (r.ok) { notify('success', r.message || 'Imported.'); nav.refresh(); } else notify('error', r.error || 'Could not import that file.');
   };
-
   const shown = d.books.filter((b) =>
     (!q || (b.title + ' ' + (b.author || '') + ' ' + (b.isbn || '') + ' ' + (b.barcode || '') + ' ' + (b.subject || '')).toLowerCase().includes(q.toLowerCase()))
-    && (!category || b.category === category)
-    && (!subject || b.subject === subject)
-    && (!availOnly || (b.copies_available > 0 && !b.reference_only)));
-
+    && (!category || b.category === category) && (!subject || b.subject === subject)
+    && (!avail || (b.copies_available > 0 && !b.reference_only)));
   return (
-    <>
-      <PageHeader title="Catalogue" actions={<>
-        {canWrite(d, 'catalogue_import') && <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />}
-        {canWrite(d, 'catalogue_import') && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import CSV</button>}
-        {canWrite(d, 'catalogue_export') && <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>}
-        {canWrite(d, 'catalogue_create') && <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>}
-      </>} />
-      <Tabs urls={d.urls} page="books" />
-      {reserving && <ReserveModal d={d} book={reserving} onClose={() => setReserving(null)}
-        onDone={(m) => { setReserving(null); notify('success', m); }} notify={notify} />}
-
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form">
-          <div className="form-group"><label className="form-label">Search</label>
-            <input type="text" className="form-control" value={q} placeholder="Title, author, ISBN, barcode, subject" onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Category</label>
-            <select className="form-control" value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">All</option>{d.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Subject</label>
-            <select className="form-control" value={subject} onChange={(e) => setSubject(e.target.value)}>
-              <option value="">All</option>{(d.subjects || []).map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
-          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-            <label className="form-check"><input type="checkbox" checked={availOnly} onChange={(e) => setAvailOnly(e.target.checked)} /> Available only</label></div>
-        </div>
-      </div></div>
-
-      <div className="card">
-        <div className="card-header"><h3>{shown.length} title(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(b) => b.id} rows={shown} pageSize={25} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p>{canWrite(d, 'catalogue_create') && <a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a>}</Empty>}
-            columns={[
-              { key: 'title', label: 'Title', sortable: true, sortValue: (b) => b.title, render: (b) => <><strong>{b.title}</strong>{b.reference_only && <span className="badge badge-warning" style={{ marginLeft: '.3rem' }}>Reference</span>}{b.status === 'Withdrawn' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Withdrawn</span>}{(b.isbn || b.barcode) && <div className="text-muted text-sm">{b.isbn || b.barcode}</div>}</> },
-              { key: 'author', label: 'Author', sortable: true, sortValue: (b) => b.author || '', render: (b) => b.author || '—' },
-              { key: 'category', label: 'Category', render: (b) => <>{b.category && <span className="badge badge-secondary">{b.category}</span>}{b.subject && <span className="badge badge-secondary" style={{ marginLeft: '.2rem' }}>{b.subject}</span>}{!b.category && !b.subject && '—'}</> },
-              { key: 'shelf', label: 'Shelf', render: (b) => [b.shelf, b.rack].filter(Boolean).join(' · ') || '—' },
-              { key: 'avail', label: 'Avail/Total', align: 'right', render: (b) => <><span className={'badge ' + (b.copies_available ? 'badge-success' : 'badge-danger')}>{b.copies_available}</span> / {b.copies_total}</> },
-              { key: 'act', label: '', render: (b) => (
-                <div className="d-flex gap-1 justify-end">
-                  {b.copies_available > 0 && !b.reference_only && canWrite(d, 'circulation_issue') && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
-                  {!b.reference_only && canWrite(d, 'reservations_create') && <button type="button" className="btn btn-secondary btn-sm" title="Reserve / hold" onClick={() => setReserving(b)}><i aria-hidden="true" className="fas fa-bookmark" /></button>}
-                  {canWrite(d, 'catalogue_edit') && <a href={b.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
-                  {canWrite(d, 'catalogue_delete') && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                </div>) },
-            ]} />
-        </div>
+    <Page d={d}>
+      <Head icon="fa-book" title="Catalogue" sub={`${plural(shown.length, 'title')}${shown.length !== d.books.length ? ` of ${d.books.length}` : ''}`}>
+        {canWrite(d, 'catalogue_create') && <A to={d.urls.add_book} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm"> Add book</span></A>}
+        <Menu items={[
+          canWrite(d, 'catalogue_import') && { icon: busy ? 'fa-spinner' : 'fa-file-import', label: 'Import from CSV', onClick: () => fileRef.current && fileRef.current.click() },
+          canWrite(d, 'catalogue_export') && { icon: 'fa-file-csv', label: 'Export catalogue (CSV)', href: d.urls.export, native: true },
+        ]} />
+        <input type="file" ref={fileRef} accept=".csv,text/csv" hidden onChange={onImport} />
+      </Head>
+      <div className="cm-filters">
+        <SearchBox value={q} onChange={setQ} placeholder="Title, author, ISBN, barcode, subject" />
+        {(d.subjects || []).length > 0 && (
+          <select className="cm-sel" value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject">
+            <option value="">All subjects</option>{d.subjects.map((c) => <option key={c} value={c}>{c}</option>)}</select>)}
+        <Seg label="Availability" value={avail} onChange={setAvail} options={[{ value: '', label: 'All' }, { value: '1', label: 'On the shelf' }]} />
       </div>
-    </>
+      {d.categories.length > 0 && <Chips label="Category" value={category} onChange={setCategory}
+        items={[{ value: '', label: 'All' }, ...d.categories.map((c) => ({ value: c, label: c }))]} />}
+      <section className="rs-card">
+        {shown.length ? (
+          <div className="cm-list">
+            {shown.slice(0, limit).map((b) => {
+              const out = b.copies_available <= 0;
+              return (
+                <div key={b.id} className={'lb-row book' + (b.status === 'Withdrawn' ? ' off' : '')}>
+                  <Cover title={b.title} />
+                  <span className="lb-row-t"><b>{b.title}</b>
+                    <small>{[b.author, b.category, b.subject].filter(Boolean).join(' · ') || '—'}</small>
+                    {(b.shelf || b.rack || b.isbn) && <small className="lb-where">{(b.shelf || b.rack) && <><i className="fas fa-location-dot" aria-hidden="true" /> {[b.shelf, b.rack].filter(Boolean).join(' · ')}</>}{b.isbn ? `  ${b.isbn}` : ''}</small>}</span>
+                  <span className="lb-row-s">
+                    {b.reference_only ? <Pill tone="info" icon="fa-book-bookmark">Reference</Pill>
+                      : <Pill tone={out ? 'bad' : 'good'}>{out ? 'All out' : `${b.copies_available} of ${b.copies_total} in`}</Pill>}
+                    {b.status === 'Withdrawn' && <Pill>Withdrawn</Pill>}
+                  </span>
+                  <span className="lb-acts">
+                    {!out && !b.reference_only && canWrite(d, 'circulation_issue') && <A to={b.issue_url} className="rs-btn primary sm icon" aria-label={'Issue ' + b.title} title="Issue"><i className="fas fa-hand-holding" aria-hidden="true" /></A>}
+                    <Menu label="More" items={[
+                      !b.reference_only && canWrite(d, 'reservations_create') && { icon: 'fa-bookmark', label: out ? 'Reserve (join the queue)' : 'Hold a copy', onClick: () => setReserving(b) },
+                      canWrite(d, 'catalogue_edit') && { icon: 'fa-pen', label: 'Edit details / copies', href: b.edit_url },
+                      canWrite(d, 'catalogue_delete') && { icon: 'fa-trash', label: 'Remove', danger: true, onClick: () => del(b) },
+                    ]} />
+                  </span>
+                </div>);
+            })}
+            {shown.length > limit && <button type="button" className="cm-showmore" onClick={() => setLimit((l) => l + 120)}>Show more ({shown.length - limit} left)</button>}
+          </div>
+        ) : (
+          <Blank icon="fa-book" title={d.books.length ? 'No books match' : 'The catalogue is empty'}>
+            <p>{d.books.length ? 'Try another search or clear the filters.' : 'Add books one by one with the ISBN, or import a CSV.'}</p>
+            {canWrite(d, 'catalogue_create') && !d.books.length && <A to={d.urls.add_book} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /> Add a book</A>}
+          </Blank>)}
+      </section>
+      {reserving && <ReserveSheet d={d} book={reserving} notify={notify} onClose={() => setReserving(null)} />}
+    </Page>
   );
 }
 
-// ---- Book form -------------------------------------------------------------
+function BorrowerPick({ d, type, setType, picked, setPicked, autoFocus }) {
+  return (
+    <div className="cm-stack">
+      <Seg label="Borrower type" value={type} onChange={(v) => { setType(v); setPicked(null); }}
+           options={[{ value: 'student', icon: 'fa-user-graduate', label: 'Student' }, { value: 'staff', icon: 'fa-user-tie', label: 'Staff' }]} />
+      <Lookup key={type} url={type === 'staff' ? d.urls.staff_search : d.urls.student_search} autoFocus={autoFocus}
+              placeholder={type === 'staff' ? 'Search staff name or ID…' : 'Search student name or ID…'}
+              picked={picked} onPick={setPicked} onClear={() => setPicked(null)} />
+    </div>
+  );
+}
+
+function ReserveSheet({ d, book, notify, onClose }) {
+  const [type, setType] = useState('student');
+  const [who, setWho] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!who) { notify('error', 'Choose who it’s for.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.urls.reserve, { book_id: book.id, borrower_type: type,
+      student_id: type === 'student' ? who.id : '', staff_id: type === 'staff' ? who.id : '' });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message || 'Reserved.'); onClose(); } else notify('error', r.error || 'Could not reserve.');
+  };
+  return (
+    <Sheet title="Reserve a copy" onClose={onClose}>
+      <div className="cm-sheet">
+        <div className="lb-book-h"><Cover title={book.title} /><span><b>{book.title}</b><small>{book.copies_available > 0
+          ? 'A copy is free — it will be held for them now.' : 'All copies are out — they join the queue and are next when one comes back.'}</small></span></div>
+        <BorrowerPick d={d} type={type} setType={setType} picked={who} setPicked={setWho} autoFocus />
+        <div className="cm-sheet-f">
+          <button type="button" className="rs-btn ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="rs-btn primary" disabled={busy || !who} onClick={submit}><i className="fas fa-bookmark" aria-hidden="true" /> Reserve</button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+// ============================================================================
+// Add / edit book
+// ============================================================================
 function BookForm({ d, notify }) {
   const nav = useNav();
+  const phone = usePhone();
   const b = d.book || {};
   const editing = !!d.book;
   const init = (k, dv) => (b[k] != null && b[k] !== '' ? b[k] : dv);
@@ -227,17 +334,14 @@ function BookForm({ d, notify }) {
     copies_total: b.copies_total != null ? b.copies_total : 1, notes: init('notes', ''),
   });
   const [busy, setBusy] = useState(false);
+  const [more, setMore] = useState(editing);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-
-  // ── ISBN / barcode auto-fill ──────────────────────────────────────────────
   const [looking, setLooking] = useState(false);
   const [lookMsg, setLookMsg] = useState(null);
   const [dupes, setDupes] = useState([]);
   const fileRef = useRef(null);
-
   const applyMeta = (m) => setF((s) => {
     const next = { ...s };
-    // Fill from the catalogue result, keeping anything the user already typed.
     ['title', 'subtitle', 'author', 'publisher', 'subject', 'keywords', 'description', 'language'].forEach((k) => {
       if (m[k] && !String(next[k] || '').trim()) next[k] = m[k];
     });
@@ -245,374 +349,402 @@ function BookForm({ d, notify }) {
     if (m.isbn) next.isbn = m.isbn;
     return next;
   });
-
   const doLookup = async (isbnArg) => {
     const isbn = (isbnArg != null ? isbnArg : f.isbn) || '';
-    if (!isbn.trim()) { setLookMsg({ tone: 'warn', text: 'Enter or scan an ISBN first.' }); return; }
+    if (!isbn.trim()) { setLookMsg({ tone: 'mid', text: 'Type or scan an ISBN first.' }); return; }
     setLooking(true); setLookMsg(null); setDupes([]);
     try {
       const res = await apiGet(`${d.urls.isbn_lookup}?isbn=${encodeURIComponent(isbn)}`);
       setDupes(res.existing || []);
-      if (res.found) { applyMeta(res.book); setLookMsg({ tone: 'success', text: `Found via ${res.book.source}. Details filled in — review and save.` }); }
-      else { set('isbn', res.isbn || isbn); setLookMsg({ tone: 'warn', text: 'Not in the online catalogues (common for locally-published Nigerian books). ISBN saved — just type the title and details, then save.' }); }
-    } catch (e2) {
-      setLookMsg({ tone: 'error', text: 'Lookup failed. Check the connection or type the details.' });
+      if (res.found) { applyMeta(res.book); setLookMsg({ tone: 'good', text: `Found via ${res.book.source} — details filled in. Check them and save.` }); }
+      else { set('isbn', res.isbn || isbn); setLookMsg({ tone: 'mid', text: 'Not in the online catalogues (common for locally published books). Just type the title below.' }); }
+    } catch (_) {
+      setLookMsg({ tone: 'bad', text: 'Lookup failed — check the connection, or type the details.' });
     } finally { setLooking(false); }
   };
-
-  // Scan a barcode from a photo the user takes/uploads, using the browser's
-  // native BarcodeDetector (no external library). A book's barcode is its
-  // ISBN-13, so a hit feeds straight into the lookup.
   const scanSupported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
   const onScanFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    if (!scanSupported) { setLookMsg({ tone: 'warn', text: 'Barcode scanning isn’t supported here — type the ISBN instead.' }); return; }
-    setLookMsg({ tone: 'info', text: 'Reading barcode…' });
+    if (!scanSupported) { setLookMsg({ tone: 'mid', text: 'Barcode scanning isn’t supported on this device — type the ISBN instead.' }); return; }
+    setLookMsg({ tone: 'info', text: 'Reading the barcode…' });
     try {
       const bitmap = await createImageBitmap(file);
       // eslint-disable-next-line no-undef
-      const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128'] });
-      const codes = await detector.detect(bitmap);
+      const codes = await new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'code_128'] }).detect(bitmap);
       if (codes && codes.length) { const code = codes[0].rawValue; set('isbn', code); doLookup(code); }
-      else setLookMsg({ tone: 'warn', text: 'Couldn’t read a barcode — try a clearer photo or type the ISBN.' });
-    } catch (e2) {
-      setLookMsg({ tone: 'error', text: 'Could not read the image. Type the ISBN instead.' });
-    }
+      else setLookMsg({ tone: 'mid', text: 'Couldn’t read a barcode — try a sharper photo or type the ISBN.' });
+    } catch (_) { setLookMsg({ tone: 'bad', text: 'Could not read that image. Type the ISBN instead.' }); }
   };
-
   const addCopies = async (dupe) => {
-    const n = Number(await promptDialog({ title: 'Add copies',
-      label: `How many copies of "${dupe.title}" to add?`, inputType: 'number', defaultValue: '1' }));
+    const n = Number(await promptDialog({ title: 'Add copies', label: `How many copies of “${dupe.title}” to add?`, inputType: 'number', defaultValue: '1' }));
     if (!n || n <= 0) return;
     const r = await submitJson(dupe.add_copies_url, { count: n });
     if (r.ok) nav.go(d.urls.books); else notify('error', r.error || 'Could not add copies.');
   };
-
   const submit = async (e) => {
-    e.preventDefault();
-    if (!f.title.trim()) { notify('error', 'Title is required.'); return; }
+    if (e) e.preventDefault();
+    if (!f.title.trim()) { notify('error', 'A book needs a title.'); return; }
     setBusy(true);
     const r = await submitJson(d.submit_url, { ...f, reference_only: f.reference_only ? 'on' : '' });
     setBusy(false);
-    if (r.ok) nav.go(r.redirect);
-    else notify('error', r.error || 'Could not save the book.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save the book.');
   };
-
+  const canSave = canWrite(d, editing ? 'catalogue_edit' : 'catalogue_create');
+  const T = (k, label, extra) => <Field label={label} grow><input value={f[k]} onChange={(e) => set(k, e.target.value)} {...extra} /></Field>;
   return (
-    <>
-      <PageHeader title={editing ? 'Edit Book' : 'Add Book'} />
-
-      {!editing && (
-        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-barcode" /> Quick add by ISBN / barcode</h3></div>
-          <div className="card-body">
-            <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-              <div className="form-group" style={{ flex: 1, minWidth: 200, margin: 0 }}>
-                <label className="form-label">ISBN</label>
-                <input type="text" className="form-control" placeholder="Type or scan the 10/13-digit ISBN"
-                       value={f.isbn} onChange={(e) => set('isbn', e.target.value)}
-                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } }} />
-              </div>
-              <button type="button" className="btn btn-primary" onClick={() => doLookup()} disabled={looking}>
-                <i aria-hidden="true" className="fas fa-magnifying-glass" /> {looking ? 'Looking…' : 'Look up'}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => fileRef.current && fileRef.current.click()}
-                      title={scanSupported ? 'Take or upload a photo of the barcode' : 'Scanning not supported on this device'}>
-                <i aria-hidden="true" className="fas fa-camera" /> Scan barcode
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onScanFile} />
+    <Page d={d} className="lb-formpage">
+      <Head icon={editing ? 'fa-pen' : 'fa-plus'} title={editing ? 'Edit book' : 'Add a book'} sub={editing ? `${b.copies_available} of ${b.copies_total} on the shelf · ${b.on_loan} on loan` : 'Scan or type the ISBN to fill in the details for you.'} />
+      <form onSubmit={submit} className="lb-form">
+        {!editing && (
+          <section className="rs-card lb-isbn">
+            <div className="cm-step-h"><span className="cm-ch app sm"><i className="fas fa-barcode" aria-hidden="true" /></span><h3>Quick add by ISBN</h3></div>
+            <div className="lb-isbn-r">
+              <div className="cm-search grow"><i className="fas fa-barcode" aria-hidden="true" />
+                <input value={f.isbn} placeholder="10 or 13-digit ISBN" inputMode="numeric" aria-label="ISBN"
+                       onChange={(e) => set('isbn', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } }} /></div>
+              <button type="button" className="rs-btn primary" onClick={() => doLookup()} disabled={looking}>
+                <i className={'fas ' + (looking ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles')} aria-hidden="true" /> {looking ? 'Looking…' : 'Fill in'}</button>
+              <button type="button" className="rs-btn ghost" onClick={() => fileRef.current && fileRef.current.click()} title="Take a photo of the barcode">
+                <i className="fas fa-camera" aria-hidden="true" /><span className="rs-hide-sm"> Scan</span></button>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onScanFile} />
             </div>
-            {lookMsg && <div className={'alert mt-2 alert-' + ({ success: 'success', error: 'danger', warn: 'warning', info: 'info' }[lookMsg.tone] || 'info')} role="status" style={{ marginBottom: 0, marginTop: '.6rem' }}>{lookMsg.text}</div>}
+            {lookMsg && <p className={'lb-msg ' + lookMsg.tone} role="status">{lookMsg.text}</p>}
             {dupes.length > 0 && (
-              <div className="alert alert-warning" role="status" style={{ marginTop: '.6rem', marginBottom: 0 }}>
-                <strong><i aria-hidden="true" className="fas fa-circle-info" /> This title may already be in your catalogue.</strong>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', marginTop: '.5rem' }}>
-                  {dupes.map((b) => (
-                    <div key={b.id} style={{ display: 'flex', gap: '.5rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                      <span>{b.title}{b.author ? ` · ${b.author}` : ''} <span className="text-muted text-sm">({b.copies_available}/{b.copies_total} available)</span></span>
-                      <button type="button" className="btn btn-sm btn-primary" onClick={() => addCopies(b)}><i aria-hidden="true" className="fas fa-plus" /> Add copies to this one</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-muted text-sm" style={{ marginTop: '.4rem' }}>Or just fill the form below to add it as a separate entry.</div>
+              <div className="lb-dupes"><b><i className="fas fa-circle-info" aria-hidden="true" /> Already in your catalogue?</b>
+                {dupes.map((x) => (
+                  <div key={x.id} className="lb-dupe"><span>{x.title}{x.author ? ` · ${x.author}` : ''} <small>({x.copies_available}/{x.copies_total} on the shelf)</small></span>
+                    <button type="button" className="rs-btn primary sm" onClick={() => addCopies(x)}><i className="fas fa-plus" aria-hidden="true" /> Add copies to this</button></div>))}
+                <small className="cm-mute">Or fill in the form to add it as a separate book.</small></div>)}
+          </section>)}
+        <section className="rs-card lb-stackcard">
+          <div className="cm-step-h"><h3>The book</h3></div>
+          <div className="cm-row2">{T('title', 'Title', { placeholder: 'e.g. New General Mathematics' })}{T('author', 'Author(s)')}</div>
+          <div className="cm-row2">
+            <Field label="Category" grow><input value={f.category} list="lbCats" onChange={(e) => set('category', e.target.value)} placeholder="Textbook, Story, Reference…" />
+              <datalist id="lbCats">{(d.categories || []).map((c) => <option key={c} value={c} />)}</datalist></Field>
+            <Field label="Subject" grow><input value={f.subject} list="lbSubs" onChange={(e) => set('subject', e.target.value)} placeholder="Mathematics, English…" />
+              <datalist id="lbSubs">{(d.subjects || []).map((c) => <option key={c} value={c} />)}</datalist></Field>
+          </div>
+          <div className="cm-row2">
+            <Field label="Copies" grow><input type="number" min="0" value={f.copies_total} onChange={(e) => set('copies_total', e.target.value)} /></Field>
+            {T('shelf', 'Shelf', { placeholder: 'e.g. B3' })}{T('rack', 'Rack / row')}
+          </div>
+          <Toggle title="Reference only" sub="Stays in the library — can’t be borrowed" on={f.reference_only} onChange={(v) => set('reference_only', v)} />
+          <button type="button" className="cm-more" aria-expanded={more} onClick={() => setMore((v) => !v)}>
+            <i className={'fas ' + (more ? 'fa-chevron-up' : 'fa-sliders')} aria-hidden="true" /> {more ? 'Fewer details' : 'More details — publisher, ISBN, barcode, price, source…'}</button>
+          {more && (
+            <div className="cm-stack">
+              <div className="cm-row2">{T('subtitle', 'Subtitle')}{T('publisher', 'Publisher')}</div>
+              <div className="cm-row2">{editing && T('isbn', 'ISBN')}{T('barcode', 'Barcode / accession no.', { placeholder: 'Scannable code' })}{T('edition', 'Edition')}
+                <Field label="Year" grow><input type="number" value={f.publication_year} onChange={(e) => set('publication_year', e.target.value)} /></Field></div>
+              <div className="cm-row2">{T('language', 'Language')}{T('keywords', 'Keywords', { placeholder: 'Comma-separated, searchable' })}</div>
+              <div className="cm-row2">
+                <div className="cm-f grow"><span>Condition</span><Seg label="Condition" value={f.condition} onChange={(v) => set('condition', v)} options={['Good', 'Fair', 'Poor'].map((x) => ({ value: x, label: x }))} /></div>
+                <div className="cm-f grow"><span>Status</span><Seg label="Status" value={f.status} onChange={(v) => set('status', v)} options={['Available', 'Withdrawn'].map((x) => ({ value: x, label: x }))} /></div>
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <div className="form-row">
-            <div className="form-group" style={{ flex: 2 }}><label className="form-label">Title <span className="required">*</span></label>
-              <input type="text" className="form-control" required value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Subtitle</label>
-              <input type="text" className="form-control" value={f.subtitle} onChange={(e) => set('subtitle', e.target.value)} /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Author(s)</label>
-              <input type="text" className="form-control" value={f.author} onChange={(e) => set('author', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Publisher</label>
-              <input type="text" className="form-control" value={f.publisher} onChange={(e) => set('publisher', e.target.value)} /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">ISBN</label>
-              <input type="text" className="form-control" value={f.isbn} onChange={(e) => set('isbn', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Barcode / accession</label>
-              <input type="text" className="form-control" placeholder="Scannable code" value={f.barcode} onChange={(e) => set('barcode', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Edition</label>
-              <input type="text" className="form-control" value={f.edition} onChange={(e) => set('edition', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Year</label>
-              <input type="number" className="form-control" value={f.publication_year} onChange={(e) => set('publication_year', e.target.value)} /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Category</label>
-              <input type="text" className="form-control" list="lib-cats" placeholder="Textbook, Story, Reference…" value={f.category} onChange={(e) => set('category', e.target.value)} />
-              <datalist id="lib-cats">{(d.categories || []).map((c) => <option key={c} value={c} />)}</datalist></div>
-            <div className="form-group"><label className="form-label">Subject</label>
-              <input type="text" className="form-control" list="lib-subs" placeholder="Mathematics, English…" value={f.subject} onChange={(e) => set('subject', e.target.value)} />
-              <datalist id="lib-subs">{(d.subjects || []).map((c) => <option key={c} value={c} />)}</datalist></div>
-            <div className="form-group"><label className="form-label">Language</label>
-              <input type="text" className="form-control" value={f.language} onChange={(e) => set('language', e.target.value)} /></div>
-          </div>
-          <div className="form-group"><label className="form-label">Keywords</label>
-            <input type="text" className="form-control" placeholder="Comma-separated, searchable" value={f.keywords} onChange={(e) => set('keywords', e.target.value)} /></div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Shelf</label>
-              <input type="text" className="form-control" value={f.shelf} onChange={(e) => set('shelf', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Rack / row</label>
-              <input type="text" className="form-control" value={f.rack} onChange={(e) => set('rack', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Condition</label>
-              <select className="form-control" value={f.condition} onChange={(e) => set('condition', e.target.value)}>{['Good', 'Fair', 'Poor'].map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Unit price (₦)</label>
-              <input type="number" className="form-control" min="0" step="0.01" value={f.price} onChange={(e) => set('price', e.target.value)} /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Total copies</label>
-              <input type="number" className="form-control" min="0" value={f.copies_total} onChange={(e) => set('copies_total', e.target.value)} />
-              {editing && <span className="form-hint d-block">{b.copies_available} available · {b.on_loan} on loan</span>}</div>
-            <div className="form-group"><label className="form-label">Status</label>
-              <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{['Available', 'Withdrawn'].map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
-            <div className="form-group" style={{ alignSelf: 'center' }}><label className="form-check" title="Reference books stay in the library and can't be borrowed"><input type="checkbox" checked={f.reference_only} onChange={(e) => set('reference_only', e.target.checked)} /> Reference-only</label></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Acquired via</label>
-              <select className="form-control" value={f.source} onChange={(e) => set('source', e.target.value)}>{['Purchase', 'Donation'].map((x) => <option key={x} value={x}>{x}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Supplier / vendor</label>
-              <input type="text" className="form-control" value={f.supplier} onChange={(e) => set('supplier', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Donated by</label>
-              <input type="text" className="form-control" placeholder="Donor name (if a donation)" value={f.donated_by} onChange={(e) => set('donated_by', e.target.value)} /></div>
-          </div>
-          <div className="form-group"><label className="form-label">Description</label>
-            <textarea className="form-control" rows="2" value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Notes</label>
-            <textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
-          <div className="page-header-actions">
-            {canWrite(d, editing ? 'catalogue_edit' : 'catalogue_create') && <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save' : 'Add Book'}</button>}
-            <a href={d.urls.books} className="btn btn-secondary">Cancel</a>
-          </div>
-        </form>
-      </div></div>
-    </>
+              <div className="cm-row2">
+                <div className="cm-f grow"><span>Acquired by</span><Seg label="Acquired by" value={f.source} onChange={(v) => set('source', v)} options={['Purchase', 'Donation'].map((x) => ({ value: x, label: x }))} /></div>
+                <Field label="Unit price (₦)" grow><input type="number" min="0" step="0.01" value={f.price} onChange={(e) => set('price', e.target.value)} /></Field>
+              </div>
+              <div className="cm-row2">{f.source === 'Donation' ? T('donated_by', 'Donated by') : T('supplier', 'Supplier / vendor')}</div>
+              <Field label="Description"><textarea rows={2} value={f.description} onChange={(e) => set('description', e.target.value)} /></Field>
+              <Field label="Notes"><textarea rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></Field>
+            </div>)}
+        </section>
+        {!phone && canSave && (
+          <div className="lb-form-f"><A to={d.urls.books} className="rs-btn ghost">Cancel</A>
+            <button className="rs-btn primary" disabled={busy}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {editing ? 'Save changes' : 'Add to catalogue'}</button></div>)}
+      </form>
+      {phone && canSave && (
+        <Bar><span className="rs-bar-t"><b>{f.title || 'New book'}</b><small>{plural(Number(f.copies_total) || 0, 'copy', 'copies')}</small></span>
+          <button type="button" className="rs-btn primary" disabled={busy} onClick={() => submit()}><i className="fas fa-check" aria-hidden="true" /> Save</button></Bar>)}
+    </Page>
   );
 }
 
-// ---- Issue -----------------------------------------------------------------
+// ============================================================================
+// Issue
+// ============================================================================
 function Issue({ d, notify }) {
   const nav = useNav();
-  const [bookId, setBookId] = useState(d.preset ? String(d.preset.id) : '');
-  const [borrowerType, setBorrowerType] = useState('student');
-  const [studentId, setStudentId] = useState('');
-  const [staffId, setStaffId] = useState('');
+  const phone = usePhone();
+  const [book, setBook] = useState(d.preset ? { id: d.preset.id, label: d.preset.title } : null);
+  const [type, setType] = useState('student');
+  const [who, setWho] = useState(null);
   const [due, setDue] = useState(d.default_due);
-  const [busy, setBusy] = useState(false);
   const [scan, setScan] = useState('');
-  const [scanned, setScanned] = useState(d.preset ? d.preset.title : '');
-
-  const lookupBarcode = async (code) => {
-    if (!code.trim()) return;
+  const [busy, setBusy] = useState(false);
+  const days = Number((d.settings || {}).loan_days) || 14;
+  const addDays = (n) => { const t = new Date(); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+  const lookup = async () => {
+    if (!scan.trim()) return;
     try {
-      const r = await fetch(d.urls.barcode_lookup + '?code=' + encodeURIComponent(code.trim()), { credentials: 'same-origin' });
+      const r = await fetch(d.urls.barcode_lookup + '?code=' + encodeURIComponent(scan.trim()), { credentials: 'same-origin' });
       const j = await r.json();
-      if (j.ok) { setBookId(String(j.book.id)); setScanned(j.book.title + (j.book.reference_only ? ' (reference-only)' : ` · ${j.book.available} available`)); }
-      else notify('error', 'No book matches that barcode/ISBN.');
+      if (!j.ok) { notify('error', 'No book matches that barcode or ISBN.'); return; }
+      if (j.book.reference_only) { notify('error', `“${j.book.title}” is reference-only and can’t be borrowed.`); return; }
+      if (j.book.available <= 0) { notify('error', `All copies of “${j.book.title}” are out.`); return; }
+      setBook({ id: j.book.id, label: `${j.book.title} (${j.book.available} avail)` }); setScan('');
     } catch (_) { /* ignore */ }
   };
-
   const submit = async (e) => {
-    e.preventDefault();
-    const borrowerId = borrowerType === 'staff' ? staffId : studentId;
-    if (!bookId || !borrowerId) { notify('error', 'Select a book and a borrower.'); return; }
+    if (e) e.preventDefault();
+    if (!book || !who) { notify('error', !book ? 'Pick a book first.' : 'Pick who is borrowing it.'); return; }
     setBusy(true);
-    const r = await submitJson(d.submit_url, { book_id: bookId, borrower_type: borrowerType,
-      student_id: borrowerType === 'student' ? studentId : '', staff_id: borrowerType === 'staff' ? staffId : '',
-      due_date: due });
+    const r = await submitJson(d.submit_url, { book_id: book.id, borrower_type: type,
+      student_id: type === 'student' ? who.id : '', staff_id: type === 'staff' ? who.id : '', due_date: due });
     setBusy(false);
-    if (r.ok) nav.go(r.redirect);
-    else notify('error', r.error || 'Could not issue the book.');
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not issue the book.');
   };
-
+  const presets = [[7, '1 week'], [days, `${days} days`], [days * 2, `${days * 2} days`]].filter((x, i, a) => a.findIndex((y) => y[0] === x[0]) === i);
+  const ready = book && who;
   return (
-    <>
-      <PageHeader title="Issue Book" />
-      <Tabs urls={d.urls} page="issue" />
-      <div className="card" style={{ maxWidth: 640 }}><div className="card-body">
-        <form onSubmit={submit}>
-          <div className="form-group"><label className="form-label">Scan barcode / ISBN</label>
-            <div className="d-flex gap-2">
-              <input type="text" className="form-control" value={scan} placeholder="Scan or type a code, then Enter"
-                     onChange={(e) => setScan(e.target.value)}
-                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookupBarcode(scan); } }} />
-              <button type="button" className="btn btn-secondary" onClick={() => lookupBarcode(scan)}><i aria-hidden="true" className="fas fa-barcode" /></button>
-            </div>
-            {scanned && <span className="form-hint d-block"><i aria-hidden="true" className="fas fa-check text-success" /> {scanned}</span>}</div>
-          <Autocomplete label="…or search the book" required={!bookId} url={d.urls.book_search} placeholder="Search title / author / ISBN…"
-                        initialText={d.preset ? d.preset.title : ''} onPick={(id) => { setBookId(id); }} />
-
-          <div className="borrower-toggle" role="tablist">
-            {[['student', 'fa-user-graduate', 'Student'], ['staff', 'fa-user-tie', 'Staff']].map(([v, ic, lab]) => (
-              <button type="button" key={v} role="tab" aria-selected={borrowerType === v}
-                className={borrowerType === v ? 'on' : ''} onClick={() => setBorrowerType(v)}><i aria-hidden="true" className={'fas ' + ic} /> {lab}</button>))}
-          </div>
-          {borrowerType === 'student'
-            ? <Autocomplete label="Student" required url={d.urls.student_search} placeholder="Search name / student ID…" onPick={setStudentId} />
-            : <Autocomplete label="Staff" required url={d.urls.staff_search} placeholder="Search name / staff ID…" onPick={setStaffId} />}
-
-          <div className="form-group"><label className="form-label">Due date</label>
-            <input type="date" className="form-control" value={due} onChange={(e) => setDue(e.target.value)} />
-            <span className="form-hint d-block">Default loan period is {d.settings.loan_days} days{d.settings.fine_per_day ? ` · ₦${d.settings.fine_per_day}/day overdue fine` : ''}.</span></div>
-          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</button>
-        </form>
-      </div></div>
-    </>
+    <Page d={d} className="lb-issue-page">
+      <Head icon="fa-hand-holding" title="Issue a book" sub="Book → borrower → due date. That’s it." />
+      <form onSubmit={submit} className="lb-issue">
+        <section className="rs-card cm-step">
+          <div className="cm-step-h"><b>1</b><h3>Which book?</h3></div>
+          {book ? (
+            <div className="cm-picked"><Cover title={book.label} size="sm" /><b>{book.label}</b>
+              <button type="button" className="cm-ib" onClick={() => setBook(null)} aria-label="Change book"><i className="fas fa-xmark" aria-hidden="true" /></button></div>
+          ) : (
+            <div className="cm-stack">
+              <div className="cm-search"><i className="fas fa-barcode" aria-hidden="true" />
+                <input value={scan} placeholder="Scan the barcode / ISBN, then Enter" aria-label="Scan barcode or ISBN" autoFocus={!phone}
+                       onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } }} /></div>
+              <Lookup url={d.urls.book_search} placeholder="…or search title, author or ISBN" onPick={setBook} icon="fa-book" />
+            </div>)}
+        </section>
+        <section className="rs-card cm-step">
+          <div className="cm-step-h"><b>2</b><h3>Who’s borrowing it?</h3></div>
+          <BorrowerPick d={d} type={type} setType={setType} picked={who} setPicked={setWho} />
+        </section>
+        <section className="rs-card cm-step">
+          <div className="cm-step-h"><b>3</b><h3>Due back</h3></div>
+          <Chips label="Loan length" value={presets.find((p) => addDays(p[0]) === due) ? String(presets.find((p) => addDays(p[0]) === due)[0]) : ''}
+                 onChange={(v) => setDue(addDays(Number(v)))} items={presets.map(([n, l]) => ({ value: String(n), label: l }))} />
+          <Field label="Date"><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></Field>
+          <small className="cm-mute">{d.settings && Number(d.settings.fine_per_day) ? `Late returns are fined ${naira(d.settings.fine_per_day)} a day.` : 'No late fines are set.'}</small>
+        </section>
+        {!phone && (
+          <div className="lb-form-f"><button className="rs-btn primary" disabled={busy || !ready}>
+            <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-hand-holding')} aria-hidden="true" /> Issue book</button></div>)}
+      </form>
+      {phone && (
+        <Bar><span className="rs-bar-t"><b>{ready ? 'Ready to issue' : !book ? 'Pick a book' : 'Pick a borrower'}</b><small>{who ? who.label : book ? book.label : ''}</small></span>
+          <button type="button" className="rs-btn primary" disabled={busy || !ready} onClick={() => submit()}><i className="fas fa-hand-holding" aria-hidden="true" /> Issue</button></Bar>)}
+    </Page>
   );
 }
 
-// ---- Loans -----------------------------------------------------------------
+// ============================================================================
+// Loans
+// ============================================================================
 function Loans({ d, notify }) {
   const nav = useNav();
-  const [busy, setBusy] = useState(false);
-  const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    setBusy(true);
-    const r = await submitJson(url, fields || {});
-    setBusy(false);
-    if (r.ok) { if (r.message) notify('success', r.message); nav.refresh(); }
-    else notify('error', r.error || 'Action failed.');
-  };
-  const ret = (l) => {
-    const overdue = l.is_overdue && d.settings && d.settings.fine_per_day;
-    // Offer to waive when the return carries a fine.
-    if (overdue) {
-      confirm(`'${l.book}' is ${l.days_overdue} day(s) late. Return and CHARGE the fine? (Cancel to waive it.)`)
-        .then((charge) => act(l.return_url, charge ? {} : { waive: '1' }));
-    } else {
-      act(l.return_url, {}, `Mark '${l.book}' as returned?`);
-    }
-  };
-  const markLost = async (l) => {
-    const cost = await promptDialog({ title: `Mark '${l.book}' as lost`,
-      label: 'Replacement cost to bill the borrower (₦)', placeholder: 'Blank = book price',
-      inputType: 'number', required: false });
-    if (cost === null) return;
-    act(l.mark_url, { kind: 'Lost', cost });
-  };
-  const markDamaged = async (l) => {
-    const cost = await promptDialog({ title: `Mark '${l.book}' as damaged`,
-      label: 'Charge to the borrower (₦)', placeholder: 'Blank = book price',
-      inputType: 'number', required: false });
-    if (cost === null) return;
-    act(l.mark_url, { kind: 'Damaged', cost });
-  };
-  const onStatus = (v) => { nav.go(d.urls.loans + '?status=' + v); };
+  const { actions } = useLoanActions(d, notify);
+  const [q, setQ] = useState('');
+  const c = d.counts || {};
+  const shown = d.loans.filter((l) => !q || (l.book + ' ' + l.student + ' ' + (l.borrower_ref || '')).toLowerCase().includes(q.toLowerCase()));
   const remind = async () => {
-    if (!await confirm('Draft an SMS reminder to the parents of students with overdue books? Nothing sends until you review it in Communication.')) return;
+    if (!await confirm({ title: 'Remind parents?', message: 'A text reminder to the parents of students with overdue books will be drafted in Communication. Nothing is sent until you review it.', confirmText: 'Draft reminder' })) return;
     const r = await submitJson(d.urls.remind_overdue, {});
-    if (r.ok) { notify('success', r.message); if (r.redirect) nav.go(r.redirect); }
-    else notify('error', r.error || 'Could not draft reminders.');
+    if (r.ok) { notify('success', r.message); if (r.redirect) nav.go(r.redirect); } else notify('error', r.error || 'Could not draft reminders.');
   };
-
   return (
-    <>
-      <PageHeader title="Loans" actions={<>
-        {d.status === 'Overdue' && canWrite(d, 'circulation_remind') && <button type="button" className="btn btn-secondary" onClick={remind}><i aria-hidden="true" className="fas fa-comment-sms" /> Remind parents</button>}
-        {canWrite(d, 'circulation_issue') && <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>}
-      </>} />
-      <Tabs urls={d.urls} page="loans" />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>
-          <select className="form-control" value={d.status} onChange={(e) => onStatus(e.target.value)}>
-            {['Borrowed', 'Overdue', 'Returned', 'Lost', 'Damaged'].map((s) => <option key={s} value={s}>{s}</option>)}
-            <option value="all">All</option>
-          </select></div></div>
-      </div></div>
-
-      <div className="card">
-        <div className="card-header"><h3>{d.loans.length} loan(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(l) => l.id} rows={d.loans} pageSize={25} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-rotate-left" title="No loans"><p>Nothing matches this filter.</p></Empty>}
-            columns={[
-              { key: 'book', label: 'Book', sortable: true, sortValue: (l) => l.book, render: (l) => l.book },
-              { key: 'student', label: 'Borrower', sortable: true, sortValue: (l) => l.student, render: (l) => <>{l.borrower_url ? <a href={l.borrower_url}>{l.student}</a> : l.student}{l.borrower_type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}{l.borrower_ref && <div className="text-muted text-sm">{l.borrower_ref}</div>}</> },
-              { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
-              { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d late)</span>}{l.renew_count > 0 && <span className="text-muted text-sm"> · renewed ×{l.renew_count}</span>}</> },
-              { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
-              { key: 'fine', label: 'Fine / cost', render: (l) => (l.fine || l.replacement_cost) ? naira(l.fine || l.replacement_cost) : '—' },
-              { key: 'act', label: '', render: (l) => l.status === 'Borrowed'
-                ? (canWrite(d, 'circulation_return') ? <div className="d-flex gap-1 justify-end">
-                    <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Return" onClick={() => ret(l)}><i aria-hidden="true" className="fas fa-rotate-left" /></button>
-                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Renew" onClick={() => act(l.renew_url, {})}><i aria-hidden="true" className="fas fa-arrows-rotate" /></button>
-                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Mark lost" onClick={() => markLost(l)}><i aria-hidden="true" className="fas fa-triangle-exclamation" /></button>
-                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Mark damaged" onClick={() => markDamaged(l)}><i aria-hidden="true" className="fas fa-screwdriver-wrench" /></button>
-                  </div> : '—')
-                : <span className="text-muted text-sm">{l.returned}</span> },
-            ]} />
-        </div>
+    <Page d={d}>
+      <Head icon="fa-rotate-left" title="Loans" sub={`${plural(c.Borrowed || 0, 'book')} out · ${c.Overdue || 0} overdue`}>
+        {canWrite(d, 'circulation_issue') && <A to={d.urls.issue} className="rs-btn primary"><i className="fas fa-hand-holding" aria-hidden="true" /><span className="rs-hide-sm"> Issue</span></A>}
+        {canWrite(d, 'circulation_remind') && (c.Overdue || 0) > 0 && <Menu items={[{ icon: 'fa-comment-sms', label: 'Text parents about overdue books', onClick: remind }]} />}
+      </Head>
+      <div className="cm-filters">
+        <SearchBox value={q} onChange={setQ} placeholder="Find a book or borrower" />
       </div>
-    </>
+      <Seg label="Show" value={d.status} onChange={(v) => nav.go(d.urls.loans + '?status=' + v)} options={[
+        { value: 'Borrowed', label: 'Out', count: c.Borrowed }, { value: 'Overdue', label: 'Overdue', count: c.Overdue },
+        { value: 'Returned', label: 'Returned' }, { value: 'Lost', label: 'Lost', count: c.Lost || undefined },
+        { value: 'Damaged', label: 'Damaged', count: c.Damaged || undefined }, { value: 'all', label: 'All' }]} />
+      <section className="rs-card">
+        {shown.length ? <div className="cm-list">{shown.map((l) => <LoanRow key={l.id} l={l} actions={actions} />)}</div>
+          : <Blank icon="fa-rotate-left" title={q ? 'No loans match' : d.status === 'Overdue' ? 'Nothing overdue' : 'No loans here'} />}
+      </section>
+    </Page>
   );
 }
 
-// ---- Settings --------------------------------------------------------------
-function Settings({ d, notify }) {
-  const [loanDays, setLoanDays] = useState(d.settings.loan_days);
-  const [fine, setFine] = useState(d.settings.fine_per_day);
+// ============================================================================
+// Holds (reservations)
+// ============================================================================
+function Reservations({ d, notify }) {
+  const nav = useNav();
+  const [busy, setBusy] = useState(null);
+  const act = async (r, url, opts) => {
+    if (opts && !await confirm(opts)) return;
+    setBusy(r.id);
+    const res = await submitJson(url, {});
+    setBusy(null);
+    if (res.ok) { if (res.message) notify('success', res.message); nav.refresh(); } else notify('error', res.error || 'That didn’t work.');
+  };
+  const tone = { Ready: 'good', Queued: 'mid', Fulfilled: '', Cancelled: '', Expired: 'bad' };
+  return (
+    <Page d={d}>
+      <Head icon="fa-bookmark" title="Holds" sub="Books put aside or queued for a borrower.">
+        {canWrite(d, 'reservations_create') && <A to={d.urls.books} className="rs-btn ghost"><i className="fas fa-plus" aria-hidden="true" /> Reserve from catalogue</A>}
+      </Head>
+      <Seg label="Show" value={d.status} onChange={(v) => nav.go(d.urls.reservations + '?status=' + v)} options={[
+        { value: 'open', label: 'Open' }, { value: 'Ready', label: 'Ready' }, { value: 'Queued', label: 'Waiting' },
+        { value: 'Fulfilled', label: 'Collected' }, { value: 'Cancelled', label: 'Cancelled' }, { value: 'Expired', label: 'Expired' }]} />
+      <section className="rs-card">
+        {d.reservations.length ? <div className="cm-list">{d.reservations.map((r) => (
+          <div key={r.id} className="lb-row">
+            <Cover title={r.book} />
+            <span className="lb-row-t"><b>{r.book}</b><small>for {r.borrower}{r.borrower_type === 'staff' ? ' (staff)' : ''} · placed {r.created}{r.status === 'Ready' && r.expires ? ` · hold ends ${r.expires}` : ''}</small></span>
+            <span className="lb-row-s"><Pill tone={tone[r.status]}>{r.status === 'Queued' ? 'Waiting' : r.status}</Pill></span>
+            {(r.status === 'Queued' || r.status === 'Ready') && (
+              <span className="lb-acts">
+                {r.available > 0 && canWrite(d, 'reservations_fulfill') && <button type="button" className="rs-btn primary sm" disabled={busy === r.id}
+                  onClick={() => act(r, r.fulfill_url, { title: 'Issue now?', message: `Lend “${r.book}” to ${r.borrower}.`, confirmText: 'Issue' })}><i className="fas fa-hand-holding" aria-hidden="true" /><span className="rs-hide-sm"> Issue</span></button>}
+                {canWrite(d, 'reservations_cancel') && <button type="button" className="cm-ib" disabled={busy === r.id} aria-label="Cancel hold"
+                  onClick={() => act(r, r.cancel_url, { title: 'Cancel this hold?', tone: 'danger', confirmText: 'Cancel hold', cancelText: 'Keep' })}><i className="fas fa-xmark" aria-hidden="true" /></button>}
+              </span>)}
+          </div>))}</div>
+          : <Blank icon="fa-bookmark" title="No holds here"><p>Reserve a book from the catalogue to hold it for someone.</p></Blank>}
+      </section>
+    </Page>
+  );
+}
+
+// ============================================================================
+// Borrowers
+// ============================================================================
+function Borrowers({ d }) {
+  const [q, setQ] = useState(d.q || '');
+  const [type, setType] = useState(d.type || '');
+  const [limit, setLimit] = useState(80);
+  const shown = d.borrowers.filter((b) => (!type || b.type === type)
+    && (!q || (b.name + ' ' + b.ref + ' ' + (b.class || '')).toLowerCase().includes(q.toLowerCase())));
+  return (
+    <Page d={d}>
+      <Head icon="fa-users" title="Borrowers" sub={`${plural(d.borrowers.length, 'person', 'people')} have borrowed from the library`} />
+      <div className="cm-filters">
+        <SearchBox value={q} onChange={setQ} placeholder="Name, ID or class" />
+        <Seg label="Type" value={type} onChange={setType} options={[{ value: '', label: 'All' }, { value: 'student', label: 'Students' }, { value: 'staff', label: 'Staff' }]} />
+      </div>
+      <section className="rs-card">
+        {shown.length ? <div className="cm-list">{shown.slice(0, limit).map((b) => (
+          <A key={b.type + b.id} to={b.url} className="lb-row link">
+            <span className="rs-av" aria-hidden="true">{initials(b.name)}</span>
+            <span className="lb-row-t"><b>{b.name}</b><small>{[b.type === 'staff' ? 'Staff' : b.class, b.ref].filter(Boolean).join(' · ')}</small></span>
+            <span className="lb-row-s">{b.overdue ? <Pill tone="bad">{b.overdue} overdue</Pill> : b.active ? <Pill tone="info">{b.active} out</Pill> : null}
+              <small>{plural(b.total, 'loan')}</small></span>
+            <i className="fas fa-chevron-right cm-row-go" aria-hidden="true" />
+          </A>))}
+          {shown.length > limit && <button type="button" className="cm-showmore" onClick={() => setLimit((l) => l + 150)}>Show more ({shown.length - limit} left)</button>}</div>
+          : <Blank icon="fa-users" title={q ? 'No one matches' : 'No borrowers yet'}><p>People appear here once they borrow a book.</p></Blank>}
+      </section>
+    </Page>
+  );
+}
+
+function Borrower({ d, notify }) {
+  const { actions } = useLoanActions(d, notify);
+  const b = d.borrower;
+  const s = d.stats;
+  return (
+    <Page d={d}>
+      <Head icon={b.type === 'staff' ? 'fa-user-tie' : 'fa-user-graduate'} title={b.name}
+            sub={[b.type === 'staff' ? 'Staff' : 'Student', b.ref, b.class].filter(Boolean).join(' · ')}>
+        {canWrite(d, 'circulation_issue') && <A to={d.urls.issue} className="rs-btn primary"><i className="fas fa-hand-holding" aria-hidden="true" /> Issue a book</A>}
+      </Head>
+      <Tiles items={[
+        { label: 'Out now', value: s.out, tone: s.overdue ? 'bad' : '', sub: s.overdue ? `${s.overdue} overdue` : 'none overdue' },
+        { label: 'Total loans', value: s.total, sub: 'all time' },
+        { label: 'Lost / damaged', value: s.lost + s.damaged, tone: (s.lost + s.damaged) ? 'mid' : '' },
+        { label: 'Fines & costs', value: s.fines ? naira(s.fines) : '₦0' },
+      ]} />
+      <section className="rs-card">
+        <div className="rs-card-h"><h3>Has now</h3><small>{plural(d.current.length, 'book')}</small></div>
+        {d.current.length ? <div className="cm-list">{d.current.map((l) => <LoanRow key={l.id} l={l} actions={actions} hideBorrower />)}</div>
+          : <p className="cm-mute">Nothing out right now.</p>}
+      </section>
+      <section className="rs-card">
+        <div className="rs-card-h"><h3>History</h3><small>{plural(d.past.length, 'loan')}</small></div>
+        {d.past.length ? <div className="cm-list">{d.past.map((l) => <LoanRow key={l.id} l={l} hideBorrower />)}</div>
+          : <p className="cm-mute">No past loans.</p>}
+      </section>
+    </Page>
+  );
+}
+
+// ============================================================================
+// Reading lists
+// ============================================================================
+function ReadingLists({ d, notify }) {
+  const nav = useNav();
+  const [adding, setAdding] = useState(false);
+  const [classId, setClassId] = useState(d.class_id ? String(d.class_id) : '');
+  const [book, setBook] = useState(null);
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault();
+  const add = async () => {
+    if (!classId || !book) { notify('error', 'Pick a class and a book.'); return; }
     setBusy(true);
-    const r = await submitJson(d.submit_url, { loan_days: loanDays, fine_per_day: fine });
+    const r = await submitJson(d.urls.add, { class_id: classId, book_id: book.id, note });
     setBusy(false);
-    if (r.ok) notify('success', r.message || 'Saved.');
-    else notify('error', r.error || 'Could not save.');
+    if (r.ok) { notify('success', r.message || 'Added.'); setBook(null); setNote(''); setAdding(false); nav.refresh(); } else notify('error', r.error || 'Could not add.');
   };
+  const remove = async (it) => {
+    if (!await confirm({ title: 'Remove from list?', message: `“${it.book}” will come off ${it.class}’s list.`, tone: 'danger', confirmText: 'Remove' })) return;
+    const r = await submitJson(it.remove_url, {});
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not remove.');
+  };
+  const groups = useMemo(() => {
+    const g = {};
+    d.items.forEach((it) => { (g[it.class] = g[it.class] || []).push(it); });
+    return Object.entries(g);
+  }, [d.items]);
+  const can = canWrite(d, 'reading_lists_manage');
   return (
-    <>
-      <PageHeader title="Library Settings" />
-      <Tabs urls={d.urls} page="settings" />
-      <div className="card" style={{ maxWidth: 560 }}>
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-gear" /> Loan rules</h3></div>
-        <div className="card-body">
-          <form onSubmit={submit}>
-            <div className="form-row">
-              <div className="form-group"><label className="form-label">Loan period (days)</label>
-                <input type="number" className="form-control" min="1" value={loanDays} onChange={(e) => setLoanDays(e.target.value)} /></div>
-              <div className="form-group"><label className="form-label">Overdue fine (₦ per day)</label>
-                <input type="number" className="form-control" min="0" step="1" value={fine} onChange={(e) => setFine(e.target.value)} />
-                <span className="form-hint d-block">0 to disable fines.</span></div>
-            </div>
-            {canWrite(d, 'settings') && <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>}
-          </form>
-        </div>
+    <Page d={d}>
+      <Head icon="fa-list-check" title="Reading lists" sub="Books recommended to each class.">
+        {can && <button type="button" className="rs-btn primary" onClick={() => setAdding(true)}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm"> Recommend a book</span></button>}
+      </Head>
+      <div className="cm-filters">
+        <select className="cm-sel" value={d.class_id || ''} onChange={(e) => nav.go(e.target.value ? d.urls.self + '?class_id=' + e.target.value : d.urls.self)} aria-label="Class">
+          <option value="">All classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       </div>
-    </>
+      {groups.length ? groups.map(([cls, items]) => (
+        <section className="rs-card" key={cls}>
+          <div className="rs-card-h"><h3><i className="fas fa-school" aria-hidden="true" /> {cls}</h3><small>{plural(items.length, 'book')}</small></div>
+          <div className="cm-list">{items.map((it) => (
+            <div key={it.id} className="lb-row">
+              <Cover title={it.book} />
+              <span className="lb-row-t"><b>{it.book}</b><small>{[it.author, it.note, it.by && `added by ${it.by}`].filter(Boolean).join(' · ')}</small></span>
+              {can && <button type="button" className="cm-ib" onClick={() => remove(it)} aria-label={'Remove ' + it.book}><i className="fas fa-xmark" aria-hidden="true" /></button>}
+            </div>))}</div>
+        </section>
+      )) : <Blank icon="fa-list-check" title="No recommendations yet"><p>Recommend books to a class and they show up here.</p>
+        {can && <button type="button" className="rs-btn primary" onClick={() => setAdding(true)}><i className="fas fa-plus" aria-hidden="true" /> Recommend a book</button>}</Blank>}
+      {adding && (
+        <Sheet title="Recommend a book" onClose={() => setAdding(false)}>
+          <div className="cm-sheet">
+            <Field label="Class"><select value={classId} onChange={(e) => setClassId(e.target.value)}>
+              <option value="">Choose a class…</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+            <div className="cm-f"><span>Book</span><Lookup url={d.urls.book_search} placeholder="Search title, author or ISBN" picked={book} onPick={setBook} onClear={() => setBook(null)} icon="fa-book" /></div>
+            <Field label="Note (optional)"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Term 1 core text" /></Field>
+            <div className="cm-sheet-f"><button type="button" className="rs-btn ghost" onClick={() => setAdding(false)}>Cancel</button>
+              <button type="button" className="rs-btn primary" disabled={busy || !book || !classId} onClick={add}><i className="fas fa-plus" aria-hidden="true" /> Add to list</button></div>
+          </div>
+        </Sheet>)}
+    </Page>
   );
 }
 
-// ---- Reports ---------------------------------------------------------------
+// ============================================================================
+// Reports
+// ============================================================================
 function Reports({ d }) {
   const nav = useNav();
   const sel = d.sel || {};
@@ -621,303 +753,71 @@ function Reports({ d }) {
   const [to, setTo] = useState(sel.to || '');
   const [category, setCategory] = useState(sel.category || '');
   const [subject, setSubject] = useState(sel.subject || '');
+  const [limit, setLimit] = useState(100);
   const params = (extra) => ({ type: sel.type, from, to, category, subject, ...extra });
   const go = (extra) => navParams(nav.go, d.urls.self, params(extra));
   const qs = () => Object.entries(params({})).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-  const cell = (col, row) => {
-    const v = row[col.key];
-    if (col.money) return typeof v === 'number' ? naira(v) : v;
-    return (v === '' || v == null) ? '—' : v;
-  };
+  const cell = (col, row) => { const v = row[col.key]; if (col.money) return typeof v === 'number' ? naira(v) : v; return (v === '' || v == null) ? '—' : v; };
   return (
-    <>
-      <PageHeader title="Reports" actions={canWrite(d, 'reports_export') ? <>
-        <a href={`${d.urls.export}?format=csv&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
-        <a href={`${d.urls.export}?format=xlsx&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
-      </> : null} />
-      <Tabs urls={d.urls} page="reports" />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form">
-          <div className="form-group"><label className="form-label">Report</label>
-            <select className="form-control" value={sel.type} onChange={(e) => go({ type: e.target.value })}>
-              {d.report_types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">From</label>
-            <input type="date" className="form-control" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">To</label>
-            <input type="date" className="form-control" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Category</label>
-            <select className="form-control" value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">All</option>{d.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Subject</label>
-            <select className="form-control" value={subject} onChange={(e) => setSubject(e.target.value)}>
-              <option value="">All</option>{(d.subjects || []).map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
-          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-            <button type="button" className="btn btn-primary" onClick={() => go({})}><i aria-hidden="true" className="fas fa-filter" /> Apply</button></div>
-        </div>
-      </div></div>
-
-      {rep.summary && rep.summary.length > 0 && (
-        <div className="kpi-row" style={{ gridTemplateColumns: `repeat(${Math.min(rep.summary.length, 4)}, 1fr)` }}>
-          {rep.summary.map((s, i) => (
-            <div className="kpi" key={i}><div className="ic blue"><i aria-hidden="true" className="fas fa-chart-simple" /></div>
-              <div><div className="v" style={{ fontSize: '1.15rem' }}>{s.value}</div><div className="l">{s.label}</div></div></div>))}
-        </div>)}
-
-      <div className="card">
-        <div className="card-header"><h3>{rep.title} · {rep.rows.length} row(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(r, i) => i} rows={rep.rows} pageSize={50} sticky maxHeight="60vh"
-            empty={<Empty icon="fa-chart-line" title="No data"><p>Nothing matches these filters.</p></Empty>}
-            columns={rep.columns.map((col) => ({ key: col.key, label: col.label, align: col.align,
-              render: (r) => cell(col, r) }))} />
-        </div>
+    <Page d={d}>
+      <Head icon="fa-chart-line" title="Reports" sub={rep.title}>
+        {canWrite(d, 'reports_export') && <Menu label="Export" items={[
+          { icon: 'fa-file-excel', label: 'Excel', href: `${d.urls.export}?format=xlsx&${qs()}`, native: true },
+          { icon: 'fa-file-csv', label: 'CSV', href: `${d.urls.export}?format=csv&${qs()}`, native: true }]} />}
+      </Head>
+      <Chips label="Report" value={sel.type} onChange={(v) => go({ type: v })} items={d.report_types.map((t) => ({ value: t.key, label: t.label }))} />
+      <div className="cm-filters">
+        <div className="cm-range lb-range"><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From" /><span>→</span>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To" /></div>
+        <select className="cm-sel" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+          <option value="">All categories</option>{d.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+        {(d.subjects || []).length > 0 && <select className="cm-sel" value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject">
+          <option value="">All subjects</option>{d.subjects.map((c) => <option key={c} value={c}>{c}</option>)}</select>}
+        <button type="button" className="rs-btn primary sm" onClick={() => go({})}>Apply</button>
       </div>
-    </>
+      {rep.summary && rep.summary.length > 0 && <Tiles items={rep.summary.slice(0, 4).map((x) => ({ label: x.label, value: x.value }))} />}
+      <section className="rs-card lb-tablecard">
+        {rep.rows.length ? (
+          <div className="lb-table-wrap"><table className="lb-table">
+            <thead><tr>{rep.columns.map((c) => <th key={c.key} className={c.align === 'right' ? 'r' : ''}>{c.label}</th>)}</tr></thead>
+            <tbody>{rep.rows.slice(0, limit).map((r, i) => <tr key={i}>{rep.columns.map((c) => <td key={c.key} className={c.align === 'right' ? 'r' : ''}>{cell(c, r)}</td>)}</tr>)}</tbody>
+          </table></div>
+        ) : <Blank icon="fa-chart-line" title="Nothing in this period"><p>Try a wider date range or another report.</p></Blank>}
+        {rep.rows.length > limit && <button type="button" className="cm-showmore" onClick={() => setLimit((l) => l + 200)}>Show more ({rep.rows.length - limit} left)</button>}
+      </section>
+    </Page>
   );
 }
 
-// ---- Borrowers directory ---------------------------------------------------
-function Borrowers({ d }) {
-  const nav = useNav();
-  const [q, setQ] = useState(d.q || '');
-  const [type, setType] = useState(d.type || '');
-  const shown = d.borrowers.filter((b) =>
-    (!type || b.type === type)
-    && (!q || (b.name + ' ' + b.ref + ' ' + (b.class || '')).toLowerCase().includes(q.toLowerCase())));
-  return (
-    <>
-      <PageHeader title="Borrowers" />
-      <Tabs urls={d.urls} page="borrowers" />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form">
-          <div className="form-group"><label className="form-label">Search</label>
-            <input type="text" className="form-control" value={q} placeholder="Name, ID, class" onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Type</label>
-            <select className="form-control" value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="">All</option><option value="student">Students</option><option value="staff">Staff</option></select></div>
-        </div>
-      </div></div>
-      <div className="card">
-        <div className="card-header"><h3>{shown.length} borrower(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(b) => b.type + b.id} rows={shown} pageSize={30} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-users" title="No borrowers yet"><p>Loans appear here once books are issued.</p></Empty>}
-            columns={[
-              { key: 'name', label: 'Borrower', sortable: true, sortValue: (b) => b.name, render: (b) => <><a href={b.url}><strong>{b.name}</strong></a>{b.type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}<div className="text-muted text-sm">{b.ref}{b.class ? ` · ${b.class}` : ''}</div></> },
-              { key: 'active', label: 'Out now', align: 'right', sortable: true, sortValue: (b) => b.active, render: (b) => b.active || '—' },
-              { key: 'overdue', label: 'Overdue', align: 'right', render: (b) => b.overdue ? <span className="badge badge-danger">{b.overdue}</span> : '—' },
-              { key: 'total', label: 'Total loans', align: 'right', sortable: true, sortValue: (b) => b.total, render: (b) => b.total },
-              { key: 'act', label: '', render: (b) => <a href={b.url} className="btn btn-secondary btn-sm" aria-label="History"><i aria-hidden="true" className="fas fa-arrow-right" /></a> },
-            ]} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ---- Borrower history ------------------------------------------------------
-function Borrower({ d, notify }) {
-  const nav = useNav();
+// ============================================================================
+// Settings
+// ============================================================================
+function Settings({ d, notify }) {
+  const [loanDays, setLoanDays] = useState(d.settings.loan_days);
+  const [fine, setFine] = useState(d.settings.fine_per_day);
   const [busy, setBusy] = useState(false);
-  const b = d.borrower;
-  const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
+  const can = canWrite(d, 'settings');
+  const dirty = String(loanDays) !== String(d.settings.loan_days) || String(fine) !== String(d.settings.fine_per_day);
+  const save = async () => {
     setBusy(true);
-    const r = await submitJson(url, fields || {});
+    const r = await submitJson(d.submit_url, { loan_days: loanDays, fine_per_day: fine });
     setBusy(false);
-    if (r.ok) { if (r.message) notify('success', r.message); nav.refresh(); }
-    else notify('error', r.error || 'Action failed.');
-  };
-  const s = d.stats;
-  const kpis = [['blue', 'fa-book', s.total, 'Total loans'], ['amber', 'fa-hand-holding', s.out, 'Out now'],
-    ['red', 'fa-clock', s.overdue, 'Overdue'], ['red', 'fa-triangle-exclamation', s.lost + s.damaged, 'Lost/damaged']];
-  const loanCols = (withActions) => [
-    { key: 'book', label: 'Book', render: (l) => l.book },
-    { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
-    { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d)</span>}</> },
-    { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
-    ...(withActions ? [{ key: 'act', label: '', render: (l) => (canWrite(d, 'circulation_return') ?
-      <div className="d-flex gap-1 justify-end">
-        <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Return" onClick={() => act(l.return_url, {}, `Return '${l.book}'?`)}><i aria-hidden="true" className="fas fa-rotate-left" /></button>
-        <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Renew" onClick={() => act(l.renew_url, {})}><i aria-hidden="true" className="fas fa-arrows-rotate" /></button>
-      </div> : null) }] : [{ key: 'closed', label: '', render: (l) => <span className="text-muted text-sm">{l.returned}{l.fine ? ` · ${naira(l.fine)}` : ''}{l.replacement_cost ? ` · ${naira(l.replacement_cost)}` : ''}</span> }]),
-  ];
-  return (
-    <>
-      <PageHeader title={b.name} actions={<a href={d.urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Borrowers</a>} />
-      <div className="text-muted mb-3">{b.type === 'staff' ? 'Staff' : 'Student'}{b.ref ? ` · ${b.ref}` : ''}{b.class ? ` · ${b.class}` : ''}{s.fines ? ` · fines/costs ${naira(s.fines)}` : ''}</div>
-      <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
-          <div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
-      </div>
-      <div className="card mb-3"><div className="card-header"><h3>Current loans ({d.current.length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(l) => l.id} rows={d.current} empty={<Empty icon="fa-hand-holding" title="Nothing out" />} columns={loanCols(true)} />
-        </div></div>
-      <div className="card"><div className="card-header"><h3>Past loans ({d.past.length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(l) => l.id} rows={d.past} pageSize={20} empty={<Empty icon="fa-clock-rotate-left" title="No history" />} columns={loanCols(false)} />
-        </div></div>
-    </>
-  );
-}
-
-// ---- Reserve modal ---------------------------------------------------------
-function ReserveModal({ d, book, onClose, onDone, notify }) {
-  const [borrowerType, setBorrowerType] = useState('student');
-  const [studentId, setStudentId] = useState('');
-  const [staffId, setStaffId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault();
-    const borrowerId = borrowerType === 'staff' ? staffId : studentId;
-    if (!borrowerId) { notify('error', 'Choose a borrower.'); return; }
-    setBusy(true);
-    const r = await submitJson(d.urls.reserve, { book_id: book.id, borrower_type: borrowerType,
-      student_id: borrowerType === 'student' ? studentId : '', staff_id: borrowerType === 'staff' ? staffId : '' });
-    setBusy(false);
-    if (r.ok) onDone(r.message || 'Reserved.');
-    else notify('error', r.error || 'Could not reserve.');
+    if (r.ok) notify('success', r.message || 'Saved.'); else notify('error', r.error || 'Could not save.');
   };
   return (
-    <Modal title={`Reserve “${book.title}”`} icon="fa-bookmark" size="sm" onClose={onClose}
-           footer={<>
-             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-             <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-bookmark" /> Reserve</button>
-           </>}>
-      <form onSubmit={submit}>
-        <p className="text-muted text-sm">{book.copies_available > 0
-          ? 'A copy is free — this hold will be ready to collect immediately.'
-          : 'No copy is free — the borrower joins the queue and is promoted when one is returned.'}</p>
-        <div className="borrower-toggle" role="tablist">
-          {[['student', 'fa-user-graduate', 'Student'], ['staff', 'fa-user-tie', 'Staff']].map(([v, ic, lab]) => (
-            <button type="button" key={v} role="tab" aria-selected={borrowerType === v}
-              className={borrowerType === v ? 'on' : ''} onClick={() => setBorrowerType(v)}><i aria-hidden="true" className={'fas ' + ic} /> {lab}</button>))}
+    <Page d={d}>
+      <Head icon="fa-gear" title="Library settings" sub="Loan rules used when books are issued and returned." />
+      <section className="rs-card lb-stackcard lb-set">
+        <div className="cm-row2">
+          <Field label="Loan period (days)" grow hint="Default due date when issuing."><input type="number" min="1" value={loanDays} disabled={!can} onChange={(e) => setLoanDays(e.target.value)} /></Field>
+          <Field label="Late fine (₦ per day)" grow hint="0 turns fines off."><input type="number" min="0" step="1" value={fine} disabled={!can} onChange={(e) => setFine(e.target.value)} /></Field>
         </div>
-        {borrowerType === 'student'
-          ? <Autocomplete label="Student" required url={d.urls.student_search} placeholder="Search name / student ID…" onPick={setStudentId} />
-          : <Autocomplete label="Staff" required url={d.urls.staff_search} placeholder="Search name / staff ID…" onPick={setStaffId} />}
-      </form>
-    </Modal>
-  );
-}
-
-// ---- Reservations ----------------------------------------------------------
-function Reservations({ d, notify }) {
-  const nav = useNav();
-  const [busy, setBusy] = useState(false);
-  const act = async (url, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    setBusy(true);
-    const r = await submitJson(url, {});
-    setBusy(false);
-    if (r.ok) { if (r.message) notify('success', r.message); nav.refresh(); }
-    else notify('error', r.error || 'Action failed.');
-  };
-  const onStatus = (v) => nav.go(d.urls.reservations + '?status=' + v);
-  const resBadge = (s) => {
-    const map = { Ready: 'badge-success', Queued: 'badge-warning', Fulfilled: 'badge-secondary', Cancelled: 'badge-secondary', Expired: 'badge-danger' };
-    return <span className={'badge ' + (map[s] || 'badge-secondary')}>{s}</span>;
-  };
-  return (
-    <>
-      <PageHeader title="Reservations" />
-      <Tabs urls={d.urls} page="reservations" />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>
-          <select className="form-control" value={d.status} onChange={(e) => onStatus(e.target.value)}>
-            <option value="open">Open (queued + ready)</option>
-            {['Queued', 'Ready', 'Fulfilled', 'Cancelled', 'Expired'].map((s) => <option key={s} value={s}>{s}</option>)}
-          </select></div></div>
-      </div></div>
-      <div className="card">
-        <div className="card-header"><h3>{d.reservations.length} reservation(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(r) => r.id} rows={d.reservations} pageSize={30} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-bookmark" title="No reservations"><p>Holds placed from the catalogue appear here.</p></Empty>}
-            columns={[
-              { key: 'book', label: 'Book', sortable: true, sortValue: (r) => r.book, render: (r) => r.book },
-              { key: 'borrower', label: 'For', render: (r) => <>{r.borrower}{r.borrower_type === 'staff' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Staff</span>}</> },
-              { key: 'created', label: 'Placed', render: (r) => r.created },
-              { key: 'status', label: 'Status', render: (r) => <>{resBadge(r.status)}{r.status === 'Ready' && r.expires && <div className="text-muted text-sm">expires {r.expires}</div>}</> },
-              { key: 'act', label: '', render: (r) => (r.status === 'Queued' || r.status === 'Ready')
-                ? <div className="d-flex gap-1 justify-end">
-                    {r.available > 0 && canWrite(d, 'reservations_fulfill') && <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Issue now" onClick={() => act(r.fulfill_url, `Issue “${r.book}” to ${r.borrower}?`)}><i aria-hidden="true" className="fas fa-hand-holding" /></button>}
-                    {canWrite(d, 'reservations_cancel') && <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Cancel" onClick={() => act(r.cancel_url, 'Cancel this reservation?')}><i aria-hidden="true" className="fas fa-xmark" /></button>}
-                  </div>
-                : '—' },
-            ]} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ---- Reading lists ---------------------------------------------------------
-function ReadingLists({ d, notify }) {
-  const nav = useNav();
-  const [classId, setClassId] = useState(d.class_id ? String(d.class_id) : '');
-  const [bookId, setBookId] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const bookRef = useRef(0);
-  const add = async (e) => {
-    e.preventDefault();
-    if (!classId || !bookId) { notify('error', 'Pick a class and a book.'); return; }
-    setBusy(true);
-    const r = await submitJson(d.urls.add, { class_id: classId, book_id: bookId, note });
-    setBusy(false);
-    if (r.ok) { notify('success', r.message || 'Added.'); setBookId(''); setNote(''); bookRef.current += 1; nav.refresh(); }
-    else notify('error', r.error || 'Could not add.');
-  };
-  const remove = async (it) => {
-    if (!await confirm(`Remove “${it.book}” from ${it.class}?`)) return;
-    setBusy(true);
-    const r = await submitJson(it.remove_url, {});
-    setBusy(false);
-    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not remove.');
-  };
-  const onClassFilter = (v) => nav.go(v ? d.urls.self + '?class_id=' + v : d.urls.self);
-  return (
-    <>
-      <PageHeader title="Reading lists" />
-      <Tabs urls={d.urls} page="reading_lists" />
-      {canWrite(d, 'reading_lists_manage') && <div className="card mb-3">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Recommend a book to a class</h3></div>
-        <div className="card-body">
-          <form onSubmit={add}><div className="form-row">
-            <div className="form-group"><label className="form-label">Class <span className="required">*</span></label>
-              <select className="form-control" value={classId} onChange={(e) => setClassId(e.target.value)}>
-                <option value="">Select…</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-            <div className="form-group" style={{ flex: 2 }}>
-              <Autocomplete key={bookRef.current} label="Book" required url={d.urls.book_search} placeholder="Search title / author / ISBN…" onPick={setBookId} /></div>
-            <div className="form-group" style={{ flex: 2 }}><label className="form-label">Note</label>
-              <input type="text" className="form-control" placeholder="Optional (e.g. Term 1 core text)" value={note} onChange={(e) => setNote(e.target.value)} /></div>
-            <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-              <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
-          </div></form>
-        </div>
-      </div>}
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form"><div className="form-group"><label className="form-label">Filter by class</label>
-          <select className="form-control" value={d.class_id || ''} onChange={(e) => onClassFilter(e.target.value)}>
-            <option value="">All classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div></div>
-      </div></div>
-      <div className="card">
-        <div className="card-header"><h3>{d.items.length} recommendation(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(it) => it.id} rows={d.items} pageSize={30} sticky maxHeight="60vh"
-            empty={<Empty icon="fa-list-check" title="No recommendations yet"><p>Add books above to build class reading lists.</p></Empty>}
-            columns={[
-              { key: 'class', label: 'Class', sortable: true, sortValue: (it) => it.class, render: (it) => <span className="badge badge-secondary">{it.class}</span> },
-              { key: 'book', label: 'Book', sortable: true, sortValue: (it) => it.book, render: (it) => <><strong>{it.book}</strong>{it.author && <div className="text-muted text-sm">{it.author}</div>}</> },
-              { key: 'note', label: 'Note', render: (it) => it.note || '—' },
-              { key: 'by', label: 'Added by', render: (it) => it.by || '—' },
-              { key: 'act', label: '', render: (it) => canWrite(d, 'reading_lists_manage') && <button type="button" className="btn btn-danger btn-sm" disabled={busy} aria-label="Remove" onClick={() => remove(it)}><i aria-hidden="true" className="fas fa-trash" /></button> },
-            ]} />
-        </div>
-      </div>
-    </>
+        <p className="cm-mute">A book issued today is due back in <b>{plural(Number(loanDays) || 0, 'day')}</b>{Number(fine) ? <>; a week late costs <b>{naira(Number(fine) * 7)}</b> (you can waive it on return).</> : <>; late returns aren’t fined.</>}</p>
+        {!can && <p className="cm-mute">You don’t have permission to change these.</p>}
+      </section>
+      {can && dirty && <Bar><span className="rs-bar-t"><b>Unsaved changes</b><small>Loan rules</small></span>
+        <button type="button" className="rs-btn primary" disabled={busy} onClick={save}><i className="fas fa-check" aria-hidden="true" /> Save</button></Bar>}
+    </Page>
   );
 }
 
@@ -925,14 +825,14 @@ const SCREENS = { dashboard: Dashboard, books: Books, book_form: BookForm, issue
 
 export default function LibraryApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
-  const [msg, setMsg] = useState(null);
-  const notify = (tone, text) => setMsg({ tone, text });
+  const [toast, setToast] = useState(null);
+  const notify = (tone, text) => setToast({ tone, text, at: Date.now() });
   const Screen = SCREENS[d.page] || Dashboard;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
-        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
         <Screen d={d} notify={notify} />
+        {toast && <Toast key={toast.at} tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
       </SectionShell>
     </NavCtx.Provider>
   );
