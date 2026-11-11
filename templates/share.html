@@ -1,67 +1,131 @@
 {% extends "base.html" %}
 {% block title %}Share App - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Share</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.sh{max-width:1020px}
+.sh-wrap{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:1rem;align-items:start}
+.sh-qr{padding:1.4rem;text-align:center}
+.sh-code{width:240px;max-width:78%;margin:0 auto 1rem;padding:14px;background:#fff;border-radius:18px;box-shadow:0 4px 18px rgba(0,0,0,.08);border:1px solid #eef2f7}
+.sh-code svg{display:block;width:100%;height:auto}
+.sh-url{display:flex;gap:.45rem;align-items:center;background:var(--gray-50,#f8fafc);border:1.5px solid var(--border-color);border-radius:12px;padding:.3rem .3rem .3rem .8rem}
+.sh-url input{flex:1;min-width:0;border:0;background:none;font:inherit;font-weight:700;font-size:.9rem;color:var(--text-primary);outline:none}
+.sh-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;margin-top:.7rem}
+.sh-btns .rs-btn{padding:0 .5rem;font-size:.82rem}
+.sh-hint{font-size:.82rem;color:var(--text-muted);margin:.9rem 0 0;line-height:1.45}
+.sh-side{display:flex;flex-direction:column;gap:1rem}
+.sh-sec{padding:0;overflow:hidden}
+.sh-sec h3{margin:0;font-size:.95rem;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.sh-sec h3 small{display:block;font-weight:500;color:var(--text-muted);font-size:.78rem;margin-top:.15rem}
+.sh-row{display:flex;align-items:center;gap:.8rem;padding:.7rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.sh-row:last-child{border-bottom:0}
+.sh-ic{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary)}
+.sh-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.sh-t b{font-size:.92rem}.sh-t small{color:var(--text-muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh-steps{margin:0;padding:.9rem 1rem .9rem 2.3rem;font-size:.88rem;color:var(--text-secondary);line-height:1.6}
+.sh-warn{display:flex;gap:.6rem;align-items:flex-start;padding:.75rem 1rem;border-radius:12px;font-size:.84rem;background:color-mix(in srgb,var(--warning) 12%,transparent);margin-top:.9rem;text-align:left}
+@media (max-width:760px){
+  .sh-wrap{grid-template-columns:minmax(0,1fr)}
+  .sh-qr{padding:1.1rem}
+}
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Share the App</h1></div>
+<div class="rs sh">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-qrcode" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Share the App</h1><p>Get staff, parents and students onto the app on their own phones — scan or tap a link. Works over mobile data.</p></div>
+  </header>
 
-<div class="card" style="max-width:560px; margin:0 auto;">
-    <div class="card-body" style="text-align:center;">
-        <p class="text-muted">
-            Let teachers open the app on their own phones — they scan the code or
-            type the link. Works over mobile data; no shared Wi-Fi needed.
-        </p>
+  <div class="sh-wrap">
+    <section class="rs-card sh-qr">
+      {% if qr_svg %}<div class="sh-code" id="qrBox">{{ qr_svg|safe }}</div>{% endif %}
+      <div class="sh-url">
+        <i class="fas fa-link" aria-hidden="true" style="color:var(--text-muted)"></i>
+        <input id="shareUrl" type="text" readonly value="{{ share_url }}" data-select aria-label="App link">
+      </div>
+      <div class="sh-btns">
+        <button type="button" class="rs-btn primary" id="copyBtn" data-copy="{{ share_url }}"><i class="fas fa-copy"></i> Copy</button>
+        <a class="rs-btn ghost" href="https://wa.me/?text={{ ('Open our school app: ' ~ share_url)|urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp</a>
+        {% if qr_svg %}<button type="button" class="rs-btn ghost" id="qrDl"><i class="fas fa-download" aria-hidden="true"></i> QR</button>
+        {% else %}<a class="rs-btn ghost" href="{{ share_url }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Open</a>{% endif %}
+      </div>
+      {% if 'trycloudflare.com' in share_url %}
+      <div class="sh-warn"><i class="fas fa-triangle-exclamation" style="color:var(--warning);margin-top:.15rem" aria-hidden="true"></i>
+        <span>This is a temporary link — it changes each time the app restarts. Use your own domain for a permanent link.</span></div>
+      {% elif not qr_svg %}
+      <p class="sh-hint">QR code unavailable — share the link above.</p>
+      {% else %}
+      <p class="sh-hint">Print the QR code for the staff room or notice board — anyone who scans it lands on the sign-in page.</p>
+      {% endif %}
+    </section>
 
-        {% if qr_svg %}
-        <div style="width:240px; max-width:80%; margin:1rem auto; padding:14px;
-                    background:#fff; border-radius:14px; box-shadow:0 2px 12px rgba(0,0,0,.08);">
-            {{ qr_svg|safe }}
+    <div class="sh-side">
+      {% if portals %}
+      <section class="rs-card sh-sec">
+        <h3>Direct links<small>Send each group straight to their own sign-in page</small></h3>
+        {% for p in portals %}
+        <div class="sh-row">
+          <span class="sh-ic"><i class="fas {{ p.icon }}" aria-hidden="true"></i></span>
+          <span class="sh-t"><b>{{ p.title }}</b><small>{{ p.sub }} · {{ p.url }}</small></span>
+          <button type="button" class="rs-btn sm ghost sh-copy" data-copy="{{ p.url }}" aria-label="Copy {{ p.title }} link"><i class="fas fa-copy"></i> Copy</button>
         </div>
-        {% endif %}
+        {% endfor %}
+      </section>
+      {% endif %}
 
-        <div style="display:flex; gap:.5rem; align-items:stretch; justify-content:center;
-                    max-width:440px; margin:1rem auto 0;">
-            <input id="shareUrl" type="text" readonly value="{{ share_url }}"
-                   class="form-control" style="text-align:center; font-weight:600;"
-                   data-select>
-            <button type="button" class="btn btn-primary" id="copyBtn">
-                <i class="fas fa-copy"></i> Copy
-            </button>
-        </div>
+      {% if invites_url %}
+      <a class="rs-card sh-row" href="{{ invites_url }}" style="text-decoration:none;color:inherit;border-bottom:1px solid var(--border-color)">
+        <span class="sh-ic"><i class="fas fa-user-plus" aria-hidden="true"></i></span>
+        <span class="sh-t"><b>Invite new staff</b><small>Make a sign-up link — they fill their own details, you approve</small></span>
+        <i class="fas fa-chevron-right" style="color:var(--text-muted)" aria-hidden="true"></i>
+      </a>
+      {% endif %}
 
-        <p class="text-muted text-sm" style="margin-top:1rem;">
-            <a href="{{ share_url }}" target="_blank" rel="noopener">{{ share_url }}</a>
-        </p>
-
-        {% if 'trycloudflare.com' in share_url %}
-        <p class="text-muted text-sm" style="margin-top:.5rem;">
-            This is a temporary instant link — it changes each time you restart.
-            For a short, permanent link on your own domain, see the phone-pilot guide.
-        </p>
-        {% elif not qr_svg %}
-        <p class="text-muted text-sm">QR code unavailable — share the link above.</p>
-        {% endif %}
+      <section class="rs-card sh-sec">
+        <h3>Add it to the home screen<small>So it opens like a normal app</small></h3>
+        <ol class="sh-steps">
+          <li>Open the link in <b>Chrome</b> (Android) or <b>Safari</b> (iPhone).</li>
+          <li>Android: tap <b>⋮</b> → <b>Install app</b>. iPhone: tap <b>Share</b> → <b>Add to Home Screen</b>.</li>
+          <li>Open it from the new icon and sign in.</li>
+        </ol>
+      </section>
     </div>
+  </div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
 (function () {
-    var btn = document.getElementById('copyBtn');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-        var input = document.getElementById('shareUrl');
-        input.select();
+    function copy(text, btn) {
         var done = function () {
             var old = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check"></i> Copied';
             setTimeout(function () { btn.innerHTML = old; }, 1500);
         };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(input.value).then(done, function () {
-                document.execCommand('copy'); done();
-            });
-        } else {
-            document.execCommand('copy'); done();
-        }
+        var fb = function () {
+            var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) {}
+            document.body.removeChild(ta);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fb); else fb();
+    }
+    document.querySelectorAll('#copyBtn, .sh-copy').forEach(function (b) {
+        b.addEventListener('click', function () { copy(b.dataset.copy, b); });
+    });
+    var dl = document.getElementById('qrDl');
+    if (dl) dl.addEventListener('click', function () {
+        var svg = document.querySelector('#qrBox svg');
+        if (!svg) return;
+        var xml = new XMLSerializer().serializeToString(svg);
+        var img = new Image();
+        img.onload = function () {
+            var c = document.createElement('canvas'); c.width = c.height = 1024;
+            var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 1024, 1024); x.drawImage(img, 32, 32, 960, 960);
+            var a = document.createElement('a'); a.download = 'school-app-qr.png'; a.href = c.toDataURL('image/png'); a.click();
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
     });
 })();
 </script>

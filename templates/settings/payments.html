@@ -3,116 +3,147 @@
 {% block breadcrumb %}<a href="{{ back_url }}">Settings</a> <span>/ Online Payments</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
 <style>
-  .pay-wrap{max-width:760px}
-  .pay-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-  .pay-head h2{margin:0;font-size:20px}
-  .st{font-size:12.5px;font-weight:700;padding:4px 12px;border-radius:999px}
-  .st.on{background:#d1e7dd;color:#14603f}
-  .st.off{background:#fef3cd;color:#7a5310}
-  .lead{color:var(--text-secondary,#556);font-size:14px;margin:2px 0 18px}
-  .note{background:#eef6ff;border:1px solid #d6e6fb;color:#22405f;border-radius:12px;
-        padding:13px 15px;font-size:13.5px;margin-bottom:18px}
-  .note b{font-weight:700}
-  .steps{margin:8px 0 0 18px;padding:0} .steps li{margin:4px 0}
-  .hook{display:flex;gap:8px;align-items:center;margin-top:8px}
-  .hook code{background:#0f172a;color:#e2e8f0;padding:7px 10px;border-radius:8px;font-size:12.5px;
-             overflow-x:auto;white-space:nowrap;flex:1}
-  .hook button{white-space:nowrap}
-  .form-hint{font-size:12px;color:var(--text-secondary,#667);margin-top:4px}
-  .danger-row{margin-top:18px;padding-top:16px;border-top:1px solid var(--border,#e5e7eb)}
+.py{max-width:1020px}
+.py-hero{display:flex;align-items:center;gap:1rem;padding:1rem 1.1rem;margin:0 0 1rem;border-left:4px solid var(--warning)}
+.py-hero.on{border-left-color:var(--success)}
+.py-hero-ic{width:50px;height:50px;border-radius:14px;flex:none;display:grid;place-items:center;font-size:1.3rem;background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
+.py-hero.on .py-hero-ic{background:color-mix(in srgb,var(--success) 14%,transparent);color:var(--success)}
+.py-hero .t{flex:1;min-width:0}.py-hero b{display:block;font-size:1.02rem}.py-hero small{color:var(--text-muted);font-size:.84rem;line-height:1.4}
+.py-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:1rem;align-items:start}
+.py-card{padding:1.1rem}
+.py-card h3{margin:0 0 .8rem;font-size:1rem;display:flex;align-items:center;gap:.5rem}
+.py-step{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:.75rem;font-weight:800}
+.py-prov{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:0 0 1.1rem}
+.py-prov label{position:relative;display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.8rem .5rem;border:1.5px solid var(--border-color);border-radius:13px;cursor:pointer;font-weight:700;font-size:.9rem;text-align:center}
+.py-prov label small{font-weight:500;color:var(--text-muted);font-size:.72rem}
+.py-prov input{position:absolute;opacity:0;pointer-events:none}
+.py-prov label:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--bg-card));box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 13%,transparent)}
+.py-prov label:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.py-form{display:flex;flex-direction:column;gap:.9rem}
+.py-key{position:relative;display:flex}
+.py-key input{flex:1;padding-right:2.8rem!important}
+.py-eye{position:absolute;right:.35rem;top:50%;transform:translateY(-50%);width:34px;height:34px;border:0;background:none;color:var(--text-muted);cursor:pointer;border-radius:8px}
+.py-eye:hover{color:var(--primary)}
+.py-saved{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:700;color:var(--success);margin-left:.4rem}
+.py-hook{display:flex;gap:.45rem;align-items:center}
+.py-hook code{flex:1;min-width:0;background:#0f172a;color:#e2e8f0;padding:.6rem .75rem;border-radius:10px;font-size:.78rem;overflow-x:auto;white-space:nowrap}
+.py-how{margin:0;padding-left:1.2rem;font-size:.87rem;line-height:1.55;color:var(--text-secondary)}
+.py-how li{margin:.25rem 0}
+.py-side{display:flex;flex-direction:column;gap:1rem}
+.py-flow{display:flex;flex-direction:column;gap:.75rem}
+.py-flow div{display:flex;gap:.7rem;align-items:flex-start;font-size:.86rem;color:var(--text-secondary)}
+.py-flow i{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 11%,transparent);color:var(--primary)}
+.py-flow span>b:first-child{color:var(--text-primary);display:block}
+.py-danger{padding:1rem 1.1rem;border:1.5px solid color-mix(in srgb,var(--danger) 35%,var(--border-color))}
+.py-danger p{margin:0 0 .7rem;font-size:.85rem;color:var(--text-secondary)}
+.py-safe{display:flex;gap:.55rem;align-items:flex-start;font-size:.8rem;color:var(--text-muted);margin:.2rem 0 0}
+@media (max-width:760px){
+  .py-grid{grid-template-columns:minmax(0,1fr)}
+  .py-hero{flex-wrap:wrap}.py-hero .rs-btn{width:100%}
+  .py-prov label{padding:.7rem .3rem;font-size:.84rem}
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="pay-wrap">
-  <div class="pay-head">
-    <h2>Online fee payments</h2>
-    {% if configured %}<span class="st on">Active</span>{% else %}<span class="st off">Not set up</span>{% endif %}
-  </div>
-  <p class="lead">Collect school fees, books and other charges online. Payments go
-    <b>directly into your school’s own account</b> — the platform never touches the
-    money. Choose your provider and paste that provider’s keys.</p>
+<div class="rs cm py">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-credit-card" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Online fee payments</h1><p>Parents pay fees by card or transfer — the money goes straight into the school’s own account.</p></div>
+  </header>
 
-  <div class="note" id="note-paystack">
-    <b>Paystack:</b> create a free account at <b>paystack.com</b>, add your bank account, then
-    <b>Settings → API Keys &amp; Webhooks</b> → copy your <b>Public Key</b> (<code>pk_…</code>)
-    and <b>Secret Key</b> (<code>sk_…</code>). Set the Webhook URL (below) there too.
-  </div>
-  <div class="note" id="note-flutterwave" style="display:none">
-    <b>Flutterwave:</b> from your dashboard <b>Settings → API</b> copy your <b>Public Key</b>
-    (<code>FLWPUBK…</code>) and <b>Secret Key</b> (<code>FLWSECK…</code>). Put your
-    <b>Secret Hash</b> (Settings → Webhooks) in the third box, and set the Webhook URL below.
-  </div>
-  <div class="note" id="note-monnify" style="display:none">
-    <b>Monnify:</b> from your dashboard copy your <b>API Key</b> (public box), <b>Secret Key</b>,
-    and <b>Contract Code</b> (third box). Set the Webhook URL below in Monnify → Settings → Webhooks.
-  </div>
-
-  <div class="card"><div class="card-body">
-    <form method="post" action="{{ url_for('settings.payments_settings') }}">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-
-      <div class="form-group">
-        <label class="form-label">Payment provider</label>
-        <select class="form-control" name="provider" id="provider">
-          {% for p in providers %}<option value="{{ p.id }}" {{ 'selected' if p.id == provider }}>{{ p.name }}</option>{% endfor %}
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" id="lbl-public">Public / API Key</label>
-        <input class="form-control" type="text" name="public_key" value="{{ public_key }}"
-               id="pub" autocomplete="off">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" id="lbl-secret">Secret Key</label>
-        <input class="form-control" type="password" name="secret_key" value=""
-               placeholder="{{ '•••••••• (saved — leave blank to keep)' if configured else 'Secret key' }}"
-               autocomplete="new-password">
-        <div class="form-hint">Stored <b>encrypted</b>. Leave blank to keep the key you already saved.</div>
-      </div>
-
-      <div class="form-group" id="grp-extra">
-        <label class="form-label" id="lbl-extra">Secret Hash / Contract Code</label>
-        <input class="form-control" type="password" name="extra" value=""
-               placeholder="{{ '•••••••• (saved — leave blank to keep)' if has_extra else 'Only for Flutterwave / Monnify' }}"
-               autocomplete="new-password">
-        <div class="form-hint" id="hint-extra">Flutterwave: your Secret Hash. Monnify: your Contract Code. Not needed for Paystack.</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Your Webhook URL</label>
-        <div class="hook">
-          <code id="hook">{{ webhook_url }}</code>
-          <button type="button" class="btn btn-secondary" id="copyHook">Copy</button>
-        </div>
-        <div class="form-hint">Paste this into your provider's dashboard so payments are confirmed automatically.</div>
-      </div>
-
-      <button type="submit" class="btn btn-primary">Save payment settings</button>
-    </form>
-
-    {% if configured %}
-    <div class="danger-row">
-      <form method="post" action="{{ url_for('settings.payments_settings') }}"
-            onsubmit="return confirm('Remove your payment keys? Online fee payment will stop.');">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="clear">
-        <button type="submit" class="btn btn-secondary">Remove keys &amp; turn off online payment</button>
-      </form>
+  <section class="rs-card py-hero{% if configured %} on{% endif %}">
+    <span class="py-hero-ic"><i class="fas {{ 'fa-circle-check' if configured else 'fa-plug-circle-xmark' }}" aria-hidden="true"></i></span>
+    <div class="t">
+      {% if configured %}
+        <b>On — parents can pay online</b>
+        <small>Connected to {% for p in providers if p.id == provider %}{{ p.name }}{% endfor %}.
+          {% if online.count %}{{ online.count }} online payment{{ 's' if online.count != 1 }} (₦{{ '{:,.0f}'.format(online.total) }}) in the last 30 days.
+          {% elif online.last %}Last online payment {{ online.last }}.{% else %}No online payments yet — try one with a small amount to check.{% endif %}</small>
+      {% else %}
+        <b>Off — parents can’t pay online yet</b>
+        <small>Pick your payment provider, paste its keys below and save. It takes about five minutes.</small>
+      {% endif %}
     </div>
-    {% endif %}
-  </div></div>
+    {% if configured and finance_url %}<a class="rs-btn ghost" href="{{ finance_url }}"><i class="fas fa-chart-line" aria-hidden="true"></i> See payments</a>{% endif %}
+  </section>
 
-  <div class="note" style="margin-top:18px;background:#f7f8fa;border-color:#e9edf3;color:#334">
-    <b>How parents pay once this is on:</b>
-    <ul class="steps">
-      <li><b>Parents</b> log into the parent portal, open their child’s fee bill, and tap <b>Pay</b> → they’re taken to Paystack to pay by card/transfer.</li>
-      <li><b>Bursars/finance staff</b> can open a student’s statement and <b>generate a payment link</b> to send a parent (WhatsApp/SMS/email).</li>
-      <li>Every successful payment is recorded against the student automatically and shows up in Finance.</li>
-    </ul>
+  <div class="py-grid">
+    <section class="rs-card py-card">
+      <form method="post" action="{{ url_for('settings.payments_settings') }}" class="py-form" id="payForm">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <h3><span class="py-step">1</span> Choose your provider</h3>
+        <div class="py-prov" role="radiogroup" aria-label="Payment provider">
+          {% set _sub = {'paystack': 'Card · transfer · USSD', 'flutterwave': 'Card · transfer · mobile money', 'monnify': 'Bank transfer'} %}
+          {% for p in providers %}
+          <label><input type="radio" name="provider" value="{{ p.id }}" {{ 'checked' if p.id == provider }}>{{ p.name }}<small>{{ _sub.get(p.id, '') }}</small></label>
+          {% endfor %}
+        </div>
+
+        <h3><span class="py-step">2</span> Get your keys</h3>
+        <ol class="py-how" data-for="paystack">
+          <li>Sign in at <b>paystack.com</b> and add the school’s bank account.</li>
+          <li>Open <b>Settings → API Keys &amp; Webhooks</b>.</li>
+          <li>Copy the <b>Public key</b> (<code>pk_…</code>) and <b>Secret key</b> (<code>sk_…</code>), and paste the webhook link below there.</li>
+        </ol>
+        <ol class="py-how" data-for="flutterwave" hidden>
+          <li>In your Flutterwave dashboard open <b>Settings → API</b>.</li>
+          <li>Copy the <b>Public key</b> (<code>FLWPUBK…</code>) and <b>Secret key</b> (<code>FLWSECK…</code>).</li>
+          <li>Under <b>Settings → Webhooks</b>, set a <b>Secret hash</b> and paste the webhook link below.</li>
+        </ol>
+        <ol class="py-how" data-for="monnify" hidden>
+          <li>In your Monnify dashboard open <b>Developer → API keys</b>.</li>
+          <li>Copy the <b>API key</b>, <b>Secret key</b> and <b>Contract code</b>.</li>
+          <li>Under <b>Settings → Webhooks</b>, paste the webhook link below.</li>
+        </ol>
+
+        <h3 style="margin-top:.4rem"><span class="py-step">3</span> Paste them here</h3>
+        <label class="cm-f"><span id="lbl-public">Public key</span>
+          <input type="text" name="public_key" value="{{ public_key }}" id="pub" autocomplete="off" spellcheck="false"></label>
+        <label class="cm-f"><span id="lbl-secret">Secret key{% if configured %}<em class="py-saved"><i class="fas fa-lock"></i> saved</em>{% endif %}</span>
+          <span class="py-key"><input type="password" name="secret_key" value="" spellcheck="false"
+               placeholder="{{ 'Saved — leave blank to keep it' if configured else 'Secret key' }}" autocomplete="new-password">
+          <button type="button" class="py-eye" aria-label="Show secret key"><i class="fas fa-eye"></i></button></span>
+          <small>Stored encrypted and never shown again.</small></label>
+        <label class="cm-f" id="grp-extra"><span id="lbl-extra">Secret hash{% if has_extra %}<em class="py-saved"><i class="fas fa-lock"></i> saved</em>{% endif %}</span>
+          <span class="py-key"><input type="password" name="extra" value="" spellcheck="false"
+               placeholder="{{ 'Saved — leave blank to keep it' if has_extra else '' }}" autocomplete="new-password">
+          <button type="button" class="py-eye" aria-label="Show"><i class="fas fa-eye"></i></button></span></label>
+
+        <div class="cm-f"><span>Webhook link — paste this in your provider’s dashboard</span>
+          <div class="py-hook"><code id="hook">{{ webhook_url }}</code>
+            <button type="button" class="rs-btn sm ghost" id="copyHook"><i class="fas fa-copy" aria-hidden="true"></i> Copy</button></div>
+          <small>So each payment is confirmed and recorded automatically.</small></div>
+
+        <button type="submit" class="rs-btn primary wide"><i class="fas fa-check" aria-hidden="true"></i> {{ 'Save changes' if configured else 'Turn on online payments' }}</button>
+        <p class="py-safe"><i class="fas fa-shield-halved" aria-hidden="true"></i> The app never holds the money — it only checks with your provider that a payment went through.</p>
+      </form>
+    </section>
+
+    <div class="py-side">
+      <section class="rs-card py-card">
+        <h3><i class="fas fa-route" aria-hidden="true" style="color:var(--primary)"></i> How parents pay</h3>
+        <div class="py-flow">
+          <div><i class="fas fa-mobile-screen" aria-hidden="true"></i><span><b>Parent portal</b>They open their child’s fee bill and tap <b>Pay</b>.</span></div>
+          <div><i class="fas fa-link" aria-hidden="true"></i><span><b>Payment link</b>The bursar can send a link from any student’s statement by WhatsApp, SMS or email.</span></div>
+          <div><i class="fas fa-receipt" aria-hidden="true"></i><span><b>Recorded for you</b>Each payment lands on the student’s account with a receipt and shows in Finance.</span></div>
+        </div>
+      </section>
+      {% if configured %}
+      <section class="rs-card py-danger">
+        <h3 style="margin:0 0 .3rem;font-size:.95rem;color:var(--danger)"><i class="fas fa-power-off" aria-hidden="true"></i> Turn off online payments</h3>
+        <p>Removes the saved keys. Parents won’t see a Pay button until you add them again. Past payments stay recorded.</p>
+        <form method="post" action="{{ url_for('settings.payments_settings') }}" data-confirm="Remove your payment keys? Online fee payment will stop.">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="clear">
+          <button type="submit" class="rs-btn ghost" style="color:var(--danger)">Remove keys</button>
+        </form>
+      </section>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -120,27 +151,33 @@
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
   (function(){
-    var b=document.getElementById('copyHook');
-    if(b) b.addEventListener('click', function(){
-      var t=document.getElementById('hook').textContent;
+    var b = document.getElementById('copyHook');
+    if (b) b.addEventListener('click', function(){
+      var t = document.getElementById('hook').textContent;
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
-        .then(function(){ b.textContent='Copied'; setTimeout(function(){b.textContent='Copy';},1500); })
+        .then(function(){ var o = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copied'; setTimeout(function(){ b.innerHTML = o; }, 1500); })
         .catch(function(){});
     });
-    // adapt labels + notes to the chosen provider
-    var sel = document.getElementById('provider');
-    function apply(){
-      var p = sel ? sel.value : 'paystack';
-      ['paystack','flutterwave','monnify'].forEach(function(n){
-        var el = document.getElementById('note-'+n); if (el) el.style.display = (n===p?'':'none');
+    document.querySelectorAll('.py-eye').forEach(function(e){
+      e.addEventListener('click', function(){
+        var i = e.parentNode.querySelector('input'); var show = i.type === 'password';
+        i.type = show ? 'text' : 'password'; e.querySelector('i').className = 'fas ' + (show ? 'fa-eye-slash' : 'fa-eye');
       });
-      var pub = {paystack:'Public Key', flutterwave:'Public Key (FLWPUBK…)', monnify:'API Key'}[p];
-      var extra = {paystack:'Not needed for Paystack', flutterwave:'Secret Hash', monnify:'Contract Code'}[p];
-      var lp=document.getElementById('lbl-public'); if(lp) lp.textContent=pub;
-      var le=document.getElementById('lbl-extra'); if(le) le.textContent=extra;
-      var ge=document.getElementById('grp-extra'); if(ge) ge.style.display=(p==='paystack'?'none':'');
+    });
+    // Adapt labels + steps to the chosen provider.
+    var pubL = {paystack:'Public key (pk_…)', flutterwave:'Public key (FLWPUBK…)', monnify:'API key'};
+    var secL = {paystack:'Secret key (sk_…)', flutterwave:'Secret key (FLWSECK…)', monnify:'Secret key'};
+    var extL = {flutterwave:'Secret hash', monnify:'Contract code'};
+    function setText(id, txt){ var el = document.getElementById(id); if (!el) return; var tag = el.querySelector('em'); el.textContent = txt; if (tag) el.appendChild(tag); }
+    function apply(){
+      var r = document.querySelector('input[name=provider]:checked'); var p = r ? r.value : 'paystack';
+      document.querySelectorAll('.py-how').forEach(function(o){ o.hidden = o.dataset.for !== p; });
+      setText('lbl-public', pubL[p] || 'Public key'); setText('lbl-secret', secL[p] || 'Secret key');
+      setText('lbl-extra', extL[p] || '');
+      var ge = document.getElementById('grp-extra'); if (ge) ge.style.display = extL[p] ? '' : 'none';
     }
-    if (sel){ sel.addEventListener('change', apply); apply(); }
+    document.querySelectorAll('input[name=provider]').forEach(function(r){ r.addEventListener('change', apply); });
+    apply();
   })();
 </script>
 {% endblock %}

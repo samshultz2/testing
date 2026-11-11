@@ -26,7 +26,21 @@ def share_app():
     except Exception:
         qr_svg = None  # library missing — page still shows the URL
 
-    return render_template('share.html', share_url=url, qr_svg=qr_svg)
+    def _u(ep):
+        try:
+            return url_for(ep)
+        except Exception:
+            return None
+    portals = [p for p in (
+        {'icon': 'fa-user-tie', 'title': 'Staff sign-in', 'sub': 'Teachers and staff', 'path': _u('auth.login')},
+        {'icon': 'fa-people-roof', 'title': 'Parent portal', 'sub': 'Fees, results, messages', 'path': _u('parent.login')},
+        {'icon': 'fa-laptop-code', 'title': 'Student CBT', 'sub': 'Online tests', 'path': _u('cbt_portal.login')},
+        {'icon': 'fa-graduation-cap', 'title': 'Alumni', 'sub': 'Former students', 'path': _u('alumni.login')},
+    ) if p['path']]
+    for p in portals:
+        p['url'] = url + p['path']
+    return render_template('share.html', share_url=url, qr_svg=qr_svg, portals=portals,
+                           invites_url=_u('staff_onboarding.invites') if is_admin() else None)
 
 
 @main_bp.route('/search')
@@ -130,42 +144,9 @@ def set_theme():
 @main_bp.route('/audit')
 @central_admin_required
 def audit_log():
-    """View the audit trail of administrative actions (with filters)."""
-    from models import AuditLog
-    from datetime import datetime as _dt
-    page = request.args.get('page', 1, type=int)
-    q = (request.args.get('q') or '').strip()
-    action = (request.args.get('action') or '').strip()
-    user = (request.args.get('user') or '').strip()
-    from_s = request.args.get('from')
-    to_s = request.args.get('to')
-
-    query = AuditLog.query
-    if q:
-        like = like_term(q)
-        query = query.filter(db.or_(AuditLog.action.ilike(like, escape='\\'),
-                                    AuditLog.detail.ilike(like, escape='\\'),
-                                    AuditLog.user.ilike(like, escape='\\'),
-                                    AuditLog.target_label.ilike(like, escape='\\')))
-    if action:
-        query = query.filter(AuditLog.action == action)
-    if user:
-        query = query.filter(ilike_contains(AuditLog.user, user))
-    try:
-        if from_s:
-            query = query.filter(AuditLog.created_at >= _dt.strptime(from_s, '%Y-%m-%d'))
-        if to_s:
-            d = _dt.strptime(to_s, '%Y-%m-%d')
-            query = query.filter(AuditLog.created_at < d.replace(hour=23, minute=59, second=59))
-    except ValueError:
-        pass
-
-    logs = query.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
-    actions = [a[0] for a in db.session.query(AuditLog.action).distinct().order_by(AuditLog.action).all()]
-    from models import Branch
-    branch_names = {b.id: b.name for b in Branch.query.all()}
-    return render_template('audit.html', logs=logs, actions=actions, branch_names=branch_names,
-        q=q, action=action, user=user, from_s=from_s or '', to_s=to_s or '')
+    """The audit trail — same screen (and filters) as Settings → Audit log."""
+    from routes.settings import audit_log as _settings_audit
+    return _settings_audit()
 
 
 @main_bp.route('/client-error', methods=['POST'])
@@ -252,4 +233,38 @@ def error_log():
     """Recent server + client errors, newest first — so an admin can see at a
     glance what went wrong and where."""
     from utils.error_tracking import recent_errors
-    return render_template('errors/recent.html', errors=recent_errors(200))
+    from utils import timeutil as _tu
+    from datetime import timedelta as _td
+    errors = recent_errors(200)
+    now = _tu.now()
+    day = (now - _td(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+    # Group repeats of the same problem (kind + message + where) so the list
+    # reads as "what's broken" rather than a wall of duplicates.
+    groups = {}
+    for e in errors:
+        k = (e.get('kind'), e.get('message'), e.get('where'))
+        g = groups.get(k)
+        if g is None:
+            groups[k] = {'e': e, 'count': 1, 'first': e.get('ts'), 'users': {e.get('user')}}
+        else:
+            g['count'] += 1
+            g['first'] = e.get('ts')
+            g['users'].add(e.get('user'))
+    summary = {'total': len(errors), 'day': sum(1 for e in errors if (e.get('ts') or '') >= day),
+               'server': sum(1 for e in errors if e.get('kind') == 'server'),
+               'client': sum(1 for e in errors if e.get('kind') != 'server'),
+               'distinct': len(groups)}
+    return render_template('errors/recent.html', errors=errors, groups=list(groups.values()),
+                           summary=summary, day_cutoff=day)
+
+
+@main_bp.route('/error-log/clear', methods=['POST'])
+@central_admin_required
+def error_log_clear():
+    """Empty the error log once the problems are dealt with."""
+    from utils.error_tracking import clear_errors
+    from utils.audit import log_action
+    clear_errors()
+    log_action('error_log.clear')
+    flash('Error log cleared.', 'success')
+    return redirect(url_for('main.error_log'))

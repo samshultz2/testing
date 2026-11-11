@@ -1,74 +1,126 @@
 {% extends "base.html" %}
 {% block title %}Error Log - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Error Log</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Error Log</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.el{max-width:1180px}
+.el-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:1rem 0}
+.el-seg{display:inline-flex;background:var(--gray-100,#eef2f7);border-radius:12px;padding:3px;gap:2px}
+.el-seg button{border:0;background:none;font:inherit;font-weight:700;font-size:.84rem;padding:.45rem .85rem;border-radius:9px;cursor:pointer;color:var(--text-secondary)}
+.el-seg button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.el-seg em{font-style:normal;color:var(--text-muted);margin-left:.3rem;font-weight:600}
+.el-search{flex:1;min-width:200px;max-width:360px;position:relative}
+.el-search i{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.85rem}
+.el-search input{width:100%;height:40px;border:1.5px solid var(--border-color);border-radius:11px;padding:0 .8rem 0 2.2rem;font:inherit;background:var(--bg-card);color:var(--text-primary)}
+.el-list{display:flex;flex-direction:column;gap:.6rem}
+.el-item{background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid var(--warning);border-radius:14px;padding:.85rem 1rem}
+.el-item.server{border-left-color:var(--danger)}
+.el-top{display:flex;gap:.8rem;align-items:flex-start}
+.el-ic{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;background:color-mix(in srgb,var(--warning) 16%,transparent);color:var(--warning)}
+.el-item.server .el-ic{background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger)}
+.el-t{flex:1;min-width:0}
+.el-msg{font-weight:700;font-size:.93rem;word-break:break-word;margin:0 0 .25rem}
+.el-meta{display:flex;flex-wrap:wrap;gap:.35rem .8rem;font-size:.78rem;color:var(--text-muted)}
+.el-meta code{font-size:.76rem;background:var(--gray-50,#f8fafc);padding:.05rem .35rem;border-radius:5px;word-break:break-all}
+.el-n{flex:none;font-weight:800;font-size:.8rem;border-radius:999px;padding:.2rem .6rem;background:var(--gray-100,#eef2f7)}
+.el-n.hot{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.el-acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.6rem;padding-left:calc(38px + .8rem)}
+.el-acts details[open]{width:100%}
+.el-acts summary{list-style:none;cursor:pointer;display:inline-flex}.el-acts summary::-webkit-details-marker{display:none}
+.el-acts pre{white-space:pre-wrap;font-size:.72rem;background:var(--gray-50,#f8fafc);padding:.7rem;border-radius:10px;margin:.5rem 0 0;max-height:320px;overflow:auto;border:1px solid var(--border-light,var(--border-color))}
+.el-new{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--danger);margin-left:.4rem}
+.el-note{font-size:.82rem;color:var(--text-muted);margin:1rem 0 0}
+@media (max-width:760px){
+  .el-acts{padding-left:0}
+  .el-search{max-width:none;flex-basis:100%}
+  .el-seg{width:100%}.el-seg button{flex:1}
+}
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-triangle-exclamation"></i> Error Log</h1>
-    <p class="text-muted text-sm">Recent server &amp; client-side errors (newest first, last {{ errors|length }}). Kept in memory — they reset when the app restarts. Server logs hold the full history.</p>
+<div class="rs el">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-bug" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Error Log</h1><p>What went wrong recently, grouped so repeats show once. Clear the log once problems are fixed, so new ones stand out.</p></div>
+    {% if errors %}
+    <div class="rs-head-a">
+      <form method="post" action="{{ url_for('main.error_log_clear') }}" data-confirm="Clear the error log? Do this once the problems are fixed.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="rs-btn ghost"><i class="fas fa-broom" aria-hidden="true"></i> Clear log</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+
+  <div class="rs-tiles">
+    <div class="rs-tile{% if summary.day %} bad{% endif %}"><span class="l">Last 24 hours</span><span class="v">{{ summary.day }}</span></div>
+    <div class="rs-tile"><span class="l">Different problems</span><span class="v">{{ summary.distinct }}</span><span class="s">{{ summary.total }} errors in all</span></div>
+    <div class="rs-tile"><span class="l">Server</span><span class="v">{{ summary.server }}</span><span class="s">The app itself failed</span></div>
+    <div class="rs-tile"><span class="l">Browser</span><span class="v">{{ summary.client }}</span><span class="s">A page broke on someone’s device</span></div>
+  </div>
+
+  {% if errors %}
+  <div class="el-bar">
+    <div class="el-seg" role="radiogroup" aria-label="Type">
+      <button type="button" class="on" data-k="all" role="radio" aria-checked="true">All<em>{{ groups|length }}</em></button>
+      <button type="button" data-k="server" role="radio" aria-checked="false">Server<em>{{ groups|selectattr('e.kind','equalto','server')|list|length }}</em></button>
+      <button type="button" data-k="client" role="radio" aria-checked="false">Browser<em>{{ groups|rejectattr('e.kind','equalto','server')|list|length }}</em></button>
+    </div>
+    <label class="el-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" id="elq" placeholder="Search message, page or person" aria-label="Search errors"></label>
+  </div>
+
+  <div class="el-list" id="elList">
+  {% for g in groups %}{% set e = g.e %}
+    <article class="el-item {{ 'server' if e.kind == 'server' else 'client' }}" data-kind="{{ 'server' if e.kind == 'server' else 'client' }}">
+      <div class="el-top">
+        <span class="el-ic"><i class="fas {{ 'fa-server' if e.kind == 'server' else 'fa-display' }}" aria-hidden="true"></i></span>
+        <div class="el-t">
+          <p class="el-msg">{{ e.message }}{% if e.ts >= day_cutoff %}<span class="el-new">last 24h</span>{% endif %}</p>
+          <div class="el-meta">
+            <span><i class="fas fa-location-dot" aria-hidden="true"></i> <code>{{ e.where }}</code></span>
+            <span><i class="fas fa-user" aria-hidden="true"></i> {{ e.user }}{% if g.users|length > 1 %} +{{ g.users|length - 1 }} more{% endif %}</span>
+            <span><i class="fas fa-clock" aria-hidden="true"></i> {{ e.ts }}{% if g.count > 1 %} · first {{ g.first }}{% endif %}</span>
+          </div>
+        </div>
+        {% if g.count > 1 %}<span class="el-n{% if g.count >= 5 %} hot{% endif %}" title="Happened {{ g.count }} times">×{{ g.count }}</span>{% endif %}
+      </div>
+      <div class="el-acts">
+        <button type="button" class="rs-btn sm ghost copy-error-btn"
+                data-ts="{{ e.ts }}" data-kind="{{ e.kind }}" data-message="{{ e.message }}"
+                data-where="{{ e.where }}" data-user="{{ e.user }}" data-detail="{{ e.detail or '' }}"
+                title="Copy this error to paste elsewhere"><i class="fas fa-copy"></i> Copy</button>
+        {% if e.detail %}<details><summary class="rs-btn sm ghost"><i class="fas fa-code" aria-hidden="true"></i>&nbsp;Technical details</summary><pre>{{ e.detail }}</pre></details>{% endif %}
+      </div>
+    </article>
+  {% endfor %}
+  </div>
+  <div class="rs-blank" id="elNone" hidden><span><i class="fas fa-magnifying-glass" aria-hidden="true"></i></span><h3>No errors match</h3></div>
+  <p class="el-note"><i class="fas fa-circle-info" aria-hidden="true"></i> Tap <b>Copy</b> to send an error to whoever maintains the app. The server logs keep the full history.</p>
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-circle-check" aria-hidden="true"></i></span><h3>No errors recorded</h3><p>Nothing has gone wrong since the last restart.</p></div>
+  {% endif %}
 </div>
-<div class="card"><div class="card-body" style="padding:0;">
-{% if errors %}
-<div class="table-container">
-<table class="data-table table-stack no-mobile-scroll">
-    <thead><tr><th>When</th><th>Type</th><th>What</th><th>Where</th><th>User</th><th></th></tr></thead>
-    <tbody>
-    {% for e in errors %}
-    <tr>
-        <td data-label="When"><small>{{ e.ts }}</small></td>
-        <td data-label="Type"><span class="badge {% if e.kind == 'server' %}badge-danger{% else %}badge-warning{% endif %}">{{ e.kind }}</span></td>
-        <td data-label="What">{{ e.message }}</td>
-        <td data-label="Where"><code>{{ e.where }}</code></td>
-        <td data-label="User">{{ e.user }}</td>
-        <td data-label="">
-            <div style="display:flex;align-items:flex-start;gap:.4rem;flex-wrap:wrap;">
-                {% if e.detail %}<details><summary class="btn btn-sm btn-secondary" style="cursor:pointer;list-style:none;">Trace</summary><pre style="white-space:pre-wrap;font-size:.72rem;background:var(--gray-50);padding:.6rem;border-radius:6px;margin-top:.4rem;max-width:100%;overflow:auto;">{{ e.detail }}</pre></details>{% endif %}
-                <button type="button" class="btn btn-sm btn-secondary copy-error-btn"
-                        data-ts="{{ e.ts }}" data-kind="{{ e.kind }}" data-message="{{ e.message }}"
-                        data-where="{{ e.where }}" data-user="{{ e.user }}" data-detail="{{ e.detail or '' }}"
-                        title="Copy this error to paste elsewhere">
-                    <i class="fas fa-copy"></i> Copy
-                </button>
-            </div>
-        </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
-</div>
-{% else %}
-<div class="empty-state"><i class="fas fa-circle-check"></i><h3>No errors recorded</h3><p>Nothing has gone wrong since the last restart.</p></div>
-{% endif %}
-</div></div>
 
 <script nonce="{{ csp_nonce }}">
 (function () {
     function fallbackCopy(text, done) {
         var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
         try { document.execCommand('copy'); done(); } catch (e) {}
         document.body.removeChild(ta);
     }
     document.querySelectorAll('.copy-error-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var parts = [
-                'WHEN: ' + btn.dataset.ts,
-                'TYPE: ' + btn.dataset.kind,
-                'WHAT: ' + btn.dataset.message,
-                'WHERE: ' + btn.dataset.where,
-                'USER: ' + btn.dataset.user,
-            ];
+            var parts = ['WHEN: ' + btn.dataset.ts, 'TYPE: ' + btn.dataset.kind, 'WHAT: ' + btn.dataset.message,
+                         'WHERE: ' + btn.dataset.where, 'USER: ' + btn.dataset.user];
             if (btn.dataset.detail) parts.push('', 'TRACE:', btn.dataset.detail);
             var text = parts.join('\n');
             var icon = btn.querySelector('i');
-            var origClass = icon.className;
-            var origText = btn.lastChild.textContent;
+            var origClass = icon.className, origText = btn.lastChild.textContent;
             var done = function () {
-                icon.className = 'fas fa-check';
-                btn.lastChild.textContent = ' Copied';
+                icon.className = 'fas fa-check'; btn.lastChild.textContent = ' Copied';
                 setTimeout(function () { icon.className = origClass; btn.lastChild.textContent = origText; }, 1500);
             };
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -76,6 +128,24 @@
             } else { fallbackCopy(text, done); }
         });
     });
+    // Type filter + search.
+    var kind = 'all', q = document.getElementById('elq'), none = document.getElementById('elNone');
+    function apply() {
+        var t = (q && q.value || '').toLowerCase(), shown = 0;
+        document.querySelectorAll('#elList .el-item').forEach(function (it) {
+            var ok = (kind === 'all' || it.dataset.kind === kind) && (!t || it.textContent.toLowerCase().indexOf(t) !== -1);
+            it.hidden = !ok; if (ok) shown++;
+        });
+        if (none) none.hidden = shown > 0;
+    }
+    document.querySelectorAll('.el-seg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+            kind = b.dataset.k;
+            document.querySelectorAll('.el-seg button').forEach(function (x) { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+            apply();
+        });
+    });
+    if (q) q.addEventListener('input', apply);
 })();
 </script>
 {% endblock %}

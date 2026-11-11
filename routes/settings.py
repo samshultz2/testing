@@ -78,8 +78,59 @@ def index():
             'performance': url_for('settings.performance'),
             'admissions': url_for('settings.admissions_data'),
             'exam_subjects': url_for('settings.exam_subjects'),
+            'payments': url_for('settings.payments_settings') if can_manage_payment_settings() else None,
+            'error_log': url_for('main.error_log'),
+            'share': url_for('main.share_app'),
+            'invites': _safe_url('staff_onboarding.invites'),
+            'people': _safe_url('users.index'),
         },
+        'health': _settings_health(),
     })
+
+
+def _safe_url(ep, **kw):
+    try:
+        return url_for(ep, **kw)
+    except Exception:
+        return None
+
+
+def _settings_health():
+    """A few at-a-glance signals for the settings home (each best-effort)."""
+    from utils import timeutil as _tu
+    out = {}
+    now = _tu.now()
+    try:
+        from flask import current_app
+        from utils.backup import list_backups
+        bk = list_backups(current_app)
+        last = max((b['modified'] for b in bk if b.get('modified')), default=None)
+        out['backup_days'] = (datetime.now() - last).days if last else None
+        out['backups'] = len(bk)
+    except Exception:
+        pass
+    try:
+        from utils import payments as pay_gw
+        out['payments_on'] = bool(pay_gw.is_configured())
+    except Exception:
+        pass
+    try:
+        from utils.error_tracking import recent_errors
+        cutoff = (now - __import__('datetime').timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+        out['errors_24h'] = sum(1 for e in recent_errors(500) if (e.get('ts') or '') >= cutoff)
+    except Exception:
+        pass
+    try:
+        from models import Branch, StaffSignup
+        out['branches'] = Branch.query.filter_by(is_active=True).count()
+        out['pending_signups'] = StaffSignup.query.filter_by(status='pending').count()
+    except Exception:
+        pass
+    try:
+        out['users'] = User.query.filter_by(is_active=True).count()
+    except Exception:
+        pass
+    return out
 
 
 @settings_bp.route('/audit')
@@ -129,6 +180,9 @@ def audit_log():
         return {
             'id': l.id,
             'created_at': l.created_at.strftime('%d %b %Y, %H:%M') if l.created_at else '',
+            'day': l.created_at.strftime('%Y-%m-%d') if l.created_at else '',
+            'day_label': l.created_at.strftime('%A, %d %B %Y') if l.created_at else '',
+            'time': l.created_at.strftime('%H:%M') if l.created_at else '',
             'user': l.user or '—',
             'role': l.role or '',
             'action': l.action,
@@ -140,8 +194,24 @@ def audit_log():
             'user_agent': l.user_agent or '',
         }
 
+    from datetime import timedelta as _tdl
+    from utils.timeutil import now as _tznow
+    _now = _tznow()
+    _today = _now.replace(hour=0, minute=0, second=0, microsecond=0)
+    _wk = AuditLog.query.filter(AuditLog.created_at >= _today - _tdl(days=6))
+    stats = {
+        'today': AuditLog.query.filter(AuditLog.created_at >= _today).count(),
+        'week': _wk.count(),
+        'people': _wk.with_entities(AuditLog.user).distinct().count(),
+        'risky': _wk.filter(db.or_(AuditLog.action.ilike('%delete%'), AuditLog.action.ilike('%restore%'),
+                                   AuditLog.action.ilike('%permission%'), AuditLog.action.ilike('%password%'))).count(),
+        'today_iso': _today.strftime('%Y-%m-%d'),
+        'week_iso': (_today - _tdl(days=6)).strftime('%Y-%m-%d'),
+        'month_iso': (_today - _tdl(days=29)).strftime('%Y-%m-%d'),
+    }
     return _render({
         'page': 'audit',
+        'stats': stats,
         'logs': [_row(l) for l in logs.items],
         'actions': actions,
         'filters': {'q': q, 'action': action, 'user': user, 'from': from_s, 'to': to_s},
@@ -525,6 +595,16 @@ def exam_subjects():
 def branches():
     from models import Branch
     rows = Branch.query.order_by(Branch.is_default.desc(), Branch.name).all()
+    from sqlalchemy import func as _f
+    from models import ClassArmAssignment as _CAA
+    from utils.helpers import get_active_term as _gat
+    stu = dict(db.session.query(Student.branch_id, _f.count(Student.id)).filter(Student.is_active == True)
+               .group_by(Student.branch_id).all())
+    usr = dict(db.session.query(User.branch_id, _f.count(User.id)).filter(User.is_active == True)
+               .group_by(User.branch_id).all())
+    _t = _gat()
+    cls = dict(db.session.query(_CAA.branch_id, _f.count(_CAA.id)).filter(_CAA.term_id == (_t.id if _t else -1))
+               .group_by(_CAA.branch_id).all())
     return _render({
         'page': 'branches',
         'add_url': url_for('settings.add_branch'),
@@ -532,8 +612,10 @@ def branches():
         'branches': [{
             'id': b.id, 'name': b.name, 'code': b.code, 'phone': b.phone,
             'address': b.address, 'is_active': b.is_active, 'is_default': b.is_default,
+            'students': stu.get(b.id, 0), 'staff': usr.get(b.id, 0), 'classes': cls.get(b.id, 0),
             'edit_url': url_for('settings.edit_branch', branch_id=b.id),
         } for b in rows],
+        'unassigned': {'students': stu.get(None, 0), 'staff': usr.get(None, 0)},
     })
 
 
@@ -657,7 +739,25 @@ def payments_settings():
                            public_key=pay_gw.public_key(),
                            has_extra=bool(pay_gw.provider_keys().get('extra')),
                            webhook_url=f'https://{host}/parent/pay/webhook',
+                           online=_online_payment_stats(),
+                           finance_url=_safe_url('finance.dashboard'),
                            back_url=url_for('settings.index'))
+
+
+def _online_payment_stats():
+    """How much has come in online lately — proof the setup actually works."""
+    try:
+        from datetime import timedelta as _td
+        from sqlalchemy import func as _f
+        from models import FeePayment
+        from utils.timeutil import now as _tznow
+        since = (_tznow() - _td(days=30)).date()
+        q = FeePayment.query.filter(FeePayment.method == 'Online')
+        n, total = q.filter(FeePayment.payment_date >= since).with_entities(_f.count(FeePayment.id), _f.coalesce(_f.sum(FeePayment.amount), 0)).first()
+        last = q.order_by(FeePayment.payment_date.desc()).with_entities(FeePayment.payment_date).first()
+        return {'count': n or 0, 'total': float(total or 0), 'last': last[0].strftime('%d %b %Y') if last and last[0] else None}
+    except Exception:
+        return {'count': 0, 'total': 0, 'last': None}
 
 
 @settings_bp.route('/school', methods=['GET', 'POST'])
@@ -1222,6 +1322,8 @@ def backup_page():
         'create_url': url_for('settings.create_backup'),
         'restore_url': url_for('settings.restore_backup'),
         'back_url': url_for('settings.index'),
+        'last_backup_days': ((datetime.now() - max(b['modified'] for b in backups)).days
+                             if backups and all(b.get('modified') for b in backups) else None),
         'backups': [{
             'name': b['name'],
             'modified': b['modified'].strftime('%d %b %Y %H:%M') if b.get('modified') else '',
