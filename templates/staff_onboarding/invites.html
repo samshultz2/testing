@@ -1,152 +1,239 @@
 {% extends "base.html" %}
-{% block title %}Staff Invite Links - {{ app_name }}{% endblock %}
+{% block title %}Staff invite links - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('users.index') }}">Users</a> / <span>Invite links</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
 <style>
-.inv-link{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
-.inv-link input{flex:1;min-width:220px;font-size:.82rem;font-family:monospace;padding:.35rem .5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--gray-50)}
-.pill{font-size:.68rem;font-weight:700;padding:.08rem .5rem;border-radius:var(--radius-full)}
-.pill-on{background:rgba(4,120,87,.12);color:#047857}.pill-off{background:var(--gray-100);color:var(--text-muted)}
-.pend{border:1px solid var(--border-color);border-left:4px solid #b45309;border-radius:var(--radius-md);padding:.6rem .8rem;margin-bottom:.6rem}
+.iv{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:1rem}
+.iv-head{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
+.iv-head .rs-head-t{flex:1;min-width:220px}
+.iv .k{font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.iv-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem}
+.iv-tile{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:.85rem 1rem;display:flex;flex-direction:column;gap:.15rem}
+.iv-tile span{font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.iv-tile b{font-family:'Space Grotesk',sans-serif;font-size:1.5rem;line-height:1.1}
+.iv-tile small{font-size:.78rem;color:var(--text-muted)}
+.iv-tile.mid b{color:#d97706}
+.iv-wrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:1rem;align-items:start}
+.iv-main{display:flex;flex-direction:column;gap:1rem;min-width:0}
+.iv-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:18px;overflow:hidden}
+.iv-card-h{display:flex;align-items:center;gap:.6rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.iv-card-h h3{margin:0;font-size:1rem;font-weight:700;flex:1}.iv-card-h h3 i{color:var(--primary);margin-right:.3rem}
+.iv-count{font-size:.78rem;font-weight:800;padding:.15rem .55rem;border-radius:999px;background:var(--gray-100,#f1f5f9);color:var(--text-muted)}
+.iv-count.hot{background:color-mix(in srgb,#d97706 15%,var(--bg-card));color:#b45309}
+.iv-empty{padding:1.1rem;margin:0;color:var(--text-muted);font-size:.88rem}
+.iv-pend{display:flex;align-items:center;gap:.8rem;padding:.75rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.iv-pend:last-child{border-bottom:0}
+.iv-av{width:42px;height:42px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;background:color-mix(in srgb,#d97706 14%,var(--bg-card));color:#b45309}
+.iv-pend-t{flex:1;min-width:0;display:flex;flex-direction:column}.iv-pend-t b{font-size:.95rem}
+.iv-pend-t small{font-size:.78rem;color:var(--text-muted)}
+.iv-pend form{display:inline}
+.iv-acts{display:flex;gap:.4rem;flex-wrap:wrap}
+.iv-link{padding:.9rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color));display:flex;flex-direction:column;gap:.55rem}
+.iv-link:last-child{border-bottom:0}
+.iv-link.new{background:color-mix(in srgb,var(--primary) 6%,var(--bg-card))}
+.iv-link.dead{opacity:.62}
+.iv-link-h{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}
+.iv-link-h b{font-size:.98rem}
+.iv-meta{display:flex;gap:.9rem;flex-wrap:wrap;font-size:.8rem;color:var(--text-muted)}
+.iv-meta i{margin-right:.2rem}
+.iv-meta .warn{color:#b45309;font-weight:700}
+.iv-url{display:flex;gap:.4rem;align-items:stretch}
+.iv-url input{flex:1;min-width:0;height:40px;font-family:ui-monospace,monospace;font-size:.8rem;padding:0 .7rem;border:1.5px solid var(--border-color);border-radius:10px;background:var(--gray-50,#f8fafc);color:inherit}
+.iv-url .rs-btn{height:40px}
+.iv-url form{display:flex}
+.iv-ib{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;color:var(--text-muted);text-decoration:none}
+.iv-ib:hover{color:var(--primary);border-color:var(--primary)}
+.iv-ib.wa{color:#16a34a}.iv-ib.del:hover{color:#dc2626;border-color:#dc2626}
+.iv-pill{font-size:.72rem;font-weight:800;padding:.15rem .55rem;border-radius:999px}
+.iv-pill.on{background:color-mix(in srgb,#16a34a 13%,var(--bg-card));color:#15803d}
+.iv-pill.off{background:var(--gray-100,#f1f5f9);color:var(--text-muted)}
+.iv-pill.bad{background:color-mix(in srgb,#dc2626 12%,var(--bg-card));color:#b91c1c}
+.iv-pill.role{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
+.iv-side{position:sticky;top:76px}
+.iv-form{padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.8rem}
+.iv-form .cm-row2>.cm-f{flex:1 1 140px}
+.iv-fields{display:flex;flex-wrap:wrap;gap:.35rem}
+.iv-fields label{display:inline-flex;align-items:center;gap:.35rem;height:32px;padding:0 .7rem;border-radius:999px;border:1.5px solid var(--border-color);font-size:.8rem;font-weight:600;cursor:pointer}
+.iv-fields label{position:relative}
+.iv-fields input{position:absolute !important;opacity:0 !important;width:1px !important;height:1px !important;pointer-events:none;margin:0 !important}
+.iv-fields label::before{content:'';width:14px;height:14px;border-radius:4px;border:1.5px solid var(--border-color);flex:none}
+.iv-fields label:has(input:checked)::before{content:'\2713';border-color:var(--primary);background:var(--primary);color:#fff;font-size:10px;line-height:12px;text-align:center;font-weight:800}
+.iv-fields label:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.iv-fwrap{display:flex;flex-direction:column;gap:.4rem}
+.iv-flabel{font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
+.iv-fields label:has(input:checked){border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--bg-card))}
+.iv-help{font-size:.78rem;color:var(--text-muted);margin:0}
+.iv-how{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;padding:1rem 1.1rem}
+.iv-how div{display:flex;gap:.55rem;align-items:flex-start;font-size:.82rem;color:var(--text-muted)}
+.iv-how b{width:24px;height:24px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:var(--primary);color:#fff;font-size:.75rem}
+@media (max-width:1100px){.iv-wrap{grid-template-columns:minmax(0,1fr)}.iv-side{position:static}}
+@media (max-width:759px){
+  .iv{gap:.75rem}
+  .iv-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .iv-pend{flex-wrap:wrap}.iv-pend .iv-acts{width:100%;padding-left:54px}.iv-pend .iv-acts .rs-btn{flex:1;justify-content:center}
+  .iv-url{flex-wrap:wrap}.iv-url input{flex:1 1 100%}
+  .iv-url .rs-btn.primary{flex:1;justify-content:center}
+  .iv-how{grid-template-columns:1fr}
+}
 </style>
 {% endblock %}
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Staff invite links</h1>
-        <p class="text-muted text-sm">Generate a link and send it to your staff (e.g. one link to all your branch principals). They fill in their details &amp; password; you approve, and they get their role's permissions over their branch — no manual account creation.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ url_for('users.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Users</a>
-    </div>
-</div>
+{% set n_active = invites|selectattr('usable')|list|length %}
+{% set role_label = {'staff':'Staff','teacher':'Teacher','readonly':'View only','admin':'Admin'} %}
+<div class="iv">
+  <nav class="sl-nav cm-nav" aria-label="Users">
+    <a href="{{ url_for('users.index') }}"><i class="fas fa-users" aria-hidden="true"></i><span>Users</span></a>
+    <a href="{{ url_for('users.groups') }}"><i class="fas fa-layer-group" aria-hidden="true"></i><span>Groups</span></a>
+    <a href="{{ url_for('staff_onboarding.invites') }}" class="on" aria-current="page"><i class="fas fa-link" aria-hidden="true"></i><span>Invite links</span></a>
+  </nav>
+  <div class="iv-head">
+    <span class="rs-head-ic"><i class="fas fa-link" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Staff invite links</h1><p>Send one link — staff sign themselves up, you approve, and they get the right access.</p></div>
+    {% if dead_count %}
+    <form method="post" action="{{ url_for('staff_onboarding.clear_dead_invites') }}" data-confirm="Delete {{ dead_count }} expired, used-up or switched-off link{{ 's' if dead_count != 1 }}? They stop working for good.">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="rs-btn ghost"><i class="fas fa-broom" aria-hidden="true"></i> Clear {{ dead_count }} old link{{ 's' if dead_count != 1 }}</button>
+    </form>
+    {% endif %}
+  </div>
 
-{# ---- Pending approvals ---- #}
-<div class="card" style="margin-bottom:1rem;{% if pending %}border-left:4px solid #b45309;{% endif %}">
-    <div class="card-header"><h3><i class="fas fa-user-clock"></i> Pending approvals ({{ pending|length }})</h3></div>
-    <div class="card-body">
+  <div class="iv-tiles">
+    <div class="iv-tile {% if pending %}mid{% endif %}"><span>Waiting for you</span><b>{{ pending|length }}</b><small>{{ 'to approve' if pending else 'all reviewed' }}</small></div>
+    <div class="iv-tile"><span>Working links</span><b>{{ n_active }}</b><small>of {{ invites|length }}</small></div>
+    <div class="iv-tile"><span>Joined via links</span><b>{{ totals.joined }}</b><small>approved accounts</small></div>
+    <div class="iv-tile"><span>Sign-ups</span><b>{{ totals.uses }}</b><small>through all links</small></div>
+  </div>
+
+  <div class="iv-wrap">
+    <div class="iv-main">
+      <section class="iv-card" {% if pending %}style="border-color:color-mix(in srgb,#d97706 45%,var(--border-color))"{% endif %}>
+        <div class="iv-card-h"><h3><i class="fas fa-user-clock" aria-hidden="true"></i> Waiting for approval</h3><span class="iv-count {% if pending %}hot{% endif %}">{{ pending|length }}</span></div>
         {% for s in pending %}
-        <div class="pend" style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;">
-            <div style="flex:1;min-width:200px;">
-                <strong>{{ s.full_name or s.username }}</strong> <span class="text-muted text-sm">@{{ s.username }}</span>
-                <div class="text-sm text-muted">
-                    {{ s.position or (s.invite.role if s.invite else 'staff')|title }}
-                    {% if s.branch %} · {{ s.branch.name }}{% endif %}
-                    {% if s.invite and s.invite.permission_group %} · group: {{ s.invite.permission_group.name }}{% endif %}
-                    {% if s.email %} · {{ s.email }}{% endif %}{% if s.phone %} · {{ s.phone }}{% endif %}
-                </div>
-            </div>
-            <form method="post" action="{{ url_for('staff_onboarding.review_signup', signup_id=s.id, action='approve') }}" style="display:inline;">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-success btn-sm"><i class="fas fa-check"></i> Approve</button>
-            </form>
-            <form method="post" action="{{ url_for('staff_onboarding.review_signup', signup_id=s.id, action='reject') }}" style="display:inline;" data-confirm="Reject this signup?">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-danger btn-sm"><i class="fas fa-xmark"></i> Reject</button>
-            </form>
+        <div class="iv-pend">
+          <span class="iv-av">{{ ((s.full_name or s.username or '?').split()|map('first')|list)[:2]|join|upper }}</span>
+          <div class="iv-pend-t"><b>{{ s.full_name or s.username }} <small>@{{ s.username }}</small></b>
+            <small>{{ s.position or role_label.get(s.invite.role if s.invite else 'staff', 'Staff') }}{% if s.branch %} · {{ s.branch.name }}{% endif %}{% if s.invite and s.invite.permission_group %} · {{ s.invite.permission_group.name }}{% endif %}</small>
+            <small>{% if s.email %}{{ s.email }}{% endif %}{% if s.email and s.phone %} · {% endif %}{% if s.phone %}{{ s.phone }}{% endif %}{% if s.created_at %} · signed up {{ s.created_at.strftime('%d %b') }}{% endif %}</small></div>
+          <div class="iv-acts">
+            <form method="post" action="{{ url_for('staff_onboarding.review_signup', signup_id=s.id, action='reject') }}" data-confirm="Reject {{ s.full_name or s.username }}? They won't get an account.">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="rs-btn ghost">Reject</button></form>
+            <form method="post" action="{{ url_for('staff_onboarding.review_signup', signup_id=s.id, action='approve') }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Approve</button></form>
+          </div>
         </div>
         {% else %}
-        <p class="text-muted text-sm" style="margin:0;">No one is waiting for approval.</p>
+        <p class="iv-empty">No one is waiting. New sign-ups show here for you to approve.</p>
         {% endfor %}
-    </div>
-</div>
+      </section>
 
-{# ---- Create a link ---- #}
-<div class="card" style="margin-bottom:1rem;">
-    <div class="card-header"><h3><i class="fas fa-link"></i> Create an invite link</h3></div>
-    <div class="card-body">
-        <form method="post" action="{{ url_for('staff_onboarding.create_invite') }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-row">
-                <div class="form-group" style="flex:1;min-width:200px;"><label class="form-label">Label <span class="text-muted text-sm">(for you)</span></label>
-                    <input type="text" name="label" class="form-control" placeholder="e.g. Branch Principals 2026"></div>
-                <div class="form-group"><label class="form-label">Role granted</label>
-                    <select name="role" class="form-control">
-                        {% for r in roles %}<option value="{{ r }}">{{ r|replace('_',' ')|title }}</option>{% endfor %}
-                    </select></div>
-                <div class="form-group"><label class="form-label">Permission group</label>
-                    <select name="permission_group_id" class="form-control">
-                        <option value="">— None (role default) —</option>
-                        {% for g in groups %}<option value="{{ g.id }}">{{ g.name }}{% if g.branch_id %} (branch){% endif %}</option>{% endfor %}
-                    </select></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group" style="flex:1;min-width:220px;"><label class="form-label">Preset position / title <span class="text-muted text-sm">(optional)</span></label>
-                    <input type="text" name="position" class="form-control" placeholder="e.g. SSS3 Form Teacher">
-                    <small class="text-muted">Pre-fills the joiner's job title — e.g. a link just for SSS3 form teachers.</small></div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Sign-up form fields <span class="text-muted text-sm">(what joiners fill, besides name / username / password / branch)</span></label>
-                <input type="hidden" name="fields_picker" value="1">
-                <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;">
-                    {% set field_labels = {'email':'Email','phone':'Phone','position':'Position/title','gender':'Gender','staff_type':'Staff type','department':'Department','qualification':'Qualification'} %}
-                    {% for key, lbl in field_labels.items() %}
-                    <label style="display:flex;align-items:center;gap:.35rem;font-size:.85rem;">
-                        <input type="checkbox" name="fields" value="{{ key }}" checked> {{ lbl }}
-                    </label>
-                    {% endfor %}
-                </div>
-                <small class="text-muted">Unchecked fields won't appear on the sign-up page. A preset position is still recorded even if "Position" is unchecked.</small>
-            </div>
-            <div class="form-row" style="align-items:flex-end;">
-                {% if is_central %}
-                <div class="form-group"><label class="form-label">Branch</label>
-                    <select name="branch_id" class="form-control" id="invBranch">
-                        <option value="">— Joiner chooses —</option>
-                        {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
-                    </select></div>
-                <div class="form-group"><label class="form-label">Scope</label>
-                    <select name="scope" class="form-control">
-                        <option value="branch">Branch (limited to their branch)</option>
-                        <option value="central">Central (sees all branches)</option>
-                    </select></div>
-                {% endif %}
-                <div class="form-group"><label class="form-label">Max uses <span class="text-muted text-sm">(blank = ∞)</span></label>
-                    <input type="number" name="max_uses" class="form-control" min="1" style="max-width:110px;" placeholder="∞"></div>
-                <div class="form-group"><label class="form-label">Expires in (days)</label>
-                    <input type="number" name="expires_days" class="form-control" min="1" value="14" style="max-width:120px;"></div>
-                <div class="form-group"><button class="btn btn-primary"><i class="fas fa-plus"></i> Generate link</button></div>
-            </div>
-        </form>
-    </div>
-</div>
-
-{# ---- Existing links ---- #}
-<div class="card">
-    <div class="card-header"><h3><i class="fas fa-list"></i> Your invite links</h3></div>
-    <div class="card-body">
+      <section class="iv-card">
+        <div class="iv-card-h"><h3><i class="fas fa-link" aria-hidden="true"></i> Your links</h3><span class="iv-count">{{ invites|length }}</span></div>
         {% for i in invites %}
-        <div style="padding:.6rem 0;border-bottom:1px solid var(--border-color);">
-            <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.35rem;">
-                <strong>{{ i.label or (i.role|replace('_',' ')|title + ' invite') }}</strong>
-                <span class="pill {{ 'pill-on' if i.usable else 'pill-off' }}">{{ 'Active' if i.usable else ('Inactive' if not i.is_active else ('Expired' if i.expired else 'Used up')) }}</span>
-                <span class="text-sm text-muted">{{ i.role|replace('_',' ')|title }}{% if i.branch %} · {{ i.branch.name }}{% else %} · joiner picks branch{% endif %}{% if i.permission_group %} · {{ i.permission_group.name }}{% endif %}</span>
-                <span class="text-sm text-muted" style="margin-left:auto;">{{ i.uses or 0 }}{% if i.max_uses %}/{{ i.max_uses }}{% endif %} used{% if i.expires_at %} · expires {{ i.expires_at.strftime('%d %b %Y') }}{% endif %}</span>
-            </div>
-            <div class="inv-link">
-                <input type="text" readonly value="{{ secure_external_url('staff_onboarding.join', token=i.token) }}" data-copy>
-                <button type="button" class="btn btn-secondary btn-sm mjs-copy" data-token="{{ i.token }}"><i class="fas fa-copy"></i> Copy</button>
-                <form method="post" action="{{ url_for('staff_onboarding.toggle_invite', invite_id=i.id) }}" style="display:inline;">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <button class="btn {{ 'btn-danger' if i.is_active else 'btn-success' }} btn-sm">{{ 'Deactivate' if i.is_active else 'Activate' }}</button>
-                </form>
-            </div>
+        {% set m = meta[i.id] %}
+        {% set url = secure_external_url('staff_onboarding.join', token=i.token) %}
+        <div class="iv-link {% if new_id == i.id %}new{% endif %} {% if not i.usable %}dead{% endif %}" id="invite-{{ i.id }}">
+          <div class="iv-link-h">
+            <b>{{ i.label or (role_label.get(i.role, i.role) + ' invite') }}</b>
+            {% if i.usable %}<span class="iv-pill on">Working</span>
+            {% elif not i.is_active %}<span class="iv-pill off">Turned off</span>
+            {% elif i.expired %}<span class="iv-pill bad">Expired</span>
+            {% else %}<span class="iv-pill off">Used up</span>{% endif %}
+            <span class="iv-pill role">{{ role_label.get(i.role, i.role) }}</span>
+            {% if new_id == i.id %}<span class="iv-pill on"><i class="fas fa-sparkles"></i> New — copy and send it</span>{% endif %}
+          </div>
+          <div class="iv-meta">
+            <span><i class="fas fa-code-branch" aria-hidden="true"></i>{{ i.branch.name if i.branch else ('All branches' if i.scope == 'central' else 'Joiner picks branch') }}</span>
+            {% if i.permission_group %}<span><i class="fas fa-layer-group" aria-hidden="true"></i>{{ i.permission_group.name }}</span>{% endif %}
+            {% if i.position %}<span><i class="fas fa-id-badge" aria-hidden="true"></i>{{ i.position }}</span>{% endif %}
+            <span><i class="fas fa-user-plus" aria-hidden="true"></i>{{ i.uses or 0 }}{% if i.max_uses %} of {{ i.max_uses }}{% endif %} signed up</span>
+            {% if m.pending %}<span class="warn"><i class="fas fa-user-clock" aria-hidden="true"></i>{{ m.pending }} waiting</span>{% endif %}
+            {% if i.expires_at %}
+              {% if i.expired %}<span>Expired {{ i.expires_at.strftime('%d %b %Y') }}</span>
+              {% elif m.days_left is not none and m.days_left <= 3 %}<span class="warn"><i class="fas fa-hourglass-end" aria-hidden="true"></i>{{ 'Expires today' if m.days_left <= 0 else 'Expires in ' ~ m.days_left ~ ' day' ~ ('s' if m.days_left != 1 else '') }}</span>
+              {% else %}<span><i class="fas fa-hourglass-half" aria-hidden="true"></i>Expires {{ i.expires_at.strftime('%d %b') }}</span>{% endif %}
+            {% else %}<span>Never expires</span>{% endif %}
+            {% if i.created_by %}<span>by {{ i.created_by }}</span>{% endif %}
+          </div>
+          <div class="iv-url">
+            <input type="text" readonly value="{{ url }}" aria-label="Invite link" data-copy>
+            {% if i.usable %}
+            <button type="button" class="rs-btn primary mjs-copy"><i class="fas fa-copy" aria-hidden="true"></i> Copy</button>
+            <a class="iv-ib wa" target="_blank" rel="noopener" title="Share on WhatsApp" aria-label="Share on WhatsApp"
+               href="https://wa.me/?text={{ ('Please create your staff account for ' ~ (school_name if school_name is defined else 'school') ~ ': ' ~ url)|urlencode }}"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
+            {% endif %}
+            <form method="post" action="{{ url_for('staff_onboarding.toggle_invite', invite_id=i.id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button class="iv-ib" title="{{ 'Turn off' if i.is_active else 'Turn back on' }}" aria-label="{{ 'Turn off' if i.is_active else 'Turn back on' }}"><i class="fas {{ 'fa-pause' if i.is_active else 'fa-play' }}" aria-hidden="true"></i></button>
+            </form>
+            <form method="post" action="{{ url_for('staff_onboarding.delete_invite', invite_id=i.id) }}"
+                  data-confirm="Delete “{{ i.label or (role_label.get(i.role, i.role) + ' invite') }}”? Anyone who has the link won't be able to use it.{% if m.pending %} {{ m.pending }} sign-up(s) are still waiting — approve or reject them first.{% endif %}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button class="iv-ib del" title="Delete link" aria-label="Delete link"><i class="fas fa-trash" aria-hidden="true"></i></button>
+            </form>
+          </div>
         </div>
         {% else %}
-        <p class="text-muted text-sm" style="margin:0;">No invite links yet — create one above.</p>
+        <div class="iv-how">
+          <div><b>1</b><span>Create a link on the right — choose the role and what they fill in.</span></div>
+          <div><b>2</b><span>Send it on WhatsApp or email to the staff who need accounts.</span></div>
+          <div><b>3</b><span>Approve each sign-up here. They can sign in straight away.</span></div>
+        </div>
         {% endfor %}
+      </section>
     </div>
+
+    <aside class="iv-side">
+      <section class="iv-card">
+        <div class="iv-card-h"><h3><i class="fas fa-plus" aria-hidden="true"></i> New invite link</h3></div>
+        <form method="post" action="{{ url_for('staff_onboarding.create_invite') }}" class="iv-form">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <label class="cm-f"><span>Name it (for you)</span><input type="text" name="label" placeholder="e.g. New teachers — January"></label>
+          <div class="cm-row2">
+            <label class="cm-f"><span>They join as</span><select name="role">
+              {% for r in roles %}<option value="{{ r }}" {% if r == 'teacher' %}selected{% endif %}>{{ role_label.get(r, r) }}</option>{% endfor %}</select></label>
+            <label class="cm-f"><span>Permission group</span><select name="permission_group_id">
+              <option value="">Role’s default access</option>
+              {% for g in groups %}<option value="{{ g.id }}">{{ g.name }}{% if g.branch_id %} (branch){% endif %}</option>{% endfor %}</select></label>
+          </div>
+          <label class="cm-f"><span>Job title to pre-fill (optional)</span><input type="text" name="position" placeholder="e.g. SSS3 Form Teacher"></label>
+          {% if is_central %}
+          <div class="cm-row2">
+            <label class="cm-f"><span>Branch</span><select name="branch_id">
+              <option value="">Joiner picks</option>{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></label>
+            <label class="cm-f"><span>Sees</span><select name="scope">
+              <option value="branch">Their branch</option><option value="central">All branches</option></select></label>
+          </div>
+          {% endif %}
+          <div class="cm-row2">
+            <label class="cm-f"><span>Works for (days)</span><input type="number" name="expires_days" min="1" value="14"></label>
+            <label class="cm-f"><span>Max sign-ups</span><input type="number" name="max_uses" min="1" placeholder="No limit"></label>
+          </div>
+          <div class="iv-fwrap"><span class="iv-flabel">They also fill in</span>
+            <input type="hidden" name="fields_picker" value="1">
+            <div class="iv-fields">{% for key, lbl in field_labels.items() %}
+              <label><input type="checkbox" name="fields" value="{{ key }}" checked> {{ lbl }}</label>{% endfor %}</div>
+            <p class="iv-help">Name, username, password and branch are always asked.</p>
+          </div>
+          <button class="rs-btn primary su-block" style="width:100%;justify-content:center"><i class="fas fa-link" aria-hidden="true"></i> Create link</button>
+          <p class="iv-help"><i class="fas fa-shield-halved" aria-hidden="true"></i> Nobody gets access until you approve them.</p>
+        </form>
+      </section>
+    </aside>
+  </div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
-document.querySelectorAll('.mjs-copy').forEach(function(b){
-    b.addEventListener('click', function(){
-        var inp = b.parentNode.querySelector('input[data-copy]');
-        inp.select();
-        try { navigator.clipboard.writeText(inp.value); } catch(_) { document.execCommand('copy'); }
-        var t = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copied';
-        setTimeout(function(){ b.innerHTML = t; }, 1500);
-    });
+document.querySelectorAll('.mjs-copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var inp = b.parentNode.querySelector('input[data-copy]');
+    inp.select();
+    try { navigator.clipboard.writeText(inp.value); } catch (_) { document.execCommand('copy'); }
+    var t = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copied';
+    setTimeout(function () { b.innerHTML = t; }, 1600);
+  });
 });
+(function () { var n = document.querySelector('.iv-link.new'); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'center' }); })();
 </script>
 {% endblock %}

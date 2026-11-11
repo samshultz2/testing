@@ -205,3 +205,49 @@ def test_join_page_respects_field_selection(app):
     assert 'name="phone"' not in html          # not selected → hidden
     assert 'name="gender"' not in html
     assert 'SSS3 Form Teacher' in html         # preset position surfaced
+
+
+def _admin_client(app):
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    html = c.get('/students').get_data(as_text=True)
+    tok = re.search(r'name="csrf-token" content="([0-9a-f]+)"', html).group(1)
+    return c, tok
+
+
+def test_delete_invite_link(app):
+    from models import db, StaffInvite, StaffSignup
+    from utils import staff_invite as svc
+    with app.app_context():
+        bid, gid = _branch_and_group(app)
+        keep = svc.create_invite(label='HasPending', role='staff', permission_group_id=None, branch_id=bid,
+                                 scope='branch', max_uses=None, expires_days=14, created_by='root')
+        s, _ = svc.submit_signup(keep, full_name='Wait Ing', username='waiting_del', email='', phone='',
+                                 password='secret12', branch_id=bid, position='')
+        gone = svc.create_invite(label='ToDelete', role='staff', permission_group_id=None, branch_id=bid,
+                                 scope='branch', max_uses=None, expires_days=14, created_by='root')
+        done, _ = svc.submit_signup(gone, full_name='Done Before', username='done_del', email='', phone='',
+                                    password='secret12', branch_id=bid, position='')
+        svc.reject_signup(done, 'root')
+        keep_id, gone_id, done_id = keep.id, gone.id, done.id
+    c, tok = _admin_client(app)
+    page = c.get('/staff-invites').get_data(as_text=True)
+    assert 'Waiting for approval' in page and 'ToDelete' in page
+    c.post(f'/staff-invites/{gone_id}/delete', data={'_csrf_token': tok})
+    c.post(f'/staff-invites/{keep_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(StaffInvite, gone_id) is None
+        assert db.session.get(StaffInvite, keep_id) is not None          # pending signup protects it
+        assert db.session.get(StaffSignup, done_id).invite_id is None   # history kept
+    # Expired links are cleared in one go.
+    with app.app_context():
+        from datetime import timedelta
+        from models.models import local_now
+        old = svc.create_invite(label='OldOne', role='staff', permission_group_id=None, branch_id=bid,
+                                scope='branch', max_uses=None, expires_days=1, created_by='root')
+        old.expires_at = local_now() - timedelta(days=2); db.session.commit()
+        old_id = old.id
+    c.post('/staff-invites/clear-dead', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(StaffInvite, old_id) is None
+        assert db.session.get(StaffInvite, keep_id) is not None

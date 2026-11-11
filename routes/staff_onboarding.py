@@ -83,9 +83,26 @@ def invites():
         me = get_current_user()
         pending = [s for s in pending if s.branch_id == (me.branch_id if me else None)]
     branches = Branch.query.order_by(Branch.name).all()
+    from utils import timeutil as _tu
+    now = _tu.now()
+    pend_by = {}
+    for sgn in StaffSignup.query.filter_by(status='pending').all():
+        pend_by[sgn.invite_id] = pend_by.get(sgn.invite_id, 0) + 1
+    joined = {}
+    for sgn in StaffSignup.query.filter_by(status='approved').all():
+        joined[sgn.invite_id] = joined.get(sgn.invite_id, 0) + 1
+    meta = {i.id: {'days_left': ((i.expires_at - now).days if i.expires_at else None),
+                   'pending': pend_by.get(i.id, 0), 'joined': joined.get(i.id, 0)} for i in invite_rows}
+    dead = [i for i in invite_rows if not i.usable and not pend_by.get(i.id)]
     return render_template('staff_onboarding/invites.html',
                            invites=invite_rows, pending=pending, groups=groups,
-                           branches=branches, roles=_ALL_ROLES, is_central=_is_central())
+                           branches=branches, roles=_ALL_ROLES, is_central=_is_central(),
+                           meta=meta, dead_count=len(dead), new_id=request.args.get('new', type=int),
+                           totals={'joined': sum(m['joined'] for m in meta.values()),
+                                   'uses': sum((i.uses or 0) for i in invite_rows)},
+                           field_labels={'email': 'Email', 'phone': 'Phone', 'position': 'Position / title',
+                                         'gender': 'Gender', 'staff_type': 'Teaching / non-teaching',
+                                         'department': 'Department', 'qualification': 'Qualification'})
 
 
 @staff_onb_bp.route('/staff-invites/create', methods=['POST'])
@@ -139,6 +156,59 @@ def toggle_invite(invite_id):
     inv.is_active = not inv.is_active
     db.session.commit()
     flash('Invite ' + ('activated.' if inv.is_active else 'deactivated.'), 'success')
+    return redirect(url_for('staff_onboarding.invites'))
+
+
+def _own_invite_or_403(invite_id):
+    inv = db.session.get(StaffInvite, invite_id) or abort(404)
+    if not _is_central():
+        me = get_current_user()
+        if inv.branch_id != (me.branch_id if me else None):
+            abort(403)
+    return inv
+
+
+def _delete_invite(inv):
+    """Delete an invite link. Refused while sign-ups through it still wait for
+    approval (approving needs the link's role / group). Reviewed sign-ups keep
+    their record; they just stop pointing at the deleted link."""
+    if StaffSignup.query.filter_by(invite_id=inv.id, status='pending').first():
+        return False
+    StaffSignup.query.filter_by(invite_id=inv.id).update({StaffSignup.invite_id: None}, synchronize_session=False)
+    db.session.delete(inv)
+    return True
+
+
+@staff_onb_bp.route('/staff-invites/<int:invite_id>/delete', methods=['POST'])
+@manage_users_required
+def delete_invite(invite_id):
+    inv = _own_invite_or_403(invite_id)
+    label = inv.label or f'{inv.role} invite'
+    if not _delete_invite(inv):
+        flash('Someone who joined through this link is still waiting for approval — approve or reject them first.', 'error')
+        return redirect(url_for('staff_onboarding.invites'))
+    db.session.commit()
+    log_action('staff_invite.delete', f'invite {invite_id} ({label})')
+    flash(f'Deleted “{label}”. The link no longer works.', 'success')
+    return redirect(url_for('staff_onboarding.invites'))
+
+
+@staff_onb_bp.route('/staff-invites/clear-dead', methods=['POST'])
+@manage_users_required
+def clear_dead_invites():
+    """Delete every expired / used-up / switched-off link in scope (skipping any
+    with sign-ups still waiting for approval)."""
+    rows = StaffInvite.query.all()
+    if not _is_central():
+        me = get_current_user()
+        rows = [i for i in rows if i.branch_id == (me.branch_id if me else None)]
+    n = 0
+    for inv in rows:
+        if not inv.usable and _delete_invite(inv):
+            n += 1
+    db.session.commit()
+    log_action('staff_invite.clear', f'{n} dead invite(s) deleted')
+    flash(f'Deleted {n} old link{"s" if n != 1 else ""}.' if n else 'No old links to delete.', 'success')
     return redirect(url_for('staff_onboarding.invites'))
 
 
