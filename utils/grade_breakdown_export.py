@@ -59,6 +59,16 @@ def _best(result, subj):
     return ((result.get('subject_overall') or {}).get(subj) or {}).get('best')
 
 
+def top_note(result, subj):
+    """'Top grades: Upper 1 — 3 of 3 A1 (small group)' or None."""
+    t = ((result.get('subject_overall') or {}).get(subj) or {}).get('top_small')
+    return f"Top grades: {t['branch']} — {t['text']} (small group)" if t else None
+
+
+def top_notes(result):
+    return [(s, top_note(result, s)) for s in result['subjects'] if top_note(result, s)]
+
+
 def best_legend(band_label):
     word = 'credit' if band_label == 'Grade' else 'pass'
     return (f'{STAR} Best branch for the subject: highest {word} rate; if tied, better grades; '
@@ -271,6 +281,9 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     elems = [KeepTogether(banner('Subject-Wise Performance & Grade Percentage Breakdown')), t,
             Spacer(1, 4), Paragraph('— Not Offered &nbsp;&nbsp; <font color="#15803d"><b>BEST</b></font> ='
                                     + pdf_escape(best_legend(band_label)[1:]), legendp)]
+    for _s, _n in top_notes(result):
+        elems.append(Paragraph(f'<font color="#b45309"><b>{pdf_escape(_s)}</b> — {pdf_escape(_n)}</font>; fewer than 5 entries, '
+                               'so not ranked best.', legendp))
 
     # ---- Overall summary table (own page) ----
     sum_headers = _summary_headers(bands, pass_label)
@@ -503,6 +516,9 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
 
     note = doc.add_paragraph()
     nr = note.add_run('— Not Offered    ' + best_legend(band_label))
+    for _s, _n in top_notes(result):
+        tn = doc.add_paragraph().add_run(f'{_s} — {_n}; fewer than 5 entries, so not ranked best.')
+        tn.italic = True; tn.font.size = Pt(8); tn.font.color.rgb = RGBColor(0xB4, 0x53, 0x09)
     nr.italic = True; nr.font.size = Pt(8); nr.font.color.rgb = note_rgb
 
     sub_banner(f'Overall {band_label} Percentage Summary by Branch')
@@ -675,6 +691,9 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
             ws.merge_cells(start_row=subj_start, start_column=1, end_row=r - 1, end_column=1)
     ws.cell(row=r + 1, column=1, value='— Not Offered').font = Font(italic=True, color='94A3B8', size=9)
     ws.cell(row=r + 2, column=1, value=best_legend(band_label)).font = Font(italic=True, color='15803D', size=9)
+    for _k, (_s, _n) in enumerate(top_notes(result)):
+        ws.cell(row=r + 3 + _k, column=1, value=f'{_s} — {_n}; fewer than 5 entries, so not ranked best.').font = \
+            Font(italic=True, color='B45309', size=9)
     ws.freeze_panes = ws.cell(row=data_start, column=1)
     # Content-tight columns — Subject/Branch/N stay as narrow as their actual
     # text (no dead whitespace), matching the reference layout; band columns
@@ -1010,6 +1029,12 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
         content_end_y = legend_y + key_f.size + int(8 * S)
         if content_end_y + key_f.size < max_y:
             d.text((margin, content_end_y), fit(best_legend(band_label), key_f, table_w), fill=(21, 128, 61), font=key_f)
+            content_end_y += key_f.size + int(8 * S)
+        for _s, _n in top_notes(result):
+            if content_end_y + key_f.size >= max_y:
+                break
+            d.text((margin, content_end_y), fit(f'{_s} — {_n}; fewer than 5 entries, so not ranked best.', key_f, table_w),
+                   fill=(180, 83, 9), font=key_f)
             content_end_y += key_f.size + int(8 * S)
 
     # ---- Overall summary — right under the main table on the same A4 page

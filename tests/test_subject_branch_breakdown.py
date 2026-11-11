@@ -380,3 +380,43 @@ def test_exports_mark_the_same_best_branch():
 def _save(wb):
     import io
     b = io.BytesIO(); wb.save(b); return b.getvalue()
+
+
+def test_small_branch_with_better_grades_gets_top_grades_note():
+    """3 of 3 A1 can't be 'best' (under 5 entries) but is noted; the larger
+    100%-credit branch stays best. No note when the small branch did worse."""
+    import io
+    from routes.results.analytics import _branch_grade_breakdown, _WAEC_PASS_GRADES
+    from models import WAECResult
+    from utils import grade_breakdown_export as G
+    from docx import Document
+    e = ([('Geography', g, 'Jemila') for g in ['A1'] * 9 + ['B2'] * 9 + ['B3'] * 2]
+         + [('Geography', 'A1', 'Upper')] * 3)
+    r = _branch_grade_breakdown(e, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
+    o = r['subject_overall']['Geography']
+    assert o['best'] == 'Jemila'
+    assert o['top_small']['branch'] == 'Upper' and o['top_small']['text'] == '3 of 3 A1'
+    assert G.top_note(r, 'Geography') == 'Top grades: Upper — 3 of 3 A1 (small group)'
+    paras = ' '.join(p.text for p in Document(io.BytesIO(G.grade_breakdown_docx({'school_name': 'S', 'logo_path': None, 'subtitle': 'W'}, r, 'Grade', 'Credit'))).paragraphs)
+    assert 'Top grades: Upper' in paras
+    # small branch that did worse → no note
+    e2 = [('Geography', 'A1', 'Jemila')] * 20 + [('Geography', 'C6', 'Upper')] * 3
+    r2 = _branch_grade_breakdown(e2, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
+    assert r2['subject_overall']['Geography']['top_small'] is None
+
+
+def test_page_shows_top_grades_note(app):
+    yr = 2094
+    with app.app_context():
+        b1 = _branch('GB TopBig'); b2 = _branch('GB TopSmall')
+        db.session.flush()
+        big = [_student(b1.id, f'Big{i}') for i in range(6)]
+        small = [_student(b2.id, f'Small{i}') for i in range(3)]
+        db.session.flush()
+        for i, s in enumerate(big):
+            db.session.add(WAECResult(student_id=s.id, exam_year=yr, subject='Geography', grade='A1' if i < 2 else 'B3'))
+        for s in small:
+            db.session.add(WAECResult(student_id=s.id, exam_year=yr, subject='Geography', grade='A1'))
+        db.session.commit()
+    html = _admin(app).get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
+    assert 'Top grades:' in html and 'GB TopSmall — 3 of 3 A1' in html

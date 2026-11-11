@@ -66,6 +66,10 @@
 .gb-row .pp{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .gb-row.best .bn{font-weight:700}
 .gb-row.best .pp{color:var(--success)}
+.gb-row.topg .pp{color:#b45309}
+.gb-topnote{display:flex;gap:.45rem;align-items:flex-start;font-size:.78rem;color:#92400e;background:color-mix(in srgb,#f59e0b 12%,var(--bg-card));border-radius:10px;padding:.4rem .6rem;margin-top:.15rem}
+.gb-topnote i{color:#d97706;margin-top:.15rem;font-size:.7rem}
+.gb-topnote em{font-style:normal;color:var(--text-muted)}
 .gb-row.no .na{grid-column:2/-1;color:var(--text-muted);font-style:italic;font-size:.76rem}
 .tone-good{color:var(--success)}.tone-mid{color:var(--warning)}.tone-bad{color:var(--danger)}
 
@@ -237,7 +241,7 @@
         <div class="gb-sj-s"><b>{{ o.n }}</b> entries{% if o.spread is not none %} · gap between branches <b>{{ o.spread }} pts</b>{% endif %}</div>
         {% for br in R.branches %}{% set c = R.table[s][br] %}
         {% if c %}
-        <div class="gb-row {{ 'best' if o.best == br }}"{% if o.best == br %} title="Best {{ pshort|lower }} rate{{ ' — tie broken by better grades' if o.tie else '' }}"{% endif %}>
+        <div class="gb-row {{ 'best' if o.best == br }}{{ ' topg' if o.top_small and o.top_small.branch == br }}"{% if o.best == br %} title="Best {{ pshort|lower }} rate{{ ' — tie broken by better grades' if o.tie else '' }}"{% endif %}>
           <span class="bn" title="{{ br }}">{{ br }}{% if c.uploaded %}<i class="fas fa-file-import" title="From an imported branch report"></i>{% endif %}</span>
           <span class="n">{{ c.n }}</span>
           {{ bar(c.pct, R.bands) }}
@@ -247,6 +251,7 @@
         <div class="gb-row no"><span class="bn">{{ br }}</span><span class="na">Not offered</span></div>
         {% endif %}
         {% endfor %}
+        {% if o.top_small %}<div class="gb-topnote" title="Fewer than 5 entries, so it can't be the subject's best branch — but its grades were the strongest."><i class="fas fa-star" aria-hidden="true"></i><span><b>Top grades:</b> {{ o.top_small.branch }} — {{ o.top_small.text }} <em>(small group)</em></span></div>{% endif %}
       </div>
       {% endfor %}
     </div>

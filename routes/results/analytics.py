@@ -1496,6 +1496,23 @@ def _jamb_score_band(score):
 BEST_MIN_ENTRIES = 5
 
 
+def _top_small(cells, best, bands):
+    """A small branch (under BEST_MIN_ENTRIES) that can't be 'best' but did
+    better than the best branch on BOTH credit rate (at least equal) and grade
+    quality (strictly higher) — e.g. 3 of 3 A1. Shown as a 'Top grades' note
+    so the achievement is visible without a tiny group winning on a fluke."""
+    if not best:
+        return None
+    b = best[1]
+    small = [x for x in cells if x[1]['n'] < BEST_MIN_ENTRIES and x[0] != best[0]
+             and x[1]['pass_pct'] >= b['pass_pct'] and x[1]['gpa'] > b['gpa']]
+    if not small:
+        return None
+    br, c = max(small, key=lambda x: (x[1]['gpa'], x[1]['n']))
+    return {'branch': br, 'n': c['n'], 'top_n': c['top_n'], 'top_band': bands[0],
+            'text': f"{c['top_n']} of {c['n']} {bands[0]}" if c['top_n'] else f"avg grade points {c['gpa']:.2f}"}
+
+
 def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_label='Credit Pass', band_label='Grade'):
     """``entries``: iterable of (subject, band, branch_name) — one per subject
     entry (a WAEC/Mock-WAEC result row, or one filled JAMB/Mock-JAMB subject
@@ -1567,6 +1584,7 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
                 gw = {b: len(bands) - i for i, b in enumerate(bands)}   # best band = most points
                 table[subj][br] = {'n': n, 'uploaded': (subj, br) in uploaded_pairs,
                                    'gpa': round(sum(counter.get(b, 0) * gw[b] for b in bands) / n, 2),
+                                   'top_n': counter.get(bands[0], 0),
                                    'pct': {b: round(counter.get(b, 0) / n * 100, 1) for b in bands},
                                    'pass_n': pn, 'pass_pct': round(pn / n * 100, 1)}
 
@@ -1595,6 +1613,7 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
             'n': n, 'pass_n': pn, 'pass_pct': round(pn / n * 100, 1) if n else 0,
             'pct': {b: round(c.get(b, 0) / n * 100, 1) if n else 0 for b in bands},
             'best': best[0] if best else None, 'tie': tie,
+            'top_small': _top_small(cells, best, bands),
             'spread': (round(max(x[1]['pass_pct'] for x in cells) - min(x[1]['pass_pct'] for x in cells), 1)
                        if len(cells) > 1 else None),
         }
