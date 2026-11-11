@@ -3,6 +3,8 @@ import { submitJson, useSave } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, Modal } from '../components/ui';
+import { Head, Tiles, Chips, Menu, Blank, usePhone, initials } from '../subjects/results';
+import { SecNav, Pill, SearchBox, plural } from '../components/appkit';
 
 const A = ({ to, className, children, title }) => {
   const nav = useNav();
@@ -30,67 +32,100 @@ const PwReqs = ({ rules, value }) => (
   </ul>
 );
 
-// ---- Index ------------------------------------------------------------------
+// ---- Index: people directory --------------------------------------------------
+const seen = (n) => (n == null ? 'Never signed in' : n === 0 ? 'Today' : n === 1 ? 'Yesterday'
+  : n < 7 ? `${n} days ago` : n < 31 ? `${Math.floor(n / 7)} wk ago` : n < 365 ? `${Math.floor(n / 30)} mo ago` : 'Over a year ago');
+const ROLE_TONE = { danger: 'bad', warning: 'mid', info: 'info', secondary: '' };
+const KINDS = [['', 'Everyone'], ['admin', 'Admins'], ['teacher', 'Teachers'], ['staff', 'Other staff'], ['inactive', 'Inactive']];
+const kindOf = (u) => (!u.is_active ? 'inactive' : u.is_admin ? 'admin' : u.is_teacher ? 'teacher' : 'staff');
+
 function Index({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
-  const toggle = (u) => save(u.toggle_url, {}, () => nav.refresh());
+  const phone = usePhone();
+  const [q, setQ] = useState('');
+  const [kind, setKind] = useState('');
+  const [flag, setFlag] = useState('');
+  const users = d.users;
+  const active = users.filter((u) => u.is_active);
+  const never = active.filter((u) => u.last_days == null && (u.created_days == null || u.created_days >= 3));
+  const dormant = active.filter((u) => u.last_days != null && u.last_days >= 90 && !u.is_self);
+  const noMfa = active.filter((u) => u.is_admin && !u.mfa);
+  const flags = { never: never.map((u) => u.id), dormant: dormant.map((u) => u.id), nomfa: noMfa.map((u) => u.id) };
+  const counts = {};
+  users.forEach((u) => { const k = kindOf(u); counts[k] = (counts[k] || 0) + 1; if (u.is_active && k !== 'inactive') counts[''] = (counts[''] || 0) + 1; });
+  counts[''] = users.length;
+  const t = q.trim().toLowerCase();
+  const rows = users.filter((u) => (!kind || kindOf(u) === kind) && (!flag || flags[flag].includes(u.id))
+    && (!t || [u.full_name, u.username, u.email, u.phone, u.display_role, u.group, u.branch].join(' ').toLowerCase().includes(t)));
+  const toggle = async (u) => {
+    if (u.is_active && !await confirm({ title: `Deactivate ${u.full_name || u.username}?`, confirmText: 'Deactivate',
+      message: 'They won’t be able to sign in. Their records and history stay; you can reactivate them any time.' })) return;
+    save(u.toggle_url, {}, () => nav.refresh());
+  };
   const del = async (u) => {
-    if (await confirm({ title: 'Delete user', tone: 'danger', confirmText: 'Delete',
-      message: `Permanently delete "${u.username}"? This removes the login account and cannot be undone. (To keep the account but block sign-in, use Deactivate instead.)` })) {
+    if (await confirm({ title: `Delete ${u.full_name || u.username}?`, tone: 'danger', confirmText: 'Delete',
+      message: `This removes the login account "${u.username}" and can’t be undone. To keep it but block sign-in, use Deactivate instead.` })) {
       save(u.delete_url, {}, () => nav.refresh());
     }
   };
+  const menu = (u) => <Menu label={`Actions for ${u.username}`} items={[
+    { icon: 'fa-id-badge', label: 'Open profile', onClick: () => nav.go(u.view_url) },
+    { icon: 'fa-pen', label: 'Edit access', onClick: () => nav.go(u.edit_url) },
+    !u.is_self && { icon: u.is_active ? 'fa-ban' : 'fa-circle-check', label: u.is_active ? 'Deactivate' : 'Reactivate', onClick: () => toggle(u) },
+    u.can_delete && { icon: 'fa-trash', label: 'Delete', danger: true, onClick: () => del(u) },
+  ]} />;
+  const alerts = [
+    noMfa.length > 0 && { k: 'nomfa', tone: 'bad', ic: 'fa-shield-halved', t: `${plural(noMfa.length, 'admin')} without two-step sign-in — admins can see everything, so their accounts matter most` },
+    never.length > 0 && { k: 'never', tone: 'mid', ic: 'fa-user-clock', t: `${plural(never.length, 'account')} never signed in — check they got their login details` },
+    dormant.length > 0 && { k: 'dormant', tone: 'info', ic: 'fa-bed', t: `${plural(dormant.length, 'account')} unused for 3+ months — deactivate staff who have left` },
+  ].filter(Boolean);
   return (
-    <>
-      <div className="page-header">
-        <h1><i aria-hidden="true" className="fas fa-users-cog" /> User Management</h1>
-        <div className="page-header-actions">
-          <A to={d.matrix_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-table-cells" /> Permission Matrix</A>
-          <A to={d.groups_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-layer-group" /> Permission Groups</A>
-          <A to={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add User</A>
-        </div>
+    <div className="rs cm us">
+      <SecNav label="Users" active="index" items={[
+        ['index', 'fa-users', 'Users', location.pathname], ['matrix', 'fa-table-cells', 'Permission matrix', d.matrix_url], ['groups', 'fa-layer-group', 'Groups', d.groups_url]]} />
+      <Head icon="fa-users-gear" title="Users" sub={`${plural(active.length, 'active account')} · who can sign in and what they can do`}>
+        <A to={d.add_url} className="rs-btn primary"><i className="fas fa-user-plus" aria-hidden="true" /><span className="rs-hide-sm"> Add user</span></A>
+      </Head>
+      <Tiles items={[
+        { label: 'Active', value: active.length, sub: `${users.length - active.length} inactive` },
+        { label: 'Admins', value: counts.admin || 0, sub: `${noMfa.length ? noMfa.length + ' without 2FA' : 'all protected'}`, tone: noMfa.length ? 'bad' : 'good' },
+        { label: 'Teachers', value: counts.teacher || 0 },
+        { label: 'Signed in this week', value: active.filter((u) => u.last_days != null && u.last_days < 7).length, sub: `of ${active.length}` },
+      ]} />
+      {alerts.length > 0 && (
+        <section className="rs-card rp-attn"><span className="k">Worth checking</span>
+          <div className="tm-alerts">{alerts.map((a) => (
+            <button key={a.k} type="button" className={'cm-attn-i ' + a.tone + (flag === a.k ? ' on' : '')} onClick={() => setFlag(flag === a.k ? '' : a.k)}>
+              <i className={'fas ' + a.ic} aria-hidden="true" /><span>{a.t}</span><small>{flag === a.k ? 'Showing' : 'Show'}</small></button>))}</div>
+        </section>)}
+      <div className="us-tools">
+        <SearchBox value={q} onChange={setQ} placeholder="Search name, username, email, role…" />
+        <Chips label="Who" value={kind} onChange={(v) => { setKind(v); setFlag(''); }}
+               items={KINDS.map(([k, l]) => ({ value: k, label: l, sub: counts[k] || 0 }))} />
       </div>
-      <div className="card">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-list" /> All Users ({d.users.length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.users.length ? (
-            <div className="table-responsive"><table className="data-table">
-              <thead><tr><th>Username</th><th>Full Name</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
-              <tbody>
-                {d.users.map((u) => (
-                  <tr key={u.id}>
-                    <td><strong>{u.username}</strong></td>
-                    <td>{u.full_name || '-'}</td>
-                    <td><span className={`badge badge-${u.role_badge}`}>{u.display_role}</span></td>
-                    <td><span className={`badge badge-${u.is_active ? 'success' : 'danger'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
-                    <td>{u.last_login}</td>
-                    <td><div className="d-flex gap-1">
-                      <A to={u.view_url} className="btn btn-sm btn-info" title="View"><i aria-hidden="true" className="fas fa-eye" /></A>
-                      <A to={u.edit_url} className="btn btn-sm btn-warning" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></A>
-                      {!u.is_self && (
-                        <button type="button" onClick={() => toggle(u)}
-                          className={`btn btn-sm btn-${u.is_active ? 'secondary' : 'success'}`}
-                          title={u.is_active ? 'Deactivate' : 'Activate'}>
-                          <i aria-hidden="true" className={`fas fa-${u.is_active ? 'ban' : 'check'}`} />
-                        </button>
-                      )}
-                      {u.can_delete && (
-                        <button type="button" onClick={() => del(u)} className="btn btn-sm btn-danger" title="Delete">
-                          <i aria-hidden="true" className="fas fa-trash" />
-                        </button>
-                      )}
-                    </div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          ) : (
-            <Empty icon="fa-users" title="No Users">No users have been added yet</Empty>
-          )}
-        </div>
-      </div>
-    </>
+      {flag && <div className="us-flag"><span>Showing: {alerts.find((a) => a.k === flag)?.t.split(' — ')[0]}</span><button type="button" className="cm-link" onClick={() => setFlag('')}>Show everyone</button></div>}
+      {!rows.length ? <Blank icon="fa-users" title={users.length ? 'No one matches' : 'No users yet'} /> : (
+        <section className="rs-card su-group">
+          {!phone && <div className="us-row us-hd"><span>Person</span><span>Role</span><span>Branch</span><span>Last seen</span><span /></div>}
+          {rows.map((u) => (
+            <div key={u.id} className={'us-row' + (u.is_active ? '' : ' off')}>
+              <A to={u.view_url} className="us-who">
+                <span className={'us-av ' + (ROLE_TONE[u.role_badge] || '')}>{initials(u.full_name || u.username)}</span>
+                <span className="us-who-t"><b>{u.full_name || u.username}{u.is_self && <em> (you)</em>}</b>
+                  <small>@{u.username}{u.email ? ` · ${u.email}` : ''}</small></span></A>
+              <span className="us-role"><Pill tone={ROLE_TONE[u.role_badge]}>{u.display_role}</Pill>
+                {u.group && <small><i className="fas fa-layer-group" aria-hidden="true" /> {u.group}</small>}
+                {u.view_only && <small>View only</small>}</span>
+              {!phone && <span className="us-br">{u.branch || '—'}</span>}
+              <span className={'us-seen' + (u.last_days == null ? ' never' : u.last_days >= 90 ? ' old' : '')}>
+                {!u.is_active ? <Pill tone="bad">Inactive</Pill> : seen(u.last_days)}
+                {u.is_active && (u.mfa ? <small className="ok"><i className="fas fa-shield-halved" aria-hidden="true" /> 2FA</small>
+                  : u.is_admin ? <small className="no"><i className="fas fa-shield" aria-hidden="true" /> No 2FA</small> : null)}</span>
+              <span className="us-act">{menu(u)}</span>
+            </div>))}
+        </section>)}
+    </div>
   );
 }
 

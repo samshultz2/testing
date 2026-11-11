@@ -209,3 +209,12 @@ def test_class_setup_payload_and_safe_arm_removal(app):
     assert r.get_json()['ok']
     with app.app_context():
         assert db.session.get(ClassArmAssignment, eid) is None and db.session.get(ClassArmAssignment, a1id) is not None
+
+
+def test_users_index_payload_has_security_signals(app):
+    c = _admin(app)
+    d = c.get('/users/', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['page'] == 'index' and d['users']
+    u = d['users'][0]
+    assert {'mfa', 'last_days', 'created_days', 'is_admin', 'group', 'branch', 'toggle_url'} <= set(u)

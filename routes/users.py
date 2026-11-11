@@ -303,8 +303,11 @@ def index():
     my_super = bool(db.session.get(User, me).is_super_admin) if me else False
     users = [u for u in User.query.order_by(User.created_at.desc()).all()
              if can_manage(u)]
+    from utils import timeutil as _tu
+    _now = _tu.now()
     return _render({
         'page': 'index',
+        'me': me,
         'matrix_url': url_for('users.matrix'),
         'groups_url': url_for('users.groups'),
         'add_url': url_for('users.add_user'),
@@ -313,6 +316,14 @@ def index():
             'display_role': u.get_display_role(), 'role_badge': _role_badge(u),
             'is_active': bool(u.is_active), 'is_self': u.id == me,
             'last_login': u.last_login.strftime('%d %b %Y %H:%M') if u.last_login else 'Never',
+            'last_days': ((_now.date() - u.last_login.date()).days if u.last_login else None),
+            'created_days': ((_now.date() - u.created_at.date()).days if u.created_at else None),
+            'email': u.email or '', 'phone': u.phone or '',
+            'is_admin': bool(u.is_admin), 'is_super_admin': bool(u.is_super_admin),
+            'is_teacher': bool(u.is_teacher), 'view_only': bool(getattr(u, 'view_only', False)),
+            'mfa': bool(getattr(u, 'mfa_enabled', False)),
+            'group': (u.permission_group.name if getattr(u, 'permission_group', None) else ''),
+            'branch': (u.branch.name if getattr(u, 'branch', None) else ('All branches' if getattr(u, 'is_central', False) else '')),
             'view_url': url_for('users.view_user', user_id=u.id),
             'edit_url': url_for('users.edit_user', user_id=u.id),
             'toggle_url': url_for('users.toggle_status', user_id=u.id),
