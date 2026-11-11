@@ -15,6 +15,7 @@ import { SalesNav, Pill, Bars } from './kit';
 
 const short = (v) => nairaShort(v);
 const ST_TONE = { 'In Use': 'good', 'In Store': 'info', Available: 'info', 'Under Repair': 'mid', Lost: 'bad', Damaged: 'mid', Disposed: '' };
+const fmtDate = (iso) => { try { return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return iso; } };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -69,18 +70,32 @@ function CatIcon({ category, size }) {
   return <span className={'ax-cat' + (size ? ' ' + size : '')} style={{ '--c': c }}><i className={'fas ' + ic} aria-hidden="true" /></span>;
 }
 
+// Units on loan are part of the active count (a loaned chair is still "In Use",
+// just not on site), so they're carved out of the In Use bucket — never added.
+function stripParts(a) {
+  const rows = (a.status_breakdown || []).filter((r) => r.quantity > 0).map((r) => ({ ...r }));
+  let loan = a.is_disposed ? 0 : (a.on_loan_quantity || 0);
+  const out = [];
+  rows.forEach((r) => {
+    const take = (r.status === 'In Use' || r.status === 'In Store') ? Math.min(loan, r.quantity) : 0;
+    loan -= take;
+    if (r.quantity - take > 0) out.push({ key: r.status, label: r.status === 'In Use' && take ? 'In use here' : r.status, n: r.quantity - take, color: ST_COLOR[r.status] || '#94a3b8' });
+    if (take) out.push({ key: r.status + '-loan', label: 'On loan', n: take, color: '#2563eb', loan: true });
+  });
+  return out;
+}
+
 function StatusStrip({ a, legend }) {
-  const rows = (a.status_breakdown || []).filter((r) => r.quantity > 0);
-  const total = rows.reduce((t, r) => t + r.quantity, 0) || 1;
+  const parts = stripParts(a);
+  const total = parts.reduce((t, r) => t + r.n, 0) || 1;
   return (
     <div className="ax-strip-w">
-      <div className="ax-strip" role="img" aria-label={rows.map((r) => `${r.quantity} ${r.status}`).join(', ')}>
-        {rows.map((r) => <i key={r.status} style={{ width: (r.quantity / total * 100) + '%', background: ST_COLOR[r.status] || '#94a3b8' }} />)}
+      <div className="ax-strip" role="img" aria-label={parts.map((r) => `${r.n} ${r.label}`).join(', ')}>
+        {parts.map((r) => <i key={r.key} className={r.loan ? 'loan' : ''} style={{ width: (r.n / total * 100) + '%', background: r.color }} />)}
       </div>
       {legend && (
         <div className="ax-legend">
-          {rows.map((r) => <span key={r.status}><i style={{ background: ST_COLOR[r.status] }} /><b>{r.quantity}</b> {r.status}</span>)}
-          {a.on_loan_quantity > 0 && <span><i className="fas fa-right-from-bracket" aria-hidden="true" /><b>{a.on_loan_quantity}</b> on loan</span>}
+          {parts.map((r) => <span key={r.key}><i className={r.loan ? 'loan' : ''} style={{ background: r.color }} /><b>{r.n}</b> {r.label}</span>)}
         </div>)}
     </div>
   );
@@ -399,7 +414,7 @@ function AssetCard({ a, d, open, doDelete, phone, onBack }) {
       </header>
       <div className="ax-card-b">
         {a.is_disposed ? <div className="ax-note"><i className="fas fa-box-archive" aria-hidden="true" />Disposed on {a.disposed_on}{a.disposal_amount ? ` · sold for ${naira(a.disposal_amount)}` : ''}</div> : (
-          <div className="ax-units"><div><b>{a.active_quantity ?? a.quantity}</b><span>{(a.active_quantity ?? a.quantity) === 1 ? 'unit' : 'units'}</span></div><StatusStrip a={a} legend /></div>)}
+          <div className="ax-units"><div><b>{a.active_quantity ?? a.quantity}</b><span>{(a.active_quantity ?? a.quantity) === 1 ? 'unit' : 'units'} in all</span></div><StatusStrip a={a} legend /></div>)}
 
         {acts.length > 0 && (
           <div className={'ax-acts' + (phone ? ' dock' : '')}>
@@ -410,23 +425,31 @@ function AssetCard({ a, d, open, doDelete, phone, onBack }) {
           </div>)}
 
         <div className="ax-facts">
-          <div><i className="fas fa-location-dot" aria-hidden="true" /><span>Where</span><b>{a.location || <em>Not set</em>}</b></div>
-          <div><i className="fas fa-user" aria-hidden="true" /><span>Who has it</span><b>{a.custodian || <em>Nobody</em>}</b></div>
-          {ownership && <div><i className="fas fa-school" aria-hidden="true" /><span>Belongs to</span><b>{ownership}</b></div>}
-          {a.on_loan_quantity > 0 && <div><i className="fas fa-right-from-bracket" aria-hidden="true" /><span>On loan</span><b>{plural(a.on_loan_quantity, 'unit')} · {a.available_quantity} free</b></div>}
+          <div><i className="fas fa-location-dot" aria-hidden="true" /><span>Where</span>{a.location ? <b>{a.location}</b>
+            : (live && batch && w('assets_edit') ? <button type="button" className="ax-set" onClick={() => open('transfer', a)}>Set location</button> : <b><em>Not set</em></b>)}</div>
+          <div><i className="fas fa-user" aria-hidden="true" /><span>Responsible</span>{a.custodian ? <b>{a.custodian}</b>
+            : (live && batch && w('assets_edit') ? <button type="button" className="ax-set" onClick={() => open('assign', a)}>Assign someone</button> : <b><em>Nobody</em></b>)}</div>
+          {ownership && <div className="wide"><i className="fas fa-school" aria-hidden="true" /><span>Belongs to</span><b className="wrap">{ownership}</b></div>}
+          {a.on_loan_quantity > 0 && <div><i className="fas fa-right-from-bracket" aria-hidden="true" /><span>Lent out</span><b>{a.on_loan_quantity} of {a.active_quantity} · {a.available_quantity} still here</b></div>}
           {a.supplier && <div><i className="fas fa-store" aria-hidden="true" /><span>Supplier</span><b>{a.supplier}</b></div>}
-          {a.acquisition_date && <div><i className="fas fa-calendar" aria-hidden="true" /><span>Bought</span><b>{a.acquisition_date}{age != null ? ` · ${age < 1 ? 'under a year' : Math.floor(age) + ' yr'} ago` : ''}</b></div>}
+          {a.acquisition_date && <div><i className="fas fa-calendar" aria-hidden="true" /><span>Bought</span><b>{fmtDate(a.acquisition_date)}{age != null ? ` · ${age < 1 ? 'this year' : Math.floor(age) + ' yr ago'}` : ''}</b></div>}
         </div>
 
         <section className="ax-sec">
           <h3>Value</h3>
-          <div className="ax-val">
-            <div><span>Book value</span><b title={naira(a.book_value)}>{phone ? short(a.book_value) : naira(a.book_value)}</b></div>
-            <div><span>Cost</span><b title={naira(a.acquisition_cost)}>{phone ? short(a.acquisition_cost) : naira(a.acquisition_cost)}</b></div>
-            <div><span>Loses</span><b>{short(a.annual_depreciation || 0)}<small>/yr</small></b></div>
-          </div>
-          {a.acquisition_cost > 0 && <Meter value={a.book_value} max={a.acquisition_cost} tone={a.book_value / a.acquisition_cost > 0.5 ? 'good' : a.book_value / a.acquisition_cost > 0.2 ? 'mid' : 'bad'} />}
-          {lifeLeft != null && <p className="ax-small">{lifeLeft > 0 ? `About ${lifeLeft < 1 ? 'less than a year' : Math.round(lifeLeft) + ' years'} of useful life left (of ${a.useful_life_years}).` : `Past its ${a.useful_life_years}-year useful life — plan a replacement.`}</p>}
+          {!(a.acquisition_cost > 0) ? (
+            <div className="ax-note"><i className="fas fa-tag" aria-hidden="true" /><span>No purchase price recorded, so value and depreciation can't be worked out.</span>
+              {w('assets_edit') && <button type="button" className="ax-set" onClick={() => open('edit', a)}>Add price</button>}</div>
+          ) : (<>
+            <div className="ax-val">
+              <div><span>Worth now</span><b title={naira(a.book_value)}>{phone ? short(a.book_value) : naira(a.book_value)}</b></div>
+              <div><span>Paid</span><b title={naira(a.acquisition_cost)}>{phone ? short(a.acquisition_cost) : naira(a.acquisition_cost)}</b></div>
+              <div><span>Loses</span><b>{a.annual_depreciation > 0 ? <>{short(a.annual_depreciation)}<small>/yr</small></> : '—'}</b></div>
+            </div>
+            <Meter value={a.book_value} max={a.acquisition_cost} tone={a.book_value / a.acquisition_cost > 0.5 ? 'good' : a.book_value / a.acquisition_cost > 0.2 ? 'mid' : 'bad'} />
+            {lifeLeft != null ? <p className="ax-small">{lifeLeft > 0 ? `About ${lifeLeft < 1 ? 'less than a year' : Math.round(lifeLeft) + ' years'} of useful life left (of ${a.useful_life_years}).` : `Past its ${a.useful_life_years}-year useful life — plan a replacement.`}</p>
+              : <p className="ax-small">Add a useful life (years) to see depreciation.</p>}
+          </>)}
         </section>
 
         <section className="ax-sec">

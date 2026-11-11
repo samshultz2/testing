@@ -1906,3 +1906,9 @@ span.sj-teacher{cursor:default}
 }
 .ax-sub>span{white-space:nowrap}
 @media (max-width:759px){.ax-sub{flex-wrap:wrap}.ax-sub .rs-seg{margin-left:auto}.ax-val b{font-size:.9rem}}
+.ax-strip i.loan,.ax-legend i.loan{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.45) 0 3px,transparent 3px 6px)!important}
+.ax-facts>div.wide{grid-column:1/-1}
+.ax-facts b.wrap{white-space:normal;line-height:1.35}
+.ax-set{justify-self:start;border:0;background:none;padding:0;font:inherit;font-size:.86rem;font-weight:700;color:var(--primary);cursor:pointer}
+.ax-note .ax-set{margin-left:auto;white-space:nowrap}
+.ax-units>div:first-child span{white-space:nowrap}
