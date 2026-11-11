@@ -146,3 +146,35 @@ def test_classes_and_arms_pages_payloads(app):
     a = c.get('/academics/arms', headers={'X-Requested-With': 'fetch'}).get_json()
     a = a.get('data', a)
     assert a['page'] == 'arms' and 'uses_arms' in a and isinstance(a['grid'], list)
+
+
+def test_term_view_calendar_and_break_removal(app):
+    from datetime import date
+    from models import db, AcademicSession, Term, Holiday
+    with app.app_context():
+        s = AcademicSession(name='2060/2061', is_active=False)
+        db.session.add(s); db.session.flush()
+        t = Term(session_id=s.id, term_number=1, name='First Term',
+                 start_date=date(2060, 9, 6), end_date=date(2060, 12, 10))
+        db.session.add(t); db.session.commit()
+        tid = t.id
+    c = _admin(app)
+    tok = _ptoken(c)
+    c.post(f'/academics/terms/{tid}/weeks/generate', headers={'X-Requested-With': 'fetch'}, data={'_csrf_token': tok})
+    r = c.post(f'/academics/terms/{tid}/holidays/add', headers={'X-Requested-With': 'fetch'},
+               data={'date': '2060-10-25', 'end_date': '2060-10-29', 'holiday_type': 'Mid-term Break',
+                     'reason': 'Mid-term break', '_csrf_token': tok})
+    assert r.get_json()['ok']
+    d = c.get(f'/academics/terms/{tid}', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['stats']['weeks'] == d['stats']['expected_weeks'] and d['stats']['weeks'] >= 13
+    assert len(d['breaks']) == 1 and d['breaks'][0]['days'] == 5
+    days = [x for w in d['weeks'] for x in w['days']]
+    assert all(len(w['days']) == 5 for w in d['weeks'])
+    assert sum(1 for x in days if x['status'] == 'holiday') == 5
+    assert all(x['status'] in ('future', 'holiday') for x in days)   # term is in the future
+    r = c.post(f'/academics/terms/{tid}/holidays/remove', headers={'X-Requested-With': 'fetch'},
+               data={'ids': ','.join(map(str, d['breaks'][0]['ids'])), '_csrf_token': tok})
+    assert r.get_json()['ok']
+    with app.app_context():
+        assert Holiday.query.filter_by(term_id=tid).count() == 0

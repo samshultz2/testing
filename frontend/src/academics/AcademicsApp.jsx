@@ -5,6 +5,7 @@ import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import TermSetup from './TermSetup';
+import TermView from './TermView';
 import Terms from './Terms';
 import Sessions from './Sessions';
 import { Classes, Arms } from './Structure';
@@ -122,78 +123,6 @@ function EditTerm({ d, notify }) {
 
 // ---- Term setup checklist --------------------------------------------------
 // ---- View term (weeks + holidays) ------------------------------------------
-function ViewTerm({ d, notify }) {
-  const nav = useNav();
-  const t = d.term;
-  const [hf, setHf] = useState({ date: '', end_date: '', holiday_type: 'Public Holiday', reason: '' });
-  const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    const r = await submitJson(url, fields || {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
-  };
-  const addHoliday = async (e) => {
-    e.preventDefault();
-    if (!hf.date || !hf.reason.trim()) { notify('error', 'Date and reason are required.'); return; }
-    const r = await submitJson(d.urls.add_holiday, hf);
-    if (r.ok) { setHf({ date: '', end_date: '', holiday_type: 'Public Holiday', reason: '' }); notify('success', r.message); nav.refresh(); }
-    else notify('error', r.error || 'Could not add.');
-  };
-  return (
-    <>
-      <div className="page-header">
-        <div><h1>{t.full_name}</h1>{t.is_active && <span className="badge badge-success">Active</span>}</div>
-        <div className="page-header-actions">{canWrite(d, 'structure_edit') && <a href={d.urls.edit} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-edit" /> Edit Dates</a>}</div>
-      </div>
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group"><label className="form-label">Start Date</label><div className="form-control" style={{ background: 'var(--bg-secondary)' }}>{t.start_date || 'Not set'}</div></div>
-        <div className="form-group"><label className="form-label">End Date</label><div className="form-control" style={{ background: 'var(--bg-secondary)' }}>{t.end_date || 'Not set'}</div></div>
-      </div></div></div>
-
-      <div className="card mb-3">
-        <div className="card-header"><h3>Weeks ({d.weeks.length})</h3>
-          {(canWrite(d, 'structure_create') || canWrite(d, 'structure_bulk')) && <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {canWrite(d, 'structure_create') && <button type="button" className="btn btn-primary btn-sm" onClick={() => act(d.urls.add_week, {})}><i aria-hidden="true" className="fas fa-plus" /> Add Week</button>}
-            {canWrite(d, 'structure_bulk') && d.weeks.length === 0 && t.has_start && <button type="button" className="btn btn-secondary btn-sm" onClick={() => act(d.urls.generate_weeks, {})}><i aria-hidden="true" className="fas fa-sync" /> Generate All</button>}
-          </div>}
-        </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.weeks.length ? (
-            <div className="data-cards" style={{ padding: '1rem' }}>{d.weeks.map((w) => (
-              <div className="data-card" key={w.id}>
-                <div className="data-card-header"><div className="data-card-title">Week {w.week_number}</div></div>
-                <div className="data-card-row"><span className="data-card-label">Start</span><span>{w.start_date}</span></div>
-                <div className="data-card-row"><span className="data-card-label">End</span><span>{w.end_date}</span></div>
-                {canWrite(d, 'structure_delete') && w.is_last && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => act(w.delete_url, {}, `Delete Week ${w.week_number}? This will also delete attendance records for this week.`)}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
-              </div>))}</div>
-          ) : <Empty icon="fa-calendar" title=""><p>No weeks added yet. Click "Add Week" to add Week 1.</p></Empty>}
-        </div>
-      </div>
-
-      <div className="card"><div className="card-header"><h3>Holidays ({d.holidays.length})</h3></div>
-        <div className="card-body">
-          {canWrite(d, 'holidays_create') && <form onSubmit={addHoliday} className="filter-form mb-3">
-            <div className="form-group"><label className="form-label">From</label><input type="date" className="form-control" required value={hf.date} onChange={(e) => setHf((s) => ({ ...s, date: e.target.value }))} /></div>
-            <div className="form-group"><label className="form-label">To <span className="text-muted">(optional)</span></label><input type="date" className="form-control" title="Leave blank for a single day" value={hf.end_date} onChange={(e) => setHf((s) => ({ ...s, end_date: e.target.value }))} /></div>
-            <div className="form-group"><label className="form-label">Type</label>
-              <select className="form-control" value={hf.holiday_type} onChange={(e) => setHf((s) => ({ ...s, holiday_type: e.target.value }))}>
-                <option>Public Holiday</option><option>Mid-term Break</option><option>Other</option></select></div>
-            <div className="form-group"><label className="form-label">Reason</label><input type="text" className="form-control" placeholder="e.g., Eid el-Kabir" required value={hf.reason} onChange={(e) => setHf((s) => ({ ...s, reason: e.target.value }))} /></div>
-            <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
-          </form>}
-          {canWrite(d, 'holidays_create') && <p className="text-muted text-sm" style={{ margin: '-0.5rem 0 1rem' }}>For a multi-day break, set From and To — each weekday in the range is marked at once. Weekends are skipped automatically.</p>}
-          {d.holidays.length > 0 && (
-            <div className="data-cards">{d.holidays.map((h) => (
-              <div className="data-card" key={h.id}>
-                <div className="data-card-header"><div className="data-card-title">{h.date}</div>{h.holiday_type && <span className="badge badge-info">{h.holiday_type}</span>}</div>
-                <div className="data-card-row"><span className="data-card-label">Reason</span><span>{h.reason}</span></div>
-                {canWrite(d, 'holidays_delete') && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => act(h.delete_url, {})}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
-              </div>))}</div>
-          )}
-        </div></div>
-    </>
-  );
-}
-
 // ---- Classes ---------------------------------------------------------------
 function ClassForm({ d, notify }) {
   const nav = useNav();
@@ -847,7 +776,7 @@ function CopyTermSetup({ d, notify }) {
 }
 
 const SCREENS = { sessions: Sessions, add_session: SessionForm, edit_session: SessionForm,
-  terms: Terms, add_term: AddTerm, edit_term: EditTerm, setup: TermSetup, view_term: ViewTerm,
+  terms: Terms, add_term: AddTerm, edit_term: EditTerm, setup: TermSetup, view_term: TermView,
   classes: Classes, edit_class: ClassForm, arms: Arms, edit_arm: ArmForm, assignments: Assignments, view_assignment: ViewAssignment,
   copy_term_setup: CopyTermSetup };
 

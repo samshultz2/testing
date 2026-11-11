@@ -718,29 +718,145 @@ def term_setup():
 @academics_bp.route('/terms/<int:term_id>')
 @login_required
 def view_term(term_id):
-    """View term details including weeks and holidays"""
+    """One term's calendar: progress, every week as Mon–Fri day dots (register
+    taken / missed / holiday / upcoming), holidays grouped into breaks, and
+    in-place week / date / holiday actions."""
+    from sqlalchemy import func
+    from models import Attendance
     term = db.get_or_404(Term, term_id)
     weeks = term.weeks.order_by(Week.week_number).all()
     holidays = term.holidays.order_by(Holiday.date).all()
     last_id = weeks[-1].id if weeks else None
+    today = timeutil.today()
+    hol = {h.date: h for h in holidays}
+    # Classes that should take a register: those with students this term.
+    n_classes = (db.session.query(func.count(func.distinct(StudentEnrollment.class_arm_assignment_id)))
+                 .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                 .filter(ClassArmAssignment.term_id == term.id, StudentEnrollment.is_active == True).scalar() or 0)
+    # Per school day: how many classes took the register.
+    marked = dict(db.session.query(Attendance.date, func.count(func.distinct(StudentEnrollment.class_arm_assignment_id)))
+                  .join(StudentEnrollment, Attendance.enrollment_id == StudentEnrollment.id)
+                  .filter(Attendance.week_id.in_([w.id for w in weeks] or [-1]))
+                  .group_by(Attendance.date).all())
+    att_per_week = dict(db.session.query(Attendance.week_id, func.count(Attendance.id))
+                        .filter(Attendance.week_id.in_([w.id for w in weeks] or [-1]))
+                        .group_by(Attendance.week_id).all())
+    wk_rows, past_days, taken_days, cur_week = [], 0, 0, None
+    slots_taken = 0   # class-days with a register
+    for w in weeks:
+        days = []
+        d = w.start_date
+        while d <= w.end_date:
+            if d.weekday() < 5:
+                h = hol.get(d)
+                n = marked.get(d, 0)
+                if h:
+                    st = 'holiday'
+                elif d > today:
+                    st = 'future'
+                elif n:
+                    st = 'full' if n_classes and n >= n_classes else 'part'
+                else:
+                    st = 'missed'
+                if st in ('full', 'part', 'missed'):
+                    past_days += 1
+                    taken_days += 1 if st != 'missed' else 0
+                    slots_taken += min(n, n_classes) if n_classes else 0
+                days.append({'date': d.isoformat(), 'day': d.strftime('%a'), 'n': d.day, 'status': st,
+                             'classes': n, 'reason': h.reason if h else None})
+            d += timedelta(days=1)
+        is_cur = w.start_date <= today <= w.end_date + timedelta(days=2)
+        if is_cur:
+            cur_week = w.week_number
+        wk_rows.append({'id': w.id, 'week_number': w.week_number,
+                        'start_date': _fd(w.start_date), 'end_date': _fd(w.end_date),
+                        'label': f'{w.start_date.strftime("%d %b")} – {w.end_date.strftime("%d %b")}',
+                        'is_last': w.id == last_id, 'current': is_cur, 'days': days,
+                        'attendance': att_per_week.get(w.id, 0),
+                        'delete_url': url_for('academics.delete_week', week_id=w.id)})
 
+    # Holidays grouped into breaks: consecutive school days with the same reason.
+    breaks = []
+    for h in holidays:
+        prev = breaks[-1] if breaks else None
+        gap_ok = prev and (h.date - prev['_end']).days <= 3 and all(
+            (prev['_end'] + timedelta(days=i)).weekday() >= 5 for i in range(1, (h.date - prev['_end']).days))
+        if prev and gap_ok and prev['reason'] == h.reason and prev['type'] == (h.holiday_type or ''):
+            prev['_end'] = h.date
+            prev['ids'].append(h.id)
+        else:
+            breaks.append({'reason': h.reason, 'type': h.holiday_type or '', '_start': h.date, '_end': h.date,
+                           'ids': [h.id]})
+    for b in breaks:
+        b['days'] = len(b['ids'])
+        b['label'] = (_fd(b['_start']) if b['_start'] == b['_end']
+                      else f'{b["_start"].strftime("%d %b")} – {_fd(b["_end"])}')
+        b['past'] = b['_end'] < today
+        b.pop('_start'); b.pop('_end')
+
+    state, prog = 'nodates', None
+    if term.start_date and term.end_date:
+        total = max(1, (term.end_date - term.start_date).days)
+        if today < term.start_date:
+            state = 'upcoming'
+        elif today > term.end_date:
+            state, prog = 'ended', 100
+        else:
+            state, prog = 'running', round((today - term.start_date).days / total * 100)
+    expected = len(get_weeks_in_range(term.start_date, term.end_date)) if term.start_date and term.end_date else 0
+    school_days = sum(1 for w in wk_rows for x in w['days'] if x['status'] != 'holiday')
+    siblings = (Term.query.join(AcademicSession).order_by(AcademicSession.name.desc(), Term.term_number.desc()).all())
     return _render({
         'page': 'view_term',
         'term': {'id': term.id, 'full_name': term.full_name, 'name': term.name,
+                 'session': term.session.name if term.session else '',
                  'is_active': bool(term.is_active), 'has_start': term.start_date is not None,
-                 'start_date': _fd(term.start_date), 'end_date': _fd(term.end_date)},
-        'weeks': [{'id': w.id, 'week_number': w.week_number,
-                   'start_date': _fd(w.start_date), 'end_date': _fd(w.end_date),
-                   'is_last': w.id == last_id,
-                   'delete_url': url_for('academics.delete_week', week_id=w.id)} for w in weeks],
+                 'start_date': _fd(term.start_date), 'end_date': _fd(term.end_date),
+                 'start_iso': term.start_date.isoformat() if term.start_date else '',
+                 'end_iso': term.end_date.isoformat() if term.end_date else '',
+                 'state': state, 'progress': prog,
+                 'days_left': max((term.end_date - today).days, 0) if term.end_date and state == 'running' else None,
+                 'days_to_start': (term.start_date - today).days if state == 'upcoming' else None},
+        'stats': {'weeks': len(weeks), 'expected_weeks': expected, 'current_week': cur_week,
+                  'school_days': school_days, 'holiday_days': len(holidays),
+                  'past_days': past_days, 'taken_days': taken_days, 'classes': n_classes,
+                  'coverage': (round(slots_taken / (n_classes * past_days) * 100) if n_classes and past_days else None)},
+        'weeks': wk_rows,
+        'breaks': breaks,
         'holidays': [{'id': h.id, 'date': _fd(h.date), 'holiday_type': h.holiday_type or '',
                       'reason': h.reason,
                       'delete_url': url_for('academics.delete_holiday', holiday_id=h.id)} for h in holidays],
+        'terms': [{'id': t.id, 'label': t.full_name, 'url': url_for('academics.view_term', term_id=t.id)} for t in siblings],
         'urls': {'edit': url_for('academics.edit_term', term_id=term.id),
                  'add_week': url_for('academics.add_next_week', term_id=term.id),
                  'generate_weeks': url_for('academics.generate_weeks', term_id=term.id),
-                 'add_holiday': url_for('academics.add_holiday', term_id=term.id)},
+                 'add_holiday': url_for('academics.add_holiday', term_id=term.id),
+                 'remove_holidays': url_for('academics.remove_holidays', term_id=term.id),
+                 'setup': url_for('academics.term_setup', term_id=term.id),
+                 'terms': url_for('academics.terms_list'),
+                 'attendance': url_for('attendance.attendance_app')},
     })
+
+
+@academics_bp.route('/terms/<int:term_id>/holidays/remove', methods=['POST'])
+@login_required
+def remove_holidays(term_id):
+    """Remove a whole break (several holiday days) in one go."""
+    ids = [int(x) for x in request.form.getlist('ids') if str(x).isdigit()] or \
+          [int(x) for x in (request.form.get('ids') or '').split(',') if x.strip().isdigit()]
+    try:
+        rows = Holiday.query.filter(Holiday.term_id == term_id, Holiday.id.in_(ids or [-1])).all()
+        for h in rows:
+            db.session.delete(h)
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('academics.holiday_delete', detail=f'{len(rows)} day(s) term={term_id}',
+                   target_type='term', target_id=term_id)
+        return _ok(f'{len(rows)} holiday day{"s" if len(rows) != 1 else ""} removed.',
+                   url_for('academics.view_term', term_id=term_id))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('academics.view_term', term_id=term_id))
 
 
 def _rebuild_weeks(term):
