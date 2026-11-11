@@ -1912,3 +1912,20 @@ span.sj-teacher{cursor:default}
 .ax-set{justify-self:start;border:0;background:none;padding:0;font:inherit;font-size:.86rem;font-weight:700;color:var(--primary);cursor:pointer}
 .ax-note .ax-set{margin-left:auto;white-space:nowrap}
 .ax-units>div:first-child span{white-space:nowrap}
+.ax-act.good i{color:var(--success)}
+.ax-act.good{border-color:color-mix(in srgb,var(--success) 40%,var(--border-color))}
+.ax-stchips{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.45rem}
+.ax-stchip{display:grid;grid-template-columns:10px minmax(0,1fr);gap:0 .5rem;align-items:center;text-align:left;padding:.55rem .7rem;border-radius:12px;border:1.5px solid var(--border-color);background:var(--bg-card);font:inherit;cursor:pointer;color:var(--text-primary)}
+.ax-stchip i{grid-row:1/3;width:10px;height:10px;border-radius:3px;background:var(--c)}
+.ax-stchip b{font-size:.88rem}
+.ax-stchip small{font-size:.72rem;color:var(--text-muted)}
+.ax-stchip.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 9%,var(--bg-card))}
+.ax-stchip:disabled{opacity:.45;cursor:not-allowed}
+.ax-qty{display:flex;align-items:center;gap:.4rem}
+.ax-qty>button:not(.rs-chip){width:44px;height:44px;border-radius:12px;border:1.5px solid var(--border-color);background:var(--bg-card);cursor:pointer;color:var(--text-primary)}
+.ax-qty input{width:84px;height:44px;text-align:center;font:inherit;font-size:1.2rem;font-weight:800;border:1.5px solid var(--border-color);border-radius:12px;background:var(--bg-card);color:var(--text-primary)}
+.ax-after{display:flex;flex-wrap:wrap;gap:.3rem .8rem;align-items:center;font-size:.82rem;padding:.6rem .75rem;border-radius:12px;background:var(--gray-50,var(--gray-100))}
+.ax-after>span:first-child{font-weight:700;color:var(--text-muted)}
+.ax-after span{display:inline-flex;align-items:center;gap:.3rem}
+.ax-after span i{width:9px;height:9px;border-radius:3px;background:var(--c)}
+.ax-after em{font-style:normal;color:var(--text-muted)}

@@ -58,6 +58,7 @@ const CAT = {
 };
 const catOf = (c) => CAT[c] || CAT.Other;
 const ST_COLOR = { 'In Use': '#16a34a', 'In Store': '#2563eb', 'Under Repair': '#d97706', Lost: '#dc2626', Disposed: '#94a3b8' };
+const qtyOf = (a, st) => ((a.status_breakdown || []).find((r) => r.status === st) || {}).quantity || 0;
 const placeOf = (a) => a.location || (a.class_name ? `${a.class_name}${a.arm_name ? ' ' + a.arm_name : ''}` : '') || '';
 const EV = { created: 'Registered', quantity_changed: 'Quantity changed', status_changed: 'Status changed', updated: 'Details updated',
   disposed: 'Disposed', restored: 'Restored', transferred: 'Moved', assigned: 'Given to', unassigned: 'Custodian removed',
@@ -121,7 +122,7 @@ function Register({ d, notify }) {
   const [openId, setOpenId] = useState(null);
   useEffect(() => { const h = () => setModal({ kind: 'edit', asset: {} }); window.addEventListener('assets:add', h); return () => window.removeEventListener('assets:add', h); }, []);
   const pickGroup = (g) => { setGroup(g); try { localStorage.setItem('assets:group', g); } catch (e) { /* ignore */ } };
-  const open = (kind, asset) => setModal({ kind, asset });
+  const open = (kind, asset, preset) => setModal({ kind, asset, preset });
   const close = () => setModal(null);
   const saved = () => { setModal(null); nav.refresh(); };
 
@@ -311,7 +312,7 @@ function Register({ d, notify }) {
       {modal && modal.kind === 'dispose' && <DisposeModal asset={modal.asset} notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'transfer' && <QuickPlaceSheet d={d} asset={modal.asset} kind="place" notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'assign' && <QuickPlaceSheet d={d} asset={modal.asset} kind="person" notify={notify} onClose={close} onSaved={saved} />}
-      {modal && modal.kind === 'status' && <MoveStatusModal asset={modal.asset} d={d} notify={notify} onClose={close} onSaved={saved} />}
+      {modal && modal.kind === 'status' && <MoveStatusModal asset={modal.asset} d={d} preset={modal.preset} notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'checkout' && <CheckoutModal asset={modal.asset} notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'units' && <AssetUnitsModal asset={modal.asset} d={d} notify={notify} onClose={close} onSaved={() => nav.refresh()} />}
       {modal && modal.kind === 'history' && <AssetHistoryModal asset={modal.asset} onClose={close} />}
@@ -378,11 +379,14 @@ function AssetCard({ a, d, open, doDelete, phone, onBack }) {
     live && batch && w('assets_edit') && { k: 'transfer', icon: 'fa-truck-ramp-box', label: 'Move' },
     live && batch && w('assets_edit') && { k: 'assign', icon: 'fa-user-tag', label: 'Assign' },
     live && batch && w('assets_loans') && { k: 'checkout', icon: 'fa-right-from-bracket', label: 'Lend out' },
+    live && batch && w('assets_edit') && qtyOf(a, 'Under Repair') > 0 && { k: 'status', preset: { from: 'Under Repair', to: 'In Use', all: true }, icon: 'fa-circle-check', label: `${qtyOf(a, 'Under Repair')} back from repair`, good: true },
+    live && batch && w('assets_edit') && qtyOf(a, 'Lost') > 0 && { k: 'status', preset: { from: 'Lost', to: 'In Use', all: true }, icon: 'fa-magnifying-glass-location', label: `${qtyOf(a, 'Lost')} found` },
+    live && batch && w('assets_edit') && { k: 'status', preset: { from: 'In Use', to: 'Under Repair' }, icon: 'fa-screwdriver-wrench', label: 'Send for repair' },
     live && batch && w('assets_edit') && { k: 'status', icon: 'fa-right-left', label: 'Change status' },
     a.is_individually_tracked && { k: 'units', icon: 'fa-qrcode', label: 'Units' },
     w('assets_maintenance') && { k: 'maint', icon: 'fa-wrench', label: 'Maintenance', warn: a.maintenance_overdue },
     w('assets_edit') && { k: 'edit', icon: 'fa-pen', label: 'Edit' },
-  ].filter(Boolean);
+  ].filter(Boolean).sort((x, y) => (y.good ? 1 : 0) - (x.good ? 1 : 0));
   const more = [
     { icon: 'fa-clock-rotate-left', label: 'Full history', onClick: () => open('history', a) },
     live && w('assets_dispose') && { icon: 'fa-box-archive', label: 'Dispose / retire', onClick: () => open('dispose', a) },
@@ -419,9 +423,9 @@ function AssetCard({ a, d, open, doDelete, phone, onBack }) {
         {acts.length > 0 && (
           <div className={'ax-acts' + (phone ? ' dock' : '')}>
             {(phone ? acts.slice(0, 4) : acts).map((x) => (
-              <button type="button" key={x.k} className={'ax-act' + (x.warn ? ' warn' : '')} onClick={() => open(x.k, a)}>
+              <button type="button" key={x.label} className={'ax-act' + (x.warn ? ' warn' : '') + (x.good ? ' good' : '')} onClick={() => open(x.k, a, x.preset)}>
                 <i className={'fas ' + x.icon} aria-hidden="true" /><span>{x.label}</span></button>))}
-            {phone && acts.length > 4 && <Menu label="More" items={acts.slice(4).map((x) => ({ icon: x.icon, label: x.label, onClick: () => open(x.k, a) }))} />}
+            {phone && acts.length > 4 && <Menu label="More" items={acts.slice(4).map((x) => ({ icon: x.icon, label: x.label, onClick: () => open(x.k, a, x.preset) }))} />}
           </div>)}
 
         <div className="ax-facts">
@@ -430,7 +434,7 @@ function AssetCard({ a, d, open, doDelete, phone, onBack }) {
           <div><i className="fas fa-user" aria-hidden="true" /><span>Responsible</span>{a.custodian ? <b>{a.custodian}</b>
             : (live && batch && w('assets_edit') ? <button type="button" className="ax-set" onClick={() => open('assign', a)}>Assign someone</button> : <b><em>Nobody</em></b>)}</div>
           {ownership && <div className="wide"><i className="fas fa-school" aria-hidden="true" /><span>Belongs to</span><b className="wrap">{ownership}</b></div>}
-          {a.on_loan_quantity > 0 && <div><i className="fas fa-right-from-bracket" aria-hidden="true" /><span>Lent out</span><b>{a.on_loan_quantity} of {a.active_quantity} · {a.available_quantity} still here</b></div>}
+          {a.on_loan_quantity > 0 && <div><i className="fas fa-right-from-bracket" aria-hidden="true" /><span>Lent out</span><b>{a.on_loan_quantity} out · {a.available_quantity} free to use</b></div>}
           {a.supplier && <div><i className="fas fa-store" aria-hidden="true" /><span>Supplier</span><b>{a.supplier}</b></div>}
           {a.acquisition_date && <div><i className="fas fa-calendar" aria-hidden="true" /><span>Bought</span><b>{fmtDate(a.acquisition_date)}{age != null ? ` · ${age < 1 ? 'this year' : Math.floor(age) + ' yr ago'}` : ''}</b></div>}
         </div>
@@ -1187,45 +1191,62 @@ function AssetMaintenanceModal({ asset, d, onClose, onSaved, notify }) {
   );
 }
 
-function MoveStatusModal({ asset, d, onClose, onSaved, notify }) {
-  const buckets = (asset.status_breakdown || []).filter((r) => r.quantity > 0);
-  const otherStatuses = (d.statuses || []).filter((s) => s !== 'Disposed');
-  const [f, setF] = useState({
-    from_status: buckets[0]?.status || '',
-    to_status: otherStatuses.find((s) => s !== buckets[0]?.status) || '',
-    quantity: '1', note: '',
-  });
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const have = buckets.find((r) => r.status === f.from_status)?.quantity || 0;
+// Move units between statuses — "send 12 for repair", "12 back from repair".
+// Totals never change (units only move between buckets), and units out on loan
+// can't be moved (they aren't here), mirroring the server's check.
+const STATUS_HINT = { 'In Use': 'Working and in use', 'In Store': 'Working, kept in store', 'Under Repair': 'Away being fixed', Lost: 'Missing' };
+function MoveStatusModal({ asset, d, onClose, onSaved, notify, preset }) {
+  const loanOf = {};
+  stripParts(asset).forEach((p) => { if (p.loan) loanOf[p.key.replace('-loan', '')] = p.n; });
+  const buckets = (asset.status_breakdown || []).filter((r) => r.quantity > 0)
+    .map((r) => ({ ...r, movable: r.quantity - (loanOf[r.status] || 0) }));
+  const statuses = (d.statuses || []).filter((x) => x !== 'Disposed');
+  const first = (preset && preset.from) || (buckets.find((r) => r.movable > 0) || {}).status || '';
+  const [from, setFrom] = useState(first);
+  const [to, setTo] = useState((preset && preset.to) || statuses.find((x) => x !== first) || '');
+  const src = buckets.find((r) => r.status === from) || { quantity: 0, movable: 0 };
+  const [qty, setQty] = useState(String((preset && preset.all) ? src.movable : Math.min(1, src.movable)));
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const n = parseInt(qty, 10) || 0;
+  const pickFrom = (st) => { setFrom(st); if (to === st) setTo(statuses.find((x) => x !== st) || ''); const b = buckets.find((r) => r.status === st); setQty(String(Math.min(n || 1, b ? b.movable : 0) || (b ? b.movable : 0))); };
+  const after = {};
+  buckets.forEach((r) => { after[r.status] = r.quantity; });
+  if (n > 0 && n <= src.movable && from !== to) { after[from] -= n; after[to] = (after[to] || 0) + n; }
   const save = async () => {
-    const qty = parseInt(f.quantity, 10) || 0;
-    if (!f.from_status || !f.to_status) { notify('error', 'Choose a status to move from and to.'); return; }
-    if (f.from_status === f.to_status) { notify('error', 'Choose two different statuses.'); return; }
-    if (qty <= 0 || qty > have) { notify('error', `Enter 1–${have} unit(s).`); return; }
-    const r = await submitJson(asset.move_status_url, f);
+    if (!from || !to || from === to) { notify('error', 'Choose where the units are now and where they are going.'); return; }
+    if (n <= 0 || n > src.movable) { notify('error', `Enter 1–${src.movable}.`); return; }
+    setBusy(true);
+    const r = await submitJson(asset.move_status_url, { from_status: from, to_status: to, quantity: n, note });
+    setBusy(false);
     if (r.ok) { notify('success', r.message); onSaved(); } else notify('error', r.error || 'Could not move.');
   };
   return (
-    <Modal title={`Move quantity — "${asset.name}"`} icon="fa-right-left" size="md" onClose={onClose}
-           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Move</Button></>}>
-      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Shift some of this asset's quantity from one status to another — e.g. move 3 of 30 laptops from "In Use" to "Under Repair" — without retyping the whole split.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.6rem' }}>
-        <Field label="From *">
-          <select className="form-control" value={f.from_status} onChange={(e) => set('from_status', e.target.value)}>
-            {buckets.map((r) => <option key={r.status} value={r.status}>{r.status} ({r.quantity})</option>)}
-          </select>
-        </Field>
-        <Field label="To *">
-          <select className="form-control" value={f.to_status} onChange={(e) => set('to_status', e.target.value)}>
-            {otherStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </Field>
-        <Field label={`Quantity (max ${have}) *`}>
-          <input type="number" min="1" max={have} className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} />
-        </Field>
+    <Sheet title={`Change status — ${asset.name}`} onClose={onClose}>
+      <div className="sl-form">
+        <div className="ax-lbl">Take units that are</div>
+        <div className="ax-stchips">{buckets.map((r) => (
+          <button type="button" key={r.status} className={'ax-stchip' + (from === r.status ? ' on' : '')} disabled={!r.movable} onClick={() => pickFrom(r.status)} style={{ '--c': ST_COLOR[r.status] }}>
+            <i /><b>{r.status}</b><small>{r.quantity}{loanOf[r.status] ? ` · ${loanOf[r.status]} on loan` : ''}</small></button>))}</div>
+        <div className="ax-lbl">and mark them</div>
+        <div className="ax-stchips">{statuses.filter((x) => x !== from).map((x) => (
+          <button type="button" key={x} className={'ax-stchip' + (to === x ? ' on' : '')} onClick={() => setTo(x)} style={{ '--c': ST_COLOR[x] }}>
+            <i /><b>{x}</b><small>{STATUS_HINT[x] || ''}</small></button>))}</div>
+        <div className="ax-lbl">How many?</div>
+        <div className="ax-qty">
+          <button type="button" onClick={() => setQty(String(Math.max(1, n - 1)))} aria-label="One less"><i className="fas fa-minus" /></button>
+          <input type="number" inputMode="numeric" min="1" max={src.movable} value={qty} onChange={(e) => setQty(e.target.value)} aria-label="Quantity" />
+          <button type="button" onClick={() => setQty(String(Math.min(src.movable, n + 1)))} aria-label="One more"><i className="fas fa-plus" /></button>
+          <button type="button" className={'rs-chip' + (n === src.movable ? ' on' : '')} onClick={() => setQty(String(src.movable))}>All {src.movable}</button>
+        </div>
+        {loanOf[from] > 0 && <p className="ax-small">{loanOf[from]} {from} unit(s) are out on loan and stay as they are until returned.</p>}
+        <div className="ax-after"><span>After this:</span>{statuses.filter((x) => after[x]).map((x) => <span key={x} style={{ '--c': ST_COLOR[x] }}><i /><b>{after[x]}</b> {x}</span>)}
+          <em>· still {asset.active_quantity} in total</em></div>
+        <label className="sl-f"><span>Note (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder={to === 'Under Repair' ? 'e.g. faulty screens, sent to Slot' : from === 'Under Repair' ? 'e.g. repaired by Slot, invoice 2231' : 'Optional'} /></label>
+        <button type="button" className="rs-btn primary wide" disabled={busy || !n || n > src.movable || from === to} onClick={save}>
+          <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" />Move {n || ''} to {to}</button>
       </div>
-      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. reported faulty screen" /></Field>
-    </Modal>
+    </Sheet>
   );
 }
 

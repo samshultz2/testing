@@ -1729,6 +1729,25 @@ def _effective_section(a):
     return a.section or (a.school_class.section if a.school_class else None)
 
 
+USABLE_STATUSES = ('In Use', 'In Store')
+
+
+def _loan_split(a, on_loan=None):
+    """Which buckets the units currently out on loan come out of. A loan can
+    only be of a usable unit, so it's taken from In Use first, then In Store
+    — the same rule the asset card draws. Returns (breakdown, {status: loaned})."""
+    bd = _breakdown_dict(a)
+    if on_loan is None:
+        on_loan = sum(l.quantity or 0 for l in a.loans if l.is_out) if not a.is_individually_tracked else 0
+    taken, left = {}, on_loan
+    for st in USABLE_STATUSES:
+        t = min(left, bd.get(st, 0))
+        if t:
+            taken[st] = t
+            left -= t
+    return bd, taken
+
+
 def _asset_dict(a):
     _maint_records = a.maintenance_records.all()
     _due_candidates = [m for m in _maint_records if m.next_maintenance_on]
@@ -1748,7 +1767,8 @@ def _asset_dict(a):
         'status_breakdown': a.status_breakdown, 'is_split': a.is_split,
         'active_quantity': a.active_quantity,
         'on_loan_quantity': on_loan_qty,
-        'available_quantity': max(0, (a.active_quantity or 0) - on_loan_qty),
+        # free to lend / use right now: usable (In Use + In Store) minus what's out
+        'available_quantity': max(0, sum(_breakdown_dict(a).get(st, 0) for st in USABLE_STATUSES) - on_loan_qty),
         'annual_depreciation': a.annual_depreciation,
         'accumulated_depreciation': a.accumulated_depreciation,
         'book_value': a.book_value, 'is_disposed': a.is_disposed,
@@ -2455,10 +2475,16 @@ def move_asset_status(asset_id):
         return _err('Choose two different statuses.', url_for('sales.assets'))
     if qty <= 0:
         return _err('Enter how many units to move.', url_for('sales.assets'))
-    current = _breakdown_dict(a)
+    current, loaned = _loan_split(a)
     have = current.get(from_status, 0)
     if qty > have:
         return _err(f'Only {have} unit(s) are currently "{from_status}".', url_for('sales.assets'))
+    # Units out on loan aren't here to be sent for repair / marked lost etc.
+    out = loaned.get(from_status, 0)
+    if out and qty > have - out:
+        return _err(f'{out} of the {have} "{from_status}" unit(s) are out on loan, so at most '
+                    f'{have - out} can be moved. Mark the loan returned first if those are coming back.',
+                    url_for('sales.assets'))
     status_before, qty_before = a.status, a.quantity
     target = dict(current)
     target[from_status] = have - qty
@@ -2521,10 +2547,11 @@ def checkout_asset(asset_id):
         return _err('Enter who this is going to.', url_for('sales.assets'))
     qty = request.form.get('quantity', type=int) or 1
     on_loan = sum(l.quantity or 0 for l in a.loans if l.is_out)
-    available = (a.active_quantity or 0) - on_loan
+    usable = sum(_breakdown_dict(a).get(st, 0) for st in USABLE_STATUSES)
+    available = max(0, usable - on_loan)
     if qty <= 0 or qty > available:
-        return _err(f'Only {available} unit(s) are available to check out '
-                   f'({on_loan} already out).', url_for('sales.assets'))
+        return _err(f'Only {available} unit(s) are available to lend '
+                   f'({on_loan} already out; units under repair or lost can\'t be lent).', url_for('sales.assets'))
     purpose = (request.form.get('purpose') or '').strip() or None
     loan = AssetLoan(
         asset_id=a.id, branch_id=a.branch_id, borrower=borrower, purpose=purpose,
