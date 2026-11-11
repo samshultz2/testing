@@ -293,54 +293,225 @@ def activate_term(term_id):
 @academics_bp.route('/setup')
 @login_required
 def term_setup():
-    """Guided checklist for setting up a term, with each step's status + a link."""
+    """Term readiness: a grouped checklist (calendar, classes, teaching, fees)
+    where each step shows its status, why it matters, and a one-tap fix —
+    many of them done in place (activate, set dates, generate weeks, copy
+    last term's classes / subjects / fees)."""
+    from utils.access_control import can_write_module, can_access_module
+    from models import ClassSubject, SchoolSettings
     term_id = request.args.get('term_id', type=int)
     active_session = AcademicSession.query.filter_by(is_active=True).first()
     term = db.session.get(Term, term_id) if term_id else get_active_term()
     terms = Term.query.join(AcademicSession).order_by(
-        AcademicSession.name.desc(), Term.term_number).all()
+        AcademicSession.name.desc(), Term.term_number.desc()).all()
+    # Chronological order → the term just before this one is the copy source.
+    chrono = sorted(terms, key=lambda t: (t.session.name if t.session else '', t.term_number))
+    prev = None
+    if term and term in chrono:
+        i = chrono.index(term)
+        prev = chrono[i - 1] if i > 0 else None
 
-    weeks = assignments = enrolled = holidays = 0
+    can_acad = can_write_module('academics')
+    can_subj = can_write_module('results')
+    show_fees = can_access_module('finance')
+    can_fin = show_fees and can_write_module('finance')
+    today = date.today()
+
+    def link(label, url):
+        return {'kind': 'link', 'label': label, 'url': url}
+
+    def post(label, url, fields=None, confirm=None, icon=None):
+        return {'kind': 'post', 'label': label, 'url': url, 'fields': fields or {},
+                'confirm': confirm, 'icon': icon}
+
+    steps, info = [], {}
     if term:
-        weeks = Week.query.filter_by(term_id=term.id).count()
-        aids = [a.id for a in ClassArmAssignment.query.filter_by(term_id=term.id).all()]
-        assignments = len(aids)
-        holidays = Holiday.query.filter_by(term_id=term.id).count()
+        tid = term.id
+        weeks = Week.query.filter_by(term_id=tid).count()
+        expected_weeks = len(get_weeks_in_range(term.start_date, term.end_date)) \
+            if term.start_date and term.end_date else 0
+        holidays = Holiday.query.filter_by(term_id=tid).count()
+        asg = ClassArmAssignment.query.filter_by(term_id=tid).all()
+        aids = [a.id for a in asg] or [-1]
+        no_teacher = [a.display_name for a in asg if not (a.form_teacher_name or '').strip()]
         enrolled = StudentEnrollment.query.filter(
-            StudentEnrollment.class_arm_assignment_id.in_(aids or [-1]),
+            StudentEnrollment.class_arm_assignment_id.in_(aids),
             StudentEnrollment.is_active == True).count()
+        active_students = Student.query.filter_by(is_active=True).count() \
+            if hasattr(Student, 'is_active') else Student.query.count()
+        empty_classes = [a.display_name for a in asg
+                         if a.enrollments.filter_by(is_active=True).count() == 0]
+        class_ids = {a.class_id for a in asg}
+        cs = ClassSubject.query.filter_by(term_id=tid, is_active=True).all()
+        cls_with_subj = {c.class_id for c in cs}
+        no_subj = sorted({a.school_class.name for a in asg
+                          if a.class_id not in cls_with_subj and a.school_class})
+        no_subj_teacher = sum(1 for c in cs if not (c.teacher_name or '').strip())
+        prev_asg = ClassArmAssignment.query.filter_by(term_id=prev.id).count() if prev else 0
+        prev_cs = ClassSubject.query.filter_by(term_id=prev.id, is_active=True).count() if prev else 0
+        term_url = url_for('academics.view_term', term_id=tid)
+        asg_url = url_for('academics.assignments_list', term_id=tid)
+        subj_url = url_for('subjects.class_subjects_list', term_id=tid)
 
-    term_url = (url_for('academics.view_term', term_id=term.id) if term
-                else url_for('academics.terms_list'))
-    steps = [
-        {'title': 'Active academic session', 'done': active_session is not None,
-         'detail': active_session.name if active_session else 'None active yet',
-         'url': url_for('academics.sessions_list'), 'cta': 'Sessions'},
-        {'title': 'Active term', 'done': bool(term and term.is_active),
-         'detail': term.full_name if term else 'None selected',
-         'url': url_for('academics.terms_list'), 'cta': 'Terms'},
-        {'title': 'Weeks created', 'done': weeks > 0,
-         'detail': f'{weeks} week(s)', 'url': term_url, 'cta': 'Add weeks'},
-        {'title': 'Holidays & breaks', 'optional': True, 'done': True,
-         'detail': f'{holidays} marked (optional)', 'url': term_url, 'cta': 'Manage'},
-        {'title': 'Classes set up for the term', 'done': assignments > 0,
-         'detail': f'{assignments} class-arm(s)',
-         'url': url_for('academics.assignments_list'), 'cta': 'Class assignments'},
-        {'title': 'Students enrolled', 'done': enrolled > 0,
-         'detail': f'{enrolled} enrolled',
-         'url': url_for('academics.assignments_list'), 'cta': 'Enrol / Import'},
-    ]
+        # ---- Calendar ----
+        steps.append({'key': 'session', 'group': 'calendar', 'icon': 'fa-calendar',
+                      'title': 'Academic session is active', 'done': active_session is not None,
+                      'detail': active_session.name if active_session else 'No session is active',
+                      'why': 'Every term, class and result belongs to a session.',
+                      'action': None if active_session else (link('Open sessions', url_for('academics.sessions_list')) if can_acad else None)})
+        steps.append({'key': 'active', 'group': 'calendar', 'icon': 'fa-bolt',
+                      'title': 'Term is the active term', 'done': bool(term.is_active),
+                      'detail': 'Active now' if term.is_active else 'Not active — attendance and score entry use the active term',
+                      'why': 'Teachers mark attendance and enter scores for the active term.',
+                      'action': None if term.is_active or not can_acad else post(
+                          'Make active', url_for('academics.activate_term', term_id=tid),
+                          confirm=f'Make {term.full_name} the active term for everyone?', icon='fa-bolt')})
+        has_dates = bool(term.start_date and term.end_date)
+        steps.append({'key': 'dates', 'group': 'calendar', 'icon': 'fa-calendar-days',
+                      'title': 'Start and end dates set', 'done': has_dates,
+                      'detail': f'{_fd(term.start_date)} – {_fd(term.end_date)}' if has_dates else 'Dates not set',
+                      'why': 'Dates drive the weeks, attendance days and the term progress bar.',
+                      'action': {'kind': 'dates', 'label': 'Change dates' if has_dates else 'Set dates',
+                                 'url': url_for('academics.edit_term', term_id=tid)} if can_acad else None})
+        steps.append({'key': 'weeks', 'group': 'calendar', 'icon': 'fa-table-columns',
+                      'title': 'School weeks created', 'done': weeks > 0,
+                      'detail': (f'{weeks} weeks' + (f' (dates suggest {expected_weeks})' if expected_weeks and expected_weeks != weeks else ''))
+                                if weeks else ('No weeks yet' if has_dates else 'Set the dates first'),
+                      'warn': bool(weeks and expected_weeks and expected_weeks != weeks),
+                      'why': 'Weekly attendance, lesson notes and timetables are organised by week.',
+                      'action': (post('Regenerate weeks' if weeks else 'Generate weeks',
+                                      url_for('academics.generate_weeks', term_id=tid),
+                                      confirm=('This replaces the existing weeks with ones built from the term dates.' if weeks else None),
+                                      icon='fa-wand-magic-sparkles')
+                                 if can_acad and has_dates and (not weeks or expected_weeks != weeks) else
+                                 (link('View weeks', term_url) if weeks else None))})
+        steps.append({'key': 'holidays', 'group': 'calendar', 'icon': 'fa-umbrella-beach', 'optional': True,
+                      'title': 'Holidays and mid-term break', 'done': holidays > 0,
+                      'detail': f'{holidays} marked' if holidays else 'None marked',
+                      'why': 'Holidays are skipped when counting school days and attendance.',
+                      'action': link('Add holidays' if not holidays else 'Manage', term_url) if can_acad else link('View', term_url)})
+
+        # ---- Classes & students ----
+        copy_cls = post(f'Copy from {prev.full_name}', url_for('academics.copy_term_setup'),
+                        {'from_term_id': prev.id, 'to_term_id': tid, 'copy_enrollments': 'on'},
+                        confirm=f'Copy the classes and the students in them from {prev.full_name}?', icon='fa-copy') \
+            if prev and prev_asg and can_acad else None
+        steps.append({'key': 'classes', 'group': 'classes', 'icon': 'fa-school',
+                      'title': 'Classes opened for the term', 'done': len(asg) > 0,
+                      'detail': f'{len(asg)} class{"es" if len(asg) != 1 else ""}' if asg else 'No classes yet',
+                      'why': 'Students, subjects and results are attached to a class for each term.',
+                      'action': (copy_cls if not asg and copy_cls else link('Open class setup' if asg else 'Set up classes', asg_url))})
+        steps.append({'key': 'students', 'group': 'classes', 'icon': 'fa-user-graduate',
+                      'title': 'Students placed in classes', 'done': enrolled > 0,
+                      'detail': (f'{enrolled} of {active_students} students placed' if asg else 'Open classes first'),
+                      'warn': bool(enrolled and enrolled < active_students),
+                      'note': (f'{active_students - enrolled} student{"s" if active_students - enrolled != 1 else ""} not in a class'
+                               if enrolled and enrolled < active_students else
+                               (f'Empty: {", ".join(empty_classes[:4])}{"…" if len(empty_classes) > 4 else ""}' if empty_classes and enrolled else None)),
+                      'why': 'Only placed students appear on attendance registers and score sheets.',
+                      'action': (copy_cls if asg and not enrolled and copy_cls else link('Place students', asg_url)) if asg else None})
+        steps.append({'key': 'form_teachers', 'group': 'classes', 'icon': 'fa-chalkboard-user', 'optional': True,
+                      'title': 'Form teachers assigned', 'done': bool(asg) and not no_teacher,
+                      'detail': (f'{len(asg) - len(no_teacher)} of {len(asg)} classes' if asg else 'Open classes first'),
+                      'note': (f'Missing: {", ".join(no_teacher[:4])}{"…" if len(no_teacher) > 4 else ""}' if asg and no_teacher else None),
+                      'why': 'Form teachers write report-card comments and mark daily attendance.',
+                      'action': link('Assign', asg_url) if asg else None})
+
+        # ---- Teaching & results ----
+        copy_subj = post(f'Copy from {prev.full_name}', url_for('subjects.copy_class_subjects'),
+                         {'from_term_id': prev.id, 'to_term_id': tid},
+                         confirm=f'Copy every class’s subjects and subject teachers from {prev.full_name}?', icon='fa-copy') \
+            if prev and prev_cs and can_subj else None
+        steps.append({'key': 'subjects', 'group': 'teaching', 'icon': 'fa-book',
+                      'title': 'Subjects set for each class', 'done': bool(asg) and not no_subj and bool(cs),
+                      'detail': (f'{len(class_ids) - len(no_subj)} of {len(class_ids)} classes have subjects' if asg else 'Open classes first'),
+                      'note': (f'No subjects: {", ".join(no_subj[:4])}{"…" if len(no_subj) > 4 else ""}' if asg and no_subj and cs else None),
+                      'why': 'Score sheets, broadsheets and report cards list the class’s subjects.',
+                      'action': (copy_subj if not cs and copy_subj else link('Class subjects', subj_url)) if asg else None})
+        steps.append({'key': 'subject_teachers', 'group': 'teaching', 'icon': 'fa-person-chalkboard', 'optional': True,
+                      'title': 'Subject teachers named', 'done': bool(cs) and no_subj_teacher == 0,
+                      'detail': (f'{len(cs) - no_subj_teacher} of {len(cs)} class subjects' if cs else 'Set subjects first'),
+                      'why': 'Teachers see only their own subjects when entering scores.',
+                      'action': link('Assign teachers', subj_url) if cs else None})
+
+        # ---- Fees ----
+        if show_fees:
+            from models import FeeStructure
+            fs = FeeStructure.query.filter_by(term_id=tid, is_active=True).all()
+            fee_cls = {f.class_id for f in fs}
+            no_fee = sorted({a.school_class.name for a in asg if a.class_id not in fee_cls and a.school_class})
+            prev_fs = FeeStructure.query.filter_by(term_id=prev.id, is_active=True).count() if prev else 0
+            fin_url = url_for('finance.structure', term_id=tid)
+            copy_fee = post(f'Copy from {prev.full_name}', url_for('finance.copy_structure'),
+                            {'from_term_id': prev.id, 'to_term_id': tid},
+                            confirm=f'Copy all school fees from {prev.full_name}? You can adjust amounts afterwards.', icon='fa-copy') \
+                if prev and prev_fs and can_fin else None
+            steps.append({'key': 'fees', 'group': 'fees', 'icon': 'fa-money-bill-wave', 'optional': True,
+                          'title': 'School fees set', 'done': bool(fs) and not no_fee,
+                          'detail': (f'{len(class_ids) - len(no_fee)} of {len(class_ids)} classes have fees' if asg else
+                                     (f'{len(fee_cls)} classes have fees' if fs else 'No fees set')),
+                          'note': (f'No fees: {", ".join(no_fee[:4])}{"…" if len(no_fee) > 4 else ""}' if fs and no_fee else None),
+                          'why': 'Bills, balances and defaulter lists come from the fee structure.',
+                          'action': copy_fee if not fs and copy_fee else link('Fee structure', fin_url)})
+
+        # ---- Term timeline ----
+        if has_dates:
+            total = max(1, (term.end_date - term.start_date).days)
+            gone = min(max((today - term.start_date).days, 0), total)
+            cur_week = Week.query.filter(Week.term_id == tid, Week.start_date <= today,
+                                         Week.end_date >= today - timedelta(days=2)).first()
+            info = {'start': _fd(term.start_date), 'end': _fd(term.end_date),
+                    'progress': round(gone / total * 100),
+                    'state': 'upcoming' if today < term.start_date else ('ended' if today > term.end_date else 'running'),
+                    'days_left': max((term.end_date - today).days, 0),
+                    'days_to_start': max((term.start_date - today).days, 0),
+                    'week': cur_week.week_number if cur_week else None, 'weeks': weeks}
+        info.update({'classes': len(asg), 'students': enrolled, 'active_students': active_students,
+                     'subjects': len(cs), 'holidays': holidays})
+
+        by = {s['key']: s for s in steps}
+        ok = lambda *ks: all(by[k]['done'] for k in ks if k in by)
+        unlocks = [
+            {'label': 'Attendance', 'icon': 'fa-user-check', 'ready': ok('active', 'weeks', 'classes', 'students'),
+             'needs': 'active term, weeks and placed students'},
+            {'label': 'Score entry & CBT', 'icon': 'fa-pen-to-square', 'ready': ok('active', 'classes', 'students', 'subjects'),
+             'needs': 'active term, placed students and class subjects'},
+            {'label': 'Report cards', 'icon': 'fa-file-lines', 'ready': ok('classes', 'students', 'subjects', 'form_teachers'),
+             'needs': 'subjects and form teachers'},
+        ]
+        if show_fees:
+            unlocks.append({'label': 'Fee billing', 'icon': 'fa-wallet', 'ready': ok('classes', 'students', 'fees'),
+                            'needs': 'placed students and a fee structure'})
+    else:
+        unlocks = []
+
     required = [s for s in steps if not s.get('optional')]
     done = sum(1 for s in required if s['done'])
-    from utils.access_control import can_write_module
     return _render({
         'page': 'setup',
-        'steps': [{'title': s['title'], 'done': bool(s['done']), 'optional': bool(s.get('optional')),
-                   'detail': s['detail'], 'url': s['url'], 'cta': s['cta']} for s in steps],
+        'term': {'id': term.id, 'full_name': term.full_name, 'is_active': bool(term.is_active),
+                 'session': term.session.name if term.session else ''} if term else None,
+        'prev_term': prev.full_name if prev else None,
+        'info': info, 'unlocks': unlocks,
+        'steps': [{**s, 'done': bool(s['done']), 'optional': bool(s.get('optional')),
+                   'warn': bool(s.get('warn'))} for s in steps],
+        'groups': [g for g in [
+            {'key': 'calendar', 'label': 'Term calendar', 'icon': 'fa-calendar-days'},
+            {'key': 'classes', 'label': 'Classes & students', 'icon': 'fa-school'},
+            {'key': 'teaching', 'label': 'Subjects & teachers', 'icon': 'fa-book'},
+            {'key': 'fees', 'label': 'Fees', 'icon': 'fa-wallet'},
+        ] if any(s['group'] == g['key'] for s in steps)],
         'done': done, 'required': len(required),
-        'term_id': term.id if term else '', 'can_write': can_write_module('academics'),
-        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'optional_done': sum(1 for s in steps if s.get('optional') and s['done']),
+        'optional_total': sum(1 for s in steps if s.get('optional')),
+        'term_id': term.id if term else '', 'can_write': can_acad,
+        'term_dates': {'start_date': term.start_date.isoformat() if term and term.start_date else '',
+                       'end_date': term.end_date.isoformat() if term and term.end_date else ''},
+        'terms': [{'id': t.id, 'full_name': t.full_name, 'is_active': bool(t.is_active)} for t in terms],
         'self_url': url_for('academics.term_setup'),
+        'urls': {'terms': url_for('academics.terms_list'), 'add_term': url_for('academics.add_term'),
+                 'sessions': url_for('academics.sessions_list'),
+                 'assignments': url_for('academics.assignments_list')},
     })
 
 

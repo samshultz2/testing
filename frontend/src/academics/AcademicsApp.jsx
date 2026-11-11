@@ -4,6 +4,7 @@ import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import TermSetup from './TermSetup';
 
 // ---- Sessions list ---------------------------------------------------------
 function Sessions({ d, notify }) {
@@ -189,40 +190,6 @@ function EditTerm({ d, notify }) {
 }
 
 // ---- Term setup checklist --------------------------------------------------
-function Setup({ d }) {
-  const nav = useNav();
-  return (
-    <>
-      <div className="page-header">
-        <div><h1><i aria-hidden="true" className="fas fa-list-check" /> Term Setup</h1><p className="text-muted text-sm">A quick checklist to get a term ready for attendance, results and CBT.</p></div>
-        {d.terms.length > 0 && (
-          <form className="filter-form"><select className="form-control" value={d.term_id} onChange={(e) => navParams(nav.go, d.self_url, { term_id: e.target.value })}>
-            {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></form>)}
-      </div>
-      <div className="card"><div className="card-body">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }}>
-          <div style={{ flex: 1, height: 10, background: 'var(--bg-subtle,#eef2f7)', borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: (d.required ? d.done / d.required * 100 : 0) + '%', background: '#10b981' }} /></div>
-          <strong>{d.done} / {d.required} done</strong>
-        </div>
-        {!d.can_write && <p className="text-muted text-sm" style={{ margin: '-0.5rem 0 1rem' }}><i aria-hidden="true" className="fas fa-eye" /> View-only — you can see setup progress but not make changes.</p>}
-        <div className="data-cards">{d.steps.map((s, i) => {
-          const ok = s.done && !s.optional;
-          return (
-            <div className="data-card" key={i} style={{ borderLeft: `4px solid ${s.done ? '#10b981' : s.optional ? 'var(--text-muted)' : '#f59e0b'}` }}>
-              <div className="data-card-header"><div className="data-card-title">
-                <i aria-hidden="true" className={'fas ' + (ok ? 'fa-circle-check text-success' : s.optional ? 'fa-circle-dot text-muted' : 'fa-circle-exclamation text-warning')} /> {s.title}{s.optional && <span className="text-muted text-sm"> (optional)</span>}
-              </div></div>
-              <div className="data-card-row"><span className="data-card-label">Status</span><span>{s.detail}</span></div>
-              {d.can_write && <div className="data-card-actions"><a href={s.url} className={'btn btn-' + (ok ? 'secondary' : 'primary') + ' btn-sm w-100'}><i aria-hidden="true" className="fas fa-arrow-right" /> {s.cta}</a></div>}
-            </div>);
-        })}</div>
-        {d.done === d.required && <div className="alert alert-success" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-check" /> This term is fully set up. Teachers can mark attendance and enter results.</div>}
-      </div></div>
-    </>
-  );
-}
-
 // ---- View term (weeks + holidays) ------------------------------------------
 function ViewTerm({ d, notify }) {
   const nav = useNav();
@@ -1034,7 +1001,7 @@ function CopyTermSetup({ d, notify }) {
 }
 
 const SCREENS = { sessions: Sessions, add_session: SessionForm, edit_session: SessionForm,
-  terms: Terms, add_term: AddTerm, edit_term: EditTerm, setup: Setup, view_term: ViewTerm,
+  terms: Terms, add_term: AddTerm, edit_term: EditTerm, setup: TermSetup, view_term: ViewTerm,
   classes: Classes, edit_class: ClassForm, arms: Arms, edit_arm: ArmForm, assignments: Assignments, view_assignment: ViewAssignment,
   copy_term_setup: CopyTermSetup };
 
