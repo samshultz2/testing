@@ -545,7 +545,15 @@ def profile():
 
     from utils.themes import THEMES as _T
     from utils.self_service import profile_self_service
-    ss = profile_self_service(user)   # own data per module, each gated by its self-scope capability
+    # Attendance filter: ?ay=<year>|all & am=<1-12>|'' (whole year) & ap=<page>.
+    # No filter in the URL → this month.
+    ay = request.args.get('ay')
+    am = request.args.get('am') if 'am' in request.args else None
+    if ay is None and am is None:
+        ay = am = None
+    elif am is None:
+        am = ''
+    ss = profile_self_service(user, ay, am, request.args.get('ap', 1))   # own data per module, each gated by its self-scope capability
     return render_template('auth/profile.html', user=user, staff=staff,
                            themes=[(t['key'], t['label']) for t in _T],
                            hr_self=ss['hr'], lib_self=ss['library'], sales_self=ss['sales'],

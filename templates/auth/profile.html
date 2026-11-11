@@ -3,141 +3,269 @@
 {% block breadcrumb %}<span>My profile</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-  .prof-grid{display:grid;grid-template-columns:1fr;gap:1rem}
-  @media(min-width:900px){.prof-grid{grid-template-columns:1.4fr 1fr}}
-  .ro-list{display:grid;grid-template-columns:1fr 1fr;gap:.6rem .9rem}
-  .ro-list .k{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
-  .ro-list .v{font-weight:600}
-  .prof-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
+.pf{max-width:1200px;margin:0 auto}
+.pf-hero{display:flex;align-items:center;gap:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--rs-r);padding:1rem 1.2rem}
+.pf-av{width:64px;height:64px;border-radius:20px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.35rem;font-family:'Space Grotesk',sans-serif;background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));color:var(--primary)}
+.pf-hero-t{flex:1;min-width:0}
+.pf-hero-t h1{margin:0;font-size:1.4rem;line-height:1.2}
+.pf-hero-t p{margin:.2rem 0 0;color:var(--text-muted);font-size:.88rem}
+.pf-chips{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.45rem}
+.pf-chips span{font-size:.74rem;font-weight:700;border-radius:999px;padding:.18rem .6rem;background:var(--gray-100);color:var(--text-secondary)}
+.pf-hero-a{display:flex;gap:.45rem;flex-wrap:wrap;justify-content:flex-end}
+.pf-nav{position:sticky;top:calc(var(--header-height,64px) + 6px);z-index:20}
+.pf-nav a{flex:1 0 auto;cursor:pointer}
+.pf-panel{display:none;flex-direction:column;gap:.9rem}
+.pf-panel.on{display:flex}
+.pf-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:.9rem;align-items:start}
+.pf-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}
+.pf-form .full{grid-column:1/-1}
+.pf-f{display:flex;flex-direction:column;gap:.3rem}
+.pf-f>span{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.pf-f input,.pf-f select{height:46px;border:1.5px solid var(--border-color);border-radius:12px;padding:0 .85rem;font:inherit;background:var(--bg-card);color:var(--text-primary);min-width:0}
+.pf-f input:focus,.pf-f select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 12%,transparent)}
+.pf-ro{display:flex;flex-direction:column}
+.pf-ro div{display:flex;justify-content:space-between;gap:1rem;padding:.6rem 0;border-bottom:1px solid var(--border-light,var(--border-color));font-size:.9rem}
+.pf-ro div:last-child{border-bottom:0}
+.pf-ro span{color:var(--text-muted)}
+.pf-links{display:flex;flex-direction:column}
+.pf-links a{display:flex;align-items:center;gap:.75rem;padding:.75rem .2rem;border-bottom:1px solid var(--border-light,var(--border-color));color:inherit;text-decoration:none;font-weight:600;font-size:.92rem}
+.pf-links a:last-child{border-bottom:0}
+.pf-links a>i:first-child{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--primary);flex:none}
+.pf-links a small{display:block;font-weight:500;color:var(--text-muted);font-size:.78rem}
+.pf-links a .fa-chevron-right{margin-left:auto;color:var(--text-muted);font-size:.72rem}
+.pf-today{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.pf-today-ic{width:52px;height:52px;border-radius:16px;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.2rem;background:var(--gray-100);color:var(--text-muted)}
+.pf-today-ic.in{background:color-mix(in srgb,var(--success) 13%,var(--bg-card));color:var(--success)}
+.pf-today-ic.late{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
+.pf-today-t{flex:1;min-width:180px}
+.pf-today-t b{display:block;font-size:1.05rem}
+.pf-today-t span{font-size:.85rem;color:var(--text-muted)}
+.pf-today form{margin:0}
+.pf-today .rs-btn{height:48px;padding:0 1.3rem}
+.pf-filt{display:flex;flex-direction:column;gap:.55rem}
+.pf-filt-row{display:flex;gap:.4rem;overflow-x:auto;scrollbar-width:none;padding-bottom:.1rem}
+.pf-filt-row::-webkit-scrollbar{display:none}
+.pf-filt-row a{flex:none;text-decoration:none}
+.pf-filt-row .rs-chip.dis{opacity:.4;pointer-events:none}
+.pf-lbl{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.pf-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem}
+.pf-tiles>div{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:.65rem .8rem;display:flex;flex-direction:column;min-width:0}
+.pf-tiles span{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.pf-tiles b{font-size:1.3rem;font-family:'Space Grotesk',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-tiles small{font-size:.74rem;color:var(--text-muted)}
+.pf-tiles .bad b{color:var(--danger)}.pf-tiles .mid b{color:var(--warning)}.pf-tiles .good b{color:var(--success)}
+.pf-tiles .hero{background:color-mix(in srgb,var(--danger) 6%,var(--bg-card));border-color:color-mix(in srgb,var(--danger) 30%,var(--border-color))}
+.pf-att{display:flex;flex-direction:column}
+.pf-att-r{display:flex;align-items:center;gap:.8rem;padding:.65rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.pf-att-r:last-child{border-bottom:0}
+.pf-date{width:46px;flex:none;text-align:center;border-radius:12px;background:var(--gray-100);padding:.3rem 0;line-height:1.1}
+.pf-date b{display:block;font-size:1.05rem;font-family:'Space Grotesk',sans-serif}
+.pf-date small{font-size:.64rem;font-weight:800;text-transform:uppercase;color:var(--text-muted)}
+.pf-att-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:.1rem}
+.pf-att-t b{font-size:.9rem}
+.pf-att-t span{font-size:.78rem;color:var(--text-muted)}
+.pf-st{font-size:.72rem;font-weight:800;border-radius:999px;padding:.2rem .6rem;white-space:nowrap}
+.pf-st.Present{background:color-mix(in srgb,var(--success) 13%,var(--bg-card));color:var(--success)}
+.pf-st.Late{background:color-mix(in srgb,var(--warning) 15%,var(--bg-card));color:color-mix(in srgb,var(--warning) 75%,#000)}
+.pf-st.Absent{background:color-mix(in srgb,var(--danger) 11%,var(--bg-card));color:var(--danger)}
+.pf-st.Excused{background:var(--gray-100);color:var(--text-secondary)}
+.pf-amt{text-align:right;min-width:86px;font-variant-numeric:tabular-nums}
+.pf-amt b{display:block;font-size:.9rem}
+.pf-amt small{font-size:.74rem;color:var(--text-muted)}
+.pf-pager{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.7rem 1.1rem;border-top:1px solid var(--border-color);font-size:.84rem;color:var(--text-muted)}
+.pf-pager a,.pf-pager span.rs-btn{min-width:44px}
+.pf-pager .dis{opacity:.4;pointer-events:none}
+.pf .data-table{width:100%}
+.pf .rs-card .table-wrap{overflow-x:auto;margin:0 -1.1rem;padding:0 1.1rem}
+.pf-save .rs-bar-t small{white-space:normal}
+@media (max-width:900px){.pf-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:759px){
+  .pf-hero{flex-wrap:wrap;padding:.9rem}
+  .pf-av{width:54px;height:54px;font-size:1.1rem;border-radius:17px}
+  .pf-hero-a{width:100%;justify-content:stretch}
+  .pf-hero-a .rs-btn{flex:1}
+  .pf-form{grid-template-columns:minmax(0,1fr)}
+  .pf-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pf-att-r{padding:.6rem .8rem;gap:.6rem}
+  .pf-att-r .pf-io{display:none}
+  .pf-nav a span{font-size:.8rem}
+  .pf .pf-save{position:sticky;bottom:calc(68px + env(safe-area-inset-bottom,0px) + 8px);z-index:30}
+}
+.pf-save{position:sticky;bottom:12px;z-index:30}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <div><h1>My profile</h1><p class="text-muted text-sm">Update your own details. Role, permissions, branch and pay are managed by an administrator.</p></div>
-</div>
-
-<form method="POST" action="{{ url_for('auth.profile') }}">
-  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-  <div class="prof-grid">
-    <div>
-      <div class="card mb-3">
-        <div class="card-header"><h3><i class="fas fa-id-card"></i> Basic details</h3></div>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Full name</label>
-              <input type="text" name="full_name" class="form-control" value="{{ user.full_name or '' }}" autocomplete="name"></div>
-            <div class="form-group"><label class="form-label">Phone</label>
-              <input type="tel" name="phone" class="form-control" value="{{ user.phone or '' }}" autocomplete="tel"></div>
-          </div>
-          <div class="form-group"><label class="form-label">Email</label>
-            <input type="email" name="email" class="form-control" value="{{ user.email or '' }}" autocomplete="email"></div>
-          <div class="form-group"><label class="form-label">Interface theme</label>
-            <select name="theme" class="form-control">
-              {% for key, label in themes %}<option value="{{ key }}" {% if user.theme == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
-            </select></div>
-        </div>
-      </div>
-
-      {% if staff %}
-      <div class="card mb-3">
-        <div class="card-header"><h3><i class="fas fa-address-book"></i> Emergency &amp; personal (your HR record)</h3></div>
-        <div class="card-body">
-          <div class="form-group"><label class="form-label">Home address</label>
-            <input type="text" name="address" class="form-control" value="{{ staff.address or '' }}"></div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Next of kin — name</label>
-              <input type="text" name="nok_name" class="form-control" value="{{ staff.nok_name or '' }}"></div>
-            <div class="form-group"><label class="form-label">Next of kin — phone</label>
-              <input type="tel" name="nok_phone" class="form-control" value="{{ staff.nok_phone or '' }}"></div>
-            <div class="form-group"><label class="form-label">Relationship</label>
-              <input type="text" name="nok_relationship" class="form-control" value="{{ staff.nok_relationship or '' }}"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-group"><label class="form-label">Emergency contact — name</label>
-              <input type="text" name="emergency_name" class="form-control" value="{{ staff.emergency_name or '' }}"></div>
-            <div class="form-group"><label class="form-label">Emergency contact — phone</label>
-              <input type="tel" name="emergency_phone" class="form-control" value="{{ staff.emergency_phone or '' }}"></div>
-            <div class="form-group"><label class="form-label">Blood group</label>
-              <input type="text" name="blood_group" class="form-control" value="{{ staff.blood_group or '' }}" maxlength="6"></div>
-          </div>
-          <div class="form-group"><label class="form-label">Medical notes <span class="text-muted">(confidential)</span></label>
-            <input type="text" name="medical_notes" class="form-control" value="{{ staff.medical_notes or '' }}" placeholder="Allergies, conditions"></div>
-        </div>
-      </div>
-      {% endif %}
-
-      <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save changes</button>
-    </div>
-
-    <div>
-      <div class="card mb-3">
-        <div class="card-header"><h3><i class="fas fa-user-shield"></i> Account</h3></div>
-        <div class="card-body">
-          <div class="ro-list">
-            <div><div class="k">Username</div><div class="v">{{ user.username }}</div></div>
-            <div><div class="k">Role</div><div class="v">{{ (user.role or '').replace('_',' ').title() }}</div></div>
-            {% if staff %}<div><div class="k">Staff ID</div><div class="v">{{ staff.staff_id }}</div></div>
-            <div><div class="k">Designation</div><div class="v">{{ staff.designation or '—' }}</div></div>{% endif %}
-          </div>
-          <div class="prof-actions">
-            <a href="{{ url_for('auth.change_password') }}" class="btn btn-secondary btn-sm"><i class="fas fa-key"></i> Change password</a>
-            <a href="{{ url_for('auth.security_settings') }}" class="btn btn-secondary btn-sm"><i class="fas fa-shield-halved"></i> Security &amp; 2FA</a>
-            <a href="{{ url_for('auth.sessions') }}" class="btn btn-secondary btn-sm"><i class="fas fa-laptop"></i> Active devices</a>
-          </div>
-          <p class="text-muted text-sm" style="margin-top:.6rem">Need your role, branch or salary changed? Contact an administrator.</p>
-        </div>
+{% set nm = user.full_name or user.username %}
+{% set ini = (nm.split()|map('first')|list)[:2]|join|upper %}
+{% set A = hr_self.att if hr_self else none %}
+{% set money = '₦{:,.2f}' %}
+<div class="rs pf">
+  <section class="pf-hero">
+    <span class="pf-av" aria-hidden="true">{{ ini }}</span>
+    <div class="pf-hero-t">
+      <h1>{{ nm }}</h1>
+      <p>@{{ user.username }}{% if user.email %} · {{ user.email }}{% endif %}</p>
+      <div class="pf-chips">
+        <span>{{ (user.role or '').replace('_',' ').title() }}</span>
+        {% if staff %}{% if staff.staff_id %}<span>{{ staff.staff_id }}</span>{% endif %}{% if staff.designation %}<span>{{ staff.designation }}</span>{% endif %}{% endif %}
       </div>
     </div>
+    <div class="pf-hero-a">
+      <a href="{{ url_for('auth.security_settings') }}" class="rs-btn ghost"><i class="fas fa-shield-halved" aria-hidden="true"></i><span>Security</span></a>
+      <a href="{{ url_for('auth.change_password') }}" class="rs-btn ghost"><i class="fas fa-key" aria-hidden="true"></i><span>Password</span></a>
+    </div>
+  </section>
+
+  <nav class="sl-nav pf-nav" aria-label="My account" id="pfNav">
+    <a data-tab="profile" class="on"><i class="fas fa-id-card" aria-hidden="true"></i><span>Profile</span></a>
+    {% if hr_self and hr_self.att %}<a data-tab="attendance"><i class="fas fa-user-clock" aria-hidden="true"></i><span>Attendance</span></a>{% endif %}
+    {% if hr_self and (hr_self.payslips is not none or hr_self.deductions is not none or (hr_self.contributions and hr_self.contributions['items'])) %}<a data-tab="pay"><i class="fas fa-money-check-dollar" aria-hidden="true"></i><span>Pay</span></a>{% endif %}
+    {% if hr_self and (hr_self.leave is not none or hr_self.loans is not none or hr_self.documents is not none) %}<a data-tab="hr"><i class="fas fa-briefcase" aria-hidden="true"></i><span>Leave &amp; HR</span></a>{% endif %}
+    {% if lib_self or sales_self %}<a data-tab="more"><i class="fas fa-layer-group" aria-hidden="true"></i><span>{{ 'Library' if lib_self and not sales_self else ('My sales' if sales_self and not lib_self else 'Library & sales') }}</span></a>{% endif %}
+  </nav>
+
+  {# ───────────── Profile ───────────── #}
+  <div class="pf-panel on" data-panel="profile">
+    <form method="POST" action="{{ url_for('auth.profile') }}" id="pfForm">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="pf-grid">
+        <div style="display:flex;flex-direction:column;gap:.9rem">
+          <section class="rs-card">
+            <div class="rs-card-h"><h3><i class="fas fa-id-card" aria-hidden="true"></i>Your details</h3></div>
+            <div class="pf-form">
+              <label class="pf-f full"><span>Full name</span><input type="text" name="full_name" value="{{ user.full_name or '' }}" autocomplete="name"></label>
+              <label class="pf-f"><span>Phone</span><input type="tel" name="phone" value="{{ user.phone or '' }}" autocomplete="tel" inputmode="tel"></label>
+              <label class="pf-f"><span>Email</span><input type="email" name="email" value="{{ user.email or '' }}" autocomplete="email"></label>
+              <label class="pf-f full"><span>App theme</span><select name="theme">
+                {% for key, label in themes %}<option value="{{ key }}" {% if user.theme == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+            </div>
+          </section>
+          {% if staff %}
+          <section class="rs-card">
+            <div class="rs-card-h"><h3><i class="fas fa-address-book" aria-hidden="true"></i>Emergency &amp; personal</h3><small>your HR record</small></div>
+            <div class="pf-form">
+              <label class="pf-f full"><span>Home address</span><input type="text" name="address" value="{{ staff.address or '' }}"></label>
+              <label class="pf-f"><span>Next of kin</span><input type="text" name="nok_name" value="{{ staff.nok_name or '' }}"></label>
+              <label class="pf-f"><span>Next of kin phone</span><input type="tel" name="nok_phone" value="{{ staff.nok_phone or '' }}" inputmode="tel"></label>
+              <label class="pf-f"><span>Relationship</span><input type="text" name="nok_relationship" value="{{ staff.nok_relationship or '' }}"></label>
+              <label class="pf-f"><span>Blood group</span><input type="text" name="blood_group" value="{{ staff.blood_group or '' }}" maxlength="6"></label>
+              <label class="pf-f"><span>Emergency contact</span><input type="text" name="emergency_name" value="{{ staff.emergency_name or '' }}"></label>
+              <label class="pf-f"><span>Emergency phone</span><input type="tel" name="emergency_phone" value="{{ staff.emergency_phone or '' }}" inputmode="tel"></label>
+              <label class="pf-f full"><span>Medical notes (confidential)</span><input type="text" name="medical_notes" value="{{ staff.medical_notes or '' }}" placeholder="Allergies, conditions"></label>
+            </div>
+          </section>
+          {% endif %}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.9rem">
+          <section class="rs-card">
+            <div class="rs-card-h"><h3><i class="fas fa-user-shield" aria-hidden="true"></i>Account</h3></div>
+            <div class="pf-ro">
+              <div><span>Username</span><b>{{ user.username }}</b></div>
+              <div><span>Role</span><b>{{ (user.role or '').replace('_',' ').title() }}</b></div>
+              {% if staff %}{% if staff.staff_id %}<div><span>Staff ID</span><b>{{ staff.staff_id }}</b></div>{% endif %}
+              <div><span>Designation</span><b>{{ staff.designation or '—' }}</b></div>{% endif %}
+            </div>
+            <p class="rs-muted" style="margin-top:.6rem">Role, branch and salary are managed by an administrator.</p>
+          </section>
+          <section class="rs-card">
+            <div class="rs-card-h"><h3><i class="fas fa-lock" aria-hidden="true"></i>Sign-in &amp; security</h3></div>
+            <div class="pf-links">
+              <a href="{{ url_for('auth.change_password') }}"><i class="fas fa-key" aria-hidden="true"></i><span>Change password<small>Use a long, unique password</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+              <a href="{{ url_for('auth.security_settings') }}"><i class="fas fa-shield-halved" aria-hidden="true"></i><span>Two-step verification<small>{{ 'On' if user.mfa_enabled else 'Off — turn it on for extra safety' }}</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+              <a href="{{ url_for('auth.sessions') }}"><i class="fas fa-laptop" aria-hidden="true"></i><span>Signed-in devices<small>See and sign out other devices</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="rs-bar pf-save" style="margin-top:.9rem">
+        <div class="rs-bar-t"><b>Your profile</b><small id="pfDirty">Changes are saved when you tap Save</small></div>
+        <button type="submit" class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i>Save changes</button>
+      </div>
+    </form>
   </div>
-</form>
 
-{% if hr_self %}
-<div class="selfservice" style="margin-top:.4rem">
-  {% if hr_self.attendance is not none %}
-  <div class="card mb-3">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
-      <h3><i class="fas fa-user-clock"></i> My attendance</h3>
+  {# ───────────── Attendance ───────────── #}
+  {% if hr_self and hr_self.att %}
+  <div class="pf-panel" data-panel="attendance">
+    <section class="rs-card pf-today">
+      {% set t = hr_self.today %}
+      <span class="pf-today-ic {{ 'late' if t and t.status == 'Late' else ('in' if t and t.clock_in else '') }}"><i class="fas {{ 'fa-circle-check' if t and t.clock_in else 'fa-fingerprint' }}" aria-hidden="true"></i></span>
+      <div class="pf-today-t">
+        <b>{% if t and t.clock_out %}Done for today{% elif t and t.clock_in %}You're clocked in{% else %}Not clocked in yet{% endif %}</b>
+        <span>{% if t %}{{ t.status }}{% if t.clock_in %} · in {{ t.clock_in }}{% endif %}{% if t.clock_out %} · out {{ t.clock_out }}{% endif %}{% else %}Today{% endif %}</span>
+      </div>
       {% if hr_self.can_clock %}
-      <form method="post" action="{{ clock_url }}" style="margin:0">
+      <form method="post" action="{{ clock_url }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        {% if hr_self.clock_action == 'out' %}
-          <button type="submit" class="btn btn-warning btn-sm"><i class="fas fa-right-from-bracket"></i> Clock out now</button>
-        {% elif hr_self.clock_action == 'done' %}
-          <button type="button" class="btn btn-secondary btn-sm" disabled><i class="fas fa-check"></i> Clocked out {{ hr_self.today.clock_out }}</button>
-        {% else %}
-          <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-fingerprint"></i> Clock in now</button>
-        {% endif %}
+        {% if hr_self.clock_action == 'out' %}<button type="submit" class="rs-btn"><i class="fas fa-right-from-bracket" aria-hidden="true"></i>Clock out</button>
+        {% elif hr_self.clock_action == 'done' %}<button type="button" class="rs-btn ghost" disabled><i class="fas fa-check" aria-hidden="true"></i>Clocked out {{ t.clock_out }}</button>
+        {% else %}<button type="submit" class="rs-btn primary"><i class="fas fa-fingerprint" aria-hidden="true"></i>Clock in now</button>{% endif %}
       </form>
       {% endif %}
-    </div>
-    <div class="card-body">
-      {% if hr_self.today %}
-        <p class="text-muted text-sm" style="margin-top:0">Today: <strong>{{ hr_self.today.status }}</strong>{% if hr_self.today.clock_in %} · in {{ hr_self.today.clock_in }}{% endif %}{% if hr_self.today.clock_out %} · out {{ hr_self.today.clock_out }}{% endif %}.</p>
-      {% elif hr_self.can_clock %}
-        <p class="text-muted text-sm" style="margin-top:0">You haven't clocked in today.</p>
-      {% endif %}
-      {% if hr_self.attendance %}
-      <div style="overflow-x:auto">
-        <table class="data-table" style="margin:0;min-width:460px">
-          <thead><tr><th>Date</th><th>Status</th><th>In</th><th>Out</th><th style="text-align:right">Late (min)</th></tr></thead>
-          <tbody>
-            {% for r in hr_self.attendance %}
-            <tr><td>{{ r.date }}</td><td>{{ r.status }}</td><td>{{ r.clock_in }}</td><td>{{ r.clock_out }}</td><td style="text-align:right">{{ r.minutes_late }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    </section>
+
+    {% macro alink(y, m, p=1) -%}{{ url_for('auth.profile', ay=y, am=m, ap=p) }}#attendance{%- endmacro %}
+    <section class="rs-card pf-filt">
+      <div class="pf-lbl">Year</div>
+      <div class="pf-filt-row" role="radiogroup" aria-label="Year">
+        {% for y in A.years %}<a role="radio" aria-checked="{{ 'true' if A.year == y else 'false' }}" class="rs-chip{{ ' on' if A.year == y }}" href="{{ alink(y, A.month if A.year != 'all' else '') }}">{{ y }}</a>{% endfor %}
+        <a role="radio" aria-checked="{{ 'true' if A.all_years else 'false' }}" class="rs-chip{{ ' on' if A.all_years }}" href="{{ alink('all', '') }}"><i class="fas fa-infinity" aria-hidden="true"></i>All years</a>
       </div>
-      {% else %}<p class="text-muted text-sm" style="margin:0">No attendance recorded yet.</p>{% endif %}
+      <div class="pf-lbl">Month</div>
+      <div class="pf-filt-row" role="radiogroup" aria-label="Month">
+        {% set yy = A.years[0] if A.all_years else A.year %}
+        <a role="radio" aria-checked="{{ 'true' if not A.month and not A.all_years else 'false' }}" class="rs-chip{{ ' on' if not A.month and not A.all_years }}{{ ' dis' if A.all_years }}" href="{{ alink(yy, '') }}">Whole year</a>
+        {% for mi in range(1, 13) %}{% set mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mi-1] %}
+        <a role="radio" aria-checked="{{ 'true' if A.month == mi else 'false' }}" class="rs-chip{{ ' on' if A.month == mi }}{{ ' dis' if A.all_years }}" href="{{ alink(yy, mi) }}">{{ mn }}</a>{% endfor %}
+      </div>
+      {% if not A.is_current %}<a class="rs-link" href="{{ url_for('auth.profile') }}#attendance" style="align-self:flex-start"><i class="fas fa-rotate-left" aria-hidden="true"></i> Back to this month</a>{% endif %}
+    </section>
+
+    {% set T = A.totals %}
+    <div class="pf-tiles" aria-label="Totals for {{ A.label }}">
+      <div class="hero {{ 'bad' if T.deduction else 'good' }}"><span>Late-coming deductions</span><b>{{ money.format(T.deduction) }}</b><small>{{ 'across all years' if A.all_years else 'in ' ~ A.label }}</small></div>
+      <div class="{{ 'mid' if T.late_days else 'good' }}"><span>Days late</span><b>{{ T.late_days }}</b><small>{{ T.minutes_late }} min late in total</small></div>
+      <div><span>Days recorded</span><b>{{ T.days }}</b><small>{{ T.present_days }} at work</small></div>
+      <div class="{{ 'bad' if T.absent_days else '' }}"><span>Absent</span><b>{{ T.absent_days }}</b><small>{{ 'day' if T.absent_days == 1 else 'days' }}</small></div>
     </div>
+
+    <section class="rs-card flush">
+      <div class="rs-card-h" style="padding:.9rem 1.1rem 0"><h3><i class="fas fa-calendar-days" aria-hidden="true"></i>{{ A.label }}</h3><small>{{ T.days }} {{ 'day' if T.days == 1 else 'days' }}</small></div>
+      {% if A.rows %}
+      <div class="pf-att">
+        {% for r in A.rows %}
+        <div class="pf-att-r">
+          <span class="pf-date"><small>{{ r.mon }}</small><b>{{ r.day }}</b>{% if A.all_years or not A.month %}<small>{{ r.yr }}</small>{% endif %}</span>
+          <div class="pf-att-t"><b>{{ r.dow }}</b><span class="pf-io">In {{ r.clock_in }} · Out {{ r.clock_out }}</span>{% if r.minutes_late %}<span>{{ r.minutes_late }} min late</span>{% endif %}</div>
+          <span class="pf-st {{ r.status }}">{{ r.status }}</span>
+          <span class="pf-amt">{% if r.deduction %}<b class="bad" style="color:var(--danger)">−{{ money.format(r.deduction) }}</b><small>deducted</small>{% else %}<small>—</small>{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if A.pages > 1 %}
+      <nav class="pf-pager" aria-label="Attendance pages">
+        <a class="rs-btn sm ghost{{ ' dis' if A.page <= 1 }}" href="{{ alink(A.year, A.month, A.page - 1) }}" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i><span class="rs-hide-sm">Newer</span></a>
+        <span>Page {{ A.page }} of {{ A.pages }}</span>
+        <a class="rs-btn sm ghost{{ ' dis' if A.page >= A.pages }}" href="{{ alink(A.year, A.month, A.page + 1) }}" aria-label="Next page"><span class="rs-hide-sm">Older</span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+      </nav>
+      {% endif %}
+      {% else %}
+      <div class="rs-blank" style="border:0"><span><i class="fas fa-calendar-xmark" aria-hidden="true"></i></span><h3>Nothing recorded for {{ A.label }}</h3><p>Pick another month or year above.</p></div>
+      {% endif %}
+    </section>
   </div>
   {% endif %}
 
-  {% if hr_self.payslips is not none %}
-  <div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-money-check-dollar"></i> My payslips</h3></div>
-    <div class="card-body">
+  {# ───────────── Pay ───────────── #}
+  <div class="pf-panel" data-panel="pay">
+  {% if hr_self %}
+{% if hr_self.payslips is not none %}
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-money-check-dollar"></i> My payslips</h3></div>
+    <div>
       {% if hr_self.payslips %}
       <div style="overflow-x:auto">
         <table class="data-table" style="margin:0;min-width:520px">
@@ -157,13 +285,13 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">No finalized payslips yet.</p>{% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
   {% if hr_self.deductions is not none %}
-  <div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-scissors"></i> My deductions</h3></div>
-    <div class="card-body">
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-scissors"></i> My deductions</h3></div>
+    <div>
       <p class="text-muted text-sm" style="margin-top:0">Deductions applied to your salary. View only — contact HR about any query.</p>
       {% if hr_self.deductions %}
       <div style="overflow-x:auto">
@@ -178,13 +306,13 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">No deductions on record.</p>{% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
   {% if hr_self.contributions and hr_self.contributions['items'] %}
-  <div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My contributions</h3></div>
-    <div class="card-body">
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-hand-holding-dollar"></i> My contributions</h3></div>
+    <div>
       <p class="text-muted text-sm" style="margin-top:0">What you contribute each month and how much has been deducted so far — e.g. your Welfare total to date.</p>
       <div style="overflow-x:auto">
         <table class="data-table" style="margin:0;min-width:420px">
@@ -210,13 +338,18 @@
         </table>
       </div>
     </div>
-  </div>
+  </section>
   {% endif %}
 
-  {% if hr_self.leave is not none %}
-  <div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-plane-departure"></i> My leave</h3></div>
-    <div class="card-body">
+    {% endif %}
+  </div>
+
+  <div class="pf-panel" data-panel="hr">
+  {% if hr_self %}
+{% if hr_self.leave is not none %}
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-plane-departure"></i> My leave</h3></div>
+    <div>
       {% if hr_self.leave_balances %}
       <div style="overflow-x:auto;margin-bottom:.7rem">
         <table class="data-table" style="margin:0;min-width:420px">
@@ -242,13 +375,13 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">No leave requests on record.</p>{% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
   {% if hr_self.loans is not none %}
-  <div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My staff loans</h3></div>
-    <div class="card-body">
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-hand-holding-dollar"></i> My staff loans</h3></div>
+    <div>
       <p class="text-muted text-sm" style="margin-top:0">Your loan balances and repayment progress. View only — contact HR about any query.</p>
       {% if hr_self.loans %}
       <div style="overflow-x:auto">
@@ -271,13 +404,13 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">You have no staff loans on record.</p>{% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
 
   {% if hr_self.documents is not none %}
-  <div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-folder-open"></i> My documents</h3></div>
-    <div class="card-body">
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-folder-open"></i> My documents</h3></div>
+    <div>
       {% if hr_self.documents %}
       <div style="overflow-x:auto">
         <table class="data-table" style="margin:0;min-width:480px">
@@ -295,19 +428,20 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">No documents on file.</p>{% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
-</div>
-{% endif %}
+  {% endif %}
+  </div>
 
+  <div class="pf-panel" data-panel="more">
 {% if lib_self %}
-<div class="selfservice">
-  <div class="card mb-3">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+
+  <section class="rs-card">
+    <div class="rs-card-h" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
       <h3><i class="fas fa-book-open-reader"></i> My library loans</h3>
       {% if lib_self.overdue %}<span class="badge badge-danger">{{ lib_self.overdue }} overdue</span>{% endif %}
     </div>
-    <div class="card-body">
+    <div>
       {% if lib_self.loans %}
       <div style="overflow-x:auto">
         <table class="data-table" style="margin:0;min-width:480px">
@@ -324,18 +458,17 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">You have no books on loan.</p>{% endif %}
     </div>
-  </div>
-</div>
+  </section>
 {% endif %}
 
 {% if sales_self %}
-<div class="selfservice">
-  <div class="card mb-3">
-    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+
+  <section class="rs-card">
+    <div class="rs-card-h" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
       <h3><i class="fas fa-cash-register"></i> My sales</h3>
       <span class="badge badge-success">Today: {{ sales_self.today_count }} · ₦{{ '{:,.2f}'.format(sales_self.today_total) }}</span>
     </div>
-    <div class="card-body">
+    <div>
       <p class="text-muted text-sm" style="margin-top:0">Sales you recorded. View only.</p>
       {% if sales_self.recent %}
       <div style="overflow-x:auto">
@@ -350,7 +483,29 @@
       </div>
       {% else %}<p class="text-muted text-sm" style="margin:0">You haven't recorded any sales yet.</p>{% endif %}
     </div>
+  </section>
+{% endif %}
+
   </div>
 </div>
-{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var nav = document.getElementById('pfNav'); if (!nav) return;
+  var tabs = nav.querySelectorAll('a[data-tab]');
+  function show(name, push) {
+    var ok = nav.querySelector('a[data-tab="' + name + '"]'); if (!ok) name = 'profile';
+    tabs.forEach(function (a) { a.classList.toggle('on', a.dataset.tab === name); a.setAttribute('aria-current', a.dataset.tab === name ? 'page' : 'false'); });
+    document.querySelectorAll('.pf-panel').forEach(function (p) { p.classList.toggle('on', p.dataset.panel === name); });
+    if (push) history.replaceState(null, '', location.pathname + location.search + (name === 'profile' ? '' : '#' + name));
+  }
+  tabs.forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); show(a.dataset.tab, true); window.scrollTo({ top: 0, behavior: 'smooth' }); }); });
+  show((location.hash || '#profile').slice(1), false);
+  // tell the user there are unsaved edits
+  var f = document.getElementById('pfForm'), lbl = document.getElementById('pfDirty');
+  if (f && lbl) f.addEventListener('input', function () { lbl.textContent = 'You have unsaved changes'; lbl.style.color = 'var(--warning)'; });
+})();
+</script>
 {% endblock %}

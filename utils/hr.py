@@ -143,7 +143,78 @@ def clock_out_now(staff_id, when=None):
     return rec, rec.clock_out
 
 
-def hr_self_service(user):
+ATT_PER_PAGE = 15
+
+
+def self_attendance_view(staff_id, year=None, month=None, page=1, per_page=ATT_PER_PAGE):
+    """One staff member's own attendance for a period, paginated, with totals.
+    ``year``: an int, or 'all' for every year on record. ``month``: 1–12, or
+    None for the whole year (ignored when year == 'all'). Defaults to this
+    month. Totals cover the WHOLE filtered period, not just the shown page."""
+    from models import StaffAttendance
+    from sqlalchemy import extract, func
+    today = timeutil.today()
+    years = sorted({y for (y,) in db.session.query(extract('year', StaffAttendance.date))
+                    .filter(StaffAttendance.staff_id == staff_id).distinct().all() if y} | {today.year},
+                   reverse=True)
+    years = [int(y) for y in years]
+    all_years = (year == 'all')
+    if not all_years:
+        try:
+            year = int(year) if year else today.year
+        except (TypeError, ValueError):
+            year = today.year
+        if month in (None, ''):
+            month = None
+        else:
+            try:
+                month = int(month)
+                month = month if 1 <= month <= 12 else None
+            except (TypeError, ValueError):
+                month = None
+    else:
+        month = None
+    q = StaffAttendance.query.filter(StaffAttendance.staff_id == staff_id)
+    if not all_years:
+        q = q.filter(extract('year', StaffAttendance.date) == year)
+        if month:
+            q = q.filter(extract('month', StaffAttendance.date) == month)
+    tot = q.with_entities(func.count(StaffAttendance.id),
+                          func.coalesce(func.sum(StaffAttendance.minutes_late), 0),
+                          func.coalesce(func.sum(StaffAttendance.deduction), 0)).first()
+    late_days = q.filter(db.or_(StaffAttendance.minutes_late > 0, StaffAttendance.status == 'Late')).count()
+    absent_days = q.filter(StaffAttendance.status == 'Absent').count()
+    total = int(tot[0] or 0)
+    pages = max(1, -(-total // per_page))
+    try:
+        page = min(max(1, int(page or 1)), pages)
+    except (TypeError, ValueError):
+        page = 1
+    rows = (q.order_by(StaffAttendance.date.desc())
+            .offset((page - 1) * per_page).limit(per_page).all())
+    import calendar
+    if all_years:
+        label = 'All years'
+    elif month:
+        label = f'{calendar.month_name[month]} {year}'
+    else:
+        label = str(year)
+    return {
+        'year': 'all' if all_years else year, 'month': month or '', 'years': years,
+        'label': label, 'all_years': all_years,
+        'is_current': (not all_years and year == today.year and month == today.month),
+        'rows': [{'date': r.date.strftime('%a %d %b %Y'), 'day': r.date.strftime('%d'), 'dow': r.date.strftime('%a'),
+                  'mon': r.date.strftime('%b'), 'yr': r.date.strftime('%Y'), 'status': r.status or 'Present',
+                  'clock_in': r.clock_in or '—', 'clock_out': r.clock_out or '—',
+                  'minutes_late': r.minutes_late or 0, 'deduction': round(r.deduction or 0, 2)} for r in rows],
+        'totals': {'days': total, 'late_days': late_days, 'absent_days': absent_days,
+                   'present_days': total - absent_days,
+                   'minutes_late': int(tot[1] or 0), 'deduction': round(float(tot[2] or 0), 2)},
+        'page': page, 'pages': pages, 'per_page': per_page,
+    }
+
+
+def hr_self_service(user, att_year=None, att_month=None, att_page=1):
     """Assemble the self-scope HR data a signed-in user may see on their own
     account page. Each section is populated ONLY if the user holds the matching
     self-scope capability, and every query is limited to their own linked staff
@@ -170,13 +241,12 @@ def hr_self_service(user):
            'leave': None, 'leave_balances': None, 'loans': None, 'documents': None}
     today = timeutil.today()
     if att_lvl:
-        rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
-                .order_by(StaffAttendance.date.desc()).limit(30).all())
-        out['attendance'] = [{'date': r.date.strftime('%a %d %b %Y'), 'status': r.status,
-                              'clock_in': r.clock_in or '—', 'clock_out': r.clock_out or '—',
-                              'minutes_late': r.minutes_late or 0,
-                              'deduction': round(r.deduction or 0, 2)} for r in rows]
-        trec = next((r for r in rows if r.date == today), None)
+        if att_month is None and att_year is None:
+            att_month = today.month           # default: this month
+        view = self_attendance_view(staff.id, att_year, att_month, att_page)
+        out['att'] = view
+        out['attendance'] = view['rows']
+        trec = StaffAttendance.query.filter_by(staff_id=staff.id, date=today).first()
         out['today'] = ({'status': trec.status, 'clock_in': trec.clock_in,
                          'clock_out': trec.clock_out} if trec else None)
         # Next self-service action for today's toggle button.

@@ -13,8 +13,8 @@ def test_account_renders_contributions_card(app, monkeypatch):
                             'total_monthly': 2000.0, 'total_contributed': 6000.0}}
     real = A.profile_self_service
 
-    def fake(user):
-        out = real(user)
+    def fake(user, *a, **k):
+        out = real(user, *a, **k)
         out['hr'] = hr
         return out
     monkeypatch.setattr(A, 'profile_self_service', fake)

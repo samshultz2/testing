@@ -70,9 +70,9 @@ def sales_self_sales(user):
     }
 
 
-def profile_self_service(user):
+def profile_self_service(user, att_year=None, att_month=None, att_page=1):
     """All self-service blocks for the /account page, keyed by module. Each value
     is that module's assembler output (or None when not entitled/applicable)."""
     from utils.hr import hr_self_service
-    return {'hr': hr_self_service(user), 'library': library_self_loans(user),
+    return {'hr': hr_self_service(user, att_year, att_month, att_page), 'library': library_self_loans(user),
             'sales': sales_self_sales(user)}
