@@ -210,7 +210,7 @@ def test_waec_export_pdf_docx_xlsx_png(app):
     from openpyxl import load_workbook
     import io as _io
     wb = load_workbook(_io.BytesIO(r.get_data()))
-    assert wb.sheetnames == ['Grade Breakdown', 'Summary', 'Branch Ranking']
+    assert wb.sheetnames == ['Overview', 'Grade Breakdown', 'Summary', 'Branch Ranking']
 
     r = c.get(f'/results/subject-branch-breakdown/export.png?exam=waec&year={yr}')
     assert r.status_code == 200
@@ -367,8 +367,9 @@ def test_exports_mark_the_same_best_branch():
          + [('Commerce', 'A1', 'Upper')] * 3)
     r = _branch_grade_breakdown(e, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
     meta = {'school_name': 'S', 'logo_path': None, 'subtitle': 'WAEC'}
-    ws = load_workbook(io.BytesIO(_save(G.grade_breakdown_xlsx(meta, r, 'Grade', 'Credit')))).active
-    assert [c.value for c in ws['B'] if c.value and '★' in str(c.value)] == ['★ Jemila']
+    # same design as the PDF: a BEST tag in the column next to the branch
+    ws = load_workbook(io.BytesIO(_save(G.grade_breakdown_xlsx(meta, r, 'Grade', 'Credit'))))['Grade Breakdown']
+    assert [row[1].value for row in ws.iter_rows() if row[2].value == 'BEST'] == ['Jemila']
     doc = Document(io.BytesIO(G.grade_breakdown_docx(meta, r, 'Grade', 'Credit')))
     # Word mirrors the PDF design: the branch name followed by a BEST tag.
     assert {' '.join(c.text.split()) for t in doc.tables for row in t.rows for c in row.cells
