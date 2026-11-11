@@ -119,3 +119,30 @@ def test_new_session_with_terms_copies_dates_a_year_on(app):
         assert ts[0].start_date.weekday() == date(2050, 9, 12).weekday()
         assert ts[1].start_date is None
         assert Week.query.filter_by(term_id=ts[0].id).count() >= 13
+
+
+def test_classes_and_arms_pages_payloads(app):
+    from models import db, SchoolClass
+    with app.app_context():
+        for n, lv in (('ZZ1', 41), ('ZZ2', 41)):
+            if not SchoolClass.query.filter_by(name=n).first():
+                db.session.add(SchoolClass(name=n, level=lv))
+        db.session.commit()
+    c = _admin(app)
+    d = c.get('/academics/classes', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['page'] == 'classes'
+    assert any('share level 41' in a['text'] for a in d['alerts'])
+    row = next(r for r in d['classes'] if r['name'] == 'ZZ1')
+    assert {'section', 'arms', 'students', 'subjects', 'edit_url'} <= set(row)
+    # quick-add a suggested standard class with its section
+    sug = d['suggest'][0] if d['suggest'] else None
+    if sug:
+        r = c.post('/academics/classes/add', headers={'X-Requested-With': 'fetch'},
+                   data={**sug, '_csrf_token': _ptoken(c)})
+        assert r.get_json()['ok']
+        with app.app_context():
+            assert SchoolClass.query.filter_by(name=sug['name']).first().section == sug['section']
+    a = c.get('/academics/arms', headers={'X-Requested-With': 'fetch'}).get_json()
+    a = a.get('data', a)
+    assert a['page'] == 'arms' and 'uses_arms' in a and isinstance(a['grid'], list)

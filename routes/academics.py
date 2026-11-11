@@ -988,18 +988,119 @@ def delete_holiday(holiday_id):
 # CLASSES
 # ============================================================================
 
+_SECTIONS = [('nursery', 'Nursery'), ('primary', 'Primary'), ('junior', 'Junior secondary'),
+             ('senior', 'Senior secondary'), ('other', 'Other')]
+_STD_CLASS_SUGGEST = [('JSS1', 1, 'junior'), ('JSS2', 2, 'junior'), ('JSS3', 3, 'junior'),
+                      ('SSS1', 4, 'senior'), ('SSS2', 5, 'senior'), ('SSS3', 6, 'senior')]
+
+
+def _class_section(c):
+    if c.section:
+        return c.section
+    n = (c.name or '').upper().replace(' ', '')
+    if n.startswith('SS'):
+        return 'senior'
+    if n.startswith('JS'):
+        return 'junior'
+    if 'NUR' in n or n.startswith(('KG', 'PRE', 'CRE')):
+        return 'nursery'
+    if n.startswith(('BAS', 'PRI', 'GRADE', 'YEAR')):
+        return 'primary'
+    return 'other'
+
+
+def _structure_term():
+    t = get_active_term()
+    return t
+
+
+def _term_counts(term):
+    """Per (class_id, arm_id) for the term: students enrolled and the assignment id."""
+    from sqlalchemy import func
+    if not term:
+        return {}
+    rows = (db.session.query(ClassArmAssignment.id, ClassArmAssignment.class_id, ClassArmAssignment.arm_id,
+                             ClassArmAssignment.form_teacher_name,
+                             func.count(StudentEnrollment.id))
+            .outerjoin(StudentEnrollment, (StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                       & (StudentEnrollment.is_active == True))
+            .filter(ClassArmAssignment.term_id == term.id)
+            .group_by(ClassArmAssignment.id).all())
+    from utils.branch_scope import scope_query
+    try:
+        allowed = {a.id for a in scope_query(ClassArmAssignment.query.filter_by(term_id=term.id), ClassArmAssignment).all()}
+    except Exception:
+        allowed = None
+    out = {}
+    for aid, cid, arm_id, ft, n in rows:
+        if allowed is not None and aid not in allowed:
+            continue
+        cur = out.setdefault((cid, arm_id), {'students': 0, 'ids': [], 'teacher': bool(ft)})
+        cur['students'] += n
+        cur['ids'].append(aid)
+    return out
+
+
 @academics_bp.route('/classes')
 @login_required
 def classes_list():
-    """List all classes"""
-    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    """Classes grouped by section, with this term's arms, students and subjects,
+    level checks (promotion follows the level order) and quick-add of the
+    standard JSS/SSS classes."""
+    from models import ClassSubject
+    from sqlalchemy import func
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level, SchoolClass.name).all()
+    term = _structure_term()
+    counts = _term_counts(term)
+    subj = dict(db.session.query(ClassSubject.class_id, func.count(func.distinct(ClassSubject.subject_id)))
+                .filter(ClassSubject.term_id == (term.id if term else -1), ClassSubject.is_active == True)
+                .group_by(ClassSubject.class_id).all())
+    arm_names = {a.id: (a.name, bool(a.is_default)) for a in ClassArm.query.all()}
+
+    def row(c):
+        mine = sorted([(arm_names.get(arm, ('?', False)), v) for (cid, arm), v in counts.items() if cid == c.id],
+                      key=lambda x: x[0][0])
+        return {'id': c.id, 'name': c.name, 'level': c.level, 'description': c.description or '',
+                'section': _class_section(c), 'section_set': bool(c.section),
+                'arms': [{'name': nm, 'default': dflt, 'students': v['students']} for (nm, dflt), v in mine],
+                'students': sum(v['students'] for _, v in mine), 'subjects': subj.get(c.id, 0),
+                'opened': bool(mine),
+                'edit_url': url_for('academics.edit_class', class_id=c.id),
+                'delete_url': url_for('academics.delete_class', class_id=c.id)}
+
+    rows = [row(c) for c in classes]
+    alerts = []
+    by_level = {}
+    for r in rows:
+        by_level.setdefault(r['level'], []).append(r['name'])
+    dup = [(lv, ns) for lv, ns in sorted(by_level.items()) if len(ns) > 1]
+    for lv, ns in dup[:3]:
+        alerts.append({'tone': 'mid', 'icon': 'fa-layer-group',
+                       'text': f'{" and ".join(ns)} share level {lv} — promotion can’t tell which comes next.'})
+    levels = sorted(by_level)
+    gaps = [lv for lv in range(levels[0], levels[-1]) if lv not in by_level] if levels else []
+    if gaps:
+        alerts.append({'tone': 'info', 'icon': 'fa-stairs',
+                       'text': f'No class at level {", ".join(map(str, gaps[:4]))} — promotion moves students up one level at a time.'})
+    closed = [r['name'] for r in rows if not r['opened']]
+    if term and closed and len(closed) < len(rows):
+        alerts.append({'tone': 'info', 'icon': 'fa-door-closed',
+                       'text': f'Not opened for {term.name}: {", ".join(closed[:5])}{"…" if len(closed) > 5 else ""}.',
+                       'link': url_for('academics.assignments_list', term_id=term.id), 'link_label': 'Class setup'})
+    names = {r['name'].upper().replace(' ', '') for r in rows}
+    suggest = [{'name': n, 'level': lv, 'section': sec} for n, lv, sec in _STD_CLASS_SUGGEST if n not in names]
     return _render({
         'page': 'classes',
-        'classes': [{'id': c.id, 'name': c.name, 'level': c.level,
-                     'description': c.description or '',
-                     'edit_url': url_for('academics.edit_class', class_id=c.id),
-                     'delete_url': url_for('academics.delete_class', class_id=c.id)} for c in classes],
-        'add_url': url_for('academics.add_class')})
+        'classes': rows, 'alerts': alerts, 'suggest': suggest,
+        'sections': [{'key': k, 'label': l} for k, l in _SECTIONS],
+        'term': term.full_name if term else None,
+        'next_level': (max(levels) + 1) if levels else 1,
+        'totals': {'classes': len(rows), 'opened': sum(1 for r in rows if r['opened']),
+                   'students': sum(r['students'] for r in rows),
+                   'arms': len({a['name'] for r in rows for a in r['arms'] if not a['default']})},
+        'add_url': url_for('academics.add_class'),
+        'urls': {'classes': url_for('academics.classes_list'), 'arms': url_for('academics.arms_list'),
+                 'assignments': url_for('academics.assignments_list')}})
 
 
 @academics_bp.route('/classes/add', methods=['POST'])
@@ -1016,7 +1117,9 @@ def add_class():
         if SchoolClass.query.filter_by(name=name).first():
             return _err('A class with this name already exists.', url_for('academics.classes_list'))
 
-        db.session.add(SchoolClass(name=name, level=level, description=description))
+        section = request.form.get('section') or None
+        db.session.add(SchoolClass(name=name, level=level, description=description,
+                                   section=section if section in {k for k, _ in _SECTIONS[:4]} else None))
         db.session.commit()
         return _ok('Class added successfully!', url_for('academics.classes_list'))
     except Exception as e:
@@ -1045,6 +1148,9 @@ def edit_class(class_id):
             school_class.name = name
             school_class.level = level
             school_class.description = description
+            if 'section' in request.form:
+                sec = request.form.get('section') or None
+                school_class.section = sec if sec in {k for k, _ in _SECTIONS[:4]} else None
             db.session.commit()
             return _ok('Class updated!', url_for('academics.classes_list'))
         except Exception as e:
@@ -1085,14 +1191,42 @@ def delete_class(class_id):
 @academics_bp.route('/arms')
 @login_required
 def arms_list():
-    """List all class arms (the hidden default 'General' arm is never shown)."""
+    """Arms with where they're used this term (classes × arms grid), the
+    'school uses arms' switch and quick-add suggestions. The hidden default
+    'General' arm is never shown."""
+    from models import SchoolSettings
+    uses = bool(SchoolSettings.get('uses_class_arms', True))
     arms = ClassArm.query.filter_by(is_default=False, is_active=True).order_by(ClassArm.name).all()
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level, SchoolClass.name).all()
+    term = _structure_term()
+    counts = _term_counts(term)
+    grid = []
+    for c in classes:
+        cells = {}
+        for a in arms:
+            v = counts.get((c.id, a.id))
+            if v:
+                cells[str(a.id)] = {'students': v['students'],
+                                    'url': url_for('academics.view_assignment', assignment_id=v['ids'][0])}
+        grid.append({'id': c.id, 'name': c.name, 'cells': cells})
+    rows = []
+    for a in arms:
+        used = [(c, counts[(c.id, a.id)]) for c in classes if (c.id, a.id) in counts]
+        rows.append({'id': a.id, 'name': a.name, 'description': a.description or '',
+                     'classes': [c.name for c, _ in used], 'students': sum(v['students'] for _, v in used),
+                     'edit_url': url_for('academics.edit_arm', arm_id=a.id),
+                     'delete_url': url_for('academics.delete_arm', arm_id=a.id)})
+    have = {a.name.lower() for a in ClassArm.query.all()}
+    pool = ['A', 'B', 'C', 'D', 'Gold', 'Silver', 'Diamond', 'Ruby', 'Emerald', 'Science', 'Art', 'Commercial']
     return _render({
-        'page': 'arms',
-        'arms': [{'id': a.id, 'name': a.name, 'description': a.description or '',
-                  'edit_url': url_for('academics.edit_arm', arm_id=a.id),
-                  'delete_url': url_for('academics.delete_arm', arm_id=a.id)} for a in arms],
-        'add_url': url_for('academics.add_arm')})
+        'page': 'arms', 'uses_arms': uses,
+        'arms': rows, 'grid': grid, 'term': term.full_name if term else None,
+        'suggest': [n for n in pool if n.lower() not in have][:6],
+        'unused': [r['name'] for r in rows if not r['classes']],
+        'add_url': url_for('academics.add_arm'),
+        'uses_url': url_for('academics.set_uses_arms'),
+        'urls': {'classes': url_for('academics.classes_list'), 'arms': url_for('academics.arms_list'),
+                 'assignments': url_for('academics.assignments_list')}})
 
 
 @academics_bp.route('/arms/add', methods=['POST'])

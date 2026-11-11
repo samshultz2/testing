@@ -7,6 +7,7 @@ import { canWrite } from '../lib/perms';
 import TermSetup from './TermSetup';
 import Terms from './Terms';
 import Sessions from './Sessions';
+import { Classes, Arms } from './Structure';
 
 // ---- Sessions list ---------------------------------------------------------
 // ---- Session form (add / edit) --------------------------------------------
@@ -194,49 +195,6 @@ function ViewTerm({ d, notify }) {
 }
 
 // ---- Classes ---------------------------------------------------------------
-function Classes({ d, notify }) {
-  const nav = useNav();
-  const [f, setF] = useState({ name: '', level: '', description: '' });
-  const add = async (e) => {
-    e.preventDefault();
-    if (!f.name.trim() || !f.level) { notify('error', 'Class name and level are required.'); return; }
-    const r = await submitJson(d.add_url, f);
-    if (r.ok) { setF({ name: '', level: '', description: '' }); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
-  };
-  const del = async (url, name) => {
-    if (!await confirm(`Delete ${name}? Existing rosters/timetables keep it, but it won't be offered for new assignments.`)) return;
-    const r = await submitJson(url, {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>School Classes</h1></div>
-      {canWrite(d, 'structure_create') && <div className="card mb-3"><div className="card-header"><h3>Add New Class</h3></div>
-        <div className="card-body"><form onSubmit={add}>
-          <div className="form-group"><label className="form-label">Class Name</label><input type="text" className="form-control" placeholder="e.g., JSS1" required value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Level</label><input type="number" className="form-control" min="1" max="20" required placeholder="Order number" value={f.level} onChange={(e) => setF((s) => ({ ...s, level: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Description</label><input type="text" className="form-control" placeholder="Optional" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
-          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Class</button>
-        </form></div></div>}
-      <div className="card"><div className="card-header"><h3>Existing Classes</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.classes.length ? (
-            <div className="data-cards" style={{ padding: '1rem' }}>{d.classes.map((c) => (
-              <div className="data-card" key={c.id}>
-                <div className="data-card-header"><div className="data-card-title">{c.name}</div><span className="badge badge-info">Level {c.level}</span></div>
-                <div className="data-card-row"><span className="data-card-label">Description</span><span>{c.description || '-'}</span></div>
-                {(canWrite(d, 'structure_edit') || canWrite(d, 'structure_delete')) && <div className="data-card-actions">
-                  {canWrite(d, 'structure_edit') && <a href={c.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
-                  {canWrite(d, 'structure_delete') && <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(c.delete_url, c.name)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                </div>}
-              </div>))}</div>
-          ) : <Empty icon="fa-school" title=""><p>No classes added yet</p></Empty>}
-        </div></div>
-    </>
-  );
-}
-
-// ---- Edit class --------------------------------------------------------
 function ClassForm({ d, notify }) {
   const nav = useNav();
   const [f, setF] = useState({ name: d.school_class.name, level: d.school_class.level, description: d.school_class.description });
@@ -269,48 +227,6 @@ function ClassForm({ d, notify }) {
 }
 
 // ---- Arms ------------------------------------------------------------------
-function Arms({ d, notify }) {
-  const nav = useNav();
-  const [f, setF] = useState({ name: '', description: '' });
-  const add = async (e) => {
-    e.preventDefault();
-    if (!f.name.trim()) { notify('error', 'Arm name is required.'); return; }
-    const r = await submitJson(d.add_url, f);
-    if (r.ok) { setF({ name: '', description: '' }); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
-  };
-  const del = async (url, name) => {
-    if (!await confirm(`Delete ${name}? Existing rosters/timetables keep it, but it won't be offered for new assignments.`)) return;
-    const r = await submitJson(url, {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Class Arms</h1></div>
-      {canWrite(d, 'structure_create') && <div className="card mb-3"><div className="card-header"><h3>Add New Arm</h3></div>
-        <div className="card-body"><form onSubmit={add}>
-          <div className="form-group"><label className="form-label">Arm Name</label><input type="text" className="form-control" placeholder="e.g., Rose, Lily" required value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Description</label><input type="text" className="form-control" placeholder="Optional" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
-          <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Arm</button>
-        </form></div></div>}
-      <div className="card"><div className="card-header"><h3>Existing Arms</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.arms.length ? (
-            <div className="data-cards" style={{ padding: '1rem' }}>{d.arms.map((a) => (
-              <div className="data-card" key={a.id}>
-                <div className="data-card-header"><div className="data-card-title">{a.name}</div></div>
-                <div className="data-card-row"><span className="data-card-label">Description</span><span>{a.description || '-'}</span></div>
-                {(canWrite(d, 'structure_edit') || canWrite(d, 'structure_delete')) && <div className="data-card-actions">
-                  {canWrite(d, 'structure_edit') && <a href={a.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
-                  {canWrite(d, 'structure_delete') && <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(a.delete_url, a.name)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                </div>}
-              </div>))}</div>
-          ) : <Empty icon="fa-layer-group" title=""><p>No arms added yet</p></Empty>}
-        </div></div>
-    </>
-  );
-}
-
-// ---- Edit arm ----------------------------------------------------------
 function ArmForm({ d, notify }) {
   const nav = useNav();
   const [f, setF] = useState({ name: d.arm.name, description: d.arm.description });
