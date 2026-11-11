@@ -24,8 +24,15 @@ admin_required = manage_users_required
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
 from utils.spa import section_responders
-_wants_json, _render, _ok, _err = section_responders(
+_wants_json, _render_raw, _ok, _err = section_responders(
     'users/app.html', 'users_json', 'users.index')
+
+
+def _render(payload):
+    # Section tabs (Users / Permission matrix / Groups) on every users screen.
+    payload.setdefault('nav', {'index': url_for('users.index'), 'matrix': url_for('users.matrix'),
+                               'groups': url_for('users.groups')})
+    return _render_raw(payload)
 
 
 def _guard(target):
@@ -181,6 +188,15 @@ def _user_view(u):
     d['mfa_enabled'] = bool(getattr(u, 'mfa_enabled', False))
     d['reset_mfa_url'] = url_for('users.reset_mfa', user_id=u.id)
     d['back_url'] = url_for('users.index')
+    d['toggle_url'] = url_for('users.toggle_status', user_id=u.id)
+    d['is_self'] = (u.id == session.get('user_id'))
+    d['group'] = u.permission_group.name if getattr(u, 'permission_group', None) else ''
+    d['branch'] = (u.branch.name if getattr(u, 'branch', None)
+                   else ('All branches' if getattr(u, 'is_central', False) else ''))
+    d['view_only'] = bool(getattr(u, 'view_only', False))
+    d['manage_scope'] = u.manage_scope or 'none'
+    from utils import timeutil as _tu
+    d['last_days'] = (_tu.now().date() - u.last_login.date()).days if u.last_login else None
     return d
 
 
