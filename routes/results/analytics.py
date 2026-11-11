@@ -1751,10 +1751,22 @@ def _pivot_jamb_entries(rows_with_branch):
                 yield (subj, _jamb_score_band(score), branch)
 
 
-def _load_grade_breakdown(exam):
+def _load_grade_breakdown(exam, only_subjects=None, only_branches=None):
     """Shared data-loader for the Subject-Wise Grade Breakdown report — used by
     both the on-screen page and its PDF/Word/Excel/PNG exports, so they can
     never drift apart. Returns a dict of everything the template/exporters need."""
+    # ``only_subjects`` / ``only_branches`` (exports only): restrict the report
+    # to those, *before* aggregating, so the headline figures, best branch and
+    # ranking are all worked out on exactly what's exported.
+    def _keep(entries, uploaded):
+        if only_subjects:
+            entries = [e for e in entries if e[0] in only_subjects]
+            uploaded = {k_: v for k_, v in (uploaded or {}).items() if k_[0] in only_subjects}
+        if only_branches:
+            entries = [e for e in entries if e[2] in only_branches]
+            uploaded = {k_: v for k_, v in (uploaded or {}).items() if k_[1] in only_branches}
+        return entries, uploaded
+
     from models import Branch
     from utils.branch_scope import viewing_branch_id
 
@@ -1818,6 +1830,7 @@ def _load_grade_breakdown(exam):
                 entries = list(_pivot_jamb_entries(rows_with_branch))
                 bands, pass_bands = _JAMB_SCORE_BANDS, _JAMB_PASS_BANDS
             uploaded = _uploaded_distribution(branch_names, exam, bid, exam_year=selected_year)
+            entries, uploaded = _keep(entries, uploaded)
             result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded,
                                              pass_label=pass_label, band_label=band_label)
     else:
@@ -1878,6 +1891,7 @@ def _load_grade_breakdown(exam):
             uploaded = _uploaded_distribution(branch_names, exam, bid,
                                               mock_session_id=selected_mock['session_id'],
                                               mock_exam_number=selected_mock['exam_number'])
+            entries, uploaded = _keep(entries, uploaded)
             result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded,
                                              pass_label=pass_label, band_label=band_label)
 
@@ -1894,7 +1908,9 @@ def subject_branch_breakdown():
     branch — independently for WAEC, JAMB, Mock WAEC or Mock JAMB."""
     exam = request.args.get('exam', 'waec')
     data = _load_grade_breakdown(exam)
-    return render_template('results/subject_branch_breakdown.html', **data)
+    from utils.grade_breakdown_export import GB_SECTIONS, GB_COLUMNS
+    return render_template('results/subject_branch_breakdown.html', gb_sections=GB_SECTIONS,
+                           gb_columns=GB_COLUMNS, **data)
 
 
 @results_bp.route('/subject-branch-breakdown/export.<fmt>')
@@ -1908,9 +1924,19 @@ def subject_branch_breakdown_export(fmt):
     if fmt not in ('pdf', 'docx', 'xlsx', 'png'):
         abort(404)
     exam = request.args.get('exam', 'waec')
-    data = _load_grade_breakdown(exam)
+    # Choices from the Export dialog (all optional: no params = the full report
+    # with default sections/columns, as before).
+    from utils.grade_breakdown_export import gb_options
+    def _csv(name):
+        v = request.args.get(name)
+        return None if v is None else [x for x in v.split(',') if x]
+    only_subjects = set(request.args.getlist('subject')) or None
+    only_branches = set(request.args.getlist('branch')) or None
+    opts = gb_options(request.args.get('size'), _csv('sections'), _csv('cols'))
+    data = _load_grade_breakdown(exam, only_subjects=only_subjects, only_branches=only_branches)
     if not data['result'] or not data['result']['subjects']:
-        flash('No data to export yet.', 'warning')
+        flash('No data to export yet.' if not (only_subjects or only_branches)
+              else 'Nothing to export for the subjects/branches you picked.', 'warning')
         return redirect(url_for('results.subject_branch_breakdown', exam=data['exam']))
 
     from utils.school import school_profile
@@ -1922,24 +1948,24 @@ def subject_branch_breakdown_export(fmt):
 
     if fmt == 'pdf':
         from utils.grade_breakdown_export import grade_breakdown_pdf
-        buf = grade_breakdown_pdf(meta, data['result'], data['band_label'], data['pass_label'])
+        buf = grade_breakdown_pdf(meta, data['result'], data['band_label'], data['pass_label'], opts=opts)
         return send_file(io.BytesIO(buf), mimetype='application/pdf',
                          as_attachment=True, download_name=f'{fname_base}.pdf')
     if fmt == 'docx':
         from utils.grade_breakdown_export import grade_breakdown_docx
-        buf = grade_breakdown_docx(meta, data['result'], data['band_label'], data['pass_label'])
+        buf = grade_breakdown_docx(meta, data['result'], data['band_label'], data['pass_label'], opts=opts)
         return send_file(io.BytesIO(buf), mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                          as_attachment=True, download_name=f'{fname_base}.docx')
     if fmt == 'xlsx':
         from utils.grade_breakdown_export import grade_breakdown_xlsx
-        wb = grade_breakdown_xlsx(meta, data['result'], data['band_label'], data['pass_label'])
+        wb = grade_breakdown_xlsx(meta, data['result'], data['band_label'], data['pass_label'], opts=opts)
         buf = io.BytesIO()
         wb.save(buf)
         buf.seek(0)
         return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                          as_attachment=True, download_name=f'{fname_base}.xlsx')
     from utils.grade_breakdown_export import grade_breakdown_image_export
-    payload, mimetype, ext = grade_breakdown_image_export(meta, data['result'], data['band_label'], data['pass_label'])
+    payload, mimetype, ext = grade_breakdown_image_export(meta, data['result'], data['band_label'], data['pass_label'], opts=opts)
     return send_file(io.BytesIO(payload), mimetype=mimetype,
                      as_attachment=True, download_name=f'{fname_base}.{ext}')
 

@@ -516,3 +516,74 @@ def test_waec_and_jamb_lists_select_the_session_year_even_with_no_results(app):
             s = AcademicSession.query.filter_by(is_active=True).first()
             s.name = old_name
             db.session.commit()
+
+
+def _gb_export_data(app, yr):
+    with app.app_context():
+        b1 = _branch('GB Opt One'); b2 = _branch('GB Opt Two')
+        db.session.flush()
+        rows = []
+        for i in range(6):
+            s1 = _student(b1.id, f'O1{i}'); s2 = _student(b2.id, f'O2{i}')
+            db.session.flush()
+            rows += [WAECResult(student_id=s1.id, exam_year=yr, subject='Physics', grade='A1'),
+                     WAECResult(student_id=s1.id, exam_year=yr, subject='Chemistry', grade='C5'),
+                     WAECResult(student_id=s2.id, exam_year=yr, subject='Physics', grade='B3'),
+                     WAECResult(student_id=s2.id, exam_year=yr, subject='Chemistry', grade='F9')]
+        db.session.add_all(rows)
+        db.session.commit()
+
+
+def test_export_dialog_options_reach_every_format(app):
+    """Size, sections, columns and subject/branch picks from the Export dialog."""
+    import io
+    import fitz
+    from docx import Document
+    from openpyxl import load_workbook
+    yr = 2071
+    _gb_export_data(app, yr)
+    c = _admin(app)
+    html = c.get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
+    assert 'id="gbExport"' in html and 'name="gbxSize"' in html and 'name="gbxSubject"' in html
+
+    base = f'/results/subject-branch-breakdown/export.%s?exam=waec&year={yr}'
+    q = '&size=l&sections=subjects,ranking&cols=n,rate,groups&subject=Physics'
+    for fmt in ('pdf', 'docx', 'xlsx', 'png'):
+        r = c.get(base % fmt + q)
+        assert r.status_code == 200, fmt
+
+    txt = ' '.join(fitz.open(stream=c.get(base % 'pdf' + q).data, filetype='pdf')[0].get_text().split())
+    assert 'Physics' in txt and 'Chemistry' not in txt          # subject filter, recomputed
+    assert 'Key takeaways' not in txt                             # section left out
+    assert 'DISTINCTION' in txt and ' A1 ' not in txt             # groups on, individual grades off
+
+    doc = Document(io.BytesIO(c.get(base % 'docx' + q).data))
+    heads = {t.rows[0].cells[0].text: [x.text for x in t.rows[0].cells] for t in doc.tables}
+    assert heads['SUBJECT'] == ['SUBJECT', 'BRANCH', 'N', 'DISTINCTION', 'CREDIT', 'PASS', 'FAIL', 'CREDIT RATE']
+
+    wb = load_workbook(io.BytesIO(c.get(base % 'xlsx' + q).data))
+    assert wb.sheetnames == ['Grade Breakdown', 'Summary', 'Branch Ranking']   # no Overview sections chosen
+    ws = wb['Grade Breakdown']
+    assert [x.value for x in ws[4]][:4] == ['Subject', 'Branch', None, 'N']
+    assert ws['A5'].font.size > 10.5                                  # large text
+
+    # branch filter: only that branch is in the report
+    r = c.get(base % 'pdf' + '&branch=GB Opt One')
+    txt = ' '.join(fitz.open(stream=r.data, filetype='pdf')[0].get_text().split())
+    assert 'GB Opt One' in txt and 'GB Opt Two' not in txt
+
+
+def test_export_text_sizes_differ():
+    from routes.results.analytics import _branch_grade_breakdown, _WAEC_PASS_GRADES
+    from models import WAECResult
+    from utils import grade_breakdown_export as G
+    import fitz
+    e = [('Physics', 'A1', 'One')] * 6 + [('Physics', 'C5', 'Two')] * 6
+    r = _branch_grade_breakdown(e, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
+    meta = {'school_name': 'S', 'logo_path': None, 'subtitle': 'W'}
+
+    def size_of(sz):
+        pdf = G.grade_breakdown_pdf(meta, r, 'Grade', 'Credit', opts=G.gb_options(sz, ['subjects'], None))
+        d = fitz.open(stream=pdf, filetype='pdf')[0].get_text('dict')
+        return max(s['size'] for b in d['blocks'] for l in b.get('lines', []) for s in l['spans'] if s['text'].strip() == 'One')
+    assert size_of('s') < size_of('m') < size_of('l')

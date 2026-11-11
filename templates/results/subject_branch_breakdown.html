@@ -47,6 +47,48 @@
 @keyframes gbUp{from{transform:translateY(100%)}to{transform:none}}
 @keyframes gbFade{from{opacity:0}to{opacity:1}}
 
+/* export dialog */
+.gbx-bg{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:1rem}
+.gbx-bg[hidden]{display:none}
+.gbx{background:var(--bg-card);color:var(--text-primary);width:100%;max-width:620px;max-height:calc(100vh - 2rem);display:flex;flex-direction:column;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.3);overflow:hidden}
+.gbx-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.2rem .8rem;border-bottom:1px solid var(--border-color)}
+.gbx-hd h3{margin:0;font-size:1.05rem;font-weight:800}
+.gbx-hd small{color:var(--text-muted);font-size:.8rem}
+.gbx-x{border:0;background:none;font-size:1.6rem;line-height:1;color:var(--text-muted);cursor:pointer;padding:0 .2rem}
+.gbx-body{padding:.9rem 1.2rem;overflow-y:auto}
+.gbx-l{display:flex;align-items:center;gap:.5rem;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin:.9rem 0 .45rem}
+.gbx-l:first-child{margin-top:0}
+.gbx-cnt{font-weight:600;text-transform:none;letter-spacing:0}
+.gbx-quick{margin-left:auto;display:flex;gap:.3rem}
+.gbx-quick button{border:1px solid var(--border-color);background:var(--bg-card);border-radius:8px;font:inherit;font-size:.72rem;font-weight:700;text-transform:none;letter-spacing:0;padding:.2rem .6rem;color:var(--primary);cursor:pointer}
+.gbx-fmt{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem}
+.gbx-fmt input,.gbx-seg input{position:absolute;opacity:0;pointer-events:none}
+.gbx-fmt span{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:.7rem .3rem;border:1.5px solid var(--border-color);border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;text-align:center}
+.gbx-fmt i{font-size:1.15rem;color:var(--text-muted)}
+.gbx-fmt input:checked+span{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--bg-card));color:var(--primary)}
+.gbx-fmt input:checked+span i{color:var(--primary)}
+.gbx-fmt input:focus-visible+span,.gbx-seg input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
+.gbx-seg{display:inline-flex;background:var(--gray-100);border-radius:12px;padding:3px;gap:2px}
+.gbx-seg span{display:block;padding:.45rem 1.1rem;border-radius:9px;font-size:.85rem;font-weight:700;color:var(--text-muted);cursor:pointer}
+.gbx-seg input:checked+span{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.14)}
+.gbx-checks{display:grid;grid-template-columns:1fr 1fr;gap:.35rem}
+.gbx-checks label{display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border:1px solid var(--border-color);border-radius:10px;font-size:.84rem;cursor:pointer;min-width:0}
+.gbx-checks label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gbx-checks label.off{opacity:.6;cursor:default}
+.gbx-checks input{accent-color:var(--primary);width:16px;height:16px;flex:none;margin:0}
+.gbx-checks label:has(input:checked:not(:disabled)){border-color:color-mix(in srgb,var(--primary) 45%,var(--border-color));background:color-mix(in srgb,var(--primary) 5%,var(--bg-card))}
+.gbx-list{max-height:220px;overflow-y:auto;padding-right:2px}
+.gbx-note{font-size:.78rem;color:var(--text-muted);margin:.55rem 0 0}
+.gbx-err{font-size:.82rem;color:var(--danger,#dc2626);font-weight:600;margin:.7rem 0 0}
+.gbx-ft{display:flex;justify-content:flex-end;gap:.5rem;padding:.8rem 1.2rem calc(.8rem + env(safe-area-inset-bottom));border-top:1px solid var(--border-color)}
+@media (max-width:759px){
+  .gbx-bg{align-items:flex-end;padding:0}
+  .gbx{max-width:none;max-height:92vh;border-radius:20px 20px 0 0;animation:gbUp .22s ease-out}
+  .gbx-hd::before{content:'';position:absolute;left:50%;top:6px;width:42px;height:4px;margin-left:-21px;border-radius:4px;background:var(--border-color)}
+  .gbx-hd{position:relative;padding-top:1.1rem}
+  .gbx-checks{grid-template-columns:1fr}
+  .gbx-ft .rs-btn{flex:1}
+}
 /* branches */
 .gb-br{display:grid;grid-template-columns:28px minmax(120px,1.1fr) 70px minmax(140px,2.2fr) 82px 70px;gap:.85rem;align-items:center;padding:.6rem .2rem;border-bottom:1px solid var(--border-light,var(--border-color))}
 .gb-br:last-child{border-bottom:0}
@@ -154,15 +196,7 @@
     </div>
     <div class="rs-head-a">
       {% if has %}
-      <details class="gb-menu rs-menu">
-        <summary class="rs-btn ghost"><i class="fas fa-download" aria-hidden="true"></i> Export</summary>
-        <div class="rs-menu-pop"><div class="gb-sheet-hd">Export report<small>{{ exam_label }}{% if period_label %} · {{ period_label }}{% endif %}</small></div><div class="rs-menu-list" role="menu">
-          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='pdf', **export_args) }}"><i class="fas fa-file-pdf"></i><span>PDF</span></a>
-          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}"><i class="fas fa-file-word"></i><span>Word</span></a>
-          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}"><i class="fas fa-file-excel"></i><span>Excel</span></a>
-          <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='png', **export_args) }}"><i class="fas fa-file-image"></i><span>HD image</span></a>
-        </div></div>
-      </details>
+      <button type="button" class="rs-btn ghost" id="gbExportBtn" aria-haspopup="dialog"><i class="fas fa-download" aria-hidden="true"></i> Export</button>
       {% endif %}
       <a class="rs-btn ghost" href="{{ url_for('results.grade_distribution_manage', exam=exam) }}" title="View, edit or delete imported branch reports"><i class="fas fa-list-check" aria-hidden="true"></i> Imports</a>
       <a class="rs-btn primary" href="{{ url_for('results.grade_distribution_import', exam=exam) }}" title="Import a branch's own summary sheet"><i class="fas fa-file-import" aria-hidden="true"></i> Import report</a>
@@ -303,6 +337,77 @@
   </div>
   {% endif %}
 </div>
+{% if has %}
+{% set grp_word = 'Grade' if band_label == 'Grade' else 'Score' %}
+<div class="gbx-bg" id="gbExport" hidden role="dialog" aria-modal="true" aria-labelledby="gbxTitle"
+     data-base-pdf="{{ url_for('results.subject_branch_breakdown_export', fmt='pdf', **export_args) }}"
+     data-base-docx="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}"
+     data-base-xlsx="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}"
+     data-base-png="{{ url_for('results.subject_branch_breakdown_export', fmt='png', **export_args) }}">
+  <div class="gbx">
+    <div class="gbx-hd">
+      <div><h3 id="gbxTitle">Export report</h3><small>{{ exam_label }}{% if period_label %} · {{ period_label }}{% endif %}</small></div>
+      <button type="button" class="gbx-x" data-gbx-close aria-label="Close">&times;</button>
+    </div>
+    <div class="gbx-body">
+      <div class="gbx-l">Format</div>
+      <div class="gbx-fmt" role="radiogroup" aria-label="Format">
+        <label><input type="radio" name="gbxFmt" value="pdf" checked><span><i class="fas fa-file-pdf"></i>PDF</span></label>
+        <label><input type="radio" name="gbxFmt" value="docx"><span><i class="fas fa-file-word"></i>Word</span></label>
+        <label><input type="radio" name="gbxFmt" value="xlsx"><span><i class="fas fa-file-excel"></i>Excel</span></label>
+        <label><input type="radio" name="gbxFmt" value="png"><span><i class="fas fa-file-image"></i>Image</span></label>
+      </div>
+
+      <div class="gbx-l">Table text size</div>
+      <div class="gbx-seg" role="radiogroup" aria-label="Table text size">
+        <label><input type="radio" name="gbxSize" value="s"><span>Small</span></label>
+        <label><input type="radio" name="gbxSize" value="m" checked><span>Medium</span></label>
+        <label><input type="radio" name="gbxSize" value="l"><span>Large</span></label>
+      </div>
+
+      <div class="gbx-l">Include</div>
+      <div class="gbx-checks">
+        {% for key, label in gb_sections %}
+        {% if not (key == 'cards' and R.branches|length < 2) %}
+        <label><input type="checkbox" name="gbxSec" value="{{ key }}" checked><span>{{ label }}</span></label>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      <div class="gbx-l">Subject table columns</div>
+      <div class="gbx-checks">
+        <label class="off"><input type="checkbox" checked disabled><span>Subject &amp; branch</span></label>
+        {% for key, label, on in gb_columns %}
+        {% set label = label.replace('Credit rate', pshort ~ ' rate') %}
+        {% if band_label != 'Grade' %}{% set label = label.replace('Each grade (A1 – F9)', 'Each score band').replace('Grade groups (Distinction, Credit, Pass, Fail)', 'Score groups').replace('Grade-mix', 'Score-mix') %}{% endif %}
+        <label><input type="checkbox" name="gbxCol" value="{{ key }}" {{ 'checked' if on }}><span>{{ label }}</span></label>
+        {% endfor %}
+      </div>
+      <p class="gbx-note" data-gbx-xlsx hidden><i class="fas fa-circle-info"></i> Excel keeps real numbers you can sort and filter; mix bars aren’t drawn in Excel.</p>
+
+      <div class="gbx-l">Subjects <span class="gbx-cnt" data-gbx-count="subject"></span>
+        <span class="gbx-quick"><button type="button" data-gbx-all="subject">All</button><button type="button" data-gbx-none="subject">None</button></span></div>
+      <div class="gbx-checks gbx-list">
+        {% for s_ in R.subjects %}<label><input type="checkbox" name="gbxSubject" value="{{ s_ }}" checked><span>{{ s_ }}</span></label>{% endfor %}
+      </div>
+
+      {% if R.branches|length > 1 %}
+      <div class="gbx-l">Branches <span class="gbx-cnt" data-gbx-count="branch"></span>
+        <span class="gbx-quick"><button type="button" data-gbx-all="branch">All</button><button type="button" data-gbx-none="branch">None</button></span></div>
+      <div class="gbx-checks">
+        {% for b in R.branches %}<label><input type="checkbox" name="gbxBranch" value="{{ b }}" checked><span>{{ b }}</span></label>{% endfor %}
+      </div>
+      <p class="gbx-note"><i class="fas fa-circle-info"></i> Leaving out subjects or branches recalculates the headline figures, best branches and ranking for what you export.</p>
+      {% endif %}
+      <p class="gbx-err" data-gbx-err hidden></p>
+    </div>
+    <div class="gbx-ft">
+      <button type="button" class="rs-btn ghost" data-gbx-close>Cancel</button>
+      <button type="button" class="rs-btn primary" id="gbxGo"><i class="fas fa-download" aria-hidden="true"></i> Download</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -315,6 +420,73 @@
     d.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { setTimeout(function () { d.open = false; }, 150); }); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') d.open = false; });
   });
+  // ---- Export dialog ------------------------------------------------------
+  (function () {
+    var bg = document.getElementById('gbExport'), btn = document.getElementById('gbExportBtn');
+    if (!bg || !btn) return;
+    var KEY = 'gbExportPrefs';
+    var $$ = function (sel) { return Array.prototype.slice.call(bg.querySelectorAll(sel)); };
+    var val = function (name) { var el = bg.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; };
+    var vals = function (name) { return $$('input[name="' + name + '"]:checked').map(function (i) { return i.value; }); };
+    function count() {
+      ['subject', 'branch'].forEach(function (t) {
+        var name = t === 'subject' ? 'gbxSubject' : 'gbxBranch', all = $$('input[name="' + name + '"]').length;
+        var el = bg.querySelector('[data-gbx-count="' + t + '"]');
+        if (el) el.textContent = '(' + vals(name).length + ' of ' + all + ')';
+      });
+      bg.querySelector('[data-gbx-xlsx]').hidden = val('gbxFmt') !== 'xlsx';
+    }
+    function restore() {   // per-viewer convenience only; the page works without it
+      try {
+        var p = JSON.parse(localStorage.getItem(KEY) || 'null'); if (!p) return;
+        $$('input[name="gbxFmt"],input[name="gbxSize"]').forEach(function (i) { if (i.value === p[i.name]) i.checked = true; });
+        if (p.sec) $$('input[name="gbxSec"]').forEach(function (i) { i.checked = p.sec.indexOf(i.value) !== -1; });
+        if (p.col) $$('input[name="gbxCol"]').forEach(function (i) { i.checked = p.col.indexOf(i.value) !== -1; });
+      } catch (e) {}
+    }
+    function save() {
+      try { localStorage.setItem(KEY, JSON.stringify({ gbxFmt: val('gbxFmt'), gbxSize: val('gbxSize'), sec: vals('gbxSec'), col: vals('gbxCol') })); } catch (e) {}
+    }
+    function open() {
+      if (bg.parentNode !== document.body) document.body.appendChild(bg);
+      bg.hidden = false; count();
+      var f = bg.querySelector('input[name="gbxFmt"]:checked'); if (f) f.focus();
+    }
+    function close() { bg.hidden = true; btn.focus(); }
+    restore();
+    btn.addEventListener('click', open);
+    bg.addEventListener('click', function (e) {
+      if (e.target === bg || e.target.closest('[data-gbx-close]')) close();
+      var a = e.target.closest('[data-gbx-all],[data-gbx-none]');
+      if (a) {
+        var t = a.getAttribute('data-gbx-all') || a.getAttribute('data-gbx-none'), on = a.hasAttribute('data-gbx-all');
+        $$('input[name="' + (t === 'subject' ? 'gbxSubject' : 'gbxBranch') + '"]').forEach(function (i) { i.checked = on; });
+        count();
+      }
+    });
+    bg.addEventListener('change', count);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !bg.hidden) close(); });
+    document.getElementById('gbxGo').addEventListener('click', function () {
+      var err = bg.querySelector('[data-gbx-err]');
+      var subs = vals('gbxSubject'), allSubs = $$('input[name="gbxSubject"]').length;
+      var brs = vals('gbxBranch'), allBrs = $$('input[name="gbxBranch"]').length;
+      var secs = vals('gbxSec');
+      var msg = !subs.length ? 'Pick at least one subject.' : (allBrs && !brs.length) ? 'Pick at least one branch.'
+        : !secs.length ? 'Pick at least one thing to include.' : '';
+      err.hidden = !msg; err.textContent = msg;
+      if (msg) return;
+      var fmt = val('gbxFmt'), url = new URL(bg.getAttribute('data-base-' + fmt), location.href);
+      url.searchParams.set('size', val('gbxSize'));
+      url.searchParams.set('sections', secs.join(','));
+      url.searchParams.set('cols', vals('gbxCol').join(','));
+      if (subs.length < allSubs) subs.forEach(function (s) { url.searchParams.append('subject', s); });
+      if (allBrs && brs.length < allBrs) brs.forEach(function (b) { url.searchParams.append('branch', b); });
+      save();
+      var a = document.createElement('a'); a.href = url.toString(); a.setAttribute('data-native', ''); a.setAttribute('download', '');
+      document.body.appendChild(a); a.click(); a.remove();
+      close();
+    });
+  })();
   var cards = document.getElementById('gbCards'); if (!cards) return;
   var table = document.getElementById('gbTable'), none = document.getElementById('gbNone'), q = document.getElementById('gbQ');
   function filter() {
