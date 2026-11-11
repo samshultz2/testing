@@ -535,15 +535,16 @@ export function Academic({ d, notify }) {
   // Day plan: periods + one break, against the set school day.
   const start = toMin(f.school_day_start), end = toMin(f.school_day_end);
   const P = Math.max(0, parseInt(f.periods_per_day, 10) || 0), L = Math.max(0, parseInt(f.period_duration, 10) || 0), Br = Math.max(0, parseInt(f.break_duration, 10) || 0);
-  const need = P * L + Br;
+  // Same layout the timetable generator builds: a break after the 4th and
+  // after the 6th period (when there are periods after them).
+  const breakAfter = [4, 6].filter((n) => n < P);
+  const need = P * L + breakAfter.length * Br;
   const finish = start != null ? start + need : null;
   const spare = start != null && end != null ? end - finish : null;
-  const span = start != null && end != null && end > start ? Math.max(end - start, need) : need || 1;
-  const half = Math.ceil(P / 2);
   const segs = [];
   for (let i = 0; i < P; i++) {
     segs.push({ k: 'p' + i, w: L, label: String(i + 1) });
-    if (i === half - 1 && Br) segs.push({ k: 'br', w: Br, label: 'Break', br: true });
+    if (breakAfter.includes(i + 1) && Br) segs.push({ k: 'br' + i, w: Br, label: 'Break', br: true });
   }
   const dayBad = start == null || end == null || end <= start;
 
@@ -573,7 +574,7 @@ export function Academic({ d, notify }) {
             <div className="ac-3">
               <div className="cm-f"><span>Periods a day</span><Stepper label="periods a day" value={f.periods_per_day} onChange={put('periods_per_day')} min={4} max={12} /></div>
               <div className="cm-f"><span>Each period</span><Stepper label="period length" value={f.period_duration} onChange={put('period_duration')} min={20} max={90} step={5} unit="min" /></div>
-              <div className="cm-f"><span>Break</span><Stepper label="break length" value={f.break_duration} onChange={put('break_duration')} min={5} max={60} step={5} unit="min" /></div>
+              <div className="cm-f"><span>Each break</span><Stepper label="break length" value={f.break_duration} onChange={put('break_duration')} min={5} max={60} step={5} unit="min" /></div>
             </div>
             <div className="ac-day" aria-hidden="true">
               {segs.map((g) => <span key={g.k} className={g.br ? 'br' : ''} style={{ flexGrow: g.w }}>{g.label}</span>)}
@@ -581,7 +582,7 @@ export function Academic({ d, notify }) {
             </div>
             <div className="ac-day-ax"><span>{start != null ? fmtMin(start, tf) : '—'}</span><span>{end != null ? fmtMin(end, tf) : '—'}</span></div>
             {dayBad ? <div className="cm-attn-i bad"><i className="fas fa-circle-xmark" aria-hidden="true" /><span>The day must end after it starts.</span></div>
-              : spare < 0 ? <div className="cm-attn-i bad"><i className="fas fa-triangle-exclamation" aria-hidden="true" /><span><b>Doesn’t fit.</b> {P} periods and the break finish at {fmtMin(finish, tf)} — {dur(spare)} after school ends. Shorten periods, drop one, or end later.</span></div>
+              : spare < 0 ? <div className="cm-attn-i bad"><i className="fas fa-triangle-exclamation" aria-hidden="true" /><span><b>Doesn’t fit.</b> {P} periods and {plural(breakAfter.length, 'break')} finish at {fmtMin(finish, tf)} — {dur(spare)} after school ends. Shorten periods, drop one, or end later.</span></div>
               : <div className="cm-attn-i good"><i className="fas fa-circle-check" aria-hidden="true" /><span><b>Fits.</b> Lessons end at {fmtMin(finish, tf)}{spare > 0 ? `, ${dur(spare)} before the day ends` : ', exactly at the end of the day'}.</span></div>}
             {d.urls && d.urls.slots && <small className="cm-mute">Timetable periods are built from these numbers{d.slots ? ` — ${plural(d.slots, 'period')} set up now` : ''}. <A to={d.urls.slots}>Open timetable periods</A></small>}
           </section>
@@ -1060,6 +1061,118 @@ export function Assessments({ d, notify }) {
             <p className="cm-mute">Assessments whose code matches keep their marks. Nothing is saved until you tap Save.</p>
           </div>
         </Sheet>)}
+    </div>
+  );
+}
+
+// ---- Timetable periods ------------------------------------------------------
+// The day as a bar and a list; each slot shows its length, lessons placed in
+// it, and any overlap/gap with the slot before. Breaks know which period they
+// follow from their position, so there's no "after period" number to type.
+export function TimetableSlots({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const can = canWrite(d, 'slots_edit');
+  const canGen = canWrite(d, 'slots_generate');
+  const s = d.settings || {};
+  const tf = s.time_format === '12h' ? '12h' : '24h';
+  const init = (d.slots || []).map((x) => ({ id: x.id, name: x.name || '', start_time: x.start_time, end_time: x.end_time, is_break: !!x.is_break, lessons: x.lessons || 0 }));
+  const [rows, setRows] = useState(init);
+  const [base, setBase] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(base);
+  const upd = (i, patch) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  let n = 0;
+  const info = rows.map((r, i) => {
+    const a = toMin(r.start_time), b = toMin(r.end_time);
+    const prev = i ? toMin(rows[i - 1].end_time) : null;
+    if (!r.is_break) n += 1;
+    return { a, b, len: a != null && b != null ? b - a : null, num: r.is_break ? null : n, after: r.is_break ? n : null,
+      bad: a == null || b == null || b <= a, overlap: prev != null && a != null && a < prev ? prev - a : 0, gap: prev != null && a != null && a > prev ? a - prev : 0 };
+  });
+  const dayStart = info.length ? info[0].a : null, dayEnd = info.length ? info[info.length - 1].b : null;
+  const schoolEnd = toMin(s.school_day_end || '');
+  const overlaps = info.filter((x) => x.overlap).length, gaps = info.filter((x) => x.gap).length, bad = info.some((x) => x.bad);
+  const teaching = info.filter((x) => x.num).length, breaks = rows.length - teaching;
+  // Chain every slot to start when the one before ends, keeping each length.
+  const reflow = () => {
+    let t = toMin(rows[0].start_time);
+    setRows(rows.map((r, i) => { const len = Math.max(5, info[i].len || 40); const out = { ...r, start_time: fmtMin(t, '24h'), end_time: fmtMin(t + len, '24h') }; t += len; return out; }));
+  };
+  const generate = async () => {
+    const msg = d.lessons_total
+      ? `Times are rebuilt from Academic rules (${s.periods_per_day || 8} periods of ${s.period_duration || 40} min from ${s.school_day_start || '08:20'}). The ${plural(d.lessons_total, 'lesson')} already on class timetables stay in their periods.`
+      : `Times are rebuilt from Academic rules (${s.periods_per_day || 8} periods of ${s.period_duration || 40} min from ${s.school_day_start || '08:20'}).`;
+    if (!await confirm({ title: 'Rebuild periods?', message: msg, confirmText: 'Rebuild' })) return;
+    await save(d.generate_url, {}, () => nav.refresh());
+  };
+  const submit = async () => {
+    setSaving(true);
+    const r = await save(d.save_url, {
+      'slot_id[]': rows.map((x) => x.id), 'name[]': rows.map((x) => x.name),
+      'start_time[]': rows.map((x) => x.start_time), 'end_time[]': rows.map((x) => x.end_time),
+      'is_break[]': rows.map((x, i) => (x.is_break ? String(i) : null)).filter((x) => x !== null),
+      'after_period[]': info.map((x) => (x.after != null ? String(x.after) : '')),
+    }, () => nav.refresh());
+    setSaving(false);
+    if (r && r.ok) setBase(rows);
+  };
+  const span = dayStart != null && dayEnd != null && dayEnd > dayStart ? dayEnd - dayStart : 1;
+  return (
+    <div className="rs cm sx ts">
+      <Head icon="fa-calendar-days" title="Timetable periods" sub="The periods and breaks every class timetable is built on.">
+        {canGen && <button type="button" className="rs-btn ghost" onClick={generate}><i className="fas fa-rotate" aria-hidden="true" /> Rebuild from Academic rules</button>}
+      </Head>
+      {!rows.length ? (
+        <Blank icon="fa-clock" title="No periods yet">
+          <p>Build them from the school day in Academic rules — {s.periods_per_day || 8} periods of {s.period_duration || 40} minutes from {s.school_day_start || '08:20'}.</p>
+          {canGen && <button type="button" className="rs-btn primary" onClick={generate}><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Build periods</button>}
+        </Blank>
+      ) : (<>
+        <Tiles items={[
+          { label: 'Teaching periods', value: teaching },
+          { label: 'Breaks', value: breaks },
+          { label: 'School day', value: dayStart != null && dayEnd != null ? `${fmtMin(dayStart, tf)}–${fmtMin(dayEnd, tf)}` : '—',
+            tone: schoolEnd != null && dayEnd != null && dayEnd > schoolEnd ? 'warn' : null,
+            sub: schoolEnd != null && dayEnd != null && dayEnd > schoolEnd ? `${dur(dayEnd - schoolEnd)} past ${fmtMin(schoolEnd, tf)}` : null },
+          { label: 'Lessons placed', value: d.lessons_total || 0 },
+        ]} />
+        <section className="rs-card ts-day">
+          <div className="ts-bar">{rows.map((r, i) => info[i].len > 0 && (
+            <span key={i} className={r.is_break ? 'br' : ''} style={{ flexGrow: info[i].len }} title={`${r.name} ${r.start_time}–${r.end_time}`}>{r.is_break ? '☕' : info[i].num}</span>))}</div>
+          <div className="ac-day-ax"><span>{dayStart != null ? fmtMin(dayStart, tf) : ''}</span><span>{dayEnd != null ? fmtMin(dayEnd, tf) : ''}</span></div>
+          {bad ? <div className="cm-attn-i bad"><i className="fas fa-circle-xmark" aria-hidden="true" /><span>A slot ends before it starts — fix its times before saving.</span></div>
+            : overlaps || gaps ? (
+              <div className="cm-attn-i mid"><i className="fas fa-triangle-exclamation" aria-hidden="true" />
+                <span>{[overlaps && `${plural(overlaps, 'slot overlaps', 'slots overlap')} the one before`, gaps && `${plural(gaps, 'gap')} between slots`].filter(Boolean).join(' · ')}.</span>
+                {can && <button type="button" className="rs-btn sm primary" onClick={reflow}>Run them back to back</button>}</div>)
+            : <div className="cm-attn-i good"><i className="fas fa-circle-check" aria-hidden="true" /><span>Every slot runs straight into the next.</span></div>}
+        </section>
+        <section className="rs-card ts-list">
+          {rows.map((r, i) => {
+            const x = info[i];
+            return (
+              <div key={r.id} className={'ts-row' + (r.is_break ? ' br' : '')}>
+                {(x.overlap > 0 || x.gap > 0) && <div className={'ts-flag ' + (x.overlap ? 'bad' : '')}>{x.overlap ? `Overlaps the slot before by ${dur(x.overlap)}` : `${dur(x.gap)} gap`}</div>}
+                <span className="ts-n">{r.is_break ? <i className="fas fa-mug-hot" aria-hidden="true" /> : x.num}</span>
+                <span className="ts-name"><input value={r.name} onChange={(e) => upd(i, { name: e.target.value.slice(0, 50) })} aria-label="Slot name" disabled={!can} />
+                  <small>{r.is_break ? (x.after ? `After period ${x.after}` : 'Before the first period') : r.lessons ? `${plural(r.lessons, 'lesson')} placed` : 'No lessons yet'}{x.len > 0 ? ` · ${x.len} min` : ''}</small></span>
+                <span className="ts-t"><input type="time" value={r.start_time} onChange={(e) => upd(i, { start_time: e.target.value })} aria-label={`${r.name} starts`} disabled={!can} aria-invalid={x.bad || undefined} />
+                  <em>–</em><input type="time" value={r.end_time} onChange={(e) => upd(i, { end_time: e.target.value })} aria-label={`${r.name} ends`} disabled={!can} aria-invalid={x.bad || undefined} /></span>
+                <span className="ts-b"><small>Break</small><Switch on={r.is_break} onChange={(v) => upd(i, { is_break: v })} disabled={!can || (!r.is_break && r.lessons > 0)} label={`${r.name} is a break`} /></span>
+              </div>);
+          })}
+        </section>
+        <p className="cm-mute gr-note"><i className="fas fa-circle-info" aria-hidden="true" /> To change how many periods there are or how long they last, set it in <A to={d.urls.academic}>Academic rules</A> and rebuild — lessons already placed stay in their periods.
+          {d.urls.timetable && <> <A to={d.urls.timetable} native>Open the timetable</A></>}</p>
+      </>)}
+      {can && dirty && (
+        <Bar>
+          <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> Unsaved changes</span>
+          <button type="button" className="rs-btn ghost" onClick={() => setRows(base)}>Undo</button>
+          <button type="button" className="rs-btn primary" disabled={saving || bad} onClick={submit}>
+            <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {saving ? 'Saving…' : 'Save'}</button>
+        </Bar>)}
     </div>
   );
 }

@@ -1351,6 +1351,14 @@ def term_assessment_copy(term_id):
 def timetable_slots():
     """Manage timetable slots/periods"""
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
+    lessons = {}
+    try:
+        from sqlalchemy import func as _f
+        from models import ClassTimetable
+        lessons = dict(db.session.query(ClassTimetable.slot_id, _f.count(ClassTimetable.id))
+                       .group_by(ClassTimetable.slot_id).all())
+    except Exception:
+        pass
     return _render({
         'page': 'timetable_slots',
         'settings': _settings_dict(),
@@ -1361,7 +1369,10 @@ def timetable_slots():
                    'start_time': s.start_time.strftime('%H:%M') if s.start_time else '',
                    'end_time': s.end_time.strftime('%H:%M') if s.end_time else '',
                    'is_break': s.is_break,
-                   'after_period': s.after_period} for s in slots],
+                   'after_period': s.after_period,
+                   'lessons': lessons.get(s.id, 0)} for s in slots],
+        'lessons_total': sum(lessons.values()),
+        'urls': {'academic': url_for('settings.academic_settings'), 'timetable': _safe_url('timetable.index')},
     })
 
 
@@ -1382,50 +1393,64 @@ def generate_timetable_slots():
         start_hour, start_min = map(int, start_time_str.split(':'))
         current_time = dt(2000, 1, 1, start_hour, start_min)
 
-        # Delete existing slots
-        TimetableSlot.query.delete()
+        # Re-use the existing rows (periods by number, breaks in order) instead
+        # of deleting them: class timetables point at slot ids, so a fresh set
+        # of rows would leave every placed lesson attached to nothing.
+        from models import ClassTimetable
+        old = TimetableSlot.query.order_by(TimetableSlot.order, TimetableSlot.id).all()
+        old_periods = sorted([x for x in old if not x.is_break], key=lambda x: (x.slot_number or 0, x.id))
+        old_breaks = [x for x in old if x.is_break]
+        used = set()
+
+        def put(pool, **kw):
+            row = pool.pop(0) if pool else None
+            if row is None:
+                row = TimetableSlot(**kw)
+                db.session.add(row)
+            else:
+                for k, v in kw.items():
+                    setattr(row, k, v)
+            row.is_active = True
+            used.add(id(row))
+            return row
 
         slot_number = 1
         order = 1
 
         for i in range(periods_per_day):
-            # Add period
             end_time = current_time + timedelta(minutes=period_duration)
-            db.session.add(TimetableSlot(
-                slot_number=slot_number,
-                name=f'Period {slot_number}',
-                start_time=current_time.time(),
-                end_time=end_time.time(),
-                is_break=False,
-                duration_minutes=period_duration,
-                order=order
-            ))
+            put(old_periods, slot_number=slot_number, name=f'Period {slot_number}',
+                start_time=current_time.time(), end_time=end_time.time(), is_break=False,
+                duration_minutes=period_duration, order=order, after_period=None)
             current_time = end_time
             slot_number += 1
             order += 1
 
-            # Add break after period 4 and period 6 (configurable)
-            if i == 3 or i == 5:  # After 4th and 6th periods
+            # Breaks after the 4th and 6th periods.
+            if (i == 3 or i == 5) and i < periods_per_day - 1:
                 break_end = current_time + timedelta(minutes=break_duration)
-                break_name = 'Short Break' if i == 3 else 'Long Break'
-                db.session.add(TimetableSlot(
-                    slot_number=0,  # 0 for breaks
-                    name=break_name,
-                    start_time=current_time.time(),
-                    end_time=break_end.time(),
-                    is_break=True,
-                    duration_minutes=break_duration,
-                    order=order,
-                    after_period=i + 1,   # declare the rule explicitly, not just its clock time
-                ))
+                put(old_breaks, slot_number=0, name='Short Break' if i == 3 else 'Long Break',
+                    start_time=current_time.time(), end_time=break_end.time(), is_break=True,
+                    duration_minutes=break_duration, order=order,
+                    after_period=i + 1)   # declare the rule explicitly, not just its clock time
                 current_time = break_end
                 order += 1
+
+        # Rows no longer needed: delete if nothing is timetabled in them,
+        # otherwise just switch them off so those lessons aren't lost.
+        for x in old_periods + old_breaks:
+            if ClassTimetable.query.filter_by(slot_id=x.id).first():
+                x.is_active = False
+            else:
+                db.session.delete(x)
 
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('settings.timetable_slots'))
-    return _ok(f'{periods_per_day} periods and 2 breaks generated!', url_for('settings.timetable_slots'))
+    n_breaks = sum(1 for i in (3, 5) if i < periods_per_day - 1)
+    return _ok(f'{periods_per_day} periods and {n_breaks} break{"s" if n_breaks != 1 else ""} set from the school-day settings.',
+               url_for('settings.timetable_slots'))
 
 
 @settings_bp.route('/timetable-slots/save', methods=['POST'])

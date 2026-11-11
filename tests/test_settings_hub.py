@@ -139,3 +139,33 @@ def test_renaming_an_assessment_keeps_its_row(app):
         with app.app_context():
             db.session.get(AssessmentType, first[0]).name = first[1]
             db.session.commit()
+
+
+def test_rebuilding_periods_keeps_placed_lessons(app):
+    from models import db, TimetableSlot, ClassTimetable, SchoolSettings
+    client = _admin(app)
+    tok = _ptoken(client)
+    hdr = {'X-Requested-With': 'fetch'}
+    client.post('/settings/timetable-slots/generate', data={'_csrf_token': tok}, headers=hdr)
+    with app.app_context():
+        before = {s.slot_number: s.id for s in TimetableSlot.query.filter_by(is_active=True, is_break=False).all()}
+        SchoolSettings.set('period_duration', 35, 'int')
+        db.session.commit()
+    try:
+        r = client.post('/settings/timetable-slots/generate', data={'_csrf_token': tok}, headers=hdr)
+        assert r.status_code in (200, 302)
+        with app.app_context():
+            after = {s.slot_number: s.id for s in TimetableSlot.query.filter_by(is_active=True, is_break=False).all()}
+            assert after == before                      # same rows, new times
+            p1 = db.session.get(TimetableSlot, before[1])
+            assert (p1.end_time.hour * 60 + p1.end_time.minute) - (p1.start_time.hour * 60 + p1.start_time.minute) == 35
+            # every placed lesson still points at an existing slot
+            ids = {s.id for s in TimetableSlot.query.all()}
+            assert all(e.slot_id in ids for e in ClassTimetable.query.all())
+        d = _json(client, '/settings/timetable-slots')
+        assert 'lessons_total' in d and all('lessons' in s for s in d['slots'])
+    finally:
+        with app.app_context():
+            SchoolSettings.set('period_duration', 40, 'int')
+            db.session.commit()
+        client.post('/settings/timetable-slots/generate', data={'_csrf_token': tok}, headers=hdr)

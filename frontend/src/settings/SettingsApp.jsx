@@ -4,78 +4,11 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Index, Branches, Backup, Audit, School, Academic, Grades, Traits, Assessments } from './Hub';
+import { Index, Branches, Backup, Audit, School, Academic, Grades, Traits, Assessments, TimetableSlots } from './Hub';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-// ---- Timetable slots --------------------------------------------------------
-function TimetableSlots({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const [rows, setRows] = useState((d.slots || []).map((s) => ({ ...s })));
-  const set = (i, k) => (e) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
-  const toggle = (i) => () => setRows(rows.map((r, j) => (j === i ? { ...r, is_break: !r.is_break } : r)));
-  const s = d.settings || {};
-  const generate = async () => {
-    if (!await confirm('This will regenerate all slots based on current settings. Continue?')) return;
-    await save(d.generate_url, {}, () => nav.refresh());
-  };
-  const submit = (e) => {
-    e.preventDefault();
-    const breaks = rows.map((r, i) => (r.is_break ? String(i) : null)).filter((x) => x !== null);
-    save(d.save_url, {
-      'slot_id[]': rows.map((r) => r.id), 'name[]': rows.map((r) => r.name),
-      'start_time[]': rows.map((r) => r.start_time), 'end_time[]': rows.map((r) => r.end_time),
-      'is_break[]': breaks, 'after_period[]': rows.map((r) => r.after_period ?? ''),
-    }, () => nav.refresh());
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Timetable Slots</h1>
-        {canWrite(d, 'slots_generate') && <button type="button" className="btn btn-secondary" onClick={generate}><i aria-hidden="true" className="fas fa-sync" /> Auto-Generate</button>}</div>
-      <div className="card mb-3"><div className="card-body">
-        <p className="text-muted">School hours: {s.school_day_start || '08:20'} - {s.school_day_end || '14:10'} | Period: {s.period_duration || '40'} mins | Break: {s.break_duration || '30'} mins</p>
-      </div></div>
-      <div className="card"><div className="card-body">
-        {rows.length ? (
-          <form onSubmit={submit}>
-            <div className="table-container"><table className="data-table">
-              <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Break?</th><th>After period</th></tr></thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i} className={r.is_break ? 'table-info' : ''}>
-                    <td><input type="text" className="form-control" value={r.name} onChange={set(i, 'name')} /></td>
-                    <td><input type="time" className="form-control" value={r.start_time} onChange={set(i, 'start_time')} style={{ width: 120 }} /></td>
-                    <td><input type="time" className="form-control" value={r.end_time} onChange={set(i, 'end_time')} style={{ width: 120 }} /></td>
-                    <td><input type="checkbox" checked={!!r.is_break} onChange={toggle(i)} /></td>
-                    <td>
-                      {r.is_break ? (
-                        <input type="number" min="0" className="form-control" style={{ width: 90 }}
-                          value={r.after_period ?? ''} onChange={set(i, 'after_period')}
-                          title="This break belongs immediately after teaching period N" placeholder="N" />
-                      ) : <span className="text-muted">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-            <p className="form-hint mb-3">"After period" is the definitive rule used to position each break —
-              e.g. a break with "After period" set to 9 will always be placed right after Period 9, even if the
-              stored times drift. Only applies to break rows.</p>
-            <Actions>
-              {canWrite(d, 'slots_edit') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>}
-              <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
-            </Actions>
-          </form>
-        ) : (
-          <Empty icon="fa-clock" title="No Slots Defined">Click "Auto-Generate" to create slots based on your settings</Empty>
-        )}
-      </div></div>
-    </>
-  );
 }
 
 // ---- Users ------------------------------------------------------------------
