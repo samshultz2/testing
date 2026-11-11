@@ -216,7 +216,7 @@
   </div>
 
   <div class="rs-card">
-    <div class="rs-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> By subject</h3><small>{{ pshort|lower }} rate per branch · best branch highlighted</small></div>
+    <div class="rs-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> By subject</h3><small title="Best branch = highest {{ pshort|lower }} rate; if tied, the better grades (weighted: {{ R.bands|first }} highest); branches with fewer than 5 entries can't be best unless all are that small.">{{ pshort|lower }} rate per branch · best = highest {{ pshort|lower }} rate, then better grades <i class="fas fa-circle-info" aria-hidden="true"></i></small></div>
     <div class="gb-tools">
       <label class="rs-search"><i class="fas fa-search" aria-hidden="true"></i><input type="search" id="gbQ" placeholder="Find a subject" aria-label="Find a subject"></label>
       <div class="rs-seg" role="tablist" aria-label="Sort subjects">
@@ -237,11 +237,11 @@
         <div class="gb-sj-s"><b>{{ o.n }}</b> entries{% if o.spread is not none %} · gap between branches <b>{{ o.spread }} pts</b>{% endif %}</div>
         {% for br in R.branches %}{% set c = R.table[s][br] %}
         {% if c %}
-        <div class="gb-row {{ 'best' if o.best == br }}">
+        <div class="gb-row {{ 'best' if o.best == br }}"{% if o.best == br %} title="Best {{ pshort|lower }} rate{{ ' — tie broken by better grades' if o.tie else '' }}"{% endif %}>
           <span class="bn" title="{{ br }}">{{ br }}{% if c.uploaded %}<i class="fas fa-file-import" title="From an imported branch report"></i>{% endif %}</span>
           <span class="n">{{ c.n }}</span>
           {{ bar(c.pct, R.bands) }}
-          <span class="pp">{{ c.pass_pct }}%</span>
+          <span class="pp" title="Average grade points {{ '%.2f'|format(c.gpa) }} of {{ R.bands|length }}">{{ c.pass_pct }}%</span>
         </div>
         {% else %}
         <div class="gb-row no"><span class="bn">{{ br }}</span><span class="na">Not offered</span></div>

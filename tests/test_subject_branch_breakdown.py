@@ -340,3 +340,18 @@ def test_students_without_a_branch_count_under_the_default_branch(app):
     html = c.get('/results/subject-branch-breakdown?exam=waec&year=2093').get_data(as_text=True)
     assert 'data-name="physics"' in html and 'data-name="chemistry"' in html
     assert name in html
+
+
+def test_best_branch_ties_broken_by_grade_quality_not_entries():
+    """All branches 100% credit: the branch with better grades wins, not the one
+    with more entries; a 3-entry branch can't win on a fluke."""
+    from routes.results.analytics import _branch_grade_breakdown, _WAEC_PASS_GRADES
+    from models import WAECResult
+    e = ([('Commerce', 'A1', 'Jemila')] * 11 + [('Commerce', g, 'Benin') for g in ['A1'] * 3 + ['B3'] * 5 + ['C6'] * 4]
+         + [('Commerce', 'A1', 'Upper')] * 3)
+    r = _branch_grade_breakdown(e, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES)
+    assert r['subject_overall']['Commerce']['best'] == 'Jemila'
+    assert r['subject_overall']['Commerce']['tie'] is True
+    # identical rate and grades → nobody highlighted
+    r = _branch_grade_breakdown([('Art', 'B2', 'X')] * 6 + [('Art', 'B2', 'Y')] * 6, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES)
+    assert r['subject_overall']['Art']['best'] is None

@@ -1493,6 +1493,9 @@ def _jamb_score_band(score):
     return '0-19'
 
 
+BEST_MIN_ENTRIES = 5
+
+
 def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_label='Credit Pass', band_label='Grade'):
     """``entries``: iterable of (subject, band, branch_name) — one per subject
     entry (a WAEC/Mock-WAEC result row, or one filled JAMB/Mock-JAMB subject
@@ -1561,7 +1564,9 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
                 table[subj][br] = None
             else:
                 pn = sum(counter.get(b, 0) for b in pass_bands)
+                gw = {b: len(bands) - i for i, b in enumerate(bands)}   # best band = most points
                 table[subj][br] = {'n': n, 'uploaded': (subj, br) in uploaded_pairs,
+                                   'gpa': round(sum(counter.get(b, 0) * gw[b] for b in bands) / n, 2),
                                    'pct': {b: round(counter.get(b, 0) / n * 100, 1) for b in bands},
                                    'pass_n': pn, 'pass_pct': round(pn / n * 100, 1)}
 
@@ -1574,11 +1579,22 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
         n = sum(c.values())
         pn = sum(c.get(b, 0) for b in pass_bands)
         cells = [(br, table[subj][br]) for br in branches if table[subj][br]]
-        best = max(cells, key=lambda x: (x[1]['pass_pct'], x[1]['n'])) if len(cells) > 1 else None
+        # Best branch for this subject: highest credit/pass rate; ties broken by
+        # grade QUALITY (weighted grade points — A1 counts more than C6), then
+        # entries. Branches with a handful of candidates can't win on a fluke
+        # (min BEST_MIN_ENTRIES unless every branch is that small), and an exact
+        # tie on rate and quality highlights no one.
+        best, tie = None, False
+        if len(cells) > 1:
+            pool = [x for x in cells if x[1]['n'] >= BEST_MIN_ENTRIES] or cells
+            ranked = sorted(pool, key=lambda x: (x[1]['pass_pct'], x[1]['gpa'], x[1]['n']), reverse=True)
+            if len(ranked) == 1 or (ranked[0][1]['pass_pct'], ranked[0][1]['gpa']) != (ranked[1][1]['pass_pct'], ranked[1][1]['gpa']):
+                best = ranked[0]
+                tie = len(ranked) > 1 and ranked[0][1]['pass_pct'] == ranked[1][1]['pass_pct']
         subject_overall[subj] = {
             'n': n, 'pass_n': pn, 'pass_pct': round(pn / n * 100, 1) if n else 0,
             'pct': {b: round(c.get(b, 0) / n * 100, 1) if n else 0 for b in bands},
-            'best': best[0] if best else None,
+            'best': best[0] if best else None, 'tie': tie,
             'spread': (round(max(x[1]['pass_pct'] for x in cells) - min(x[1]['pass_pct'] for x in cells), 1)
                        if len(cells) > 1 else None),
         }
