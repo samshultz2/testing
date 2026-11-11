@@ -9,7 +9,7 @@
 // hash of the built bundles + CSS (format 'b-<hash>'), so it changes on every
 // deploy that changes an asset — no manual bump needed. Static assets also use
 // stale-while-revalidate below, so they self-heal on the next load regardless.
-const CACHE_VERSION = 'b-78b1d42a8efe';
+const CACHE_VERSION = 'b-5f8003a7f856';
 // Cap the runtime cache (visited pages + section JSON) so it can't grow without
 // bound on a long-lived install; oldest entries are evicted first.
 const RUNTIME_MAX_ENTRIES = 80;

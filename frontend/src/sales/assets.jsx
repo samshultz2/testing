@@ -1,7 +1,8 @@
 // Fixed asset register: the register itself plus its Analytics, History,
 // Audits and Loans tabs, rebuilt on the results/sales kit. The add/edit and
 // action dialogs below the screens are unchanged from the old SalesApp.jsx.
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { submitJson } from '../lib/forms';
 import { apiGet } from '../lib/api';
 import { naira, nairaShort } from '../lib/format';
@@ -44,6 +45,47 @@ export function Assets({ d, notify }) {
   );
 }
 
+// ── Register: master list + asset card ───────────────────────────────────────
+// Laptop: list on the left, the chosen asset's card on the right (stays in view).
+// Phone: tap an asset to slide in its full-screen page with a bottom action bar.
+const CAT = {
+  'ICT Equipment': ['fa-laptop', '#2563eb'], 'Furniture & Fittings': ['fa-chair', '#b45309'],
+  'Laboratory Equipment': ['fa-flask', '#7c3aed'], Vehicles: ['fa-bus', '#0891b2'],
+  Machinery: ['fa-gears', '#475569'], Buildings: ['fa-building', '#64748b'],
+  'Sports Equipment': ['fa-futbol', '#16a34a'], 'Kitchen Equipment': ['fa-kitchen-set', '#ea580c'],
+  'Musical Instruments': ['fa-music', '#db2777'], 'Books & Library': ['fa-book', '#0d9488'], Other: ['fa-box', '#6b7280'],
+};
+const catOf = (c) => CAT[c] || CAT.Other;
+const ST_COLOR = { 'In Use': '#16a34a', 'In Store': '#2563eb', 'Under Repair': '#d97706', Lost: '#dc2626', Disposed: '#94a3b8' };
+const placeOf = (a) => a.location || (a.class_name ? `${a.class_name}${a.arm_name ? ' ' + a.arm_name : ''}` : '') || '';
+const EV = { created: 'Registered', quantity_changed: 'Quantity changed', status_changed: 'Status changed', updated: 'Details updated',
+  disposed: 'Disposed', restored: 'Restored', transferred: 'Moved', assigned: 'Given to', unassigned: 'Custodian removed',
+  opening_balance: 'Opening balance', loaned: 'Checked out', returned: 'Returned' };
+const EV_IC = { created: 'fa-plus', transferred: 'fa-truck-ramp-box', assigned: 'fa-user-tag', unassigned: 'fa-user-xmark',
+  disposed: 'fa-box-archive', status_changed: 'fa-right-left', quantity_changed: 'fa-hashtag', updated: 'fa-pen', restored: 'fa-rotate-left' };
+
+function CatIcon({ category, size }) {
+  const [ic, c] = catOf(category);
+  return <span className={'ax-cat' + (size ? ' ' + size : '')} style={{ '--c': c }}><i className={'fas ' + ic} aria-hidden="true" /></span>;
+}
+
+function StatusStrip({ a, legend }) {
+  const rows = (a.status_breakdown || []).filter((r) => r.quantity > 0);
+  const total = rows.reduce((t, r) => t + r.quantity, 0) || 1;
+  return (
+    <div className="ax-strip-w">
+      <div className="ax-strip" role="img" aria-label={rows.map((r) => `${r.quantity} ${r.status}`).join(', ')}>
+        {rows.map((r) => <i key={r.status} style={{ width: (r.quantity / total * 100) + '%', background: ST_COLOR[r.status] || '#94a3b8' }} />)}
+      </div>
+      {legend && (
+        <div className="ax-legend">
+          {rows.map((r) => <span key={r.status}><i style={{ background: ST_COLOR[r.status] }} /><b>{r.quantity}</b> {r.status}</span>)}
+          {a.on_loan_quantity > 0 && <span><i className="fas fa-right-from-bracket" aria-hidden="true" /><b>{a.on_loan_quantity}</b> on loan</span>}
+        </div>)}
+    </div>
+  );
+}
+
 function Register({ d, notify }) {
   const nav = useNav();
   const phone = usePhone();
@@ -53,13 +95,17 @@ function Register({ d, notify }) {
   const [status, setStatus] = useState(d.status || '');
   const [section, setSection] = useState(d.section || '');
   const [quick, setQuick] = useState('');
+  const [group, setGroup] = useState(() => { try { return localStorage.getItem('assets:group') || 'none'; } catch (e) { return 'none'; } });
   const [filters, setFilters] = useState(false);
   const [modal, setModal] = useState(null);           // { kind, asset }
+  const [picking, setPicking] = useState(false);      // select mode for bulk actions
   const [selected, setSelected] = useState(() => new Set());
-  const [bulk, setBulk] = useState(null);             // 'transfer' | 'assign' | 'dispose'
+  const [bulk, setBulk] = useState(null);
   const [bulkVal, setBulkVal] = useState('');
   const [busy, setBusy] = useState(false);
+  const [openId, setOpenId] = useState(null);
   useEffect(() => { const h = () => setModal({ kind: 'edit', asset: {} }); window.addEventListener('assets:add', h); return () => window.removeEventListener('assets:add', h); }, []);
+  const pickGroup = (g) => { setGroup(g); try { localStorage.setItem('assets:group', g); } catch (e) { /* ignore */ } };
   const open = (kind, asset) => setModal({ kind, asset });
   const close = () => setModal(null);
   const saved = () => { setModal(null); nav.refresh(); };
@@ -67,35 +113,38 @@ function Register({ d, notify }) {
   const qty = (a, st) => ((a.status_breakdown || []).find((r) => r.status === st) || {}).quantity || 0;
   const assets = d.assets;
   const overdue = assets.filter((a) => a.maintenance_overdue);
-  const dueSoon = assets.filter((a) => !a.maintenance_overdue && a.next_maintenance_due);
   const repair = assets.reduce((t, a) => t + qty(a, 'Under Repair'), 0);
   const lost = assets.reduce((t, a) => t + qty(a, 'Lost'), 0);
   const onLoan = assets.reduce((t, a) => t + (a.on_loan_quantity || 0), 0);
-  const unplaced = assets.filter((a) => !a.is_disposed && !a.class_name && !a.teacher_name && !a.effective_section_label && !a.custodian && !a.location).length;
+  const isUnplaced = (a) => !a.is_disposed && !a.class_name && !a.teacher_name && !a.effective_section_label && !a.custodian && !a.location;
+  const unplaced = assets.filter(isUnplaced).length;
   const depYear = assets.reduce((t, a) => t + (a.annual_depreciation || 0), 0);
+  const catCount = {};
+  assets.forEach((a) => { catCount[a.category] = (catCount[a.category] || 0) + 1; });
 
   const t = q.trim().toLowerCase();
   const shown = assets.filter((a) => {
-    if (t && !(`${a.name} ${a.asset_tag || ''} ${a.serial_number || ''} ${a.custodian || ''} ${a.location || ''}`.toLowerCase().includes(t))) return false;
+    if (t && !(`${a.name} ${a.asset_tag || ''} ${a.serial_number || ''} ${a.custodian || ''} ${a.location || ''} ${a.class_name || ''}`.toLowerCase().includes(t))) return false;
     if (cat && a.category !== cat) return false;
     if (status && !(a.status_breakdown || []).some((r) => r.status === status && r.quantity > 0)) return false;
     if (section && a.effective_section !== section) return false;
     if (quick === 'maint' && !a.maintenance_overdue) return false;
     if (quick === 'repair' && !qty(a, 'Under Repair') && !qty(a, 'Lost')) return false;
     if (quick === 'loan' && !a.on_loan_quantity) return false;
-    if (quick === 'unplaced' && (a.is_disposed || a.class_name || a.teacher_name || a.effective_section_label || a.custodian || a.location)) return false;
+    if (quick === 'unplaced' && !isUnplaced(a)) return false;
     return true;
   });
+  // Laptop: keep an asset open in the card (first one by default).
+  const current = assets.find((a) => a.id === openId) || (!phone ? shown[0] : null);
   useEffect(() => { setSelected(new Set()); }, [q, cat, status, section, quick]);
   const ids = [...selected];
-  const allSel = shown.length > 0 && shown.every((a) => selected.has(a.id));
   const toggle = (id) => setSelected((x) => { const n = new Set(x); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const toggleAll = () => setSelected(allSel ? new Set() : new Set(shown.map((a) => a.id)));
+  const allSel = shown.length > 0 && shown.every((a) => selected.has(a.id));
   const runBulk = async (url, payload, msg) => {
     setBusy(true);
     const r = await submitJson(url, { ...payload, asset_ids: ids });
     setBusy(false);
-    if (r.ok) { notify('success', r.message || msg); setSelected(new Set()); setBulk(null); setBulkVal(''); nav.refresh(); } else notify('error', r.error || 'Bulk action failed.');
+    if (r.ok) { notify('success', r.message || msg); setSelected(new Set()); setBulk(null); setBulkVal(''); setPicking(false); nav.refresh(); } else notify('error', r.error || 'Bulk action failed.');
   };
   const bulkDelete = async () => {
     if (!await confirm({ title: 'Delete selected assets', tone: 'danger', confirmText: 'Delete', message: `Permanently delete ${ids.length} selected asset(s)? Their full history goes too — this can't be undone. Use Dispose to retire them and keep the record.` })) return;
@@ -103,123 +152,312 @@ function Register({ d, notify }) {
   };
   const doDelete = async (a) => {
     if (!await confirm({ title: 'Delete asset', tone: 'danger', confirmText: 'Delete', message: `Permanently delete "${a.name}"? This removes its full history too — this can't be undone. To retire it and keep the record, use Dispose instead.` })) return;
-    const r = await submitJson(a.delete_url, {}); if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
+    const r = await submitJson(a.delete_url, {}); if (r.ok) { setOpenId(null); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
   };
-  const actions = (a) => [
-    { icon: 'fa-clock-rotate-left', label: 'History', onClick: () => open('history', a) },
-    canWrite(d, 'assets_maintenance') && { icon: 'fa-wrench', label: a.maintenance_overdue ? `Maintenance (overdue since ${a.next_maintenance_due})` : a.next_maintenance_due ? `Maintenance (due ${a.next_maintenance_due})` : 'Maintenance', onClick: () => open('maint', a) },
-    a.is_individually_tracked && { icon: 'fa-qrcode', label: 'Manage units', onClick: () => open('units', a) },
-    !a.is_individually_tracked && !a.is_disposed && canWrite(d, 'assets_loans') && { icon: 'fa-right-from-bracket', label: a.on_loan_quantity ? `Check out (${a.on_loan_quantity} out now)` : 'Check out to someone', onClick: () => open('checkout', a) },
-    !a.is_individually_tracked && !a.is_disposed && canWrite(d, 'assets_edit') && { icon: 'fa-truck-ramp-box', label: 'Move to another location', onClick: () => open('transfer', a) },
-    !a.is_individually_tracked && !a.is_disposed && canWrite(d, 'assets_edit') && { icon: 'fa-user-tag', label: 'Assign custodian', onClick: () => open('assign', a) },
-    !a.is_individually_tracked && !a.is_disposed && canWrite(d, 'assets_edit') && { icon: 'fa-right-left', label: 'Change status of some units', onClick: () => open('status', a) },
-    canWrite(d, 'assets_edit') && { icon: 'fa-pen', label: 'Edit details', onClick: () => open('edit', a) },
-    !a.is_disposed && canWrite(d, 'assets_dispose') && { icon: 'fa-box-archive', label: 'Dispose / retire', onClick: () => open('dispose', a) },
-    canWrite(d, 'assets_delete') && { icon: 'fa-trash', label: 'Delete permanently', onClick: () => doDelete(a), danger: true },
-  ];
-  const nFilters = [cat, status, section].filter(Boolean).length;
+  const nFilters = [status, section].filter(Boolean).length;
   const quicks = [
-    overdue.length > 0 && { value: 'maint', label: `Maintenance overdue (${overdue.length})` },
-    (repair + lost) > 0 && { value: 'repair', label: `Repair or lost (${repair + lost})` },
-    onLoan > 0 && { value: 'loan', label: `On loan (${onLoan})` },
-    unplaced > 0 && { value: 'unplaced', label: `No location or custodian (${unplaced})` },
+    overdue.length > 0 && { value: 'maint', icon: 'fa-wrench', label: 'Maintenance overdue', n: overdue.length, tone: 'bad' },
+    (repair + lost) > 0 && { value: 'repair', icon: 'fa-screwdriver-wrench', label: 'Repair or lost', n: repair + lost, tone: 'mid' },
+    onLoan > 0 && { value: 'loan', icon: 'fa-right-from-bracket', label: 'On loan', n: onLoan, tone: 'info' },
+    unplaced > 0 && { value: 'unplaced', icon: 'fa-location-crosshairs', label: 'No place or person', n: unplaced, tone: 'mid' },
   ].filter(Boolean);
+
+  // grouping
+  const groups = (() => {
+    if (group === 'none') return [['', shown]];
+    const m = new Map();
+    shown.forEach((a) => {
+      const k = group === 'place' ? (placeOf(a) || 'No location') : (a.category || 'Other');
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(a);
+    });
+    return [...m.entries()].sort((x, y) => (x[0] === 'No location') - (y[0] === 'No location') || x[0].localeCompare(y[0]));
+  })();
+
+  const row = (a) => {
+    const on = current && current.id === a.id && !phone;
+    const sel = selected.has(a.id);
+    return (
+      <button type="button" key={a.id} className={'ax-row' + (on ? ' on' : '') + (sel ? ' sel' : '') + (a.is_disposed ? ' off' : '')}
+        onClick={() => (picking ? toggle(a.id) : setOpenId(a.id))} aria-pressed={picking ? sel : on}>
+        {picking ? <span className={'ax-tick' + (sel ? ' on' : '')}><i className="fas fa-check" aria-hidden="true" /></span> : <CatIcon category={a.category} />}
+        <span className="ax-row-t">
+          <b>{a.name}{a.maintenance_overdue && <i className="fas fa-wrench ax-warn" title={`Maintenance overdue since ${a.next_maintenance_due}`} aria-label="Maintenance overdue" />}</b>
+          <small><i className="fas fa-location-dot" aria-hidden="true" />{placeOf(a) || 'No location'}{a.custodian ? ` · ${a.custodian}` : ''}</small>
+          <StatusStrip a={a} />
+        </span>
+        <span className="ax-row-v">
+          <b>{a.is_disposed ? 'Disposed' : plural(a.active_quantity ?? a.quantity, 'unit')}</b>
+          <small>{short(a.book_value)}</small>
+        </span>
+        {!picking && <i className="fas fa-chevron-right ax-chev" aria-hidden="true" />}
+      </button>
+    );
+  };
+
+  const list = (
+    <section className="rs-card flush ax-list">
+      <div className="ax-tools">
+        <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" placeholder="Find an asset, tag, room or person" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search assets" /></label>
+        <button type="button" className={'rs-icon-btn' + (nFilters ? ' ax-on' : '')} onClick={() => setFilters(true)} aria-label={`Filters${nFilters ? ` (${nFilters} on)` : ''}`} title="Filters"><i className="fas fa-sliders" aria-hidden="true" />{nFilters > 0 && <em>{nFilters}</em>}</button>
+        {canWrite(d, 'assets_bulk') && <button type="button" className={'rs-btn sm' + (picking ? ' primary' : ' ghost')} onClick={() => { setPicking((p) => !p); setSelected(new Set()); }}>{picking ? 'Done' : 'Select'}</button>}
+      </div>
+      <div className="ax-cats" role="radiogroup" aria-label="Category">
+        <button type="button" role="radio" aria-checked={!cat} className={'rs-chip' + (!cat ? ' on' : '')} onClick={() => setCat('')}>All <small>{assets.length}</small></button>
+        {d.categories.filter((c) => catCount[c]).map((c) => (
+          <button type="button" role="radio" aria-checked={cat === c} key={c} className={'rs-chip' + (cat === c ? ' on' : '')} onClick={() => setCat(cat === c ? '' : c)}>
+            <i className={'fas ' + catOf(c)[0]} aria-hidden="true" />{c.replace(' & Fittings', '').replace(' Equipment', '')} <small>{catCount[c]}</small></button>))}
+      </div>
+      <div className="ax-sub">
+        <span>{plural(shown.length, 'asset')}{shown.length !== assets.length ? ` of ${assets.length}` : ''}</span>
+        <Seg label="Group by" value={group} onChange={pickGroup} options={[{ value: 'none', label: 'List' }, { value: 'place', label: 'By place' }, { value: 'cat', label: 'By type' }]} />
+      </div>
+      {picking && <div className="ax-pickbar"><label className="rs-check"><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(shown.map((a) => a.id)))} /> Select all {shown.length}</label></div>}
+      {shown.length ? (
+        <div className="ax-rows">
+          {groups.map(([g, rows]) => (
+            <React.Fragment key={g || 'all'}>
+              {g && <div className="ax-group"><span>{g}</span><small>{plural(rows.length, 'asset')} · {short(rows.reduce((x, a) => x + (a.book_value || 0), 0))}</small></div>}
+              {rows.map(row)}
+            </React.Fragment>))}
+        </div>
+      ) : <Blank icon="fa-building-columns" title={assets.length ? 'Nothing matches' : 'No assets yet'}>
+          <p>{assets.length ? 'Try a different search or filter.' : 'Register desks, laptops, lab kit, vehicles — everything the school owns.'}</p>
+          {!assets.length && canWrite(d, 'assets_create') && <button type="button" className="rs-btn primary" onClick={() => open('edit', {})}><i className="fas fa-plus" aria-hidden="true" />Register your first asset</button>}
+        </Blank>}
+    </section>
+  );
+
+  const card = current && <AssetCard key={current.id} a={current} d={d} open={open} doDelete={doDelete} phone={phone} onBack={() => setOpenId(null)} />;
 
   return (
     <>
-      <Tiles items={[
-        { label: 'Book value', value: short(s.total_book || 0), sub: `cost ${short(s.total_cost || 0)}` },
-        { label: 'Depreciation', value: short(depYear), sub: 'per year' },
-        { label: 'In repair / lost', value: `${repair} / ${lost}`, sub: 'units', tone: lost ? 'bad' : repair ? 'mid' : '' },
-        { label: 'Maintenance', value: overdue.length, sub: overdue.length ? 'overdue' : `${dueSoon.length} scheduled`, tone: overdue.length ? 'bad' : '' },
-        { label: 'On loan', value: onLoan, sub: 'units checked out' },
-      ]} />
-      {quicks.length > 0 && (
-        <div className="as-quick"><span>Needs attention:</span>
-          {quicks.map((x) => <button type="button" key={x.value} className={'rs-chip' + (quick === x.value ? ' on' : '')} onClick={() => setQuick(quick === x.value ? '' : x.value)}>{x.label}</button>)}
-        </div>
-      )}
-      <div className="rs-toolbar">
-        <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
-          <input type="search" placeholder="Name, tag, serial, custodian or location" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search assets" /></label>
-        {phone ? <button type="button" className={'rs-btn ghost' + (nFilters ? ' on' : '')} onClick={() => setFilters(true)}><i className="fas fa-sliders" aria-hidden="true" /><span>Filters{nFilters ? ` (${nFilters})` : ''}</span></button> : (<>
-          <select className="sl-select" value={cat} onChange={(e) => setCat(e.target.value)} aria-label="Category"><option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
-          <select className="sl-select" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All statuses</option>{d.statuses.map((x) => <option key={x}>{x}</option>)}</select>
-          <select className="sl-select" value={section} onChange={(e) => setSection(e.target.value)} aria-label="Section"><option value="">All sections</option>{d.sections.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select>
-        </>)}
+      <div className="ax-stats">
+        <div><span>Book value</span><b>{short(s.total_book || 0)}</b><small>cost {short(s.total_cost || 0)}</small></div>
+        <div><span>Assets</span><b>{s.count || 0}</b><small>{plural(s.quantity || 0, 'unit')}</small></div>
+        <div><span>Depreciation</span><b>{short(depYear)}</b><small>per year</small></div>
+        <div className={lost ? 'bad' : repair ? 'mid' : ''}><span>Repair · lost</span><b>{repair} · {lost}</b><small>units</small></div>
+        <div className={overdue.length ? 'bad' : ''}><span>Maintenance</span><b>{overdue.length}</b><small>{overdue.length ? 'overdue' : 'all up to date'}</small></div>
       </div>
-      {shown.length ? (
-        <section className="rs-card flush">
-          {canWrite(d, 'assets_bulk') && <div className="sc-head"><label className="rs-check"><input type="checkbox" checked={allSel} onChange={toggleAll} /> Select all {shown.length}</label></div>}
-          <div className="as-list">
-            {shown.map((a) => (
-              <div key={a.id} className={'as-row' + (selected.has(a.id) ? ' sel' : '') + (a.is_disposed ? ' off' : '')}>
-                {canWrite(d, 'assets_bulk') ? <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggle(a.id)} aria-label={`Select ${a.name}`} /> : <span />}
-                <span className="n"><b>{a.name}{a.maintenance_overdue && <i className="fas fa-wrench as-warn" title={`Maintenance overdue since ${a.next_maintenance_due}`} aria-label="Maintenance overdue" />}</b>
-                  <small>{[a.category, a.asset_tag, a.serial_number && `SN ${a.serial_number}`, a.from_product && 'from stock'].filter(Boolean).join(' · ')}</small></span>
-                <span className="w"><small><i className="fas fa-location-dot" aria-hidden="true" /> {[a.class_name && `${a.class_name}${a.arm_name ? ` ${a.arm_name}` : ''}`, a.teacher_name, a.effective_section_label, a.location].filter(Boolean).join(' · ') || 'No location'}</small>
-                  <small><i className="fas fa-user" aria-hidden="true" /> {a.custodian || 'No custodian'}</small></span>
-                <span className="st">
-                  {a.is_split ? a.status_breakdown.filter((r) => r.quantity > 0).map((r) => <Pill key={r.status} tone={ST_TONE[r.status]}>{r.quantity} {r.status}</Pill>)
-                    : <Pill tone={ST_TONE[a.status]}>{a.quantity > 1 ? `${a.quantity} ` : ''}{a.status}</Pill>}
-                  {a.on_loan_quantity > 0 && <Pill tone="info" icon="fa-right-from-bracket">{a.on_loan_quantity} out</Pill>}
-                </span>
-                <span className="v"><b>{naira(a.book_value)}</b><small>{a.annual_depreciation > 0 ? `−${short(a.annual_depreciation)}/yr` : `${plural(a.quantity, 'unit')}`}</small></span>
-                <span className="a">
-                  {a.is_individually_tracked && <button type="button" className="rs-btn sm ghost" onClick={() => open('units', a)}><i className="fas fa-qrcode" aria-hidden="true" /><span className="rs-hide-sm">Units</span></button>}
-                  <Menu label={phone ? 'Actions' : ''} items={actions(a)} />
-                </span>
-              </div>
-            ))}
-          </div>
-          {ids.length > 0 && (
-            <Bar>
-              <span className="rs-bar-t"><b>{ids.length} selected</b><small><button type="button" className="rs-link" onClick={() => setSelected(new Set())}>Clear</button></small></span>
-              <button type="button" className="rs-btn ghost" disabled={busy} onClick={() => setBulk('transfer')}><i className="fas fa-truck-ramp-box" aria-hidden="true" /><span className="rs-hide-sm">Move</span></button>
-              <button type="button" className="rs-btn ghost" disabled={busy} onClick={() => setBulk('assign')}><i className="fas fa-user-tag" aria-hidden="true" /><span className="rs-hide-sm">Assign</span></button>
-              <button type="button" className="rs-btn ghost" disabled={busy} onClick={() => setBulk('dispose')}><i className="fas fa-box-archive" aria-hidden="true" /><span className="rs-hide-sm">Dispose</span></button>
-              <button type="button" className="rs-btn danger" disabled={busy} onClick={bulkDelete} aria-label="Delete selected"><i className="fas fa-trash" aria-hidden="true" /></button>
-            </Bar>
-          )}
-        </section>
-      ) : <Blank icon="fa-building-columns" title={assets.length ? 'Nothing matches' : 'No assets registered'}>
-          <p>{assets.length ? 'Try a different search or filter.' : 'Register furniture, ICT equipment and other fixed assets, or convert stock from Products.'}</p></Blank>}
+      {quicks.length > 0 && (
+        <div className="ax-attn" role="group" aria-label="Needs attention">
+          {quicks.map((x) => (
+            <button type="button" key={x.value} className={'ax-attn-b ' + x.tone + (quick === x.value ? ' on' : '')} onClick={() => setQuick(quick === x.value ? '' : x.value)} aria-pressed={quick === x.value}>
+              <i className={'fas ' + x.icon} aria-hidden="true" /><b>{x.n}</b><span>{x.label}</span>{quick === x.value && <i className="fas fa-xmark ax-x" aria-hidden="true" />}
+            </button>))}
+        </div>)}
+
+      {phone ? list : <div className="ax-split">{list}<div className="ax-pane">{card || <Blank icon="fa-hand-pointer" title="Pick an asset">Its details, value and history show here.</Blank>}</div></div>}
+      {phone && current && createPortal(<div className="ax-page" role="dialog" aria-modal="true" aria-label={current.name}>{card}</div>, document.body)}
+      {phone && !current && !picking && canWrite(d, 'assets_create') && createPortal(
+        <button type="button" className="ax-fab" onClick={() => open('edit', {})} aria-label="Register asset"><i className="fas fa-plus" aria-hidden="true" /></button>, document.body)}
+
+      {picking && ids.length > 0 && (
+        <Bar>
+          <span className="rs-bar-t"><b>{plural(ids.length, 'asset')} selected</b><small>Move, assign or retire together</small></span>
+          <button type="button" className="rs-btn ghost" disabled={busy} onClick={() => setBulk('transfer')}><i className="fas fa-truck-ramp-box" aria-hidden="true" /><span className="rs-hide-sm">Move</span></button>
+          <button type="button" className="rs-btn ghost" disabled={busy} onClick={() => setBulk('assign')}><i className="fas fa-user-tag" aria-hidden="true" /><span className="rs-hide-sm">Assign</span></button>
+          <Menu label="" items={[
+            canWrite(d, 'assets_dispose') && { icon: 'fa-box-archive', label: 'Dispose / retire', onClick: () => setBulk('dispose') },
+            canWrite(d, 'assets_delete') && { icon: 'fa-trash', label: 'Delete permanently', danger: true, onClick: bulkDelete }]} />
+        </Bar>
+      )}
 
       {filters && (
         <Sheet title="Filter assets" onClose={() => setFilters(false)}>
           <div className="sl-form">
-            <label className="sl-f"><span>Category</span><select value={cat} onChange={(e) => setCat(e.target.value)}><option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></label>
-            <label className="sl-f"><span>Status</span><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option>{d.statuses.map((x) => <option key={x}>{x}</option>)}</select></label>
-            <label className="sl-f"><span>Section</span><select value={section} onChange={(e) => setSection(e.target.value)}><option value="">All sections</option>{d.sections.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select></label>
-            <button type="button" className="rs-btn primary wide" onClick={() => setFilters(false)}>Show {shown.length} assets</button>
+            <div className="ax-lbl">Status</div>
+            <div className="rs-chips">{['', ...d.statuses].map((x) => <button type="button" key={x || 'all'} className={'rs-chip' + (status === x ? ' on' : '')} onClick={() => setStatus(x)}>{x || 'Any'}</button>)}</div>
+            <div className="ax-lbl">Section</div>
+            <div className="rs-chips">{[{ key: '', label: 'Whole school' }, ...d.sections].map((x) => <button type="button" key={x.key || 'all'} className={'rs-chip' + (section === x.key ? ' on' : '')} onClick={() => setSection(x.key)}>{x.label}</button>)}</div>
+            <div className="ax-sheet-a">
+              {nFilters > 0 && <button type="button" className="rs-btn ghost" onClick={() => { setStatus(''); setSection(''); }}>Clear</button>}
+              <button type="button" className="rs-btn primary" onClick={() => setFilters(false)}>Show {plural(shown.length, 'asset')}</button>
+            </div>
           </div>
         </Sheet>
       )}
       {(bulk === 'transfer' || bulk === 'assign') && (
         <Sheet title={bulk === 'transfer' ? `Move ${plural(ids.length, 'asset')}` : `Assign ${plural(ids.length, 'asset')}`} onClose={() => setBulk(null)}>
           <div className="sl-form">
-            <p className="rs-muted">Applies to batch-tracked assets. Individually tracked ones are moved unit by unit from “Manage units”.</p>
-            <label className="sl-f"><span>{bulk === 'transfer' ? 'New location' : 'Custodian (blank to unassign)'}</span>
-              <input value={bulkVal} onChange={(e) => setBulkVal(e.target.value)} placeholder={bulk === 'transfer' ? 'e.g. ICT Lab 2' : 'e.g. Mr Bello'} autoFocus /></label>
+            <p className="rs-muted">Applies to batch-tracked assets. Individually tracked ones are moved unit by unit from “Units”.</p>
+            <PlaceInput d={d} kind={bulk === 'transfer' ? 'place' : 'person'} value={bulkVal} onChange={setBulkVal} />
             <button type="button" className="rs-btn primary wide" disabled={busy || (bulk === 'transfer' && !bulkVal.trim())}
               onClick={() => (bulk === 'transfer' ? runBulk(d.bulk_transfer_url, { location: bulkVal.trim() }, 'Moved.') : runBulk(d.bulk_assign_url, { custodian: bulkVal.trim() }, 'Assigned.'))}>
-              {bulk === 'transfer' ? 'Move' : 'Assign'}</button>
+              {bulk === 'transfer' ? 'Move here' : bulkVal.trim() ? 'Assign' : 'Remove custodian'}</button>
           </div>
         </Sheet>
       )}
       {bulk === 'dispose' && <BulkDisposeModal count={ids.length} url={d.bulk_dispose_url} notify={notify} onClose={() => setBulk(null)}
-        onSaved={(msg) => { setBulk(null); notify('success', msg); setSelected(new Set()); nav.refresh(); }} />}
+        onSaved={(msg) => { setBulk(null); notify('success', msg); setSelected(new Set()); setPicking(false); nav.refresh(); }} />}
 
       {modal && modal.kind === 'edit' && <AssetForm d={d} asset={modal.asset.id ? modal.asset : null} notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'dispose' && <DisposeModal asset={modal.asset} notify={notify} onClose={close} onSaved={saved} />}
-      {modal && modal.kind === 'transfer' && <TransferModal asset={modal.asset} notify={notify} onClose={close} onSaved={saved} />}
-      {modal && modal.kind === 'assign' && <AssignModal asset={modal.asset} notify={notify} onClose={close} onSaved={saved} />}
+      {modal && modal.kind === 'transfer' && <QuickPlaceSheet d={d} asset={modal.asset} kind="place" notify={notify} onClose={close} onSaved={saved} />}
+      {modal && modal.kind === 'assign' && <QuickPlaceSheet d={d} asset={modal.asset} kind="person" notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'status' && <MoveStatusModal asset={modal.asset} d={d} notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'checkout' && <CheckoutModal asset={modal.asset} notify={notify} onClose={close} onSaved={saved} />}
       {modal && modal.kind === 'units' && <AssetUnitsModal asset={modal.asset} d={d} notify={notify} onClose={close} onSaved={() => nav.refresh()} />}
       {modal && modal.kind === 'history' && <AssetHistoryModal asset={modal.asset} onClose={close} />}
       {modal && modal.kind === 'maint' && <AssetMaintenanceModal asset={modal.asset} d={d} notify={notify} onClose={close} onSaved={saved} />}
     </>
+  );
+}
+
+// Suggest places / people already used in the register so moves are one tap.
+function PlaceInput({ d, kind, value, onChange }) {
+  const opts = useMemo(() => {
+    const set = new Map();
+    (d.assets || []).forEach((a) => {
+      const v = kind === 'place' ? a.location : a.custodian;
+      if (v) set.set(v, (set.get(v) || 0) + 1);
+    });
+    if (kind === 'person') (d.teachers || []).forEach((t) => { if (t.name && !set.has(t.name)) set.set(t.name, 0); });
+    return [...set.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v).slice(0, 14);
+  }, [d, kind]);
+  return (
+    <>
+      <label className="sl-f"><span>{kind === 'place' ? 'Where is it going?' : 'Who is responsible for it?'}</span>
+        <input value={value} onChange={(e) => onChange(e.target.value)} autoFocus placeholder={kind === 'place' ? 'e.g. ICT Lab 2' : 'e.g. Mr Bello (blank to remove)'} /></label>
+      {opts.length > 0 && <div className="rs-chips ax-sugg">{opts.map((o) => <button type="button" key={o} className={'rs-chip' + (value === o ? ' on' : '')} onClick={() => onChange(o)}>{o}</button>)}</div>}
+    </>
+  );
+}
+
+function QuickPlaceSheet({ d, asset, kind, onClose, onSaved, notify }) {
+  const [val, setVal] = useState(kind === 'place' ? '' : (asset.custodian || ''));
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const r = await submitJson(kind === 'place' ? asset.transfer_url : asset.assign_url,
+      kind === 'place' ? { location: val.trim(), note } : { custodian: val.trim(), note });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message || 'Saved.'); onSaved(); } else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <Sheet title={kind === 'place' ? `Move ${asset.name}` : `Assign ${asset.name}`} onClose={onClose}>
+      <div className="sl-form">
+        <p className="rs-muted">{kind === 'place' ? `Now: ${asset.location || 'no location'}` : `Now: ${asset.custodian || 'nobody'}`}</p>
+        <PlaceInput d={d} kind={kind} value={val} onChange={setVal} />
+        <label className="sl-f"><span>Note (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why it moved, handover reference…" /></label>
+        <button type="button" className="rs-btn primary wide" disabled={busy || (kind === 'place' && !val.trim())} onClick={save}>
+          <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" />{kind === 'place' ? 'Move here' : val.trim() ? 'Assign' : 'Remove custodian'}</button>
+      </div>
+    </Sheet>
+  );
+}
+
+function AssetCard({ a, d, open, doDelete, phone, onBack }) {
+  const [full, setFull] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (a.detail_url) apiGet(a.detail_url).then((r) => { if (alive && r.asset) setFull(r.asset); }).catch(() => {});
+    return () => { alive = false; };
+  }, [a.detail_url, a.book_value, a.quantity, a.location, a.custodian]);
+  const w = (k) => canWrite(d, k);
+  const live = !a.is_disposed;
+  const batch = !a.is_individually_tracked;
+  const acts = [
+    live && batch && w('assets_edit') && { k: 'transfer', icon: 'fa-truck-ramp-box', label: 'Move' },
+    live && batch && w('assets_edit') && { k: 'assign', icon: 'fa-user-tag', label: 'Assign' },
+    live && batch && w('assets_loans') && { k: 'checkout', icon: 'fa-right-from-bracket', label: 'Lend out' },
+    live && batch && w('assets_edit') && { k: 'status', icon: 'fa-right-left', label: 'Change status' },
+    a.is_individually_tracked && { k: 'units', icon: 'fa-qrcode', label: 'Units' },
+    w('assets_maintenance') && { k: 'maint', icon: 'fa-wrench', label: 'Maintenance', warn: a.maintenance_overdue },
+    w('assets_edit') && { k: 'edit', icon: 'fa-pen', label: 'Edit' },
+  ].filter(Boolean);
+  const more = [
+    { icon: 'fa-clock-rotate-left', label: 'Full history', onClick: () => open('history', a) },
+    live && w('assets_dispose') && { icon: 'fa-box-archive', label: 'Dispose / retire', onClick: () => open('dispose', a) },
+    w('assets_delete') && { icon: 'fa-trash', label: 'Delete permanently', danger: true, onClick: () => doDelete(a) },
+  ];
+  const age = a.acquisition_date ? Math.max(0, (Date.now() - new Date(a.acquisition_date)) / 31557600000) : null;
+  const lifeLeft = a.useful_life_years && age != null ? Math.max(0, a.useful_life_years - age) : null;
+  const ownership = [a.class_name && `${a.class_name}${a.arm_name ? ' ' + a.arm_name : ''}`, a.teacher_name, a.effective_section_label].filter(Boolean).join(' · ');
+  const maint = (full && full.maintenance) || [];
+  const timeline = (full && full.timeline) || [];
+  const evText = (l) => {
+    if (l.event_type === 'transferred') return `${l.location_before || 'Unspecified'} → ${l.location_after || 'Unspecified'}`;
+    if (l.event_type === 'assigned') return l.custodian_after;
+    if (l.event_type === 'unassigned') return `was ${l.custodian_before || '—'}`;
+    if (l.breakdown_snapshot) return Object.entries(l.breakdown_snapshot).map(([k, v]) => `${v} ${k}`).join(', ');
+    if (l.status_after) return `${l.status_before || '—'} → ${l.status_after}`;
+    return '';
+  };
+  return (
+    <article className="ax-card">
+      <header className="ax-card-h">
+        {phone && <button type="button" className="ax-back" onClick={onBack} aria-label="Back to assets"><i className="fas fa-chevron-left" aria-hidden="true" /></button>}
+        <CatIcon category={a.category} size="lg" />
+        <div className="ax-card-t">
+          <h2>{a.name}</h2>
+          <p>{[a.category, a.asset_tag, a.serial_number && `SN ${a.serial_number}`].filter(Boolean).join(' · ')}</p>
+        </div>
+        <Menu label="" items={more} />
+      </header>
+      <div className="ax-card-b">
+        {a.is_disposed ? <div className="ax-note"><i className="fas fa-box-archive" aria-hidden="true" />Disposed on {a.disposed_on}{a.disposal_amount ? ` · sold for ${naira(a.disposal_amount)}` : ''}</div> : (
+          <div className="ax-units"><div><b>{a.active_quantity ?? a.quantity}</b><span>{(a.active_quantity ?? a.quantity) === 1 ? 'unit' : 'units'}</span></div><StatusStrip a={a} legend /></div>)}
+
+        {acts.length > 0 && (
+          <div className={'ax-acts' + (phone ? ' dock' : '')}>
+            {(phone ? acts.slice(0, 4) : acts).map((x) => (
+              <button type="button" key={x.k} className={'ax-act' + (x.warn ? ' warn' : '')} onClick={() => open(x.k, a)}>
+                <i className={'fas ' + x.icon} aria-hidden="true" /><span>{x.label}</span></button>))}
+            {phone && acts.length > 4 && <Menu label="More" items={acts.slice(4).map((x) => ({ icon: x.icon, label: x.label, onClick: () => open(x.k, a) }))} />}
+          </div>)}
+
+        <div className="ax-facts">
+          <div><i className="fas fa-location-dot" aria-hidden="true" /><span>Where</span><b>{a.location || <em>Not set</em>}</b></div>
+          <div><i className="fas fa-user" aria-hidden="true" /><span>Who has it</span><b>{a.custodian || <em>Nobody</em>}</b></div>
+          {ownership && <div><i className="fas fa-school" aria-hidden="true" /><span>Belongs to</span><b>{ownership}</b></div>}
+          {a.on_loan_quantity > 0 && <div><i className="fas fa-right-from-bracket" aria-hidden="true" /><span>On loan</span><b>{plural(a.on_loan_quantity, 'unit')} · {a.available_quantity} free</b></div>}
+          {a.supplier && <div><i className="fas fa-store" aria-hidden="true" /><span>Supplier</span><b>{a.supplier}</b></div>}
+          {a.acquisition_date && <div><i className="fas fa-calendar" aria-hidden="true" /><span>Bought</span><b>{a.acquisition_date}{age != null ? ` · ${age < 1 ? 'under a year' : Math.floor(age) + ' yr'} ago` : ''}</b></div>}
+        </div>
+
+        <section className="ax-sec">
+          <h3>Value</h3>
+          <div className="ax-val">
+            <div><span>Book value</span><b title={naira(a.book_value)}>{phone ? short(a.book_value) : naira(a.book_value)}</b></div>
+            <div><span>Cost</span><b title={naira(a.acquisition_cost)}>{phone ? short(a.acquisition_cost) : naira(a.acquisition_cost)}</b></div>
+            <div><span>Loses</span><b>{short(a.annual_depreciation || 0)}<small>/yr</small></b></div>
+          </div>
+          {a.acquisition_cost > 0 && <Meter value={a.book_value} max={a.acquisition_cost} tone={a.book_value / a.acquisition_cost > 0.5 ? 'good' : a.book_value / a.acquisition_cost > 0.2 ? 'mid' : 'bad'} />}
+          {lifeLeft != null && <p className="ax-small">{lifeLeft > 0 ? `About ${lifeLeft < 1 ? 'less than a year' : Math.round(lifeLeft) + ' years'} of useful life left (of ${a.useful_life_years}).` : `Past its ${a.useful_life_years}-year useful life — plan a replacement.`}</p>}
+        </section>
+
+        <section className="ax-sec">
+          <h3>Maintenance {w('assets_maintenance') && <button type="button" className="rs-link" onClick={() => open('maint', a)}>Log / view all</button>}</h3>
+          {a.next_maintenance_due ? <div className={'ax-note ' + (a.maintenance_overdue ? 'bad' : '')}><i className="fas fa-wrench" aria-hidden="true" />{a.maintenance_overdue ? `Overdue since ${a.next_maintenance_due}` : `Next service due ${a.next_maintenance_due}`}</div>
+            : <p className="ax-small">No service scheduled.</p>}
+          {full && full.possibly_uneconomical && <div className="ax-note mid"><i className="fas fa-triangle-exclamation" aria-hidden="true" />Repairs have cost over half its price — consider replacing it.</div>}
+          {maint.slice(0, 3).map((m) => (
+            <div className="ax-tl" key={m.id}><i className="fas fa-screwdriver-wrench" aria-hidden="true" />
+              <div><b>{m.problem || 'Service'}</b><small>{[m.completed_on || m.started_on || m.created_at, m.technician, m.status].filter(Boolean).join(' · ')}</small></div>
+              <span>{m.cost ? naira(m.cost) : ''}</span></div>))}
+          {(a.total_maintenance_cost || 0) > 0 && <p className="ax-small">Spent on upkeep so far: <b>{naira(a.total_maintenance_cost)}</b></p>}
+        </section>
+
+        {a.is_individually_tracked && full && full.units && (
+          <section className="ax-sec">
+            <h3>Units <button type="button" className="rs-link" onClick={() => open('units', a)}>Manage</button></h3>
+            <p className="ax-small">{plural(full.units.length, 'unit')} with their own tag and QR code — move, assign or check them out one by one.</p>
+          </section>)}
+
+        <section className="ax-sec">
+          <h3>Recent activity <button type="button" className="rs-link" onClick={() => open('history', a)}>Full history</button></h3>
+          {!full ? <p className="ax-small">Loading…</p> : timeline.length ? timeline.slice(0, 6).map((l) => (
+            <div className="ax-tl" key={l.id}><i className={'fas ' + (EV_IC[l.event_type] || 'fa-circle-dot')} aria-hidden="true" />
+              <div><b>{EV[l.event_type] || l.event_type} {evText(l) && <span>· {evText(l)}</span>}</b><small>{l.created_at}{l.created_by ? ` · ${l.created_by}` : ''}{l.note ? ` · ${l.note}` : ''}</small></div></div>))
+            : <p className="ax-small">No activity yet.</p>}
+        </section>
+        {full && full.active_audit_items && full.active_audit_items.length > 0 && (
+          <div className="ax-note"><i className="fas fa-clipboard-check" aria-hidden="true" />In audit “{full.active_audit_items[0].audit_name}” — {full.active_audit_items[0].state}</div>)}
+      </div>
+    </article>
   );
 }
 
@@ -922,47 +1160,6 @@ function AssetMaintenanceModal({ asset, d, onClose, onSaved, notify }) {
           </div>
         </div>
       ))}
-    </Modal>
-  );
-}
-
-function TransferModal({ asset, onClose, onSaved, notify }) {
-  const [f, setF] = useState({ location: '', reference: '', note: '' });
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const save = async () => {
-    if (!f.location.trim()) { notify('error', 'Enter the destination location.'); return; }
-    const r = await submitJson(asset.transfer_url, f);
-    if (r.ok) onSaved(); else notify('error', r.error || 'Could not transfer.');
-  };
-  return (
-    <Modal title={`Transfer "${asset.name}"`} icon="fa-truck-ramp-box" size="md" onClose={onClose}
-           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Transfer</Button></>}>
-      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Current location: <strong>{asset.location || 'Unspecified'}</strong>. The previous location stays in this asset's history.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
-        <Field label="New location *"><input className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="e.g. Mathematics Department" /></Field>
-        <Field label="Reference (optional)"><input className="form-control" value={f.reference} onChange={(e) => set('reference', e.target.value)} placeholder="e.g. transfer slip #" /></Field>
-      </div>
-      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. Lab A being renovated" /></Field>
-    </Modal>
-  );
-}
-
-function AssignModal({ asset, onClose, onSaved, notify }) {
-  const [f, setF] = useState({ custodian: asset.custodian || '', reference: '', note: '' });
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const save = async () => {
-    const r = await submitJson(asset.assign_url, f);
-    if (r.ok) onSaved(); else notify('error', r.error || 'Could not assign.');
-  };
-  return (
-    <Modal title={`Assign "${asset.name}"`} icon="fa-user-tag" size="md" onClose={onClose}
-           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
-      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Current custodian: <strong>{asset.custodian || 'Unassigned'}</strong>. Leave blank to unassign.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
-        <Field label="New custodian"><input className="form-control" value={f.custodian} onChange={(e) => set('custodian', e.target.value)} placeholder="e.g. Mrs. Chukwu, or blank to unassign" /></Field>
-        <Field label="Reference (optional)"><input className="form-control" value={f.reference} onChange={(e) => set('reference', e.target.value)} placeholder="e.g. handover slip #" /></Field>
-      </div>
-      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} /></Field>
     </Modal>
   );
 }

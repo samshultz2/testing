@@ -1768,6 +1768,7 @@ def _asset_dict(a):
         'checkout_url': url_for('sales.checkout_asset', asset_id=a.id),
         'delete_url': url_for('sales.delete_asset', asset_id=a.id),
         'history_url': url_for('sales.asset_history', asset_id=a.id),
+        'detail_url': url_for('sales.asset_detail', asset_id=a.id),
         'transfer_url': url_for('sales.transfer_asset', asset_id=a.id),
         'assign_url': url_for('sales.assign_asset', asset_id=a.id),
         'units_url': url_for('sales.asset_units', asset_id=a.id) if a.is_individually_tracked else '',
