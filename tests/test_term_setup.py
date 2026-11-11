@@ -70,3 +70,25 @@ def test_term_setup_with_a_term_offers_in_place_fixes(app):
     d = d.get('data', d)
     by = {s['key']: s for s in d['steps']}
     assert by['dates']['done'] and by['weeks']['done'] and d['info']['weeks'] >= 13
+
+
+def test_terms_list_groups_by_session_with_status_and_alerts(app):
+    from models import db, AcademicSession, Term
+    with app.app_context():
+        s = AcademicSession(name='2040/2041', is_active=False)
+        db.session.add(s); db.session.flush()
+        from datetime import date
+        db.session.add_all([
+            Term(session_id=s.id, term_number=1, name='First Term', start_date=date(2040, 9, 1), end_date=date(2040, 12, 15)),
+            Term(session_id=s.id, term_number=2, name='Second Term', start_date=date(2040, 12, 1), end_date=date(2041, 3, 30)),
+        ])
+        db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    d = c.get('/academics/terms', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    sess = next(x for x in d['sessions'] if x['id'] == sid)
+    assert [t['number'] for t in sess['terms']] == [1, 2]
+    assert all(t['state'] == 'upcoming' for t in sess['terms'])
+    assert {'weeks', 'classes', 'students', 'setup_url', 'edit_url'} <= set(sess['terms'][0])
+    assert any('overlap' in a['text'] for a in d['alerts'])

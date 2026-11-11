@@ -38,10 +38,12 @@ function ActionBtn({ step, primary, run, busy, onDates, block }) {
   );
 }
 
-function DatesSheet({ d, step, onClose, notify }) {
+export function DatesSheet({ title, url, start, end, weeks: have, onClose, notify }) {
   const nav = useNav();
-  const [f, setF] = useState({ start_date: d.term_dates.start_date, end_date: d.term_dates.end_date });
-  const [rebuild, setRebuild] = useState(!d.info.weeks);
+  const [f, setF] = useState({ start_date: start || '', end_date: end || '' });
+  // Rebuild by default when there are no weeks or the term had no dates yet
+  // (its weeks can't have come from them).
+  const [rebuild, setRebuild] = useState(!have || !start || !end);
   const [busy, setBusy] = useState(false);
   const bad = f.start_date && f.end_date && f.end_date <= f.start_date;
   const weeks = f.start_date && f.end_date && !bad
@@ -49,13 +51,13 @@ function DatesSheet({ d, step, onClose, notify }) {
   const save = async () => {
     if (!f.start_date || !f.end_date || bad) { notify('error', 'Pick a start date and a later end date.'); return; }
     setBusy(true);
-    const r = await submitJson(step.action.url, { ...f, ...(rebuild ? { regenerate_weeks: 'on' } : {}) });
+    const r = await submitJson(url, { ...f, ...(rebuild ? { regenerate_weeks: 'on' } : {}) });
     setBusy(false);
     if (r.ok) { notify('success', r.message || 'Dates saved.'); onClose(); nav.refresh(); }
     else notify('error', r.error || 'Could not save the dates.');
   };
   return (
-    <Sheet title={`${d.term.full_name} dates`} onClose={onClose}>
+    <Sheet title={title} onClose={onClose}>
       <div className="su-form">
         <div className="cm-row2">
           <Field label="First day" grow><input type="date" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} /></Field>
@@ -63,7 +65,7 @@ function DatesSheet({ d, step, onClose, notify }) {
         </div>
         {bad ? <p className="su-err"><i className="fas fa-circle-exclamation" aria-hidden="true" /> The last day must be after the first day.</p>
           : weeks > 0 && <p className="cm-mute">About {plural(weeks, 'week')} of school.</p>}
-        <Toggle title="Rebuild the weeks from these dates" sub={d.info.weeks ? `Replaces the ${d.info.weeks} weeks already set up` : 'Creates Monday–Friday school weeks'}
+        <Toggle title="Rebuild the weeks from these dates" sub={have ? `Replaces the ${have} weeks already set up` : 'Creates Monday–Friday school weeks'}
                 on={rebuild} onChange={setRebuild} />
         <div className="su-form-f">
           <button type="button" className="rs-btn ghost" onClick={onClose}>Cancel</button>
@@ -192,7 +194,8 @@ export default function TermSetup({ d, notify }) {
           </div>
         </div>
       </div>
-      {dates && dateStep && <DatesSheet d={d} step={dateStep} notify={notify} onClose={() => setDates(false)} />}
+      {dates && dateStep && <DatesSheet title={`${d.term.full_name} dates`} url={dateStep.action.url} start={d.term_dates.start_date} end={d.term_dates.end_date}
+                                     weeks={d.info.weeks} notify={notify} onClose={() => setDates(false)} />}
     </div>
   );
 }

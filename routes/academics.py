@@ -177,22 +177,99 @@ def edit_session(session_id):
 @academics_bp.route('/terms')
 @login_required
 def terms_list():
-    """List all terms"""
+    Term_NAMES = {1: 'First Term', 2: 'Second Term', 3: 'Third Term'}
+    """Terms grouped by session as a timeline: status, progress, readiness
+    counts and in-place actions (add, set dates, activate)."""
+    from sqlalchemy import func
     terms = Term.query.join(AcademicSession).order_by(
-        AcademicSession.name.desc(),
-        Term.term_number
-    ).all()
+        AcademicSession.name.desc(), Term.term_number).all()
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
+    today = date.today()
+    ids = [t.id for t in terms] or [-1]
+    weeks = dict(db.session.query(Week.term_id, func.count(Week.id)).filter(Week.term_id.in_(ids)).group_by(Week.term_id).all())
+    hols = dict(db.session.query(Holiday.term_id, func.count(Holiday.id)).filter(Holiday.term_id.in_(ids)).group_by(Holiday.term_id).all())
+    classes = dict(db.session.query(ClassArmAssignment.term_id, func.count(ClassArmAssignment.id))
+                   .filter(ClassArmAssignment.term_id.in_(ids)).group_by(ClassArmAssignment.term_id).all())
+    pupils = dict(db.session.query(ClassArmAssignment.term_id, func.count(StudentEnrollment.id))
+                  .join(StudentEnrollment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                  .filter(ClassArmAssignment.term_id.in_(ids), StudentEnrollment.is_active == True)
+                  .group_by(ClassArmAssignment.term_id).all())
+
+    def row(t):
+        st, prog, week, left = 'nodates', None, None, None
+        if t.start_date and t.end_date:
+            total = max(1, (t.end_date - t.start_date).days)
+            if today < t.start_date:
+                st, left = 'upcoming', (t.start_date - today).days
+            elif today > t.end_date:
+                st, prog = 'ended', 100
+            else:
+                st, prog, left = 'running', round((today - t.start_date).days / total * 100), (t.end_date - today).days
+                w = Week.query.filter(Week.term_id == t.id, Week.start_date <= today,
+                                      Week.end_date >= today - timedelta(days=2)).first()
+                week = w.week_number if w else None
+        return {'id': t.id, 'name': t.name, 'number': t.term_number, 'is_active': bool(t.is_active),
+                'session': t.session.name if t.session else '', 'session_id': t.session_id,
+                'start_date': _fd(t.start_date), 'end_date': _fd(t.end_date),
+                'start_iso': t.start_date.isoformat() if t.start_date else '',
+                'end_iso': t.end_date.isoformat() if t.end_date else '',
+                'state': st, 'progress': prog, 'week': week, 'days': left,
+                'weeks': weeks.get(t.id, 0), 'holidays': hols.get(t.id, 0),
+                'classes': classes.get(t.id, 0), 'students': pupils.get(t.id, 0),
+                'results_published': bool(getattr(t, 'results_published', False)),
+                'view_url': url_for('academics.view_term', term_id=t.id),
+                'edit_url': url_for('academics.edit_term', term_id=t.id),
+                'setup_url': url_for('academics.term_setup', term_id=t.id),
+                'activate_url': url_for('academics.activate_term', term_id=t.id)}
+
+    rows = [row(t) for t in terms]
+    by_session = {}
+    for r in rows:
+        by_session.setdefault(r['session_id'], []).append(r)
+
+    # Things worth a decision: active term ending with no next term, overlaps, missing dates.
+    alerts = []
+    act = next((r for r in rows if r['is_active']), None)
+    chrono = sorted(terms, key=lambda t: (t.session.name if t.session else '', t.term_number))
+    if act:
+        t = next(x for x in terms if x.id == act['id'])
+        i = chrono.index(t)
+        nxt = chrono[i + 1] if i + 1 < len(chrono) else None
+        if t.end_date and (t.end_date - today).days <= 30:
+            if not nxt:
+                when = (f'ends in {(t.end_date - today).days} days' if t.end_date >= today else 'has ended')
+                if t.term_number < 3:
+                    alerts.append({'tone': 'mid', 'icon': 'fa-calendar-plus',
+                                   'text': f'{act["name"]} {when} and {Term_NAMES[t.term_number + 1]} isn’t created yet.',
+                                   'add': {'session_id': t.session_id, 'term_number': t.term_number + 1}})
+                else:
+                    alerts.append({'tone': 'mid', 'icon': 'fa-calendar-plus',
+                                   'text': f'{act["name"]} {when} — create next session and its First Term.',
+                                   'link': url_for('academics.add_session'), 'link_label': 'New session'})
+            elif t.end_date < today and nxt.start_date and nxt.start_date <= today:
+                alerts.append({'tone': 'info', 'icon': 'fa-bolt',
+                               'text': f'{nxt.full_name} has started — make it the active term.', 'activate': nxt.id})
+    elif rows:
+        alerts.append({'tone': 'bad', 'icon': 'fa-triangle-exclamation', 'text': 'No term is active — attendance and score entry are paused.'})
+    for sid, ts in by_session.items():
+        dated = sorted([x for x in terms if x.session_id == sid and x.start_date and x.end_date], key=lambda x: x.start_date)
+        for a_, b_ in zip(dated, dated[1:]):
+            if b_.start_date <= a_.end_date:
+                alerts.append({'tone': 'bad', 'icon': 'fa-code-merge',
+                               'text': f'{a_.full_name} and {b_.name} overlap — check their dates.'})
+    nod = [r for r in rows if r['state'] == 'nodates' and (r['is_active'] or r['session_id'] == (act or {}).get('session_id'))]
+    for r in nod[:2]:
+        alerts.append({'tone': 'mid', 'icon': 'fa-calendar-xmark', 'text': f'{r["name"]} {r["session"]} has no dates.', 'dates': r['id']})
+
     return _render({
         'page': 'terms',
-        'terms': [{'id': t.id, 'name': t.name, 'is_active': bool(t.is_active),
-                   'session': t.session.name if t.session else '',
-                   'start_date': _fd(t.start_date), 'end_date': _fd(t.end_date),
-                   'weeks': t.weeks.count(),
-                   'view_url': url_for('academics.view_term', term_id=t.id),
-                   'edit_url': url_for('academics.edit_term', term_id=t.id),
-                   'activate_url': url_for('academics.activate_term', term_id=t.id)} for t in terms],
-        'urls': {'setup': url_for('academics.term_setup'), 'add': url_for('academics.add_term')},
+        'terms': rows,
+        'sessions': [{'id': s.id, 'name': s.name, 'is_active': bool(s.is_active),
+                      'terms': sorted(by_session.get(s.id, []), key=lambda r: r['number'])} for s in sessions],
+        'active_id': act['id'] if act else None,
+        'alerts': alerts,
+        'urls': {'setup': url_for('academics.term_setup'), 'add': url_for('academics.add_term'),
+                 'sessions': url_for('academics.sessions_list')},
     })
 
 

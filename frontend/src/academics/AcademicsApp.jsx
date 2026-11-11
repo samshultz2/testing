@@ -5,6 +5,7 @@ import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import TermSetup from './TermSetup';
+import Terms from './Terms';
 
 // ---- Sessions list ---------------------------------------------------------
 function Sessions({ d, notify }) {
@@ -78,44 +79,6 @@ function SessionForm({ d, notify }) {
 }
 
 // ---- Terms list ------------------------------------------------------------
-function Terms({ d, notify }) {
-  const nav = useNav();
-  const activate = async (url) => {
-    const r = await submitJson(url, {});
-    // Full reload so the new active term propagates across the whole platform
-    // (mirrors the "view session" dropdown), not just this section.
-    if (r.ok) window.location.href = r.redirect || window.location.href;
-    else notify('error', r.error || 'Failed.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Terms</h1>
-        <div className="page-header-actions">
-          <a href={d.urls.setup} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-list-check" /> Term setup</a>
-          {canWrite(d, 'structure_create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}
-        </div>
-      </div>
-      <div className="card"><div className="card-body" style={{ padding: 0 }}>
-        {d.terms.length ? (
-          <div className="data-cards" style={{ padding: '1rem' }}>{d.terms.map((t) => (
-            <div className="data-card" key={t.id}>
-              <div className="data-card-header"><div className="data-card-title">{t.name}</div>{t.is_active && <span className="badge badge-success">Active</span>}</div>
-              <div className="data-card-row"><span className="data-card-label">Session</span><span>{t.session}</span></div>
-              <div className="data-card-row"><span className="data-card-label">Start</span><span>{t.start_date || '-'}</span></div>
-              <div className="data-card-row"><span className="data-card-label">End</span><span>{t.end_date || '-'}</span></div>
-              <div className="data-card-row"><span className="data-card-label">Weeks</span><span>{t.weeks}</span></div>
-              <div className="data-card-actions">
-                <a href={t.view_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-                <a href={t.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
-                {!t.is_active && <button type="button" className="btn btn-success btn-sm w-100" style={{ flex: 1 }} onClick={() => activate(t.activate_url)}><i aria-hidden="true" className="fas fa-check" /></button>}
-              </div>
-            </div>))}</div>
-        ) : <Empty icon="fa-clock" title="No Terms"><p>Create terms for your sessions</p></Empty>}
-      </div></div>
-    </>
-  );
-}
-
 // ---- Add term --------------------------------------------------------------
 function AddTerm({ d, notify }) {
   const nav = useNav();
