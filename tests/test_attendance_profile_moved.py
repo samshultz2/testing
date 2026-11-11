@@ -179,3 +179,21 @@ def test_copy_preview_and_copy_skip_students_who_left(app):
     d = c.get('/academics/copy-term-setup', headers={'X-Requested-With': 'fetch'}).get_json()
     d = d.get('data', d)
     assert d['page'] == 'copy_term_setup' and 'preview_url' in d and d['terms']
+
+
+def test_print_register_merges_moved_student_and_blank_mode(app):
+    sid, tid = _setup(app, 'G')
+    with app.app_context():
+        rose = (ClassArmAssignment.query.join(StudentEnrollment)
+                .filter(StudentEnrollment.student_id == sid, StudentEnrollment.is_active == True).first())
+        wk = Week.query.filter_by(term_id=tid).first()
+        rid, wid = rose.id, wk.id
+    c, _tok = _client(app)
+    html = c.get(f'/attendance/print-register?term_id={tid}&assignment_id={rid}&week_id={wid}').get_data(as_text=True)
+    assert 'Mover' in html and '100%' in html            # all five days present, merged
+    assert 'Class teacher' in html and 'Head teacher' in html
+    blank = c.get(f'/attendance/print-register?term_id={tid}&assignment_id={rid}&week_id={wid}&blank=1').get_data(as_text=True)
+    assert 'mk box' in blank and 'class="pc"' not in blank
+    # Opening a class without a week lands on a week of the term.
+    first = c.get(f'/attendance/print-register?term_id={tid}&assignment_id={rid}').get_data(as_text=True)
+    assert 'Week 1' in first

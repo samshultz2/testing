@@ -1,172 +1,235 @@
 {% extends "base.html" %}
 {% block title %}Attendance Register - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Print Register</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('attendance.attendance_app') }}">Attendance</a> / <span>Print register</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-@media print {
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .sidebar, .top-header, .bottom-nav, .no-print, .sidebar-overlay { display: none !important; }
-    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-    .card { box-shadow: none !important; border: none !important; }
-    body { font-size: 10pt; }
-    .register-container { overflow: visible !important; }
-    .register-table { width: 100%; border-collapse: collapse; }
-    .register-table th, .register-table td { 
-        border: 1px solid #000; 
-        padding: 4px 6px; 
-        text-align: center;
-        font-size: 9pt;
-    }
-    .register-table th { background: #f0f0f0 !important; }
-    .register-table .student-name { text-align: left; white-space: nowrap; }
-    .day-header { writing-mode: vertical-rl; text-orientation: mixed; height: 60px; }
-    .signature-area { margin-top: 2rem; display: flex; justify-content: space-between; }
-    .signature-box { width: 45%; }
-    .signature-line { border-top: 1px solid #000; margin-top: 40px; padding-top: 5px; }
+.pr{max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:1rem}
+.pr-bar{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
+.pr-bar .rs-head-t{flex:1;min-width:200px}
+.pr-pick{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.pr-sel{height:42px;border:1.5px solid var(--border-color);border-radius:12px;padding:0 .8rem;font:inherit;font-weight:600;background:var(--bg-card);color:inherit;max-width:240px}
+.pr-week{display:flex;align-items:center;border:1.5px solid var(--border-color);border-radius:12px;overflow:hidden;background:var(--bg-card);height:42px}
+.pr-week a,.pr-week span.off{width:38px;height:100%;display:flex;align-items:center;justify-content:center;color:var(--primary);text-decoration:none}
+.pr-week span.off{color:var(--border-color)}
+.pr-week a:hover{background:color-mix(in srgb,var(--primary) 8%,var(--bg-card))}
+.pr-week select{border:0;border-left:1px solid var(--border-color);border-right:1px solid var(--border-color);height:100%;padding:0 .6rem;font:inherit;font-weight:700;background:transparent;color:inherit}
+.pr-acts{display:flex;gap:.5rem;margin-left:auto}
+.pr-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem}
+.pr-tile{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:.85rem 1rem;display:flex;flex-direction:column;gap:.15rem}
+.pr-tile span{font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.pr-tile b{font-family:'Space Grotesk',sans-serif;font-size:1.5rem;line-height:1.1}
+.pr-tile small{font-size:.78rem;color:var(--text-muted)}
+.pr-tile.good b{color:#16a34a}.pr-tile.mid b{color:#d97706}.pr-tile.bad b{color:#dc2626}
+.pr-sheet{background:var(--bg-card);border:1px solid var(--border-color);border-radius:18px;padding:1.2rem}
+.pr-head{display:none}
+.pr-title{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem}
+.pr-title h2{margin:0;font-family:'Space Grotesk',sans-serif;font-size:1.35rem}
+.pr-title p{margin:.1rem 0 0;color:var(--text-muted);font-size:.86rem}
+.pr-legend{display:flex;gap:.9rem;font-size:.76rem;color:var(--text-muted);font-weight:600;flex-wrap:wrap}
+.pr-legend span{display:inline-flex;align-items:center;gap:.3rem}
+.pr-wrap{overflow-x:auto;border:1px solid var(--border-color);border-radius:12px}
+.pr-t{width:100%;border-collapse:separate;border-spacing:0;font-size:.82rem}
+.pr-t th,.pr-t td{border-bottom:1px solid var(--border-light,var(--border-color));border-right:1px solid var(--border-light,var(--border-color));padding:.4rem .35rem;text-align:center}
+.pr-t tr>*:last-child{border-right:0}
+.pr-t thead th{background:var(--gray-50,#f8fafc);font-weight:800;font-size:.72rem;color:var(--text-muted);position:sticky;top:0}
+.pr-t thead th.day b{display:block;color:var(--text-primary,inherit);font-size:.8rem}
+.pr-t thead th.hol{background:color-mix(in srgb,#7c3aed 9%,var(--bg-card));color:#7c3aed}
+.pr-t .sn{width:34px;color:var(--text-muted)}
+.pr-t .nm{text-align:left;white-space:nowrap;min-width:180px;font-weight:600;position:sticky;left:0;background:var(--bg-card);z-index:1}
+.pr-t thead .nm{background:var(--gray-50,#f8fafc);z-index:2}
+.pr-t .grp td{background:var(--gray-50,#f8fafc);text-align:left;font-weight:800;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.pr-t .grp td.nm{background:var(--gray-50,#f8fafc)}
+.mk{display:inline-flex;width:22px;height:22px;border-radius:7px;align-items:center;justify-content:center;font-size:.72rem;font-weight:800}
+.mk.p{background:color-mix(in srgb,#16a34a 15%,var(--bg-card));color:#15803d}
+.mk.a{background:color-mix(in srgb,#dc2626 13%,var(--bg-card));color:#b91c1c}
+.mk.n{color:var(--text-muted)}
+.mk.box{border:1.5px solid var(--text-muted);background:transparent;border-radius:5px}
+td.holc{background:repeating-linear-gradient(45deg,transparent,transparent 5px,color-mix(in srgb,#7c3aed 7%,transparent) 5px,color-mix(in srgb,#7c3aed 7%,transparent) 10px)}
+.pr-t .tot{font-weight:800}
+.pr-t .pc{font-weight:800;min-width:48px}
+.pr-t tr.low .nm{color:#b91c1c}.pr-t tr.low .pc{color:#dc2626}
+.pr-t tfoot td{background:var(--gray-50,#f8fafc);font-weight:700;font-size:.76rem}
+.pr-t tfoot td.nm{background:var(--gray-50,#f8fafc)}
+.pr-sign{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2.2rem}
+.pr-sign div{border-top:1px solid var(--text-muted);padding-top:.35rem;text-align:center;font-size:.8rem;color:var(--text-muted)}
+.pr-empty{background:var(--bg-card);border:1px dashed var(--border-color);border-radius:18px;padding:2.5rem 1rem;text-align:center;color:var(--text-muted)}
+.pr-empty i{font-size:1.6rem;color:var(--primary);margin-bottom:.5rem;display:block}
+.pr-empty b{display:block;color:var(--text-primary,inherit);font-size:1.05rem;margin-bottom:.2rem}
+.pr-note{display:flex;align-items:center;gap:.6rem;padding:.6rem .8rem;border-radius:12px;font-size:.86rem;font-weight:600;color:#b45309;background:color-mix(in srgb,#d97706 9%,var(--bg-card))}
+@media (max-width:900px){.pr-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:759px){
+  .pr{gap:.75rem}
+  .pr-pick{width:100%}.pr-pick .pr-sel{flex:1 1 140px;max-width:none}
+  .pr-week{flex:1 1 100%}.pr-week select{flex:1}
+  .pr-acts{width:100%;margin:0}.pr-acts .rs-btn{flex:1;justify-content:center}
+  .pr-sheet{padding:.8rem;border-radius:14px}
+  .pr-t .nm{min-width:130px}
+  .pr-sign{grid-template-columns:1fr;gap:1.2rem}
 }
-
-.register-container { max-width: 100%; overflow-x: auto; }
-.register-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-.register-table th, .register-table td { 
-    border: 1px solid var(--border-color); 
-    padding: 0.5rem; 
-    text-align: center;
+@page{size:A4 landscape;margin:10mm}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sidebar,.top-header,.bottom-nav,.no-print,.sidebar-overlay,.session-bar,.time-travel-bar{display:none !important}
+  .main-content,.page-content{margin:0 !important;padding:0 !important;background:#fff !important}
+  .pr{max-width:none;gap:0}
+  .pr-sheet{border:0;padding:0;border-radius:0}
+  .pr-head{display:flex;align-items:center;gap:12px;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:8px}
+  .pr-head img{height:46px}
+  .pr-head h1{margin:0;font-size:15pt}.pr-head p{margin:0;font-size:9pt;color:#444}
+  .pr-wrap{overflow:visible;border:1px solid #333;border-radius:0}
+  .pr-t{font-size:8.5pt}
+  .pr-t th,.pr-t td{border-color:#999 !important;padding:2px 3px}
+  .pr-t .nm{position:static;min-width:0}
+  .pr-t thead th{position:static}
+  .mk{width:16px;height:16px;font-size:7pt}
+  .mk.box{border:1.2px solid #555;width:18px;height:18px}
+  tr{page-break-inside:avoid}
+  .pr-sign{margin-top:16mm}
+  .pr-sign div{color:#333;border-color:#333}
 }
-.register-table th { background: var(--bg-tertiary); font-weight: 600; }
-.register-table .student-name { text-align: left; white-space: nowrap; min-width: 150px; }
-.day-col { width: 30px; }
-.attendance-cell { width: 25px; height: 25px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header no-print">
-    <h1>Print Attendance Register</h1>
-    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
-</div>
+{% set qs = {'term_id': term_id or '', 'assignment_id': assignment_id or ''} %}
+<div class="pr">
+  <div class="pr-bar no-print">
+    <span class="rs-head-ic"><i class="fas fa-print" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Attendance register</h1>
+      <p>{% if selected_assignment and selected_week %}{{ selected_assignment.display_name }} · Week {{ selected_week.week_number }}{% else %}Pick a class to print its weekly register{% endif %}</p></div>
+    {% if register_data %}
+    <div class="pr-acts">
+      {% if blank %}
+      <a class="rs-btn ghost" href="{{ url_for('attendance.print_register', term_id=term_id, assignment_id=assignment_id, week_id=week_id) }}"><i class="fas fa-list-check" aria-hidden="true"></i> With marks</a>
+      {% else %}
+      <a class="rs-btn ghost" href="{{ url_for('attendance.print_register', term_id=term_id, assignment_id=assignment_id, week_id=week_id, blank=1) }}" title="Empty boxes to fill in by hand"><i class="fas fa-square" aria-hidden="true"></i> Blank register</a>
+      {% endif %}
+      <button type="button" data-print class="rs-btn primary"><i class="fas fa-print" aria-hidden="true"></i> Print</button>
+    </div>
+    {% endif %}
+  </div>
 
-<div class="card mb-3 no-print">
-    <div class="card-body">
-        <form method="GET" class="filter-form">
-            <div class="form-group">
-                <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" data-autosubmit>
-                    <option value="">Select Term</option>
-                    {% for term in terms %}
-                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" data-autosubmit>
-                    <option value="">Select Class</option>
-                    {% for a in assignments %}
-                    <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Week</label>
-                <select name="week_id" class="form-control" data-autosubmit>
-                    <option value="">Select Week</option>
-                    {% for week in weeks %}
-                    <option value="{{ week.id }}" {% if week_id == week.id %}selected{% endif %}>Week {{ week.week_number }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </form>
+  <form method="GET" class="pr-pick no-print">
+    <select name="term_id" class="pr-sel" data-autosubmit aria-label="Term">
+      <option value="">Term…</option>
+      {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+    </select>
+    <select name="assignment_id" class="pr-sel" data-autosubmit aria-label="Class">
+      <option value="">Class…</option>
+      {% for a in assignments %}<option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+    </select>
+    {% if weeks and assignment_id %}
+    <div class="pr-week">
+      {% if prev_week %}<a href="{{ url_for('attendance.print_register', term_id=term_id, assignment_id=assignment_id, week_id=prev_week.id, blank=1 if blank else None) }}" aria-label="Previous week"><i class="fas fa-chevron-left"></i></a>{% else %}<span class="off"><i class="fas fa-chevron-left"></i></span>{% endif %}
+      <select name="week_id" data-autosubmit aria-label="Week">
+        {% for week in weeks %}<option value="{{ week.id }}" {% if week_id == week.id %}selected{% endif %}>Week {{ week.week_number }} · {{ week.start_date.strftime('%d %b') }}</option>{% endfor %}
+      </select>
+      {% if next_week %}<a href="{{ url_for('attendance.print_register', term_id=term_id, assignment_id=assignment_id, week_id=next_week.id, blank=1 if blank else None) }}" aria-label="Next week"><i class="fas fa-chevron-right"></i></a>{% else %}<span class="off"><i class="fas fa-chevron-right"></i></span>{% endif %}
     </div>
-</div>
+    {% endif %}
+    {% if blank %}<input type="hidden" name="blank" value="1">{% endif %}
+  </form>
 
-{% if register_data %}
-<div class="card">
-    <div class="card-body">
-        <div class="print-header print-only">
-            <h1>{{ school_name }}</h1>
-            <p>Weekly Attendance Register</p>
-        </div>
-        
-        <div style="text-align: center; margin-bottom: 1rem;">
-            <h3>{{ selected_assignment.display_name }} - Week {{ selected_week.week_number }}</h3>
-            <p>{{ selected_week.start_date.strftime('%d %b %Y') }} - {{ selected_week.end_date.strftime('%d %b %Y') }}</p>
-        </div>
-        
-        <div class="register-container">
-            <table class="register-table">
-                <thead>
-                    <tr>
-                        <th rowspan="2">S/N</th>
-                        <th rowspan="2" class="student-name">Student Name</th>
-                        {% for day in school_days %}
-                        <th colspan="2" class="day-col">{{ day.strftime('%a') }}<br>{{ day.strftime('%d') }}</th>
-                        {% endfor %}
-                        <th rowspan="2">Total</th>
-                    </tr>
-                    <tr>
-                        {% for day in school_days %}
-                        <th title="Morning">M</th>
-                        <th title="Afternoon">A</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in register_data %}
-                    {% if loop.changed(row.student.gender) %}
-                    {% if not loop.first %}<tr class="roster-group-gap" aria-hidden="true"><td colspan="{{ school_days|length * 2 + 3 }}" style="height:0.9rem;border:none;padding:0;"></td></tr>{% endif %}
-                    <tr class="roster-group-head">
-                        <td colspan="{{ school_days|length * 2 + 3 }}" style="font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:.03em;">{% if row.student.gender == 'Male' %}Boys{% elif row.student.gender == 'Female' %}Girls{% else %}{{ row.student.gender or 'Other' }}{% endif %}</td>
-                    </tr>
-                    {% endif %}
-                    <tr>
-                        <td>{{ loop.index }}</td>
-                        <td class="student-name">{{ row.student.full_name }}</td>
-                        {% for day in school_days %}
-                        {% set att = row.attendance.get(day.isoformat(), {}) %}
-                        <td>{% if att.morning_present %}✓{% elif att.morning_present == false %}✗{% else %}-{% endif %}</td>
-                        <td>{% if att.afternoon_present %}✓{% elif att.afternoon_present == false %}✗{% else %}-{% endif %}</td>
-                        {% endfor %}
-                        <td><strong>{{ row.total_present }}</strong></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="signature-area" style="display: flex; justify-content: space-between; margin-top: 2rem;">
-            <div style="width: 45%;">
-                <div style="border-top: 1px solid var(--border-color); margin-top: 40px; padding-top: 5px; text-align: center;">
-                    Class Teacher's Signature
-                </div>
-            </div>
-            <div style="width: 45%;">
-                <div style="border-top: 1px solid var(--border-color); margin-top: 40px; padding-top: 5px; text-align: center;">
-                    Date
-                </div>
-            </div>
-        </div>
+  {% if register_data %}
+  {% if not blank %}
+  <div class="pr-tiles no-print">
+    <div class="pr-tile"><span>Students</span><b>{{ summary.students }}</b><small>{{ summary.boys }} boys · {{ summary.girls }} girls</small></div>
+    <div class="pr-tile"><span>School days</span><b>{{ summary.days }}</b><small>{% if summary.holidays %}{{ summary.holidays }} holiday{{ 's' if summary.holidays != 1 }} this week{% else %}no holidays{% endif %}</small></div>
+    <div class="pr-tile {% if summary.rate is none %}{% elif summary.rate >= 90 %}good{% elif summary.rate >= 75 %}mid{% else %}bad{% endif %}"><span>Attendance</span><b>{% if summary.rate is none %}—{% else %}{{ summary.rate }}%{% endif %}</b><small>{{ summary.taken }} of {{ summary.days }} days marked</small></div>
+    <div class="pr-tile {% if summary.missed %}mid{% else %}good{% endif %}"><span>Missed a session</span><b>{{ summary.missed }}</b><small>{% if summary.missed %}student{{ 's' if summary.missed != 1 }} this week{% else %}full attendance{% endif %}</small></div>
+  </div>
+  {% set untaken = day_totals|selectattr('taken', 'equalto', false)|rejectattr('holiday')|rejectattr('future')|list %}
+  {% if untaken %}
+  <div class="pr-note no-print"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+    <span>No register taken on {{ untaken|length }} school day{{ 's' if untaken|length != 1 }} this week — those days print as “–”.</span></div>
+  {% endif %}
+  {% endif %}
+
+  <div class="pr-sheet">
+    <div class="pr-head">
+      {% if school.logo_url %}<img src="{{ school.logo_url }}" alt="">{% endif %}
+      <div><h1>{{ school.name or school_name }}</h1>
+        <p>{{ school.address }}{% if school.address and school.motto %} · {% endif %}{{ school.motto }}</p></div>
     </div>
-</div>
-{% elif selected_term %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-hand-pointer"></i>
-            <h3>Select Class & Week</h3>
-            <p>Choose a class and week to generate the register</p>
-        </div>
+    <div class="pr-title">
+      <div>
+        <h2>{{ selected_assignment.display_name }} · Week {{ selected_week.week_number }}</h2>
+        <p>{{ selected_week.start_date.strftime('%a %d %b') }} – {{ selected_week.end_date.strftime('%a %d %b %Y') }}{% if selected_term %} · {{ selected_term.full_name }}{% endif %}{% if selected_assignment.form_teacher_name %} · Class teacher: {{ selected_assignment.form_teacher_name }}{% endif %}</p>
+      </div>
+      <div class="pr-legend">
+        {% if blank %}<span>Tick ✓ present · ✗ absent · M morning · A afternoon</span>
+        {% else %}<span><i class="mk p">✓</i> Present</span><span><i class="mk a">✗</i> Absent</span><span><i class="mk n">–</i> Not marked</span><span>M morning · A afternoon</span>{% endif %}
+      </div>
     </div>
-</div>
-{% else %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-print"></i>
-            <h3>Print Attendance Register</h3>
-            <p>Select term, class, and week to generate a printable attendance register</p>
-        </div>
+    <div class="pr-wrap">
+      <table class="pr-t">
+        <thead>
+          <tr>
+            <th rowspan="2" class="sn">#</th>
+            <th rowspan="2" class="nm">Student</th>
+            {% for d in school_days %}
+            <th colspan="2" class="day{% if d.holiday %} hol{% endif %}"><b>{{ d.date.strftime('%a') }}</b>{{ d.date.strftime('%d %b') }}</th>
+            {% endfor %}
+            <th rowspan="2">Total</th>
+            {% if not blank %}<th rowspan="2">%</th>{% endif %}
+          </tr>
+          <tr>
+            {% for d in school_days %}
+            {% if d.holiday %}<th colspan="2" class="hol" title="{{ d.holiday }}">{{ d.holiday[:14] }}</th>
+            {% else %}<th>M</th><th>A</th>{% endif %}
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in register_data %}
+          {% if loop.changed(row.student.gender) %}
+          <tr class="grp"><td></td><td class="nm">{% if row.student.gender == 'Male' %}Boys{% elif row.student.gender == 'Female' %}Girls{% else %}{{ row.student.gender or 'Other' }}{% endif %}</td><td colspan="{{ school_days|length * 2 + (1 if blank else 2) }}"></td></tr>
+          {% endif %}
+          <tr class="{% if row.pct is not none and row.pct < 75 %}low{% endif %}">
+            <td class="sn">{{ loop.index }}</td>
+            <td class="nm">{{ row.student.full_name }}</td>
+            {% for d in school_days %}
+              {% if d.holiday %}
+              <td colspan="2" class="holc"></td>
+              {% elif blank %}<td><i class="mk box"></i></td><td><i class="mk box"></i></td>
+              {% else %}
+              {% set att = row.attendance.get(d.date.isoformat()) %}
+              <td>{% if att and att.morning_present %}<i class="mk p">✓</i>{% elif att %}<i class="mk a">✗</i>{% else %}<i class="mk n">–</i>{% endif %}</td>
+              <td>{% if att and att.afternoon_present %}<i class="mk p">✓</i>{% elif att %}<i class="mk a">✗</i>{% else %}<i class="mk n">–</i>{% endif %}</td>
+              {% endif %}
+            {% endfor %}
+            <td class="tot">{% if not blank %}{{ row.total_present }}{% endif %}</td>
+            {% if not blank %}<td class="pc">{% if row.pct is none %}—{% else %}{{ row.pct }}%{% endif %}</td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if not blank %}
+        <tfoot>
+          <tr><td></td><td class="nm">Present</td>
+            {% for t in day_totals %}
+              {% if t.holiday %}<td colspan="2" class="holc"></td>
+              {% elif t.taken %}<td>{{ t.m }}</td><td>{{ t.a }}</td>
+              {% else %}<td>–</td><td>–</td>{% endif %}
+            {% endfor %}
+            <td></td><td></td></tr>
+        </tfoot>
+        {% endif %}
+      </table>
     </div>
+    <div class="pr-sign">
+      <div>Class teacher’s signature</div>
+      <div>Head teacher’s signature</div>
+      <div>Date</div>
+    </div>
+  </div>
+  {% elif selected_assignment and selected_week %}
+  <div class="pr-empty"><i class="fas fa-users-slash" aria-hidden="true"></i><b>No students in {{ selected_assignment.display_name }}</b>Place students in this class in Class setup first.</div>
+  {% elif term_id and not weeks %}
+  <div class="pr-empty"><i class="fas fa-calendar-xmark" aria-hidden="true"></i><b>No weeks set up for this term</b>Create the term’s weeks from Academics → Terms first.</div>
+  {% else %}
+  <div class="pr-empty"><i class="fas fa-hand-pointer" aria-hidden="true"></i><b>Pick a class</b>The register opens on the current week — step through weeks with the arrows.</div>
+  {% endif %}
 </div>
-{% endif %}
 {% endblock %}

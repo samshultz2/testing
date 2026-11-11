@@ -587,62 +587,109 @@ def print_register():
     if term_id:
         weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
     
+    if not week_id and weeks and assignment_id:
+        # Open on this week (or the last one that has started).
+        t_ = timeutil.today()
+        cur = [w for w in weeks if w.start_date <= t_]
+        week_id = (next((w.id for w in weeks if w.start_date <= t_ <= w.end_date), None)
+                   or (cur[-1].id if cur else weeks[0].id))
     selected_week = db.session.get(Week, week_id) if week_id else None
-    
+    if selected_week and selected_week.term_id != term_id:
+        selected_week, week_id = None, None
+
     register_data = []
-    school_days = []
+    school_days = []          # every weekday in the week: {date, holiday}
     school_name = SchoolSettings.get('school_name', 'School Name')
-    
+    from utils.school import school_profile
+    school = school_profile()
+    blank = request.args.get('blank') == '1'
+    prev_week = next_week = None
+    summary = {}
+    day_totals = []
+
+    if selected_week:
+        i = next((n for n, w in enumerate(weeks) if w.id == selected_week.id), None)
+        if i is not None:
+            prev_week = weeks[i - 1] if i > 0 else None
+            next_week = weeks[i + 1] if i + 1 < len(weeks) else None
+
     if selected_assignment and selected_week:
-        # Get holidays
-        holidays = Holiday.query.filter_by(term_id=term_id).all()
-        holiday_dates = set(h.date for h in holidays)
-        
-        # Calculate school days in the week
+        holidays = {h.date: h for h in Holiday.query.filter_by(term_id=term_id).all()}
         current = selected_week.start_date
         while current <= selected_week.end_date:
-            if current.weekday() < 5 and current not in holiday_dates:
-                school_days.append(current)
+            if current.weekday() < 5:
+                h = holidays.get(current)
+                school_days.append({'date': current, 'holiday': (h.reason or 'Holiday') if h else None})
             current += timedelta(days=1)
-        
-        # Get enrolled students
+        open_days = [d['date'] for d in school_days if not d['holiday']]
+        today = timeutil.today()
+        past_days = [d for d in open_days if d <= today]
+
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id,
             is_active=True
         ).join(Student).order_by(*roster_order()).all()
-        
+        # One query for the whole class's week, merged per student across all of
+        # their enrolments this term (a student moved between arms keeps rows
+        # under the arm they left).
+        sids = [e.student_id for e in enrollments]
+        all_enr = (StudentEnrollment.query.join(ClassArmAssignment,
+                   StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                   .filter(StudentEnrollment.student_id.in_(sids or [-1]),
+                           ClassArmAssignment.term_id == selected_assignment.term_id).all())
+        owner = {e.id: e.student_id for e in all_enr}
+        marks = {}
+        if owner and not blank:
+            for r in Attendance.query.filter(Attendance.enrollment_id.in_(list(owner)),
+                                             Attendance.date.in_(open_days or [today])).all():
+                k = (owner[r.enrollment_id], r.date.isoformat())
+                cur = marks.get(k, {'morning_present': False, 'afternoon_present': False})
+                cur['morning_present'] = cur['morning_present'] or bool(r.morning_present)
+                cur['afternoon_present'] = cur['afternoon_present'] or bool(r.afternoon_present)
+                marks[k] = cur
+        marked_days = {d for (_sid, d) in marks}
+
+        possible = len([d for d in past_days if d.isoformat() in marked_days]) * 2
+        tot_present = 0
+        missed_any = 0
         for enrollment in enrollments:
-            # Get attendance for the week
-            attendance_records = Attendance.query.filter_by(
-                enrollment_id=enrollment.id,
-                week_id=week_id
-            ).all()
-            
-            # Build attendance lookup by date
-            attendance_lookup = {}
-            total_present = 0
-            
-            for record in attendance_records:
-                attendance_lookup[record.date.isoformat()] = {
-                    'morning_present': record.morning_present,
-                    'afternoon_present': record.afternoon_present
-                }
-                if record.morning_present:
-                    total_present += 1
-                if record.afternoon_present:
-                    total_present += 1
-            
+            attendance_lookup = {d.isoformat(): marks[(enrollment.student_id, d.isoformat())]
+                                 for d in open_days if (enrollment.student_id, d.isoformat()) in marks}
+            total_present = sum(int(v['morning_present']) + int(v['afternoon_present']) for v in attendance_lookup.values())
+            tot_present += total_present
+            pct = round(total_present / possible * 100) if possible else None
+            if possible and total_present < possible:
+                missed_any += 1
             register_data.append({
                 'student': enrollment.student,
                 'attendance': attendance_lookup,
-                'total_present': total_present
+                'total_present': total_present,
+                'pct': pct,
             })
-    
+        for d in school_days:
+            iso = d['date'].isoformat()
+            m = sum(1 for r in register_data if r['attendance'].get(iso, {}).get('morning_present'))
+            a_ = sum(1 for r in register_data if r['attendance'].get(iso, {}).get('afternoon_present'))
+            day_totals.append({'iso': iso, 'm': m, 'a': a_, 'taken': iso in marked_days,
+                               'holiday': d['holiday'], 'future': d['date'] > today})
+        summary = {
+            'students': len(register_data),
+            'boys': sum(1 for r in register_data if r['student'].gender == 'Male'),
+            'girls': sum(1 for r in register_data if r['student'].gender == 'Female'),
+            'days': len(open_days), 'holidays': len(school_days) - len(open_days),
+            'taken': len([d for d in past_days if d.isoformat() in marked_days]),
+            'rate': round(tot_present / (possible * len(register_data)) * 100) if possible and register_data else None,
+            'missed': missed_any,
+        }
+
     return render_template('attendance/print_register.html',
         terms=terms, term_id=term_id, selected_term=selected_term,
         assignments=assignments, assignment_id=assignment_id, selected_assignment=selected_assignment,
         weeks=weeks, week_id=week_id, selected_week=selected_week,
-        register_data=register_data, school_days=school_days, school_name=school_name
+        register_data=register_data, school_days=school_days, school_name=school_name,
+        school=school, blank=blank, prev_week=prev_week, next_week=next_week,
+        summary=summary, day_totals=day_totals,
+        mark_url=(url_for('attendance.attendance_app') if selected_assignment else None),
     )
 
 
