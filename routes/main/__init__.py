@@ -2206,6 +2206,33 @@ def _fmt_date(d):
     return d.strftime('%d %b %Y') if d else None
 
 
+def _student_admission_block(student):
+    """Application details that have no field of their own on the student
+    record (previous school, origin, languages, entrance score…), shown on the
+    profile so nothing typed at admission is lost. None when not admitted
+    through Admissions or nothing extra was recorded."""
+    try:
+        a = student.admissions.order_by(None).first()
+    except Exception:
+        return None
+    if a is None:
+        return None
+    rows = [(k, v) for k, v in (
+        ('Previous school', a.previous_school), ('Country', a.country),
+        ('State of origin', a.state_of_origin), ('L.G.A. of origin', a.lga),
+        ('Languages at home', a.languages_spoken), ("Father's occupation", a.father_occupation),
+        ('Entrance score', a.entrance_score), ('How they heard about us', a.source),
+        ('Applied', _fmt_date(a.applied_date)), ('Admitted', _fmt_date(a.decision_date)),
+        ('Admission notes', a.notes)) if v not in (None, '')]
+    if not rows:
+        return None
+    try:
+        url = url_for('admissions.applicant_detail', applicant_id=a.id)
+    except Exception:
+        url = None
+    return {'application_no': a.application_no, 'url': url, 'rows': rows}
+
+
 def _student_attendance_summary(sid):
     """Compact attendance snapshot for the profile page. Headline figures
     (donut, badge, present/late/absent day counts) are the CURRENT/latest
@@ -2384,6 +2411,7 @@ def _student_view_payload(student):
                     'attended_by': v.attended_by,
                     'delete_url': url_for('welfare.delete_clinic', visit_id=v.id)} for v in clinic],
         'attendance': _student_attendance_summary(sid),
+        'admission': _student_admission_block(student),
         'communications': _student_comms_history(sid),
         # Change history is only shown to users who can manage the student, since
         # it can carry previous values of edited fields.

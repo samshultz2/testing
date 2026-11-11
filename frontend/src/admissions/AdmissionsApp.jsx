@@ -224,6 +224,12 @@ function ApplicantDetail({ d, notify }) {
     setBusy(false);
     if (r.ok) { window.location.href = r.redirect; } else notify('error', r.error || 'Could not admit.');
   };
+  const copyOver = async () => {
+    setBusy(true);
+    const r = await submitJson(d.urls.copy, {});
+    setBusy(false);
+    notify(r.ok ? 'success' : 'error', r.ok ? r.message : (r.error || 'Could not copy.'));
+  };
   const del = async () => {
     if (!await confirm({ title: `Delete ${a.full_name}’s application?`, tone: 'danger', confirmText: 'Delete', message: 'This can’t be undone.' })) return;
     const r = await submitJson(d.urls.delete, {});
@@ -260,7 +266,12 @@ function ApplicantDetail({ d, notify }) {
             <button type="button" disabled={!canEdit || st === 'Admitted' || !!a.admitted_student_id} onClick={() => setStatus(st)} aria-current={i === idx ? 'step' : undefined}>
               <span className="ad-dot">{i < idx ? <i className="fas fa-check" aria-hidden="true" /> : i + 1}</span><small>{st}</small></button></li>))}</ol>
         <div className="ad-track-a">
-          {a.admitted_student_id ? <A to={a.student_url} className="rs-btn primary"><i className="fas fa-user-graduate" aria-hidden="true" /> Open student record</A> : canEdit && <>
+          {a.admitted_student_id ? <>
+            {canWrite(d, 'convert') && <button type="button" className="rs-btn ghost" disabled={busy} onClick={copyOver}>
+              <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-file-import')} aria-hidden="true" /> Copy details to student record</button>}
+            <A to={a.student_url} className="rs-btn primary"><i className="fas fa-user-graduate" aria-hidden="true" /> Open student record</A>
+          </> : canEdit && <>
+            {a.status === 'Admitted' && canWrite(d, 'convert') && <button type="button" className="rs-btn primary" onClick={() => setAdmit(true)}><i className="fas fa-user-graduate" aria-hidden="true" /> Create student record</button>}
             {NEXT[a.status] && <button type="button" className="rs-btn primary" onClick={() => setStatus(NEXT[a.status])}>{VERB[NEXT[a.status]]} <i className="fas fa-arrow-right" aria-hidden="true" /></button>}
             {['Offered', 'Accepted'].includes(a.status) && canWrite(d, 'convert') && <button type="button" className={'rs-btn ' + (a.status === 'Accepted' ? 'primary' : 'ghost')} onClick={() => setAdmit(true)}><i className="fas fa-user-graduate" aria-hidden="true" /> Admit</button>}
             {!['Rejected', 'Admitted'].includes(a.status) && <button type="button" className="rs-btn ghost" onClick={() => setStatus('Waitlisted')}>Waitlist</button>}
@@ -280,7 +291,7 @@ function ApplicantDetail({ d, notify }) {
       {admit && (
         <Sheet title={`Admit ${a.full_name}`} onClose={() => setAdmit(false)}>
           <div className="su-form">
-            <p className="cm-mute">Creates a student record with the application details and parent contact.</p>
+            <p className="cm-mute">Creates the student record from the application — names, date of birth, passport photo, address, blood group and genotype, parent and emergency contacts. Other details (previous school, origin…) show on the student’s profile.</p>
             <Field label="Put them in a class (optional)">
               <select value={arm} onChange={(e) => setArm(e.target.value)}>
                 <option value="">Don’t place in a class yet</option>

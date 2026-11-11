@@ -506,6 +506,14 @@ export default function ViewApp({ initial }) {
                   </div>
                 </Section>
               )}
+              {d.admission && (
+                <Section icon="fa-file-signature" title="From the application"
+                         action={d.admission.url ? <a href={d.admission.url} className="sv-link">{d.admission.application_no || 'Open'}</a> : null}>
+                  <div className="info-grid">
+                    {d.admission.rows.map(([k, v]) => <Info key={k} label={k} copy={String(v)}>{v}</Info>)}
+                  </div>
+                </Section>
+              )}
               {d.medical && (
                 <Section icon="fa-notes-medical" title="Medical">
                   <div className="info-grid">

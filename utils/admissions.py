@@ -45,6 +45,69 @@ def pipeline_stats(session_id=None, branch_id=None):
     }
 
 
+def _blank(v):
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+def copy_to_student(applicant, student):
+    """Carry everything the application holds over to the student record:
+    names, gender, date of birth, address, blood group / genotype, the
+    passport photo, and the parent and emergency contacts. Only EMPTY student
+    fields are filled — nothing already on the student record is overwritten
+    — so it is safe to run again on a student admitted earlier. Returns the
+    list of things copied (for a message)."""
+    from models import ParentContact
+    done = []
+    for src, dst, label in (('first_name', 'first_name', 'first name'), ('middle_name', 'middle_name', 'middle name'),
+                            ('surname', 'surname', 'surname'), ('gender', 'gender', 'gender'),
+                            ('date_of_birth', 'date_of_birth', 'date of birth'), ('address', 'home_address', 'address'),
+                            ('blood_group', 'blood_group', 'blood group'), ('genotype', 'genotype', 'genotype')):
+        val = getattr(applicant, src, None)
+        if not _blank(val) and _blank(getattr(student, dst, None)):
+            setattr(student, dst, val)
+            done.append(label)
+
+    # Passport photo: the applicant's stored image becomes the student's own.
+    try:
+        from models import StudentPhoto
+        from utils.applicant_photo import load as _load
+        if not StudentPhoto.query.filter_by(student_id=student.id).first():
+            raw, _mime = _load(applicant.id)
+            if raw:
+                from utils.student_photo import save_bytes
+                save_bytes(student, raw)
+                done.append('passport photo')
+    except Exception:   # a bad image must never block admission
+        pass
+
+    existing = {(c.phone_number or '').replace(' ', '') for c in student.parent_contacts.all()}
+    has_primary = any(c.is_primary for c in student.parent_contacts.all())
+
+    def add_contact(phone, name, rel, email=None, primary=False):
+        ph = (phone or '').strip()
+        if not ph or ph.replace(' ', '') in existing:
+            return False
+        db.session.add(ParentContact(student_id=student.id, phone_number=ph[:15], name=name,
+                                     relationship=(rel or 'Guardian')[:20], email=email or None,
+                                     is_primary=primary))
+        existing.add(ph.replace(' ', ''))
+        return True
+
+    if add_contact(applicant.parent_phone, applicant.parent_name, applicant.relationship,
+                   applicant.parent_email, primary=not has_primary):
+        done.append('parent contact')
+    elif applicant.parent_email and applicant.parent_phone:
+        # Contact already there (e.g. added by hand) — fill in a missing email.
+        for c in student.parent_contacts.all():
+            if (c.phone_number or '').replace(' ', '') == applicant.parent_phone.strip().replace(' ', '') and not c.email:
+                c.email = applicant.parent_email
+                done.append('parent email')
+    if add_contact(applicant.emergency_phone, applicant.emergency_name,
+                   applicant.emergency_relationship or 'Emergency'):
+        done.append('emergency contact')
+    return done
+
+
 def convert_to_student(applicant, assignment_id=None):
     """
     Create a Student (+ primary ParentContact, + optional enrolment) from an
@@ -62,18 +125,10 @@ def convert_to_student(applicant, assignment_id=None):
         middle_name=applicant.middle_name,
         surname=applicant.surname,
         gender=applicant.gender,
-        date_of_birth=applicant.date_of_birth,
-        home_address=applicant.address,
-        photo_url=applicant.photo_url,
     )
     db.session.add(student)
     db.session.flush()
-
-    if applicant.parent_phone:
-        db.session.add(ParentContact(
-            student_id=student.id, phone_number=applicant.parent_phone,
-            name=applicant.parent_name, relationship=applicant.relationship or 'Guardian',
-            is_primary=True))
+    copy_to_student(applicant, student)
 
     if assignment_id:
         asg = db.session.get(ClassArmAssignment, assignment_id)

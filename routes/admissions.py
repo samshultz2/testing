@@ -341,6 +341,7 @@ def applicant_detail(applicant_id):
         'urls': {'edit': url_for('admissions.edit_applicant', applicant_id=a.id),
                  'status': url_for('admissions.set_status', applicant_id=a.id),
                  'convert': url_for('admissions.convert', applicant_id=a.id),
+                 'copy': url_for('admissions.copy_to_student', applicant_id=a.id),
                  'delete': url_for('admissions.delete_applicant', applicant_id=a.id),
                  'pdf': url_for('admissions.export_applicant', applicant_id=a.id, format='pdf'),
                  'docx': url_for('admissions.export_applicant', applicant_id=a.id, format='docx')},
@@ -462,6 +463,10 @@ def set_status(applicant_id):
     a = db.get_or_404(Applicant, applicant_id)
     require_branch_access(a.branch_id)
     new_status = request.form.get('status')
+    if new_status == 'Admitted' and not a.admitted_student_id:
+        # "Admitted" must create the student record — use Admit, not a bare label.
+        return _err('Use “Admit” to admit this applicant — it creates their student record.',
+                    url_for('admissions.applicant_detail', applicant_id=applicant_id))
     if new_status in admissions.ALL_STATUSES:
         a.status = new_status
         if new_status in ('Rejected', 'Admitted'):
@@ -493,6 +498,22 @@ def convert(applicant_id):
     else:
         flash(f'{a.full_name} admitted as student {student.student_id}.', 'success')
     return _ok('Admitted.', url_for('main.view_student', student_id=student.id))
+
+
+@adm_bp.route('/applicants/<int:applicant_id>/copy-to-student', methods=['POST'])
+@login_required
+def copy_to_student(applicant_id):
+    """Fill the admitted student's record with anything from the application
+    it is still missing (photo, contacts, health, address…). Never overwrites."""
+    a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
+    if not a.admitted_student:
+        return _err('This applicant has not been admitted yet.', url_for('admissions.applicant_detail', applicant_id=a.id))
+    done = admissions.copy_to_student(a, a.admitted_student)
+    db.session.commit()
+    msg = ('Copied to the student record: ' + ', '.join(done) + '.') if done else \
+        'The student record already has everything from the application.'
+    return _ok(msg, url_for('admissions.applicant_detail', applicant_id=a.id))
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/delete', methods=['POST'])
