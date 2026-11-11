@@ -1478,6 +1478,29 @@ def assignments_list():
         for aid, g, n in rows:
             gcount.setdefault(aid, {})[g if g in ('Male', 'Female') else 'Other'] = n
 
+    # Decision helpers: who has no class this term, and last term to copy from.
+    unplaced, prev_term, ever = 0, None, set()
+    if selected_term:
+        placed = {sid for (sid,) in db.session.query(StudentEnrollment.student_id)
+                  .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                  .filter(ClassArmAssignment.term_id == selected_term.id, StudentEnrollment.is_active == True).all()}
+        try:
+            from utils.branch_scope import scope_query as _sq
+            act_ids = {s.id for s in _sq(Student.query.filter_by(is_active=True), Student).all()}
+        except Exception:
+            act_ids = {s.id for s in Student.query.filter_by(is_active=True).all()}
+        unplaced = len(act_ids - placed)
+        chrono = sorted(terms, key=lambda t: (t.session.name if t.session else '', t.term_number))
+        if selected_term in chrono:
+            i = chrono.index(selected_term)
+            for t in reversed(chrono[:i]):
+                n = ClassArmAssignment.query.filter_by(term_id=t.id).count()
+                if n:
+                    prev_term = {'id': t.id, 'name': t.full_name, 'classes': n}
+                    break
+        if assignments:
+            ever = {aid for (aid,) in db.session.query(StudentEnrollment.class_arm_assignment_id)
+                    .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in assignments])).distinct().all()}
     return _render({
         'page': 'assignments',
         'term_id': term_id or '',
@@ -1498,8 +1521,15 @@ def assignments_list():
                          'boys': gcount.get(a.id, {}).get('Male', 0),
                          'girls': gcount.get(a.id, {}).get('Female', 0),
                          'view_url': url_for('academics.view_assignment', assignment_id=a.id),
+                         'ever': a.id in ever,
+                         'delete_url': url_for('academics.delete_assignment', assignment_id=a.id),
                          'edit_teacher_url': url_for('academics.edit_assignment_teacher', assignment_id=a.id)}
                         for a in assignments],
+        'unplaced': unplaced, 'prev_term': prev_term,
+        'urls': {'classes': url_for('academics.classes_list'), 'arms': url_for('academics.arms_list'),
+                 'assignments': url_for('academics.assignments_list'),
+                 'copy': url_for('academics.copy_term_setup'), 'students': url_for('main.students_list'),
+                 'setup': url_for('academics.term_setup', term_id=term_id) if term_id else url_for('academics.term_setup')},
         'self_url': url_for('academics.assignments_list'),
         'add_url': url_for('academics.add_assignment'),
         'setup_url': url_for('academics.setup_term_classes'),
@@ -1575,6 +1605,30 @@ def edit_assignment_teacher(assignment_id):
         a.form_teacher_phone = (request.form.get('form_teacher_phone', '') or '').strip() or None
     db.session.commit()
     return _ok('Class teacher updated.', url_for('academics.assignments_list', term_id=a.term_id))
+
+
+@academics_bp.route('/assignments/<int:assignment_id>/delete', methods=['POST'])
+@login_required
+def delete_assignment(assignment_id):
+    """Close an arm opened by mistake for a term — only while it has never had
+    a student (so no attendance, scores or history can be lost)."""
+    a = db.get_or_404(ClassArmAssignment, assignment_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(a.branch_id)
+    back = url_for('academics.assignments_list', term_id=a.term_id)
+    if StudentEnrollment.query.filter_by(class_arm_assignment_id=a.id).first():
+        return _err(f'{a.display_name} has (or had) students this term, so it can’t be removed. '
+                    'Move them to another arm first.', back)
+    try:
+        name = a.display_name
+        db.session.delete(a)
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('academics.assignment_delete', detail=name, target_type='class_arm_assignment', target_id=assignment_id)
+        return _ok(f'{name} removed from this term.', back)
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Could not remove: {e}', back)
 
 
 @academics_bp.route('/assignments/setup-all', methods=['POST'])

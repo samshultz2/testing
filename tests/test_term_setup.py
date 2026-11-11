@@ -178,3 +178,34 @@ def test_term_view_calendar_and_break_removal(app):
     assert r.get_json()['ok']
     with app.app_context():
         assert Holiday.query.filter_by(term_id=tid).count() == 0
+
+
+def test_class_setup_payload_and_safe_arm_removal(app):
+    from models import db, AcademicSession, Term, SchoolClass, ClassArm, ClassArmAssignment, StudentEnrollment, Student
+    with app.app_context():
+        s = AcademicSession(name='2070/2071', is_active=False); db.session.add(s); db.session.flush()
+        t1 = Term(session_id=s.id, term_number=1, name='First Term')
+        t2 = Term(session_id=s.id, term_number=2, name='Second Term'); db.session.add_all([t1, t2]); db.session.flush()
+        c = SchoolClass(name='CSX', level=88); db.session.add(c); db.session.flush()
+        arm = ClassArm.query.filter_by(name='CsArm').first() or ClassArm(name='CsArm'); db.session.add(arm); db.session.flush()
+        a1 = ClassArmAssignment(class_id=c.id, arm_id=arm.id, term_id=t1.id)
+        empty = ClassArmAssignment(class_id=c.id, arm_id=arm.id, term_id=t2.id)
+        db.session.add_all([a1, empty]); db.session.flush()
+        st = Student(student_id='CSX1', surname='C', first_name='S', gender='Male', is_active=True)
+        db.session.add(st); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=st.id, class_arm_assignment_id=a1.id, is_active=True))
+        db.session.commit()
+        t2id, a1id, eid = t2.id, a1.id, empty.id
+    c_ = _admin(app)
+    d = c_.get(f'/academics/assignments?term_id={t2id}', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['prev_term'] and d['prev_term']['classes'] >= 1
+    assert d['unplaced'] >= 1
+    tok = _ptoken(c_)
+    # an arm that has had students can't be removed; an empty one can
+    r = c_.post(f'/academics/assignments/{a1id}/delete', headers={'X-Requested-With': 'fetch'}, data={'_csrf_token': tok})
+    assert not r.get_json()['ok']
+    r = c_.post(f'/academics/assignments/{eid}/delete', headers={'X-Requested-With': 'fetch'}, data={'_csrf_token': tok})
+    assert r.get_json()['ok']
+    with app.app_context():
+        assert db.session.get(ClassArmAssignment, eid) is None and db.session.get(ClassArmAssignment, a1id) is not None
