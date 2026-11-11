@@ -2,11 +2,12 @@
 // Hub: a health strip (backups, payments, errors, people) that says what needs
 // attention, then every setting grouped by job with instant search.
 import React, { useState } from 'react';
-import { useSave } from '../lib/forms';
+import { useSave, submitJson, postFile } from '../lib/forms';
+import { canWrite } from '../lib/perms';
 import { csrfToken } from '../lib/api';
 import { useNav, navParams } from '../lib/section';
 import { confirm } from '../components/ui';
-import { Head, Tiles, Chips, Sheet, Blank, usePhone } from '../subjects/results';
+import { Head, Tiles, Chips, Seg, Sheet, Blank, Bar, usePhone } from '../subjects/results';
 import { A, Field, Toggle, Pill, SearchBox, plural } from '../components/appkit';
 
 const ago = (n) => (n == null ? 'Never' : n <= 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n} days ago`);
@@ -318,6 +319,157 @@ export function Audit({ d }) {
           <span className="cm-mute">Page {pg.page} of {pg.pages}</span>
           <button type="button" className="rs-btn sm ghost" disabled={!pg.has_next} onClick={() => go(d.filters, { page: pg.next_page })}>Older <i className="fas fa-chevron-right" aria-hidden="true" /></button>
         </div>)}
+    </div>
+  );
+}
+
+// ---- School info ------------------------------------------------------------
+// Edit on the left, see the report-card letterhead update live on the right,
+// with a checklist of what printouts are still missing.
+const SCHOOL_KEYS = ['school_name', 'school_address', 'school_phone', 'school_email', 'school_motto', 'next_term_fees', 'next_term_begins'];
+
+function clockNow(tz, fmt) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: fmt === '12h', weekday: 'short' }).format(new Date());
+  } catch (e) { return ''; }
+}
+
+export function School({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const s = d.settings || {};
+  const can = canWrite(d, 'school_info');
+  const init = {
+    ...Object.fromEntries(SCHOOL_KEYS.map((k) => [k, s[k] || ''])),
+    timezone: d.current_tz || '', time_format: d.current_time_format || '24h',
+  };
+  const [f, setF] = useState(init);
+  const [base, setBase] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const dirty = Object.keys(f).some((k) => f[k] !== base[k]);
+  const submit = async (e) => {
+    e && e.preventDefault();
+    setSaving(true);
+    const r = await save(d.submit_url, f, () => nav.refresh());
+    setSaving(false);
+    if (r && r.ok) setBase(f);
+  };
+  const pickLogo = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    const r = await postFile(d.logo_upload_url, file);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message || 'Logo updated.'); nav.refresh(); }
+    else notify('error', r.error || 'Could not upload that image.');
+  };
+  const removeLogo = async () => {
+    if (!await confirm({ title: 'Remove the logo?', message: 'Printouts and the app header will show the app logo instead.', confirmText: 'Remove', tone: 'danger' })) return;
+    setBusy(true);
+    const r = await submitJson(d.logo_remove_url, {});
+    setBusy(false);
+    if (r.ok) { notify('success', r.message || 'Logo removed.'); nav.refresh(); }
+    else notify('error', r.error || 'Could not remove the logo.');
+  };
+  const checks = [
+    ['Logo', !!d.logo_url], ['School name', !!f.school_name.trim()], ['Address', !!f.school_address.trim()],
+    ['Phone', !!f.school_phone.trim()], ['Email', !!f.school_email.trim()], ['Motto', !!f.school_motto.trim()],
+    ['Next term date', !!f.next_term_begins.trim()],
+  ];
+  const done = checks.filter((c) => c[1]).length;
+  const initials = (f.school_name || 'School').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const nt = d.next_term;
+  return (
+    <div className="rs cm sx sc">
+      <Head icon="fa-school" title="School info" sub="Your school’s identity — used in the app header and on every report card, result and printout." />
+      <div className="sc-wrap">
+        <form onSubmit={submit} className="sc-main">
+          <fieldset disabled={!can} className="sc-fs">
+            <section className="rs-card sc-sec">
+              <h3><i className="fas fa-id-badge" aria-hidden="true" /> Identity</h3>
+              <div className="sc-logo">
+                <span className="sc-logo-box">{d.logo_url ? <img src={d.logo_url} alt="School logo" /> : <b>{initials}</b>}</span>
+                <span className="sx-t"><b>{d.logo_url ? 'School logo' : 'No logo yet'}</b>
+                  <small>PNG, JPG or WEBP. A square logo on a white or clear background prints best.</small>
+                  {can && <span className="sc-logo-a">
+                    <label className={'rs-btn sm' + (d.logo_url ? ' ghost' : ' primary')}>
+                      <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-upload')} aria-hidden="true" /> {d.logo_url ? 'Replace' : 'Upload logo'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy}
+                             onChange={(e) => { const x = e.target.files && e.target.files[0]; e.target.value = ''; pickLogo(x); }} /></label>
+                    {d.logo_url && <button type="button" className="rs-btn sm ghost" onClick={removeLogo} disabled={busy}>Remove</button>}
+                  </span>}</span>
+              </div>
+              <Field label="School name"><input value={f.school_name} onChange={set('school_name')} placeholder="e.g. Greenfield College" /></Field>
+              <Field label="Motto" hint="Printed under the name on report cards"><input value={f.school_motto} onChange={set('school_motto')} placeholder="e.g. Knowledge and Character" /></Field>
+            </section>
+
+            <section className="rs-card sc-sec">
+              <h3><i className="fas fa-address-book" aria-hidden="true" /> Contact</h3>
+              <Field label="Address"><textarea rows={2} value={f.school_address} onChange={set('school_address')} placeholder="Street, town, state" /></Field>
+              <div className="sc-2">
+                <Field label="Phone"><input type="tel" inputMode="tel" value={f.school_phone} onChange={set('school_phone')} placeholder="0803 000 0000" /></Field>
+                <Field label="Email"><input type="email" value={f.school_email} onChange={set('school_email')} placeholder="info@school.com" /></Field>
+              </div>
+            </section>
+
+            <section className="rs-card sc-sec">
+              <h3><i className="fas fa-file-lines" aria-hidden="true" /> On report cards</h3>
+              <div className="sc-2">
+                <Field label="Next term begins">
+                  <input value={f.next_term_begins} onChange={set('next_term_begins')} placeholder="e.g. 27 April 2026" /></Field>
+                <Field label="Next term fees"><input value={f.next_term_fees} onChange={set('next_term_fees')} placeholder="e.g. ₦62,000" /></Field>
+              </div>
+              {nt && can && f.next_term_begins !== nt.begins && (
+                <button type="button" className="sc-hint" onClick={() => setF({ ...f, next_term_begins: nt.begins })}>
+                  <i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Use <b>{nt.begins}</b> — when {nt.name} starts</button>)}
+              <small className="cm-mute">Shown at the bottom of every report card this term. Leave blank to hide the line.</small>
+            </section>
+
+            <section className="rs-card sc-sec">
+              <h3><i className="fas fa-clock" aria-hidden="true" /> Time &amp; clock</h3>
+              <Field label="Time zone" hint="Used for every date, time, exam window and record in the app">
+                <select value={f.timezone} onChange={set('timezone')}>
+                  {(d.timezones || []).map((tz) => <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>)}</select></Field>
+              <div className="cm-f"><span>Clock style</span>
+                <Seg label="Clock style" value={f.time_format} onChange={(v) => setF({ ...f, time_format: v })} options={[
+                  { value: '24h', label: '24-hour · 13:40' }, { value: '12h', label: '12-hour · 1:40 pm' }]} />
+                <small>For timetables and every printout. Now at school: <b>{clockNow(f.timezone, f.time_format)}</b></small></div>
+            </section>
+          </fieldset>
+          {can && dirty && (
+            <Bar>
+              <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> Unsaved changes</span>
+              <button type="button" className="rs-btn ghost" onClick={() => setF(base)}>Undo</button>
+              <button type="button" className="rs-btn primary" disabled={!dirty || saving} onClick={submit}>
+                <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {saving ? 'Saving…' : 'Save'}</button>
+            </Bar>)}
+        </form>
+
+        <aside className="sc-side">
+          <section className="rs-card sc-prev">
+            <span className="k">Report card preview</span>
+            <div className="sc-paper">
+              <div className="sc-lh">
+                <span className="sc-lh-logo">{d.logo_url ? <img src={d.logo_url} alt="" /> : <b>{initials}</b>}</span>
+                <div><h4>{f.school_name || 'School name'}</h4>
+                  {f.school_motto && <em>“{f.school_motto}”</em>}
+                  <p>{f.school_address || 'Address'}</p>
+                  <p>{[f.school_phone, f.school_email].filter(Boolean).join(' · ') || 'Phone · Email'}</p></div>
+              </div>
+              <div className="sc-lines"><i /><i /><i style={{ width: '70%' }} /><i /><i style={{ width: '55%' }} /></div>
+              {(f.next_term_begins || f.next_term_fees) && <div className="sc-foot">
+                {f.next_term_begins && <span>Next term begins: <b>{f.next_term_begins}</b></span>}
+                {f.next_term_fees && <span>Next term fees: <b>{f.next_term_fees}</b></span>}</div>}
+            </div>
+          </section>
+          <section className="rs-card sc-check">
+            <div className="sc-check-h"><b>{done === checks.length ? 'Printouts are complete' : `${checks.length - done} detail${checks.length - done === 1 ? '' : 's'} missing`}</b><span>{done}/{checks.length}</span></div>
+            <div className="sx-share"><i style={{ width: Math.round(100 * done / checks.length) + '%' }} /></div>
+            <ul>{checks.map(([k, ok]) => <li key={k} className={ok ? 'ok' : ''}><i className={'fas ' + (ok ? 'fa-circle-check' : 'fa-circle')} aria-hidden="true" />{k}</li>)}</ul>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -798,11 +798,31 @@ def school_settings():
         'current_tz': get_timezone(),
         'current_time_format': get_time_format(),
         'logo_url': logo_url(),
+        'next_term': _next_term_hint(),
         'submit_url': url_for('settings.school_settings'),
         'logo_upload_url': url_for('settings.upload_school_logo'),
         'logo_remove_url': url_for('settings.remove_school_logo'),
         'back_url': url_for('settings.index'),
     })
+
+
+def _next_term_hint():
+    """The term after the active one (if it has a start date), so the report-card
+    'Next term begins' line can be filled in one tap instead of retyped."""
+    try:
+        from utils.helpers import get_active_term
+        t = get_active_term()
+        if not t or not t.end_date:
+            return None
+        nxt = (Term.query.filter(Term.start_date != None, Term.start_date > t.end_date)  # noqa: E711
+               .order_by(Term.start_date).first())
+        if not nxt:
+            return None
+        sess = getattr(nxt, 'session', None) or getattr(nxt, 'academic_session', None)
+        return {'name': f"{nxt.name}{' ' + sess.name if sess else ''}",
+                'begins': f"{nxt.start_date.day} {nxt.start_date.strftime('%B %Y')}"}
+    except Exception:
+        return None
 
 
 # --- School logo: one school-wide image, resized once, reused everywhere ------

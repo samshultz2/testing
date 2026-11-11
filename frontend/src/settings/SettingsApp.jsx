@@ -4,101 +4,11 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Index, Branches, Backup, Audit } from './Hub';
+import { Index, Branches, Backup, Audit, School } from './Hub';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-// ---- School settings --------------------------------------------------------
-function School({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const s = d.settings || {};
-  const [f, setF] = useState({
-    school_name: s.school_name || '', school_address: s.school_address || '',
-    school_phone: s.school_phone || '', school_email: s.school_email || '',
-    school_motto: s.school_motto || '', next_term_fees: s.next_term_fees || '',
-    next_term_begins: s.next_term_begins || '', timezone: d.current_tz || '',
-    time_format: d.current_time_format || '24h',
-  });
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const [saving, setSaving] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    await save(d.submit_url, f, () => nav.refresh());
-    setSaving(false);
-  };
-
-  const [logoUrl, setLogoUrl] = useState(d.logo_url || '');
-  const [busy, setBusy] = useState(false);
-  const pickLogo = async (file) => {
-    setBusy(true);
-    const r = await postFile(d.logo_upload_url, file);
-    setBusy(false);
-    if (r.ok) { notify('success', r.message || 'Logo updated.'); nav.refresh(); }
-    else notify('error', r.error || 'Could not upload that image.');
-  };
-  const removeLogo = async () => {
-    if (!await confirm('Remove the school logo? Printouts will fall back to the app logo.')) return;
-    setBusy(true);
-    const r = await submitJson(d.logo_remove_url, {});
-    setBusy(false);
-    if (r.ok) { setLogoUrl(''); notify('success', r.message || 'Logo removed.'); nav.refresh(); }
-    else notify('error', r.error || 'Could not remove the logo.');
-  };
-
-  return (
-    <>
-      <div className="page-header"><h1>School Information</h1></div>
-      <div className="card"><div className="card-body">
-        {canWrite(d, 'school_info') && <FileUpload
-          label={logoUrl ? 'Replace logo' : 'Upload logo'}
-          accept="image/png,image/jpeg,image/webp"
-          onPick={pickLogo} busy={busy} currentUrl={logoUrl} onClear={removeLogo}
-          hint="PNG, JPG or WEBP. Shown in place of the app name/logo when signed in, and on report cards, Mock-WAEC results, broadsheets and timetables." />}
-        <form onSubmit={submit}>
-          <div className="form-group"><label className="form-label">School Name</label>
-            <input type="text" className="form-control" value={f.school_name} onChange={set('school_name')} placeholder="Enter school name" /></div>
-          <div className="form-group"><label className="form-label">Address</label>
-            <textarea className="form-control" rows="2" value={f.school_address} onChange={set('school_address')} placeholder="School address" /></div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Phone</label>
-              <input type="tel" className="form-control" value={f.school_phone} onChange={set('school_phone')} placeholder="Phone number" /></div>
-            <div className="form-group"><label className="form-label">Email</label>
-              <input type="email" className="form-control" value={f.school_email} onChange={set('school_email')} placeholder="Email address" /></div>
-          </div>
-          <div className="form-group"><label className="form-label">Motto</label>
-            <input type="text" className="form-control" value={f.school_motto} onChange={set('school_motto')} placeholder="School motto" /></div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Next Term Fees <span className="text-muted">(shown on report cards)</span></label>
-              <input type="text" className="form-control" value={f.next_term_fees} onChange={set('next_term_fees')} placeholder="e.g. 62,000 Naira" /></div>
-            <div className="form-group"><label className="form-label">Next Term Begins</label>
-              <input type="text" className="form-control" value={f.next_term_begins} onChange={set('next_term_begins')} placeholder="e.g. 27 April 2026" /></div>
-          </div>
-          <div className="form-group"><label className="form-label">Timezone</label>
-            <select className="form-control" value={f.timezone} onChange={set('timezone')}>
-              {(d.timezones || []).map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-            <span className="form-hint d-block">Used for all dates, times, exam windows and timestamps across the site. Default: Africa/Lagos (UTC+1).</span></div>
-          <div className="form-group"><label className="form-label">Time Format</label>
-            <select className="form-control" value={f.time_format} onChange={set('time_format')} style={{ maxWidth: 220 }}>
-              <option value="24h">24-hour (e.g. 13:40)</option>
-              <option value="12h">12-hour (e.g. 1:40 PM)</option>
-            </select>
-            <span className="form-hint d-block">How period and school-day clock times are shown on timetable pages and in every PDF, image and spreadsheet export. Doesn't affect date/time pickers, which always follow your device.</span></div>
-          <Actions>
-            {canWrite(d, 'school_info') && <button type="submit" className={'btn btn-primary' + (saving ? ' is-loading' : '')} disabled={saving} aria-busy={saving || undefined}>
-              <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : 'Save'}
-            </button>}
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
-          </Actions>
-        </form>
-      </div></div>
-    </>
-  );
 }
 
 // "2025/2026" -> "2526" (last 2 digits of each year), mirroring

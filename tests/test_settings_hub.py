@@ -61,3 +61,25 @@ def test_share_lists_portal_links(app):
     client = _admin(app)
     html = client.get('/share').get_data(as_text=True)
     assert 'Direct links' in html and '/parent/login' in html
+
+
+def test_school_page_suggests_next_term_start(app):
+    from datetime import date
+    from models import db, Term, AcademicSession
+    from utils.helpers import get_active_term
+    with app.app_context():
+        t = get_active_term()
+        if not t:
+            return
+        if not t.end_date:
+            t.end_date = date(2031, 7, 20)
+        sess = AcademicSession.query.filter_by(name='2099/2100').first()
+        if not sess:
+            sess = AcademicSession(name='2099/2100')
+            db.session.add(sess); db.session.flush()
+            db.session.add(Term(name='First Term', session_id=sess.id, start_date=date(2099, 9, 14), end_date=date(2099, 12, 15)))
+        db.session.commit()
+        expected = Term.query.filter(Term.start_date > t.end_date).order_by(Term.start_date).first()
+    client = _admin(app)
+    d = _json(client, '/settings/school')
+    assert d['next_term'] and d['next_term']['begins'] == f"{expected.start_date.day} {expected.start_date.strftime('%B %Y')}"
