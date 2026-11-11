@@ -2046,6 +2046,8 @@ def copy_term_setup():
                             class_arm_assignment_id=dest_assign.id
                         ).first()
                         
+                        if src_enroll.student is not None and not src_enroll.student.is_active:
+                            continue          # left the school — don't bring them back
                         if not existing_enroll and src_enroll.student_id not in placed:
                             placed.add(src_enroll.student_id)
                             new_enroll = StudentEnrollment(
@@ -2066,10 +2068,77 @@ def copy_term_setup():
             db.session.rollback()
             return _err(f'Error: {str(e)}', url_for('academics.copy_term_setup'))
 
-    # GET - show form
-    terms = Term.query.order_by(Term.id.desc()).all()
+    # GET - show the guided copy
+    from sqlalchemy import func
+    from models import ClassSubject
+    from utils.access_control import can_access_module, can_write_module
+    terms = Term.query.join(AcademicSession).order_by(AcademicSession.name.desc(), Term.term_number.desc()).all()
+    ids = [t.id for t in terms] or [-1]
+    n_cls = dict(db.session.query(ClassArmAssignment.term_id, func.count(ClassArmAssignment.id))
+                 .filter(ClassArmAssignment.term_id.in_(ids)).group_by(ClassArmAssignment.term_id).all())
+    n_stu = dict(db.session.query(ClassArmAssignment.term_id, func.count(StudentEnrollment.id))
+                 .join(StudentEnrollment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                 .filter(ClassArmAssignment.term_id.in_(ids), StudentEnrollment.is_active == True)
+                 .group_by(ClassArmAssignment.term_id).all())
+    n_sub = dict(db.session.query(ClassSubject.term_id, func.count(ClassSubject.id))
+                 .filter(ClassSubject.term_id.in_(ids), ClassSubject.is_active == True).group_by(ClassSubject.term_id).all())
+    fees = can_access_module('finance')
+    n_fee = {}
+    if fees:
+        from models import FeeStructure
+        n_fee = dict(db.session.query(FeeStructure.term_id, func.count(FeeStructure.id))
+                     .filter(FeeStructure.term_id.in_(ids), FeeStructure.is_active == True).group_by(FeeStructure.term_id).all())
+    chrono = sorted(terms, key=lambda t: (t.session.name if t.session else '', t.term_number))
+    act = next((t for t in terms if t.is_active), None)
+    dflt_to = act or (chrono[-1] if chrono else None)
+    dflt_from = None
+    if dflt_to in chrono:
+        dflt_from = next((t for t in reversed(chrono[:chrono.index(dflt_to)]) if n_cls.get(t.id)), None)
     return _render({
         'page': 'copy_term_setup',
-        'terms': [{'id': t.id, 'full_name': t.full_name, 'is_active': bool(t.is_active)} for t in terms],
+        'terms': [{'id': t.id, 'full_name': t.full_name, 'is_active': bool(t.is_active),
+                   'session_id': t.session_id, 'session': t.session.name if t.session else '',
+                   'classes': n_cls.get(t.id, 0), 'students': n_stu.get(t.id, 0),
+                   'subjects': n_sub.get(t.id, 0), 'fees': n_fee.get(t.id, 0)} for t in terms],
+        'default_from': dflt_from.id if dflt_from else '', 'default_to': dflt_to.id if dflt_to else '',
+        'can': {'subjects': can_write_module('results'), 'fees': fees and can_write_module('finance')},
         'submit_url': url_for('academics.copy_term_setup'),
+        'preview_url': url_for('academics.copy_term_preview'),
+        'urls': {'subjects': url_for('subjects.copy_class_subjects'),
+                 'fees': url_for('finance.copy_structure') if fees else None,
+                 'promotion': url_for('promotion.index') if can_access_module('promotion') else None,
+                 'assignments': url_for('academics.assignments_list'),
+                 'classes': url_for('academics.classes_list'), 'arms': url_for('academics.arms_list')},
         'cancel_url': url_for('academics.assignments_list')})
+
+
+@academics_bp.route('/copy-term-setup/preview')
+@login_required
+def copy_term_preview():
+    """What a copy would do, class by class — nothing is written."""
+    f = request.args.get('from_term_id', type=int)
+    t = request.args.get('to_term_id', type=int)
+    if not f or not t or f == t:
+        return jsonify({'rows': [], 'totals': {}})
+    src = ClassArmAssignment.query.filter_by(term_id=f).join(SchoolClass).order_by(SchoolClass.level, SchoolClass.name).all()
+    dest = {(a.class_id, a.arm_id): a for a in ClassArmAssignment.query.filter_by(term_id=t).all()}
+    placed = {sid for (sid,) in db.session.query(StudentEnrollment.student_id)
+              .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+              .filter(ClassArmAssignment.term_id == t, StudentEnrollment.is_active == True).all()}
+    in_dest = {(e.class_arm_assignment_id, e.student_id) for e in StudentEnrollment.query.filter(
+        StudentEnrollment.class_arm_assignment_id.in_([a.id for a in dest.values()] or [-1])).all()}
+    seen, rows = set(), []
+    for a in src:
+        d_ = dest.get((a.class_id, a.arm_id))
+        studs = [e for e in a.enrollments.filter_by(is_active=True).all() if e.student and e.student.is_active]
+        new = skip = 0
+        for e in studs:
+            if e.student_id in placed or e.student_id in seen or (d_ and (d_.id, e.student_id) in in_dest):
+                skip += 1
+            else:
+                new += 1
+                seen.add(e.student_id)
+        rows.append({'name': a.display_name, 'exists': bool(d_), 'students': len(studs), 'new': new, 'skip': skip})
+    return jsonify({'rows': rows, 'totals': {
+        'classes_new': sum(1 for r in rows if not r['exists']), 'classes_exist': sum(1 for r in rows if r['exists']),
+        'students_new': sum(r['new'] for r in rows), 'students_skip': sum(r['skip'] for r in rows)}})

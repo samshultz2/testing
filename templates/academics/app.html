@@ -61,6 +61,32 @@
   .tm-pick button{flex-direction:row;justify-content:space-between;align-items:center}
 }
 
+/* ══ Copy a term (cp-*) ══ */
+.cp-pick{display:grid;grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);gap:1rem;align-items:stretch}
+.cp-term{display:flex;flex-direction:column;gap:.6rem;padding:.9rem;border:1px solid var(--border-color);border-radius:14px}
+.cp-term .cm-sel{max-width:none;width:100%}
+.cp-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.3rem}
+.cp-stats span{display:flex;flex-direction:column;font-size:.7rem;color:var(--text-muted);font-weight:600}
+.cp-stats b{font-family:'Space Grotesk',sans-serif;font-size:1.2rem;color:var(--text-primary,inherit)}
+.cp-swap{align-self:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;color:var(--primary)}
+.cp-swap:hover{background:color-mix(in srgb,var(--primary) 8%,var(--bg-card))}
+.cp-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:1rem;align-items:start}
+.cp-opts{display:flex;flex-direction:column;gap:.5rem}
+.cp-warn{flex-wrap:wrap}
+.cp .cm-attn-i.mid{color:#b45309}.cp .cm-attn-i.good{color:#16a34a}.cp .cm-attn-i.bad{color:#dc2626}
+.cp-note{margin:.3rem 0;font-size:.8rem}
+.cp-done{display:flex;flex-direction:column;gap:.4rem;margin-top:.3rem}
+.cp-row{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.6rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.cp-row:last-child{border-bottom:0}
+.cp-row-t{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}.cp-row-t b{font-size:.92rem}
+.cp-row-n{display:flex;align-items:baseline;gap:.5rem}.cp-row-n b{color:#16a34a;font-family:'Space Grotesk',sans-serif}.cp-row-n small{color:var(--text-muted);font-size:.76rem}
+@media (max-width:1023px){.cp-wrap{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:759px){
+  .cp-pick{grid-template-columns:minmax(0,1fr);gap:.5rem}
+  .cp-swap{justify-self:center;transform:rotate(90deg);width:38px;height:38px}
+  .cp-row{padding:.55rem .9rem}
+}
+
 /* ══ Class setup (cs-*) ══ */
 .cs .rp-gender{display:flex;height:8px;border-radius:999px;overflow:hidden;gap:2px;background:var(--gray-100,#f1f5f9)}
 .cs .rp-gender i{display:block;height:100%}

@@ -7,6 +7,7 @@ import { canWrite } from '../lib/perms';
 import TermSetup from './TermSetup';
 import TermView from './TermView';
 import ClassSetup from './ClassSetup';
+import CopySetup from './CopySetup';
 import Terms from './Terms';
 import Sessions from './Sessions';
 import { Classes, Arms } from './Structure';
@@ -509,58 +510,10 @@ function AddStudents({ d, notify, onDone }) {
 }
 
 // ---- Copy term setup -------------------------------------------------------
-function CopyTermSetup({ d, notify }) {
-  const nav = useNav();
-  const active = d.terms.find((t) => t.is_active);
-  const [f, setF] = useState({ from_term_id: '', to_term_id: active ? String(active.id) : '', copy_enrollments: true });
-  const [busy, setBusy] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!f.from_term_id || !f.to_term_id) { notify('error', 'Select both source and destination terms.'); return; }
-    setBusy(true);
-    const r = await submitJson(d.submit_url, { from_term_id: f.from_term_id, to_term_id: f.to_term_id, copy_enrollments: f.copy_enrollments ? 'on' : '' });
-    setBusy(false);
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not copy.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Copy Term Setup</h1></div>
-      <div className="card"><div className="card-header"><h3>Copy Class Assignments &amp; Enrollments</h3></div>
-        <div className="card-body">
-          <p className="text-muted mb-3">Copy class arm assignments (and optionally student enrollments) from one term to another. This saves time when setting up a new term.</p>
-          <form onSubmit={submit}>
-            <div className="form-row">
-              <div className="form-group"><label className="form-label">From Term (Source) <span className="required">*</span></label>
-                <select className="form-control" required value={f.from_term_id} onChange={(e) => setF((s) => ({ ...s, from_term_id: e.target.value }))}>
-                  <option value="">Select Source Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
-              <div className="form-group"><label className="form-label">To Term (Destination) <span className="required">*</span></label>
-                <select className="form-control" required value={f.to_term_id} onChange={(e) => setF((s) => ({ ...s, to_term_id: e.target.value }))}>
-                  <option value="">Select Destination Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
-            </div>
-            <div className="form-group"><label className="checkbox-label"><input type="checkbox" checked={f.copy_enrollments} onChange={(e) => setF((s) => ({ ...s, copy_enrollments: e.target.checked }))} /> <span>Also copy student enrollments</span></label>
-              <small className="text-muted">If checked, students enrolled in source term classes will be enrolled in destination term classes too.</small></div>
-            <div className="page-header-actions">
-              <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-copy" /> Copy Setup</button>
-              <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
-            </div>
-          </form>
-        </div></div>
-      <div className="card mt-3"><div className="card-header"><h3>What Gets Copied</h3></div>
-        <div className="card-body">
-          <ul>
-            <li><strong>Class Arm Assignments:</strong> Which classes and arms are set up (e.g., JSS1 Iris, SSS2 Rose)</li>
-            <li><strong>Student Enrollments:</strong> Which students are in which class (optional)</li>
-          </ul>
-          <p className="text-muted"><strong>Note:</strong> Attendance, scores, and other term-specific data are NOT copied.</p>
-        </div></div>
-    </>
-  );
-}
-
 const SCREENS = { sessions: Sessions, add_session: SessionForm, edit_session: SessionForm,
   terms: Terms, add_term: AddTerm, edit_term: EditTerm, setup: TermSetup, view_term: TermView,
   classes: Classes, edit_class: ClassForm, arms: Arms, edit_arm: ArmForm, assignments: ClassSetup, view_assignment: ViewAssignment,
-  copy_term_setup: CopyTermSetup };
+  copy_term_setup: CopySetup };
 
 export default function AcademicsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

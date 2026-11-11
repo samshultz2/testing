@@ -152,3 +152,30 @@ def test_copy_term_setup_does_not_double_place(app):
                   .filter(StudentEnrollment.student_id == sid, ClassArmAssignment.term_id == t2id,
                           StudentEnrollment.is_active == True).count())
         assert active == 1
+
+
+def test_copy_preview_and_copy_skip_students_who_left(app):
+    sid, tid = _setup(app, 'F')
+    with app.app_context():
+        src = db.session.get(Term, tid)
+        t2 = Term(session_id=src.session_id, term_number=3, name='Third Term')
+        db.session.add(t2); db.session.flush()
+        mate = Student.query.filter_by(student_id='MATE1F').first()
+        mate.is_active = False                     # left the school
+        db.session.commit()
+        t2id, mate_id = t2.id, mate.id
+    c, tok = _client(app)
+    pv = c.get(f'/academics/copy-term-setup/preview?from_term_id={tid}&to_term_id={t2id}').get_json()
+    assert pv['totals']['classes_new'] == 2
+    assert pv['totals']['students_new'] == 1        # the moved student once; the leaver skipped
+    r = c.post('/academics/copy-term-setup', headers={'X-Requested-With': 'fetch'},
+               data={'from_term_id': tid, 'to_term_id': t2id, 'copy_enrollments': 'on', '_csrf_token': tok})
+    assert r.get_json()['ok']
+    with app.app_context():
+        q = (StudentEnrollment.query.join(ClassArmAssignment)
+             .filter(ClassArmAssignment.term_id == t2id, StudentEnrollment.is_active == True))
+        assert q.filter(StudentEnrollment.student_id == mate_id).count() == 0
+        assert q.filter(StudentEnrollment.student_id == sid).count() == 1
+    d = c.get('/academics/copy-term-setup', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['page'] == 'copy_term_setup' and 'preview_url' in d and d['terms']

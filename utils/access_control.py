@@ -622,7 +622,7 @@ _SUBSECTION_ENDPOINTS = {
     'academics': {
         'structure_view': {'sessions_list', 'terms_list', 'view_term', 'classes_list',
                            'arms_list', 'assignments_list', 'view_assignment', 'term_setup',
-                           'api_get_terms', 'api_get_assignments', 'api_get_weeks'},
+                           'api_get_terms', 'api_get_assignments', 'api_get_weeks', 'copy_term_preview'},
         'structure_create': {'add_session', 'add_term', 'add_class', 'add_arm',
                              'add_assignment', 'add_next_week'},
         'structure_edit': {'edit_session', 'edit_term', 'activate_session', 'activate_term',
