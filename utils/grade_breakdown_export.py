@@ -48,6 +48,23 @@ def _text_on(rgb):
     return (255, 255, 255) if luminance < 0.62 else (15, 23, 42)
 
 
+STAR = '\u2605'
+
+
+def _best(result, subj):
+    """The subject's best branch — the same rule as the on-screen page
+    (highest credit/pass rate, then better grades, then entries; <5 entries
+    can't win; exact ties highlight no one). Computed once in
+    routes.results.analytics._branch_grade_breakdown."""
+    return ((result.get('subject_overall') or {}).get(subj) or {}).get('best')
+
+
+def best_legend(band_label):
+    word = 'credit' if band_label == 'Grade' else 'pass'
+    return (f'{STAR} Best branch for the subject: highest {word} rate; if tied, better grades; '
+            f'branches with fewer than 5 entries can\'t be best unless all are that small.')
+
+
 def _main_headers(bands):
     return ['Subject', 'Branch', 'Candidates (N)'] + [f'{b} (%)' for b in bands]
 
@@ -62,6 +79,7 @@ def _main_text_rows(result):
     for subj in result['subjects']:
         for bi, br in enumerate(result['branches']):
             cell = result['table'][subj][br]
+            br = f'{STAR} {br}' if br == _best(result, subj) else br
             if cell is None:
                 rows.append([subj if bi == 0 else '', br, 'Not Offered'] + [''] * len(bands))
             else:
@@ -234,8 +252,9 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
                 data.append(line)
                 style_cmds.append(('SPAN', (2, row_i), (-1, row_i)))
             else:
+                isb = br == _best(result, subj)
                 line = [Paragraph(pdf_escape(subj), cell) if bi == 0 else '',
-                        Paragraph(pdf_escape(br), cell),
+                        Paragraph(('<b><font color="#15803d">' + pdf_escape(br) + '</font></b> <font size="6" color="#15803d"><b>BEST</b></font>') if isb else pdf_escape(br), cell),
                         Paragraph(str(cell_['n']), cellc)]
                 for bx, b in enumerate(bands):
                     line.append(Paragraph(f"{cell_['pct'][b]}%", cellc))
@@ -250,7 +269,8 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     t.setStyle(TableStyle(style_cmds))
 
     elems = [KeepTogether(banner('Subject-Wise Performance & Grade Percentage Breakdown')), t,
-            Spacer(1, 4), Paragraph('— Not Offered', legendp)]
+            Spacer(1, 4), Paragraph('— Not Offered &nbsp;&nbsp; <font color="#15803d"><b>BEST</b></font> ='
+                                    + pdf_escape(best_legend(band_label)[1:]), legendp)]
 
     # ---- Overall summary table (own page) ----
     sum_headers = _summary_headers(bands, pass_label)
@@ -457,7 +477,8 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
             if first_row_idx is None:
                 first_row_idx = len(t.rows) - 1
             cell_ = result['table'][subj][br]
-            set_cell(cells[1], br, align=WD_ALIGN_PARAGRAPH.LEFT)
+            isb = cell_ is not None and br == _best(result, subj)
+            set_cell(cells[1], f'{STAR} {br}' if isb else br, bold=isb, align=WD_ALIGN_PARAGRAPH.LEFT)
             if cell_ is None:
                 merged = cells[2]
                 for k in range(3, len(headers)):
@@ -481,7 +502,7 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
         ['Subject', 'Branch'], [4.2, 3.2], 'Candidates (N)', avail_cm, len(bands)))
 
     note = doc.add_paragraph()
-    nr = note.add_run('— Not Offered')
+    nr = note.add_run('— Not Offered    ' + best_legend(band_label))
     nr.italic = True; nr.font.size = Pt(8); nr.font.color.rgb = note_rgb
 
     sub_banner(f'Overall {band_label} Percentage Summary by Branch')
@@ -630,7 +651,11 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
         subj_start = r
         for br in branches:
             cell_ = result['table'][subj][br]
-            ws.cell(row=r, column=2, value=br).alignment = left
+            isb = cell_ is not None and br == _best(result, subj)
+            bc = ws.cell(row=r, column=2, value=f'{STAR} {br}' if isb else br)
+            bc.alignment = left
+            if isb:
+                bc.font = Font(bold=True, color='15803D')
             if cell_ is None:
                 nc = ws.cell(row=r, column=3, value='Not Offered')
                 nc.alignment = ctr
@@ -649,6 +674,7 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
         if len(branches) > 1:
             ws.merge_cells(start_row=subj_start, start_column=1, end_row=r - 1, end_column=1)
     ws.cell(row=r + 1, column=1, value='— Not Offered').font = Font(italic=True, color='94A3B8', size=9)
+    ws.cell(row=r + 2, column=1, value=best_legend(band_label)).font = Font(italic=True, color='15803D', size=9)
     ws.freeze_panes = ws.cell(row=data_start, column=1)
     # Content-tight columns — Subject/Branch/N stay as narrow as their actual
     # text (no dead whitespace), matching the reference layout; band columns
@@ -950,7 +976,9 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
         for ri, br in enumerate(branches):
             cell_ = result['table'][subj][br]
             x = margin + col_w[0]
-            d.text((x + cpx, y + cpy), fit(br, body, col_w[1] - 2 * cpx), fill=C['text'], font=body)
+            isb = cell_ is not None and br == _best(result, subj)
+            d.text((x + cpx, y + cpy), fit(f'{STAR} {br}' if isb else br, body_b if isb else body, col_w[1] - 2 * cpx),
+                   fill=(21, 128, 61) if isb else C['text'], font=body_b if isb else body)
             x += col_w[1]
             if cell_ is None:
                 rest_w = sum(col_w[2:])
@@ -980,6 +1008,9 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
     if legend_y + key_f.size < max_y:
         d.text((margin, legend_y), '— Not Offered', fill=C['muted'], font=key_f)
         content_end_y = legend_y + key_f.size + int(8 * S)
+        if content_end_y + key_f.size < max_y:
+            d.text((margin, content_end_y), fit(best_legend(band_label), key_f, table_w), fill=(21, 128, 61), font=key_f)
+            content_end_y += key_f.size + int(8 * S)
 
     # ---- Overall summary — right under the main table on the same A4 page
     # when it fits (matching the reference sheet); only a fresh page if not. ----

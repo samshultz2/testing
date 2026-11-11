@@ -355,3 +355,28 @@ def test_best_branch_ties_broken_by_grade_quality_not_entries():
     # identical rate and grades → nobody highlighted
     r = _branch_grade_breakdown([('Art', 'B2', 'X')] * 6 + [('Art', 'B2', 'Y')] * 6, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES)
     assert r['subject_overall']['Art']['best'] is None
+
+
+def test_exports_mark_the_same_best_branch():
+    import io
+    from routes.results.analytics import _branch_grade_breakdown, _WAEC_PASS_GRADES
+    from models import WAECResult
+    from utils import grade_breakdown_export as G
+    from openpyxl import load_workbook
+    from docx import Document
+    import fitz
+    e = ([('Commerce', 'A1', 'Jemila')] * 11 + [('Commerce', g, 'Benin') for g in ['A1'] * 3 + ['B3'] * 5 + ['C6'] * 4]
+         + [('Commerce', 'A1', 'Upper')] * 3)
+    r = _branch_grade_breakdown(e, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
+    meta = {'school_name': 'S', 'logo_path': None, 'subtitle': 'WAEC'}
+    ws = load_workbook(io.BytesIO(_save(G.grade_breakdown_xlsx(meta, r, 'Grade', 'Credit')))).active
+    assert [c.value for c in ws['B'] if c.value and '★' in str(c.value)] == ['★ Jemila']
+    doc = Document(io.BytesIO(G.grade_breakdown_docx(meta, r, 'Grade', 'Credit')))
+    assert {c.text for t in doc.tables for row in t.rows for c in row.cells if '★' in c.text} == {'★ Jemila'}
+    txt = ' '.join(fitz.open(stream=G.grade_breakdown_pdf(meta, r, 'Grade', 'Credit'), filetype='pdf')[0].get_text().split())
+    assert 'Jemila BEST' in txt and 'Benin BEST' not in txt
+
+
+def _save(wb):
+    import io
+    b = io.BytesIO(); wb.save(b); return b.getvalue()
