@@ -195,16 +195,14 @@ def test_waec_export_pdf_docx_xlsx_png(app):
     from docx import Document
     import io
     doc = Document(io.BytesIO(r.get_data()))
-    # the navy masthead is itself a (1-column) table, so filter down to the
-    # three real data tables: main breakdown + overall summary + ranking
-    data_tables = [t for t in doc.tables if len(t.columns) > 1]
-    assert len(data_tables) == 3
-    header = [c_.text for c_ in data_tables[0].rows[0].cells]
-    assert header[:3] == ['SUBJECT', 'BRANCH', 'CANDIDATES (N)']
-    band_header = [c_.text for c_ in data_tables[0].rows[1].cells]
-    assert 'A1 (%)' in band_header
-    rank_header = [c_.text for c_ in data_tables[2].rows[0].cells]
-    assert rank_header[:4] == ['RANK', 'BRANCH', 'TOTAL ENTRIES (N)', 'WEIGHTED GPA']
+    # Same design as the PDF: a header picture, then editable tables for the
+    # subject breakdown and the branch ranking & summary.
+    heads = {t.rows[0].cells[0].text: [c_.text for c_ in t.rows[0].cells] for t in doc.tables}
+    subj = heads['SUBJECT']
+    assert subj[:3] == ['SUBJECT', 'BRANCH', 'N'] and 'A1' in subj and subj[-1] == 'CREDIT RATE'
+    rank = heads['RANK']
+    assert rank[:3] == ['RANK', 'BRANCH', 'ENTRIES'] and 'WEIGHTED GPA' in rank
+    assert doc.inline_shapes   # the header picture
 
     r = c.get(f'/results/subject-branch-breakdown/export.xlsx?exam=waec&year={yr}')
     assert r.status_code == 200
@@ -372,7 +370,9 @@ def test_exports_mark_the_same_best_branch():
     ws = load_workbook(io.BytesIO(_save(G.grade_breakdown_xlsx(meta, r, 'Grade', 'Credit')))).active
     assert [c.value for c in ws['B'] if c.value and '★' in str(c.value)] == ['★ Jemila']
     doc = Document(io.BytesIO(G.grade_breakdown_docx(meta, r, 'Grade', 'Credit')))
-    assert {c.text for t in doc.tables for row in t.rows for c in row.cells if '★' in c.text} == {'★ Jemila'}
+    # Word mirrors the PDF design: the branch name followed by a BEST tag.
+    assert {' '.join(c.text.split()) for t in doc.tables for row in t.rows for c in row.cells
+            if 'BEST' in c.text} == {'Jemila BEST'}
     txt = ' '.join(fitz.open(stream=G.grade_breakdown_pdf(meta, r, 'Grade', 'Credit'), filetype='pdf')[0].get_text().split())
     assert 'Jemila BEST' in txt and 'Benin BEST' not in txt
 
