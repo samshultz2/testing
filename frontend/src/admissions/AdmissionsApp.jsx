@@ -1,156 +1,309 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { chartPalette } from '../lib/hooks';
+// Admissions — from first enquiry to admitted student. Overview with the
+// pipeline, what needs a decision and where applicants come from; applicants
+// as a stage board (laptop) or list (phone) with one-tap "next stage"; an
+// applicant page with a clickable stage tracker, admit sheet and contact
+// actions; and the application form in sectioned cards with a sticky save bar.
+import React, { useState, useMemo } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } from '../components/ui';
+import { confirm, SectionShell, Toast } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import { compressPhoto } from '../lib/image';
 import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
 import { COUNTRIES, NIGERIA_STATES, NIGERIA_STATES_LGAS, DEFAULT_COUNTRY, DEFAULT_STATE, ageFromDOB } from '../lib/geoData';
+import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, Meter, usePhone, initials } from '../subjects/results';
+import { A, SecNav, Field, Pill, SearchBox, plural } from '../components/appkit';
 
-// Format-only check for a contact field (no requiredness — none of these
-// fields are mandatory on the applicant form). Shared by the live (on-blur)
-// check and the submit-time check so they can never disagree.
+const TONE = { Inquiry: '', Applied: 'info', Screening: 'info', Offered: 'mid', Accepted: 'mid', Admitted: 'good', Rejected: 'bad', Waitlisted: '' };
+const ICON = { Inquiry: 'fa-circle-question', Applied: 'fa-file-lines', Screening: 'fa-clipboard-check', Offered: 'fa-envelope-open-text',
+  Accepted: 'fa-handshake', Admitted: 'fa-user-graduate', Rejected: 'fa-circle-xmark', Waitlisted: 'fa-hourglass-half' };
+const NEXT = { Inquiry: 'Applied', Applied: 'Screening', Screening: 'Offered', Offered: 'Accepted' };
+const VERB = { Applied: 'Mark applied', Screening: 'Start screening', Offered: 'Make offer', Accepted: 'Mark accepted' };
+
 function contactFieldError(k, v) {
   const val = (v || '').trim();
   if (!val) return '';
-  if (k === 'parent_phone' || k === 'emergency_phone') {
-    return isValidPhone(val) ? '' : 'Enter a valid phone number, e.g. 08012345678.';
-  }
-  if (k === 'parent_email') {
-    return isValidEmail(val) ? '' : 'Enter a valid email address.';
-  }
+  if (k === 'parent_phone' || k === 'emergency_phone') return isValidPhone(val) ? '' : 'Enter a valid phone number, e.g. 08012345678.';
+  if (k === 'parent_email') return isValidEmail(val) ? '' : 'Enter a valid email address.';
   return '';
 }
+const waPhone = (p) => { const x = (p || '').replace(/\D/g, ''); return x.startsWith('0') ? '234' + x.slice(1) : x; };
 
-const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
+function ANav({ d }) {
+  return <SecNav label="Admissions" active={d.active === 'dashboard' ? 'dashboard' : 'applicants'} items={[
+    ['dashboard', 'fa-chart-pie', 'Overview', d.urls.dashboard],
+    ['applicants', 'fa-users', 'Applicants', d.urls.applicants],
+    ['blank', 'fa-file-pdf', 'Blank form', canWrite(d, 'download') ? d.urls.blank_form : null, { x: true, native: true }],
+  ]} />;
+}
+const Av = ({ a, size }) => (a.photo_url
+  ? <img src={a.photo_url} alt="" className={'ad-av' + (size ? ' ' + size : '')} />
+  : <span className={'ad-av' + (size ? ' ' + size : '')}>{initials(a.full_name)}</span>);
 
-// ---- Dashboard -------------------------------------------------------------
+// ============================================================================
+// Overview
+// ============================================================================
 function Dashboard({ d }) {
   const nav = useNav();
-  const ref = useRef();
-  useEffect(() => {
-    if (!ref.current || !window.Chart || !d.class_chart.length) return;
-    window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
-    const chart = new window.Chart(ref.current, {
-      type: 'bar',
-      data: { labels: d.class_chart.map((x) => x.name), datasets: [{ data: d.class_chart.map((x) => x.count), backgroundColor: chartPalette().indigo, borderRadius: 5 }] },
-      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
-    });
-    return () => chart.destroy();
-  }, [d.class_chart]);
-
-  const s = d.stats;
-  const maxc = Math.max(1, ...s.funnel.map((f) => f.count));
-  const kpis = [['blue', 'fa-file-lines', s.total, 'Applications'], ['amber', 'fa-hourglass-half', s.pending, 'In pipeline'],
-    ['green', 'fa-user-graduate', s.admitted, 'Admitted'], ['red', 'fa-percent', s.conversion + '%', 'Conversion']];
+  const s = d.stats, act = d.action || {};
+  const maxF = Math.max(1, ...s.funnel.map((f) => f.count));
+  const maxS = Math.max(1, ...(d.sources || []).map((x) => x.count));
+  const list = (st) => d.urls.applicants + '?' + new URLSearchParams({ status: st, session_id: d.session_id || '' });
+  const todo = [
+    act.stale > 0 && { to: act.stale_url, tone: 'mid', ic: 'fa-clock', t: `${plural(act.stale, 'application')} waiting over 2 weeks for a next step` },
+    act.offered > 0 && { to: act.offered_url, tone: 'info', ic: 'fa-envelope-open-text', t: `${plural(act.offered, 'offer')} not yet accepted` },
+    act.accepted > 0 && { to: act.accepted_url, tone: 'good', ic: 'fa-user-check', t: `${plural(act.accepted, 'applicant')} accepted — ready to admit` },
+  ].filter(Boolean);
   return (
-    <>
-      <PageHeader title="Admissions" actions={canWrite(d, 'create') ? <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a> : null} />
-      <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form"><div className="form-group"><label className="form-label">Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, d.urls.dashboard, { session_id: e.target.value })}>
-            <option value="">All sessions</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div></div>
-      </div></div>
-
-      <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div><div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}</div>
-
-      <div className="adm-grid split">
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-filter" /> Pipeline funnel</h3></div>
-          <div className="wb"><div className="funnel">
-            {s.funnel.map((f) => (
-              <div className="funnel-row" key={f.stage}>
-                <a className="lab" href={d.urls.applicants + '?' + new URLSearchParams({ status: f.stage, session_id: d.session_id || '' })}>{f.stage}</a>
-                <div className="track"><div className="fill" style={{ width: (f.count / maxc * 100) + '%' }}>{f.count}</div></div>
-              </div>
-            ))}
-          </div></div>
-        </div>
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-school" /> By intended class</h3></div>
-          <div className="wb"><div className="chart-box">
-            {d.class_chart.length ? <canvas ref={ref} /> : <Empty icon="fa-school" title="No applications yet" />}
-          </div></div>
-        </div>
+    <div className="rs cm ad">
+      <ANav d={d} />
+      <Head icon="fa-user-plus" title="Admissions" sub={`${plural(d.new_week || 0, 'new application')} this week`}>
+        <select className="cm-sel" value={d.session_id} aria-label="Session" onChange={(e) => navParams(nav.go, d.urls.dashboard, { session_id: e.target.value })}>
+          <option value="">All sessions</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+        {canWrite(d, 'create') && <A to={d.urls.add} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm"> New application</span></A>}
+      </Head>
+      <Tiles items={[
+        { label: 'Applications', value: s.total, sub: `${d.gender.male} boys · ${d.gender.female} girls` },
+        { label: 'In progress', value: s.pending },
+        { label: 'Admitted', value: s.admitted, tone: 'good' },
+        { label: 'Conversion', value: s.conversion, unit: '%', sub: `${s.rejected} not offered`, tone: s.conversion >= 50 ? 'good' : s.conversion >= 25 ? 'mid' : '' },
+      ]} />
+      {todo.length > 0 && (
+        <section className="rs-card rp-attn"><span className="k">Needs a decision</span>
+          <div className="tm-alerts">{todo.map((x) => (
+            <A key={x.t} to={x.to} className={'cm-attn-i ' + x.tone}><i className={'fas ' + x.ic} aria-hidden="true" /><span>{x.t}</span><i className="fas fa-chevron-right" aria-hidden="true" /></A>))}</div>
+        </section>)}
+      <div className="ad-grid">
+        <section className="rs-card ad-funnel">
+          <div className="rs-card-h"><h3><i className="fas fa-filter" aria-hidden="true" /> Pipeline</h3><A to={d.urls.applicants} className="cm-link">Board <i className="fas fa-arrow-right" aria-hidden="true" /></A></div>
+          {s.funnel.map((f, i) => {
+            const prev = i ? s.funnel[i - 1].count : null;
+            return (
+              <A key={f.stage} to={list(f.stage)} className="ad-fn">
+                <span className={'ad-fn-ic ' + TONE[f.stage]}><i className={'fas ' + ICON[f.stage]} aria-hidden="true" /></span>
+                <span className="ad-fn-t">{f.stage}</span>
+                <span className="ad-fn-b"><i style={{ width: Math.max(2, f.count / maxF * 100) + '%' }} /></span>
+                <b>{f.count}</b>
+              </A>);
+          })}
+          <div className="ad-out">
+            {['Waitlisted', 'Rejected'].map((o) => <A key={o} to={list(o)} className="ad-out-i"><Pill tone={TONE[o]} icon={ICON[o]}>{o}</Pill><b>{(s.by_status || {})[o] || 0}</b></A>)}</div>
+        </section>
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-school" aria-hidden="true" /> Demand by class</h3></div>
+          {(d.classes_full || []).length ? (
+            <div className="ad-cls">{d.classes_full.map((c) => (
+              <div key={c.name} className="ad-cls-r"><b>{c.name}</b>
+                <Meter value={c.admitted} max={c.count || 1} tone="good" />
+                <span>{c.admitted}/{c.count} admitted</span>
+                <small>{c.avg_score != null ? `avg ${c.avg_score}` : '—'}</small></div>))}</div>
+          ) : <p className="cm-mute">No applications yet.</p>}
+        </section>
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-bullhorn" aria-hidden="true" /> How they heard about us</h3></div>
+          {(d.sources || []).length ? (
+            <div className="rp-bars">{d.sources.map((x) => (
+              <div key={x.name} className="ad-src"><span>{x.name}</span><span className="ad-src-b"><i style={{ width: x.count / maxS * 100 + '%' }} /></span><b>{x.count}</b></div>))}</div>
+          ) : <p className="cm-mute">No sources recorded yet.</p>}
+        </section>
       </div>
-
-      <div className="widget">
-        <div className="wh"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent applications</h3><a href={d.urls.applicants} className="text-sm">View all</a></div>
-        <div className="wb" style={{ padding: 0 }}>
-          <Table rowKey={(a) => a.id} rows={d.recent}
-            empty={<Empty icon="fa-user-plus" title="No applications yet"><a href={d.urls.add} className="btn btn-primary btn-sm mt-2">New application</a></Empty>}
-            columns={[
-              { key: 'app_no', label: 'App No', render: (a) => a.application_no },
-              { key: 'name', label: 'Name', render: (a) => <a href={a.detail_url}>{a.full_name}</a> },
-              { key: 'class', label: 'Class', render: (a) => a.intended_class },
-              { key: 'status', label: 'Status', render: (a) => <span className={'badge ' + a.status_badge}>{a.status}</span> },
-              { key: 'applied', label: 'Applied', render: (a) => <span className="text-muted text-sm">{a.applied}</span> },
-            ]} />
-        </div>
-      </div>
-    </>
+      <section className="rs-card su-group">
+        <div className="su-group-h"><h3><i className="fas fa-clock-rotate-left" aria-hidden="true" /> Latest applications</h3><A to={d.urls.applicants} className="cm-link">All <i className="fas fa-arrow-right" aria-hidden="true" /></A></div>
+        {d.recent.length ? d.recent.map((r) => (
+          <A key={r.id} to={r.detail_url} className="ad-row">
+            <Av a={r} /><span className="ad-row-t"><b>{r.full_name}</b><small>{r.application_no} · {r.intended_class} · {r.applied}</small></span>
+            <Pill tone={TONE[r.status]}>{r.status}</Pill></A>)) : <Blank icon="fa-user-plus" title="No applications yet" />}
+      </section>
+    </div>
   );
 }
 
-// ---- Applicants list -------------------------------------------------------
-function Applicants({ d }) {
+// ============================================================================
+// Applicants — board (laptop) / list (phone)
+// ============================================================================
+function Applicants({ d, notify }) {
   const nav = useNav();
+  const phone = usePhone();
+  const [view, setView] = useState(() => { try { return localStorage.getItem('adm-view') || 'board'; } catch (e) { return 'board'; } });
   const [q, setQ] = useState(d.q || '');
-  const params = (over) => ({ status: d.status, session_id: d.session_id, class_id: d.class_id, q, ...over });
-  return (
-    <>
-      <PageHeader title="Applicants" actions={<>
-        {d.urls.blank_form && canWrite(d, 'download') && <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>}
-        {d.urls.blank_form && canWrite(d, 'download') && <a href={d.urls.blank_form + '?bw=1'} data-native className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W form</a>}
-        <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-        {canWrite(d, 'create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>}
-      </>} />
-      <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form">
-          <div className="form-group"><label className="form-label">Status</label>
-            <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.urls.applicants, params({ status: e.target.value }))}>
-              <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Session</label>
-            <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, d.urls.applicants, params({ session_id: e.target.value }))}>
-              <option value="">All</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Intended class</label>
-            <select className="form-control" value={d.class_id} onChange={(e) => navParams(nav.go, d.urls.applicants, params({ class_id: e.target.value }))}>
-              <option value="">All</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <form className="form-group" onSubmit={(e) => { e.preventDefault(); navParams(nav.go, d.urls.applicants, params({})); }}>
-            <label className="form-label">Search</label>
-            <input type="text" className="form-control" value={q} placeholder="Name, app no, phone" onChange={(e) => setQ(e.target.value)} /></form>
-        </div>
-      </div></div>
-      <div className="card">
-        <div className="card-header"><h3>{d.rows.length} applicant(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(a) => a.id} rows={d.rows} pageSize={25} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-user-plus" title="No applicants"><p>Create an application or adjust filters.</p><a href={d.urls.add} className="btn btn-primary mt-2">New Application</a></Empty>}
-            columns={[
-              { key: 'app_no', label: 'App No', sortable: true, sortValue: (a) => a.application_no, render: (a) => a.application_no },
-              { key: 'name', label: 'Name', sortable: true, sortValue: (a) => a.full_name, render: (a) => <><a href={a.detail_url}><strong>{a.full_name}</strong></a>{a.gender && <div className="text-muted text-sm">{a.gender}</div>}</> },
-              { key: 'class', label: 'Class', render: (a) => a.intended_class },
-              { key: 'parent', label: 'Parent', render: (a) => <>{a.parent_name || '—'}{a.parent_phone && <div className="text-muted text-sm">{a.parent_phone}</div>}</> },
-              { key: 'score', label: 'Score', render: (a) => a.entrance_score },
-              { key: 'status', label: 'Status', render: (a) => <><span className={'badge ' + a.status_badge}>{a.status}</span>{a.linked && <i aria-hidden="true" className="fas fa-link text-muted" title="Linked to student" style={{ marginLeft: 4 }} />}</> },
-              { key: 'act', label: '', render: (a) => <a href={a.detail_url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a> },
-            ]} />
-        </div>
+  const [busy, setBusy] = useState(null);
+  const canEdit = canWrite(d, 'edit');
+  const board = !phone && view === 'board' && !d.status;
+  const go = (k, v) => navParams(nav.go, d.urls.applicants, { status: d.status, session_id: d.session_id, class_id: d.class_id, q, [k]: v });
+  const setV = (v) => { setView(v); try { localStorage.setItem('adm-view', v); } catch (e) { /* ignore */ } };
+  const move = async (r, to) => {
+    setBusy(r.id);
+    const res = await submitJson(r.status_url, { status: to });
+    setBusy(null);
+    if (res.ok) { notify('success', `${r.full_name}: ${to}`); nav.refresh(); } else notify('error', res.error || 'Could not update.');
+  };
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? d.rows.filter((r) => [r.full_name, r.application_no, r.parent_phone, r.parent_name].join(' ').toLowerCase().includes(t)) : d.rows;
+  }, [d.rows, q]);
+  const counts = {};
+  d.rows.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
+  const Card = ({ r }) => (
+    <div className="ad-card">
+      <A to={r.detail_url} className="ad-card-h"><Av a={r} /><span><b>{r.full_name}</b><small>{r.intended_class} · {r.application_no}</small></span></A>
+      <div className="ad-card-m">
+        {r.entrance_score !== '—' && <span><i className="fas fa-star" aria-hidden="true" /> {r.entrance_score}</span>}
+        {r.waiting != null && r.waiting >= 14 && !['Admitted', 'Rejected'].includes(r.status) && <span className="late"><i className="fas fa-clock" aria-hidden="true" /> {r.waiting}d</span>}
+        {r.parent_phone && <a href={'tel:' + r.parent_phone} className="cm-ib" aria-label={`Call ${r.parent_name || 'parent'}`}><i className="fas fa-phone" aria-hidden="true" /></a>}
       </div>
-    </>
+      {canEdit && NEXT[r.status] && <button type="button" className="rs-btn sm ghost ad-next" disabled={busy === r.id} onClick={() => move(r, NEXT[r.status])}>
+        {busy === r.id ? <i className="fas fa-spinner fa-spin" aria-hidden="true" /> : <>{VERB[NEXT[r.status]]} <i className="fas fa-arrow-right" aria-hidden="true" /></>}</button>}
+    </div>
+  );
+  return (
+    <div className="rs cm ad">
+      <ANav d={d} />
+      <Head icon="fa-users" title="Applicants" sub={plural(d.rows.length, 'application')}>
+        <a href={d.urls.export} data-native className="rs-btn ghost"><i className="fas fa-file-csv" aria-hidden="true" /><span className="rs-hide-sm"> Export</span></a>
+        {canWrite(d, 'create') && <A to={d.urls.add} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm"> New</span></A>}
+      </Head>
+      <div className="ad-tools">
+        <SearchBox value={q} onChange={setQ} placeholder="Name, application no. or phone" />
+        <select className="cm-sel" value={d.class_id} aria-label="Class" onChange={(e) => go('class_id', e.target.value)}>
+          <option value="">All classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select className="cm-sel" value={d.session_id} aria-label="Session" onChange={(e) => go('session_id', e.target.value)}>
+          <option value="">All sessions</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+        {!phone && !d.status && <Seg value={view} onChange={setV} label="View" options={[{ value: 'board', label: 'Board', icon: 'fa-table-columns' }, { value: 'list', label: 'List', icon: 'fa-list' }]} />}
+      </div>
+      <Chips label="Stage" value={d.status} onChange={(v) => go('status', v)}
+             items={[{ value: '', label: 'All', sub: d.rows.length }, ...d.statuses.map((x) => ({ value: x, label: x, sub: counts[x] || 0 }))]} />
+
+      {!rows.length ? <Blank icon="fa-user-plus" title={d.rows.length ? 'No match' : 'No applications yet'}>
+        {canWrite(d, 'create') && !d.rows.length && <A to={d.urls.add} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /> New application</A>}</Blank>
+      : board ? (
+        <div className="ad-board">{[...d.stages, 'Waitlisted', 'Rejected'].map((st) => {
+          const col = rows.filter((r) => r.status === st);
+          if (!col.length && ['Waitlisted', 'Rejected'].includes(st)) return null;
+          return (
+            <section key={st} className={'ad-col ' + TONE[st]}>
+              <div className="ad-col-h"><i className={'fas ' + ICON[st]} aria-hidden="true" /><b>{st}</b><span>{col.length}</span></div>
+              <div className="ad-col-b">{col.map((r) => <Card key={r.id} r={r} />)}{!col.length && <p className="cm-mute">None</p>}</div>
+            </section>);
+        })}</div>
+      ) : (
+        <section className="rs-card su-group">{rows.map((r) => (
+          <div key={r.id} className="ad-li">
+            <A to={r.detail_url} className="ad-li-m"><Av a={r} />
+              <span className="ad-row-t"><b>{r.full_name}</b><small>{r.intended_class} · {r.application_no}{r.parent_phone ? ' · ' + r.parent_phone : ''}</small></span></A>
+            <Pill tone={TONE[r.status]}>{r.status}</Pill>
+            {!phone && <span className="ad-li-s">{r.entrance_score}</span>}
+            {canEdit && NEXT[r.status] && <button type="button" className="rs-btn sm ghost" disabled={busy === r.id} onClick={() => move(r, NEXT[r.status])} title={VERB[NEXT[r.status]]}>
+              {busy === r.id ? <i className="fas fa-spinner fa-spin" aria-hidden="true" /> : <><span className="rs-hide-sm">{VERB[NEXT[r.status]]} </span><i className="fas fa-arrow-right" aria-hidden="true" /></>}</button>}
+          </div>))}</section>)}
+    </div>
   );
 }
 
-// ---- Applicant form --------------------------------------------------------
+// ============================================================================
+// Applicant page
+// ============================================================================
+function ApplicantDetail({ d, notify }) {
+  const nav = useNav();
+  const a = d.applicant;
+  const [admit, setAdmit] = useState(false);
+  const [arm, setArm] = useState(d.assignments[0] ? String(d.assignments[0].id) : '');
+  const [busy, setBusy] = useState(false);
+  const canEdit = canWrite(d, 'edit');
+  const idx = d.stages.indexOf(a.status);
+  const setStatus = async (st) => {
+    if (st === a.status) return;
+    if (['Rejected', 'Waitlisted'].includes(st) && !await confirm({ title: `${st === 'Rejected' ? 'Decline' : 'Waitlist'} ${a.full_name}?`,
+      confirmText: st === 'Rejected' ? 'Decline' : 'Waitlist', tone: st === 'Rejected' ? 'danger' : undefined,
+      message: 'The parent is told about the decision if decision messages are switched on.' })) return;
+    const r = await submitJson(d.urls.status, { status: st });
+    if (r.ok) { notify('success', `Status: ${st}`); nav.refresh(); } else notify('error', r.error || 'Could not update.');
+  };
+  const doAdmit = async () => {
+    setBusy(true);
+    const r = await submitJson(d.urls.convert, { assignment_id: arm });
+    setBusy(false);
+    if (r.ok) { window.location.href = r.redirect; } else notify('error', r.error || 'Could not admit.');
+  };
+  const del = async () => {
+    if (!await confirm({ title: `Delete ${a.full_name}’s application?`, tone: 'danger', confirmText: 'Delete', message: 'This can’t be undone.' })) return;
+    const r = await submitJson(d.urls.delete, {});
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
+  };
+  const KV = ({ rows }) => <dl className="ad-kv">{rows.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>;
+  return (
+    <div className="rs cm ad">
+      <ANav d={d} />
+      <section className="rs-card ad-hero">
+        <Av a={a} size="lg" />
+        <div className="ad-hero-t">
+          <h1>{a.full_name}</h1>
+          <div className="ad-hero-m"><span>{a.application_no}</span>{a.intended_class && <span><i className="fas fa-school" aria-hidden="true" /> {a.intended_class}</span>}
+            {a.session && <span>{a.session}</span>}{a.age != null && <span>{a.age} yrs</span>}{a.gender && <span>{a.gender}</span>}</div>
+          <Pill tone={TONE[a.status]} icon={ICON[a.status]}>{a.status}</Pill>
+        </div>
+        <div className="ad-hero-a">
+          {a.parent_phone && <a href={'tel:' + a.parent_phone} className="ad-ca"><i className="fas fa-phone" aria-hidden="true" /><span>Call</span></a>}
+          {a.parent_phone && <a href={'https://wa.me/' + waPhone(a.parent_phone)} target="_blank" rel="noopener" className="ad-ca wa"><i className="fab fa-whatsapp" aria-hidden="true" /><span>WhatsApp</span></a>}
+          {a.parent_email && <a href={'mailto:' + a.parent_email} className="ad-ca"><i className="fas fa-envelope" aria-hidden="true" /><span>Email</span></a>}
+          <Menu label="More" items={[
+            canEdit && { icon: 'fa-pen', label: 'Edit application', onClick: () => nav.go(d.urls.edit) },
+            canWrite(d, 'download') && { icon: 'fa-file-pdf', label: 'Download PDF', href: d.urls.pdf, native: true },
+            canWrite(d, 'download') && { icon: 'fa-file-word', label: 'Download Word', href: d.urls.docx, native: true },
+            canWrite(d, 'delete') && { icon: 'fa-trash', label: 'Delete', danger: true, onClick: del },
+          ]} />
+        </div>
+      </section>
+
+      <section className="rs-card ad-track">
+        <ol className="ad-steps">{d.stages.map((st, i) => (
+          <li key={st} className={(i < idx ? 'done' : i === idx ? 'on' : '') + (idx < 0 ? ' off' : '')}>
+            <button type="button" disabled={!canEdit || st === 'Admitted' || !!a.admitted_student_id} onClick={() => setStatus(st)} aria-current={i === idx ? 'step' : undefined}>
+              <span className="ad-dot">{i < idx ? <i className="fas fa-check" aria-hidden="true" /> : i + 1}</span><small>{st}</small></button></li>))}</ol>
+        <div className="ad-track-a">
+          {a.admitted_student_id ? <A to={a.student_url} className="rs-btn primary"><i className="fas fa-user-graduate" aria-hidden="true" /> Open student record</A> : canEdit && <>
+            {NEXT[a.status] && <button type="button" className="rs-btn primary" onClick={() => setStatus(NEXT[a.status])}>{VERB[NEXT[a.status]]} <i className="fas fa-arrow-right" aria-hidden="true" /></button>}
+            {['Offered', 'Accepted'].includes(a.status) && canWrite(d, 'convert') && <button type="button" className={'rs-btn ' + (a.status === 'Accepted' ? 'primary' : 'ghost')} onClick={() => setAdmit(true)}><i className="fas fa-user-graduate" aria-hidden="true" /> Admit</button>}
+            {!['Rejected', 'Admitted'].includes(a.status) && <button type="button" className="rs-btn ghost" onClick={() => setStatus('Waitlisted')}>Waitlist</button>}
+            {!['Rejected', 'Admitted'].includes(a.status) && <button type="button" className="rs-btn ghost ad-no" onClick={() => setStatus('Rejected')}>Decline</button>}
+            {['Rejected', 'Waitlisted'].includes(a.status) && <button type="button" className="rs-btn ghost" onClick={() => setStatus('Screening')}>Reopen</button>}
+          </>}
+        </div>
+      </section>
+
+      <div className="ad-dgrid">
+        <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-id-card" aria-hidden="true" /> Applicant</h3></div><KV rows={d.info} /></section>
+        <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-people-roof" aria-hidden="true" /> Parent / guardian</h3></div><KV rows={d.parent} />
+          {d.emergency && <><div className="rs-card-h ad-sub"><h3>Emergency contact</h3></div><KV rows={d.emergency} /></>}</section>
+        {d.notes && <section className="rs-card ad-notes"><div className="rs-card-h"><h3><i className="fas fa-note-sticky" aria-hidden="true" /> Notes</h3></div><p>{d.notes}</p></section>}
+      </div>
+
+      {admit && (
+        <Sheet title={`Admit ${a.full_name}`} onClose={() => setAdmit(false)}>
+          <div className="su-form">
+            <p className="cm-mute">Creates a student record with the application details and parent contact.</p>
+            <Field label="Put them in a class (optional)">
+              <select value={arm} onChange={(e) => setArm(e.target.value)}>
+                <option value="">Don’t place in a class yet</option>
+                {d.assignments.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></Field>
+            {!d.assignments.length && <small className="cm-mute">No {a.intended_class || ''} class is open for {a.session || 'that session'} yet — you can place them later in Class setup.</small>}
+            <div className="su-form-f">
+              <button type="button" className="rs-btn ghost" onClick={() => setAdmit(false)}>Cancel</button>
+              <button type="button" className="rs-btn primary" disabled={busy} onClick={doAdmit}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-user-graduate')} aria-hidden="true" /> Admit</button>
+            </div>
+          </div>
+        </Sheet>)}
+    </div>
+  );
+}
+
+// ============================================================================
+// Application form
+// ============================================================================
 function ApplicantForm({ d, notify }) {
   const nav = useNav();
   const a = d.applicant || {};
   const editing = !!d.applicant;
-  const [f, setF] = useState({
+  const init = useMemo(() => ({
     first_name: a.first_name || '', surname: a.surname || '', middle_name: a.middle_name || '',
     gender: a.gender || '', date_of_birth: a.date_of_birth || '', previous_school: a.previous_school || '',
     source: a.source || '', session_id: a.session_id ? String(a.session_id) : (editing ? '' : String(d.active_session_id || '')),
@@ -162,83 +315,41 @@ function ApplicantForm({ d, notify }) {
     emergency_phone: a.emergency_phone || '', emergency_address: a.emergency_address || '',
     country: a.country || DEFAULT_COUNTRY, state_of_origin: a.state_of_origin || (!a.country || a.country === DEFAULT_COUNTRY ? DEFAULT_STATE : ''), lga: a.lga || '',
     father_occupation: a.father_occupation || '', languages_spoken: a.languages_spoken || '',
-    blood_group: a.blood_group || '', genotype: a.genotype || '',
-    photo_data: '',
-  });
-  const existingPhoto = a.photo_url || '';
-  const photoPreview = f.photo_data === '__clear__' ? ''
-    : (f.photo_data && f.photo_data.slice(0, 5) === 'data:' ? f.photo_data : existingPhoto);
+    blood_group: a.blood_group || '', genotype: a.genotype || '', photo_data: '',
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [f, setF] = useState(init);
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState({});
+  const dirty = JSON.stringify(f) !== JSON.stringify(init);
+  const photoPreview = f.photo_data === '__clear__' ? '' : (f.photo_data && f.photo_data.slice(0, 5) === 'data:' ? f.photo_data : (a.photo_url || ''));
+  const age = ageFromDOB(f.date_of_birth);
+  const hasStates = f.country === DEFAULT_COUNTRY;
+  const lgas = NIGERIA_STATES_LGAS[f.state_of_origin] || [];
   const onPhoto = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { notify('error', 'Please choose an image file.'); return; }
-    // Sanity cap only — any real photo is downsized well below this by
-    // compressPhoto(); this just avoids the browser hanging on a bogus file.
     if (file.size > 50 * 1024 * 1024) { notify('error', 'That image is too large to process (max 50 MB).'); return; }
-    try {
-      const dataUrl = await compressPhoto(file);
-      setF((s) => ({ ...s, photo_data: dataUrl }));
-    } catch (err) {
-      notify('error', 'Could not read that image.');
-    }
+    try { const url = await compressPhoto(file); setF((s) => ({ ...s, photo_data: url })); } catch (err) { notify('error', 'Could not read that image.'); }
   };
-  const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState({});
-  const age = ageFromDOB(f.date_of_birth);
-  const countryHasStates = f.country === DEFAULT_COUNTRY;
-  const lgaOptions = NIGERIA_STATES_LGAS[f.state_of_origin] || [];
   const set = (k, v) => {
     setF((s) => {
       const next = { ...s, [k]: v };
-      // "Mr. …" / "Mrs. …" name prefixes are a strong enough signal to
-      // pre-fill the relationship field — still just a default, freely
-      // overridable by the admin.
-      if (k === 'parent_name') {
-        const rel = relationshipFromName(v);
-        if (rel) next.relationship = rel;
-      } else if (k === 'emergency_name') {
-        const rel = relationshipFromName(v);
-        if (rel) next.emergency_relationship = rel;
-      } else if (k === 'country') {
-        // Switching to a country we have no state/LGA list for: the state
-        // field becomes free text, so drop a stale Nigerian-state value.
-        // Switching TO Nigeria: default to Edo rather than leaving it blank.
-        if (v === DEFAULT_COUNTRY) {
-          if (!s.state_of_origin) next.state_of_origin = DEFAULT_STATE;
-        } else if (NIGERIA_STATES.includes(s.state_of_origin)) {
-          next.state_of_origin = '';
-          next.lga = '';
-        }
-      } else if (k === 'state_of_origin') {
-        // A state's L.G.A. list changed under it — clear a no-longer-valid L.G.A.
-        const lgas = NIGERIA_STATES_LGAS[v] || [];
-        if (s.lga && !lgas.includes(s.lga)) next.lga = '';
-      }
+      if (k === 'parent_name') { const rel = relationshipFromName(v); if (rel) next.relationship = rel; }
+      else if (k === 'emergency_name') { const rel = relationshipFromName(v); if (rel) next.emergency_relationship = rel; }
+      else if (k === 'country') {
+        if (v === DEFAULT_COUNTRY) { if (!s.state_of_origin) next.state_of_origin = DEFAULT_STATE; }
+        else if (NIGERIA_STATES.includes(s.state_of_origin)) { next.state_of_origin = ''; next.lga = ''; }
+      } else if (k === 'state_of_origin') { const l = NIGERIA_STATES_LGAS[v] || []; if (s.lga && !l.includes(s.lga)) next.lga = ''; }
       return next;
     });
-    // Live: once a field has a visible error, keep re-checking as the admin
-    // types so it clears the moment it's fixed. A fresh field is only
-    // checked on blur (below), so we don't flag it mid-keystroke.
-    setErrors((er) => {
-      if (!er[k]) return er;
-      const msg = contactFieldError(k, v);
-      if (!msg) { const { [k]: _drop, ...rest } = er; return rest; }
-      return { ...er, [k]: msg };
-    });
+    setErrors((er) => { if (!er[k]) return er; const msg = contactFieldError(k, v); if (!msg) { const { [k]: _d, ...rest } = er; return rest; } return { ...er, [k]: msg }; });
   };
-  const blurField = (k) => setErrors((er) => {
-    const msg = contactFieldError(k, f[k]);
-    if (!msg) { if (!er[k]) return er; const { [k]: _drop, ...rest } = er; return rest; }
-    return { ...er, [k]: msg };
-  });
-  const submit = async (e) => {
-    e.preventDefault();
+  const blur = (k) => setErrors((er) => { const msg = contactFieldError(k, f[k]); if (!msg) { if (!er[k]) return er; const { [k]: _d, ...rest } = er; return rest; } return { ...er, [k]: msg }; });
+  const submit = async () => {
     if (!f.first_name.trim() || !f.surname.trim()) { notify('error', 'First name and surname are required.'); return; }
     const er = {};
-    ['parent_phone', 'parent_email', 'emergency_phone'].forEach((k) => {
-      const msg = contactFieldError(k, f[k]);
-      if (msg) er[k] = msg;
-    });
+    ['parent_phone', 'parent_email', 'emergency_phone'].forEach((k) => { const m = contactFieldError(k, f[k]); if (m) er[k] = m; });
     setErrors(er);
     if (Object.keys(er).length) { notify('error', 'Please fix the highlighted fields.'); return; }
     setBusy(true);
@@ -246,216 +357,81 @@ function ApplicantForm({ d, notify }) {
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
-  // Render fields via a function call, NOT as <F/>: a component defined inside
-  // render gets a fresh identity each keystroke, remounting the input and
-  // dropping the mobile keyboard after every character.
-  const F = ({ label, k, type = 'text', req, error, ...rest }) => (
-    <div className="form-group" key={k}><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
-      <input type={type} className="form-control" required={req} value={f[k]} onChange={(e) => set(k, e.target.value)}
-             aria-invalid={error ? true : undefined} {...rest} />
-      {error && <span className="form-error" role="alert" style={{ color: 'var(--danger, var(--danger))', fontSize: 'var(--text-xs)', display: 'block', marginTop: 3 }}>{error}</span>}
-    </div>
-  );
+  const T = (label, k, props = {}) => (
+    <Field label={label} grow key={k} hint={errors[k] ? undefined : props.hint}>
+      <input type={props.type || 'text'} value={f[k]} placeholder={props.placeholder} step={props.step} inputMode={props.inputMode}
+             aria-invalid={errors[k] ? true : undefined} onBlur={props.check ? () => blur(k) : undefined} onChange={(e) => set(k, e.target.value)} />
+      {errors[k] && <small className="su-err">{errors[k]}</small>}
+    </Field>);
+  const S = (label, k, opts) => (
+    <Field label={label} grow key={k}><select value={f[k]} onChange={(e) => set(k, e.target.value)}><option value="">—</option>
+      {opts.map((o) => (Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>))}</select></Field>);
   return (
-    <>
-      <PageHeader title={editing ? 'Edit Application' : 'New Application'} actions={
-        d.urls.blank_form ? <>
-          <a href={d.urls.blank_form} download="Application-Form.pdf" data-no-spa className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>
-          <a href={d.urls.blank_form + '?bw=1'} download="Application-Form-BW.pdf" data-no-spa className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W</a>
-        </> : null} />
-      <form onSubmit={submit}>
-        <div className="card mb-3"><div className="card-header"><h3>Applicant</h3></div><div className="card-body">
-          <div className="form-group">
-            <label className="form-label">Passport photograph</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              {photoPreview
-                ? <img src={photoPreview} alt="Passport" style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#ddd)' }} />
-                : <div style={{ width: 64, height: 80, border: '1px dashed #bbb', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.6rem', color: '#888', textAlign: 'center' }}>No photo</div>}
-              <div>
-                <input type="file" accept="image/*" onChange={onPhoto} />
-                {photoPreview && <div><button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '.4rem' }} onClick={() => setF((s) => ({ ...s, photo_data: '__clear__' }))}>Remove</button></div>}
-              </div>
-            </div>
+    <div className="rs cm ad">
+      <ANav d={d} />
+      <Head icon={editing ? 'fa-pen' : 'fa-user-plus'} title={editing ? 'Edit application' : 'New application'} sub={editing ? (a.first_name + ' ' + a.surname) : 'Only first name and surname are required.'} />
+      <div className="ad-form">
+        <section className="rs-card ad-fs">
+          <div className="rs-card-h"><h3><i className="fas fa-child" aria-hidden="true" /> Applicant</h3></div>
+          <div className="ad-photo">
+            {photoPreview ? <img src={photoPreview} alt="Passport" /> : <span className="ad-photo-x"><i className="fas fa-camera" aria-hidden="true" /></span>}
+            <div><label className="rs-btn ghost sm"><i className="fas fa-upload" aria-hidden="true" /> {photoPreview ? 'Change photo' : 'Add passport photo'}
+              <input type="file" accept="image/*" capture="user" hidden onChange={onPhoto} /></label>
+              {photoPreview && <button type="button" className="rs-btn ghost sm" onClick={() => set('photo_data', '__clear__')}>Remove</button>}</div>
           </div>
-          <div className="form-row">{F({ label: 'First name', k: 'first_name', req: true })}{F({ label: 'Surname', k: 'surname', req: true })}</div>
-          <div className="form-row">{F({ label: 'Middle name', k: 'middle_name' })}
-            <div className="form-group"><label className="form-label">Gender</label>
-              <select className="form-control" value={f.gender} onChange={(e) => set('gender', e.target.value)}><option value="">—</option><option>Male</option><option>Female</option></select></div>
-            <div className="form-group"><label className="form-label">Date of birth</label>
-              <input type="date" className="form-control" value={f.date_of_birth}
-                     onChange={(e) => set('date_of_birth', e.target.value)} />
-              {age !== null && <div className="form-hint">Age: {age} {age === 1 ? 'year' : 'years'}</div>}
-            </div></div>
-          <div className="form-row">{F({ label: 'Previous school', k: 'previous_school' })}</div>
-        </div></div>
-
-        <div className="card mb-3"><div className="card-header"><h3>Application</h3></div><div className="card-body">
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Session</label>
-              <select className="form-control" value={f.session_id} onChange={(e) => set('session_id', e.target.value)}><option value="">—</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Intended class</label>
-              <select className="form-control" value={f.intended_class_id} onChange={(e) => set('intended_class_id', e.target.value)}><option value="">—</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div className="cm-row2">{T('First name *', 'first_name')}{T('Surname *', 'surname')}{T('Middle name', 'middle_name')}</div>
+          <div className="cm-row2">{S('Gender', 'gender', ['Male', 'Female'])}
+            <Field label="Date of birth" grow hint={age !== null ? `${age} ${age === 1 ? 'year' : 'years'} old` : undefined}><input type="date" value={f.date_of_birth} onChange={(e) => set('date_of_birth', e.target.value)} /></Field>
+            {T('Previous school', 'previous_school')}</div>
+        </section>
+        <section className="rs-card ad-fs">
+          <div className="rs-card-h"><h3><i className="fas fa-file-lines" aria-hidden="true" /> Application</h3></div>
+          <div className="cm-row2">{S('Session', 'session_id', d.sessions.map((x) => [String(x.id), x.name]))}{S('Class applying for', 'intended_class_id', d.classes.map((c) => [String(c.id), c.name]))}</div>
+          <div className="cm-row2">
+            {!editing && S('Starting stage', 'status', d.statuses)}
+            {T('Entrance score', 'entrance_score', { type: 'number', step: '0.5', inputMode: 'decimal' })}
+            {S('How they heard about us', 'source', d.sources || [])}</div>
+        </section>
+        <section className="rs-card ad-fs">
+          <div className="rs-card-h"><h3><i className="fas fa-people-roof" aria-hidden="true" /> Parent / guardian</h3></div>
+          <div className="cm-row2">{T('Name', 'parent_name', { placeholder: 'e.g. Mr. John Okafor' })}{T('Relationship', 'relationship', { placeholder: 'Father / Mother / Guardian' })}</div>
+          <div className="cm-row2">{T('Phone', 'parent_phone', { type: 'tel', placeholder: '08012345678', check: true, inputMode: 'tel' })}{T('Email', 'parent_email', { type: 'email', check: true })}</div>
+          {T('Home address', 'address')}
+        </section>
+        <section className="rs-card ad-fs">
+          <div className="rs-card-h"><h3><i className="fas fa-kit-medical" aria-hidden="true" /> Emergency contact</h3></div>
+          <div className="cm-row2">{T('Name', 'emergency_name')}{T('Relationship', 'emergency_relationship', { placeholder: 'Uncle / Aunt / Neighbour' })}</div>
+          <div className="cm-row2">{T('Phone', 'emergency_phone', { type: 'tel', placeholder: '08012345678', check: true, inputMode: 'tel' })}{T('Address', 'emergency_address')}</div>
+        </section>
+        <section className="rs-card ad-fs">
+          <div className="rs-card-h"><h3><i className="fas fa-earth-africa" aria-hidden="true" /> Origin & health</h3></div>
+          <div className="cm-row2">
+            <Field label="Country" grow><select value={f.country} onChange={(e) => set('country', e.target.value)}>
+              {f.country && !COUNTRIES.includes(f.country) && <option value={f.country}>{f.country}</option>}
+              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
+            <Field label="State of origin" grow>{hasStates
+              ? <select value={f.state_of_origin} onChange={(e) => set('state_of_origin', e.target.value)}><option value="">—</option>
+                  {f.state_of_origin && !NIGERIA_STATES.includes(f.state_of_origin) && <option value={f.state_of_origin}>{f.state_of_origin}</option>}
+                  {NIGERIA_STATES.map((x) => <option key={x} value={x}>{x}</option>)}</select>
+              : <input type="text" value={f.state_of_origin} onChange={(e) => set('state_of_origin', e.target.value)} />}</Field>
+            <Field label="L.G.A. of origin" grow>{hasStates && f.state_of_origin
+              ? <select value={f.lga} onChange={(e) => set('lga', e.target.value)}><option value="">—</option>
+                  {f.lga && !lgas.includes(f.lga) && <option value={f.lga}>{f.lga}</option>}
+                  {lgas.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+              : <input type="text" value={f.lga} disabled={hasStates && !f.state_of_origin} placeholder={hasStates && !f.state_of_origin ? 'Pick a state first' : ''} onChange={(e) => set('lga', e.target.value)} />}</Field>
           </div>
-          <div className="form-row">
-            {!editing && <div className="form-group"><label className="form-label">Initial status</label>
-              <select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.map((s) => <option key={s}>{s}</option>)}</select></div>}
-            {F({ label: 'Entrance score', k: 'entrance_score', type: 'number', step: '0.5' })}
-          </div>
-        </div></div>
-
-        <div className="card mb-3"><div className="card-header"><h3>Parent / Guardian</h3></div><div className="card-body">
-          <div className="form-row">{F({ label: 'Name', k: 'parent_name', placeholder: 'e.g., Mr. John' })}{F({ label: 'Relationship', k: 'relationship', placeholder: 'Father/Mother/Guardian' })}</div>
-          <div className="form-row">{F({ label: 'Phone', k: 'parent_phone', type: 'tel', placeholder: '08012345678', error: errors.parent_phone, onBlur: () => blurField('parent_phone') })}{F({ label: 'Email', k: 'parent_email', type: 'email', error: errors.parent_email, onBlur: () => blurField('parent_email') })}</div>
-          {F({ label: 'Address', k: 'address' })}
-          <div className="form-group mb-0"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
-        </div></div>
-
-        <div className="card mb-3"><div className="card-header"><h3>Emergency Contact</h3></div><div className="card-body">
-          <div className="form-row">{F({ label: 'Name', k: 'emergency_name' })}{F({ label: 'Relationship', k: 'emergency_relationship', placeholder: 'Uncle/Aunt/Neighbour' })}</div>
-          <div className="form-row">{F({ label: 'Phone', k: 'emergency_phone', type: 'tel', placeholder: '08012345678', error: errors.emergency_phone, onBlur: () => blurField('emergency_phone') })}{F({ label: 'Address', k: 'emergency_address' })}</div>
-        </div></div>
-
-        <div className="card mb-3"><div className="card-header"><h3>Origin &amp; Health</h3></div><div className="card-body">
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Country</label>
-              <select className="form-control" value={f.country} onChange={(e) => set('country', e.target.value)}>
-                {/* An existing record's country may not be in our list (e.g. saved before
-                    this dropdown existed) — keep it selectable rather than silently blank it. */}
-                {f.country && !COUNTRIES.includes(f.country) && <option value={f.country}>{f.country}</option>}
-                {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select></div>
-            <div className="form-group"><label className="form-label">State of origin</label>
-              {countryHasStates
-                ? <select className="form-control" value={f.state_of_origin} onChange={(e) => set('state_of_origin', e.target.value)}>
-                    <option value="">—</option>
-                    {f.state_of_origin && !NIGERIA_STATES.includes(f.state_of_origin) && <option value={f.state_of_origin}>{f.state_of_origin}</option>}
-                    {NIGERIA_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                : <input type="text" className="form-control" value={f.state_of_origin}
-                         onChange={(e) => set('state_of_origin', e.target.value)} />}
-              </div>
-            <div className="form-group"><label className="form-label">L.G.A. of origin</label>
-              {countryHasStates && f.state_of_origin
-                ? <select className="form-control" value={f.lga} onChange={(e) => set('lga', e.target.value)}>
-                    <option value="">—</option>
-                    {f.lga && !lgaOptions.includes(f.lga) && <option value={f.lga}>{f.lga}</option>}
-                    {lgaOptions.map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                : <input type="text" className="form-control" value={f.lga} disabled={countryHasStates && !f.state_of_origin}
-                         placeholder={countryHasStates && !f.state_of_origin ? 'Select a state first' : ''}
-                         onChange={(e) => set('lga', e.target.value)} />}
-              </div>
-          </div>
-          <div className="form-row">{F({ label: "Father's occupation", k: 'father_occupation' })}{F({ label: 'Languages spoken at home', k: 'languages_spoken' })}</div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Blood group</label>
-              <select className="form-control" value={f.blood_group} onChange={(e) => set('blood_group', e.target.value)}>
-                <option value="">—</option>{['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((g) => <option key={g}>{g}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Genotype</label>
-              <select className="form-control" value={f.genotype} onChange={(e) => set('genotype', e.target.value)}>
-                <option value="">—</option>{['AA', 'AS', 'SS', 'AC', 'SC'].map((g) => <option key={g}>{g}</option>)}</select></div>
-          </div>
-        </div></div>
-
-        <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save Changes' : 'Create Application'}</button>
-          <a href={editing ? a.detail_url : d.urls.applicants} className="btn btn-secondary">Cancel</a>
-        </div>
-      </form>
-    </>
-  );
-}
-
-// ---- Applicant detail ------------------------------------------------------
-function ApplicantDetail({ d, notify }) {
-  const nav = useNav();
-  const a = d.applicant;
-  const [busy, setBusy] = useState(false);
-  const [assignment, setAssignment] = useState('');
-  const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    setBusy(true);
-    const r = await submitJson(url, fields);
-    setBusy(false);
-    if (r.ok) nav.go(r.redirect || window.location.pathname);
-    else notify('error', r.error || 'Action failed.');
-  };
-  const setStatus = (st) => act(d.urls.status, { status: st });
-
-  return (
-    <>
-      <PageHeader title="Application" actions={<>
-        {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>}
-        {d.urls.pdf && <a href={d.urls.pdf} className="btn btn-secondary" title="Download PDF"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>}
-        {d.urls.docx && <a href={d.urls.docx} className="btn btn-secondary" title="Download Word"><i aria-hidden="true" className="fas fa-file-word" /> Word</a>}
-        {canWrite(d, 'edit') && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-        {canWrite(d, 'delete') && <button type="button" className="btn btn-danger" disabled={busy}
-          onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
-      </>} />
-      <Tabs d={d} />
-
-      <div className="card mb-3"><div className="card-body">
-        <div className="d-flex gap-3 align-center flex-wrap">
-          {a.photo_url
-            ? <img src={a.photo_url} alt={a.full_name + "'s passport photo"} className="avatar-photo" />
-            : <div className="avatar">{a.initials.toUpperCase()}</div>}
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <h2 style={{ margin: 0 }}>{a.full_name}</h2>
-            <div className="text-muted">{a.application_no}{a.intended_class && ' · ' + a.intended_class}{a.session && ' · ' + a.session}</div>
-            <div className="mt-1"><span className={'badge ' + a.status_badge}>{a.status}</span>
-              {a.admitted_student_id && <a href={a.student_url} className="badge badge-success" style={{ marginLeft: 6 }}><i aria-hidden="true" className="fas fa-link" /> View student</a>}</div>
-          </div>
-        </div>
-      </div></div>
-
-      {canWrite(d, 'edit') && !a.admitted_student_id && (
-        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-diagram-project" /> Move through pipeline</h3></div>
-          <div className="card-body">
-            <div className="pipe mb-2">{d.stages.map((st) => (
-              <button key={st} type="button" disabled={busy} className={'btn btn-sm ' + (a.status === st ? 'btn-primary' : 'btn-secondary')} onClick={() => setStatus(st)}>{st}</button>))}</div>
-            <div className="pipe">{d.outcomes.map((st) => (
-              <button key={st} type="button" disabled={busy} className={'btn btn-sm ' + (a.status === st ? 'btn-danger' : 'btn-secondary')} onClick={() => setStatus(st)}>{st}</button>))}</div>
-          </div>
-        </div>
-      )}
-
-      {canWrite(d, 'convert') && !a.admitted_student_id && (
-        <div className="card mb-3" style={{ borderColor: 'var(--success)' }}>
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-graduate" /> Admit &amp; convert to student</h3></div>
-          <div className="card-body">
-            <p className="text-muted text-sm">Creates a student record (with the parent contact) and links it to this application. Optionally enrol into a class arm now.</p>
-            <div className="d-flex gap-2 align-end flex-wrap">
-              <div className="form-group mb-0" style={{ minWidth: 220 }}><label className="form-label">Enrol into (optional)</label>
-                <select className="form-control" value={assignment} onChange={(e) => setAssignment(e.target.value)}>
-                  <option value="">Don't enrol yet</option>{d.assignments.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></div>
-              <button type="button" className="btn btn-success" disabled={busy}
-                onClick={() => act(d.urls.convert, { assignment_id: assignment }, `Admit ${a.full_name} and create a student record?`)}>
-                <i aria-hidden="true" className="fas fa-user-check" /> Admit &amp; create student</button>
-            </div>
-            {!a.gender && <p className="text-danger text-sm mt-2"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Add the applicant's gender (Edit) before converting.</p>}
-          </div>
-        </div>
-      )}
-
-      <div className="adm-2col">
-        <div className="card"><div className="card-header"><h3>Applicant details</h3></div>
-          <div className="card-body"><div className="info-grid">
-            {d.info.map(([k, v]) => <div className="info-row" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}
-          </div></div></div>
-        <div className="card"><div className="card-header"><h3>Parent / Guardian</h3></div>
-          <div className="card-body"><div className="info-grid">
-            {d.parent.map(([k, v]) => <div className="info-row" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}
-          </div>{d.notes && <p className="text-muted text-sm mt-2">{d.notes}</p>}</div></div>
+          <div className="cm-row2">{T("Father's occupation", 'father_occupation')}{T('Languages at home', 'languages_spoken')}
+            {S('Blood group', 'blood_group', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])}{S('Genotype', 'genotype', ['AA', 'AS', 'SS', 'AC', 'SC'])}</div>
+          <Field label="Notes"><textarea rows="3" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></Field>
+        </section>
       </div>
-
-      {d.emergency && (
-        <div className="card mt-3"><div className="card-header"><h3>Emergency Contact</h3></div>
-          <div className="card-body"><div className="info-grid">
-            {d.emergency.map(([k, v]) => <div className="info-row" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}
-          </div></div></div>
-      )}
-    </>
+      <Bar>
+        <span className="ad-bar-t">{dirty ? 'Unsaved changes' : editing ? 'No changes yet' : 'Fill in what you have — you can add the rest later'}</span>
+        <A to={editing ? a.detail_url : d.urls.applicants} className="rs-btn ghost">Cancel</A>
+        <button type="button" className="rs-btn primary" disabled={busy || (editing && !dirty)} onClick={submit}>
+          <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {editing ? 'Save changes' : 'Create application'}</button>
+      </Bar>
+    </div>
   );
 }
 
@@ -463,14 +439,14 @@ const SCREENS = { dashboard: Dashboard, applicants: Applicants, applicant_form: 
 
 export default function AdmissionsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
-  const [msg, setMsg] = useState(null);
-  const notify = (tone, text) => setMsg({ tone, text });
+  const [toast, setToast] = useState(null);
+  const notify = (tone, text) => setToast({ tone, text, at: Date.now() });
   const Screen = SCREENS[d.page] || Dashboard;
   return (
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
-        {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
         <Screen d={d} notify={notify} />
+        {toast && <Toast key={toast.at} tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
       </SectionShell>
     </NavCtx.Provider>
   );

@@ -13,12 +13,12 @@ export function A({ to, className, children, title, native, ...rest }) {
   return <a href={to} title={title} className={className} onClick={(e) => { e.preventDefault(); nav.go(to); }} {...rest}>{children}</a>;
 }
 
-// Section nav. items: [key, icon, label, url, {x: true → pushed right}]
+// Section nav. items: [key, icon, label, url, {x: true → pushed right, native: true → plain link/download}]
 export function SecNav({ items, active, label }) {
   return (
     <nav className="sl-nav cm-nav" aria-label={label}>
       {items.filter((it) => it[3]).map(([k, ic, l, url, opt]) => (
-        <A key={k} to={url} className={(opt && opt.x ? 'cm-nav-x' : '') + (active === k ? ' on' : '')} aria-current={active === k ? 'page' : undefined}>
+        <A key={k} to={url} native={opt && opt.native} className={(opt && opt.x ? 'cm-nav-x' : '') + (active === k ? ' on' : '')} aria-current={active === k ? 'page' : undefined}>
           <i className={'fas ' + ic} aria-hidden="true" /><span>{l}</span></A>))}
     </nav>
   );

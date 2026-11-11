@@ -46,11 +46,25 @@ _wants_json, _render, _ok, _err = section_responders(
     'timetable/app.html', 'tt_json', 'timetable.index')
 
 
+def _clock():
+    """School-local weekday (0=Mon) and minutes since midnight, so the page
+    can mark today and the current period without trusting the device clock."""
+    from utils import timeutil as _tu
+    try:
+        n = _tu.now()
+    except Exception:
+        from datetime import datetime
+        n = datetime.now()
+    return {'weekday': n.weekday(), 'minutes': n.hour * 60 + n.minute}
+
+
 def _slot_dict(s):
     from utils.timeutil import format_clock
     return {'id': s.id, 'name': s.name, 'is_break': s.is_break,
             'start': format_clock(s.start_time.hour, s.start_time.minute) if s.start_time else '',
-            'end': format_clock(s.end_time.hour, s.end_time.minute) if s.end_time else ''}
+            'end': format_clock(s.end_time.hour, s.end_time.minute) if s.end_time else '',
+            'm0': s.start_time.hour * 60 + s.start_time.minute if s.start_time else None,
+            'm1': s.end_time.hour * 60 + s.end_time.minute if s.end_time else None}
 
 
 def _slots_for_assignment(assignment_id):
@@ -370,7 +384,12 @@ def index():
                 if e and e.subject:
                     grid[f'{day_num}_{slot.id}'] = {
                         'subject': e.subject.short_name or e.subject.name,
+                        'name': e.subject.name, 'sid': e.subject_id,
                         'teacher': e.teacher_name or ''}
+    load = {}
+    for v in grid.values():
+        load[v['sid']] = load.get(v['sid'], 0) + 1
+    teaching = [x for x in slots if not x.is_break]
 
     return _render({
         'page': 'index',
@@ -384,10 +403,16 @@ def index():
         'days': DAYS_OF_WEEK,
         'slots': [_slot_dict(s) for s in slots],
         'grid': grid,
-        'legend': [{'short': cs.subject.short_name or cs.subject.name[:3],
-                    'name': cs.subject.name} for cs in subjects_for_class],
+        'legend': [{'short': cs.subject.short_name or cs.subject.name[:3], 'sid': cs.subject_id,
+                    'name': cs.subject.name, 'periods': load.get(cs.subject_id, 0),
+                    'teacher': cs.teacher_name or ''} for cs in subjects_for_class],
+        'stats': {'periods': len(grid), 'slots': len(teaching) * len(DAYS_OF_WEEK),
+                  'teachers': len({v['teacher'] for v in grid.values() if v['teacher']})},
+        'clock': _clock(),
+        'mine_url': url_for('timetable.my_timetable'),
         'urls': {
             'self': url_for('timetable.index'),
+            'class_subjects': url_for('subjects.class_subjects_list', term_id=term_id) if term_id else None,
             'backups': url_for('timetable.backups'),
             'designer': url_for('timetable.designer'),
             'edit': (url_for('timetable.edit_timetable', assignment_id=selected_assignment.id)
@@ -448,19 +473,27 @@ def my_timetable():
                 continue
             if e.subject:
                 grid[f'{e.day_of_week}_{e.slot_id}'] = {
-                    'subject': e.subject.short_name or e.subject.name,
-                    'klass': caa.display_name}
+                    'subject': e.subject.short_name or e.subject.name, 'name': e.subject.name,
+                    'sid': e.subject_id, 'klass': caa.display_name}
 
-    return render_template('timetable/mine.html',
-                           teacher_name=name,
-                           terms=[{'id': t.id, 'full_name': t.full_name} for t in terms],
-                           term_id=term_id,
-                           days=DAYS_OF_WEEK,
-                           slots=[_slot_dict(s) for s in slots],
-                           grid=grid, period_count=len(grid),
-                           self_url=url_for('timetable.my_timetable'),
-                           class_view_url=url_for('timetable.index', term_id=term_id) if term_id
-                           else url_for('timetable.index'))
+    by_day = {}
+    for k in grid:
+        dd = int(k.split('_')[0])
+        by_day[dd] = by_day.get(dd, 0) + 1
+    classes = sorted({v['klass'] for v in grid.values()})
+    return _render({
+        'page': 'mine', 'teacher_name': name,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'term_id': term_id, 'days': DAYS_OF_WEEK,
+        'slots': [_slot_dict(s_) for s_ in slots],
+        'grid': grid, 'period_count': len(grid), 'by_day': by_day, 'classes': classes,
+        'clock': _clock(),
+        'empty_message': (None if grid else
+                          'No periods are assigned to you yet for this term. Periods show here once your name '
+                          'is on the class timetables (Timetable → Edit, or the generator).'),
+        'urls': {'self': url_for('timetable.my_timetable'),
+                 'class_view': url_for('timetable.index', term_id=term_id) if term_id else url_for('timetable.index')},
+    })
 
 
 @timetable_bp.route('/edit/<int:assignment_id>')

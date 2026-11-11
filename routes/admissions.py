@@ -2,7 +2,7 @@
 Admissions routes — applicant pipeline, screening/decisions, one-click
 conversion of an admitted applicant into a Student, dashboard and CSV export.
 """
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from utils import timeutil
 from utils.web_exports import csv_response, pdf_response, formula_guard
 from utils.helpers import get_active_session
@@ -101,8 +101,37 @@ def dashboard():
         cq = cq.filter(Applicant.branch_id == bid)
     cls_rows = cq.group_by(SchoolClass.name).all()
     badge = admissions.STATUS_BADGE
+    base = scope_query(Applicant.query, Applicant)
+    if session_id:
+        base = base.filter(Applicant.session_id == session_id)
+    today = timeutil.today()
+    pend = base.filter(Applicant.status.in_(['Inquiry', 'Applied', 'Screening'])).all()
+    stale = [a for a in pend if a.updated_at and (today - a.updated_at.date()).days >= 14]
+    offered = base.filter(Applicant.status == 'Offered').count()
+    accepted = base.filter(Applicant.status == 'Accepted').count()
+    src = base.with_entities(Applicant.source, func.count(Applicant.id)).group_by(Applicant.source).all()
+    gender = dict(base.with_entities(Applicant.gender, func.count(Applicant.id)).group_by(Applicant.gender).all())
+    week_ago = today - timedelta(days=7)
+    new_week = base.filter(Applicant.applied_date >= week_ago).count()
+    cls_full = []
+    for name, cid in db.session.query(SchoolClass.name, SchoolClass.id).filter(SchoolClass.is_active == True).order_by(SchoolClass.level).all():
+        rows = base.filter(Applicant.intended_class_id == cid).all()
+        if not rows:
+            continue
+        sc = [r.entrance_score for r in rows if r.entrance_score is not None]
+        cls_full.append({'name': name, 'count': len(rows),
+                         'admitted': sum(1 for r in rows if r.status == 'Admitted'),
+                         'avg_score': round(sum(sc) / len(sc), 1) if sc else None})
     return _render({
         'page': 'dashboard', 'tabs': TABS, 'active': 'dashboard',
+        'classes_full': cls_full,
+        'sources': sorted([{'name': n or 'Not recorded', 'count': c} for n, c in src], key=lambda x: -x['count']),
+        'gender': {'male': gender.get('Male', 0), 'female': gender.get('Female', 0)},
+        'new_week': new_week,
+        'action': {'stale': len(stale), 'offered': offered, 'accepted': accepted,
+                   'stale_url': url_for('admissions.applicants', status='Applied', session_id=session_id or ''),
+                   'offered_url': url_for('admissions.applicants', status='Offered', session_id=session_id or ''),
+                   'accepted_url': url_for('admissions.applicants', status='Accepted', session_id=session_id or '')},
         'stats': stats, 'session_id': session_id or '', 'sessions': _sessions_json(),
         'class_chart': [{'name': n, 'count': c} for n, c in cls_rows],
         'recent': [{'id': a.id, 'application_no': a.application_no, 'full_name': a.full_name,
@@ -150,7 +179,14 @@ def applicants():
                   'entrance_score': a.entrance_score if a.entrance_score is not None else '—',
                   'status': a.status, 'status_badge': badge.get(a.status, 'badge-secondary'),
                   'linked': bool(a.admitted_student_id),
+                  'applied': a.applied_date.strftime('%d %b') if a.applied_date else '',
+                  'waiting': (timeutil.today() - a.updated_at.date()).days if a.updated_at else None,
+                  'source': a.source or '',
+                  'photo_url': (url_for('admissions.applicant_photo', applicant_id=a.id)
+                                if (a.photo and a.photo.data) else ''),
+                  'status_url': url_for('admissions.set_status', applicant_id=a.id),
                   'detail_url': url_for('admissions.applicant_detail', applicant_id=a.id)} for a in rows],
+        'stages': admissions.STAGES, 'outcomes': admissions.OUTCOMES,
     })
 
 
@@ -288,7 +324,11 @@ def applicant_detail(applicant_id):
             'intended_class': a.intended_class.name if a.intended_class else None,
             'session': a.session.name if a.session else None,
             'status': a.status, 'status_badge': badge.get(a.status, 'badge-secondary'),
-            'gender': a.gender, 'parent_phone': a.parent_phone,
+            'gender': a.gender, 'parent_phone': a.parent_phone, 'parent_email': a.parent_email,
+            'parent_name': a.parent_name, 'entrance_score': a.entrance_score,
+            'applied': a.applied_date.strftime('%d %b %Y') if a.applied_date else None,
+            'decision': a.decision_date.strftime('%d %b %Y') if a.decision_date else None,
+            'age': ((timeutil.today() - a.date_of_birth).days // 365) if a.date_of_birth else None,
             'photo_url': (url_for('admissions.applicant_photo', applicant_id=a.id)
                           if (a.photo and a.photo.data) else ''),
             'admitted_student_id': a.admitted_student_id,
