@@ -115,3 +115,27 @@ def test_grades_page_has_score_spread(app):
     client = _admin(app)
     d = _json(client, '/settings/grades')
     assert 'spread' in d and 'pass_mark' in d
+
+
+def test_renaming_an_assessment_keeps_its_row(app):
+    from models import db, AssessmentType
+    with app.app_context():
+        types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
+        snap = [(t.id, t.name, t.short_name, t.max_score) for t in types]
+    client = _admin(app)
+    d = _json(client, '/settings/assessments')
+    assert {'marks', 'term_custom', 'subject_overrides'} <= set(d)
+    first = snap[0]
+    form = {'id[]': [str(x[0]) for x in snap], 'name[]': [first[1] + ' renamed'] + [x[1] for x in snap[1:]],
+            'short_name[]': [x[2] or '' for x in snap], 'max_score[]': [str(x[3]) for x in snap],
+            '_csrf_token': _ptoken(client)}
+    r = client.post('/settings/assessments/save', data=form, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code in (200, 302)
+    try:
+        with app.app_context():
+            assert db.session.get(AssessmentType, first[0]).name == first[1] + ' renamed'
+            assert db.session.get(AssessmentType, first[0]).is_active
+    finally:
+        with app.app_context():
+            db.session.get(AssessmentType, first[0]).name = first[1]
+            db.session.commit()

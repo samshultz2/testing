@@ -4,60 +4,11 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Index, Branches, Backup, Audit, School, Academic, Grades, Traits } from './Hub';
+import { Index, Branches, Backup, Audit, School, Academic, Grades, Traits, Assessments } from './Hub';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-// ---- Assessment types -------------------------------------------------------
-function Assessments({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const [rows, setRows] = useState((d.assessments || []).map((a) => ({ name: a.name, short_name: a.short_name || '', max_score: a.max_score })));
-  const set = (i, k) => (e) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
-  const add = () => setRows([...rows, { name: '', short_name: '', max_score: '' }]);
-  const del = (i) => setRows(rows.filter((_, j) => j !== i));
-  const total = rows.reduce((sum, r) => sum + (parseInt(r.max_score, 10) || 0), 0);
-  const submit = (e) => {
-    e.preventDefault();
-    save(d.save_url, {
-      'name[]': rows.map((r) => r.name), 'short_name[]': rows.map((r) => r.short_name),
-      'max_score[]': rows.map((r) => r.max_score),
-    }, () => nav.refresh());
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Assessment Types</h1></div>
-      <div className="card mb-3"><div className="card-body">
-        <p><strong>Total Maximum Score:</strong> <span className={`badge ${total === 100 ? 'badge-success' : 'badge-warning'}`}>{total}</span></p>
-        <small className="text-muted">The sum of all max scores should equal 100 for standard percentage grading.</small>
-      </div></div>
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <div className="table-container"><table className="data-table">
-            <thead><tr><th>Name</th><th>Short</th><th>Max Score</th><th /></tr></thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i}>
-                  <td><input type="text" className="form-control" value={r.name} onChange={set(i, 'name')} placeholder="Assessment Name" /></td>
-                  <td><input type="text" className="form-control" value={r.short_name} onChange={set(i, 'short_name')} style={{ width: 80 }} placeholder="CA1" /></td>
-                  <td><input type="number" className="form-control" value={r.max_score} onChange={set(i, 'max_score')} style={{ width: 80 }} min="1" max="100" placeholder="10" /></td>
-                  <td>{canWrite(d, 'assessments_edit') && <button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-          <Actions>
-            {canWrite(d, 'assessments_edit') && <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add</button>}
-            {canWrite(d, 'assessments_edit') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
-          </Actions>
-        </form>
-      </div></div>
-    </>
-  );
 }
 
 // ---- Timetable slots --------------------------------------------------------

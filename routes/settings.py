@@ -1185,9 +1185,51 @@ def assessments_list():
         'total_max': total_max,
         'save_url': url_for('settings.save_assessments'),
         'back_url': url_for('settings.index'),
-        'assessments': [{'name': a.name, 'short_name': a.short_name,
-                         'max_score': a.max_score} for a in assessments],
+        'assessments': [{'id': a.id, 'name': a.name, 'short_name': a.short_name,
+                         'max_score': a.max_score, 'kind': _assessment_kind(a)} for a in assessments],
+        **_assessment_context(),
     })
+
+
+def _assessment_kind(at):
+    from utils.assessments import is_midterm, is_theory, is_cbt
+    return 'mid' if is_midterm(at) else 'theory' if is_theory(at) else 'cbt' if is_cbt(at) else 'ca'
+
+
+def _assessment_context():
+    """What the marks already entered say about each assessment: how many this
+    term and the spread of values (so lowering a max shows how many marks
+    would sit above it); whether the active term has its own maximums; how
+    many subjects adjust Midterm/Theory for the practical rule."""
+    out = {'marks': {}, 'marks_term': None, 'term_custom': None, 'subject_overrides': 0,
+           'term_settings_url': url_for('settings.term_assessments')}
+    try:
+        from sqlalchemy import func as _f
+        from models import StudentScore, ClassSubject, SubjectAssessmentOverride
+        from utils.helpers import get_active_term
+        from utils.assessments import term_maxes
+        t = get_active_term()
+        if t:
+            rows = (db.session.query(StudentScore.assessment_type_id, StudentScore.score, _f.count(StudentScore.id))
+                    .join(ClassSubject, ClassSubject.id == StudentScore.class_subject_id)
+                    .filter(ClassSubject.term_id == t.id)
+                    .group_by(StudentScore.assessment_type_id, StudentScore.score).all())
+            marks = {}
+            for at_id, val, n in rows:
+                marks.setdefault(str(at_id), []).append([float(val), n])
+            out['marks'] = marks
+            sess = getattr(t, 'session', None)
+            out['marks_term'] = f"{t.name}{' ' + sess.name if sess else ''}"
+            tm = term_maxes(t.id)
+            if tm:
+                out['term_custom'] = {'name': out['marks_term'], 'maxes': {str(k): v for k, v in tm.items()},
+                                      'url': url_for('settings.term_assessment_edit', term_id=t.id)}
+        out['subject_overrides'] = (db.session.query(SubjectAssessmentOverride.subject_id)
+                                    .filter(SubjectAssessmentOverride.is_active == True)  # noqa: E712
+                                    .distinct().count())
+    except Exception:
+        pass
+    return out
 
 
 @settings_bp.route('/assessments/save', methods=['POST'])
@@ -1198,6 +1240,7 @@ def save_assessments():
         names = request.form.getlist('name[]')
         short_names = request.form.getlist('short_name[]')
         max_scores = request.form.getlist('max_score[]')
+        ids = request.form.getlist('id[]')
 
         # Deactivate all existing
         AssessmentType.query.update({AssessmentType.is_active: False})
@@ -1205,9 +1248,15 @@ def save_assessments():
         # Add/update assessment types
         for i, name in enumerate(names):
             if name.strip():
-                # Check if exists
-                existing = AssessmentType.query.filter_by(name=name.strip()).first()
+                # Same row by id first, so a rename keeps the marks already
+                # entered against it; then by name (older clients send no id).
+                existing = None
+                if i < len(ids) and str(ids[i]).isdigit():
+                    existing = db.session.get(AssessmentType, int(ids[i]))
+                if existing is None:
+                    existing = AssessmentType.query.filter_by(name=name.strip()).first()
                 if existing:
+                    existing.name = name.strip()
                     existing.short_name = short_names[i].strip() if i < len(short_names) else ''
                     existing.max_score = int(max_scores[i]) if i < len(max_scores) and max_scores[i] else 10
                     existing.order = i + 1

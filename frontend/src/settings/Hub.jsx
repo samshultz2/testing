@@ -929,3 +929,137 @@ export function Traits({ d, notify }) {
     </div>
   );
 }
+
+// ---- Assessments ------------------------------------------------------------
+// The marks that make up a subject's 100: a stacked bar that must reach 100,
+// each assessment with the marks already entered this term (lowering a max
+// shows how many marks would sit above it), column order, presets.
+const AS_PRESETS = {
+  three: { label: '2 CAs + exam (20 · 20 · 60)', rows: [['First CA', 'CA1', 20], ['Second CA', 'CA2', 20], ['Examination', 'EXAM', 60]] },
+  ten: { label: '3 CAs + exam (10 · 10 · 10 · 70)', rows: [['First CA', 'CA1', 10], ['Second CA', 'CA2', 10], ['Third CA', 'CA3', 10], ['Examination', 'EXAM', 70]] },
+  cbt: { label: 'CAs + CBT + theory (5·5·5·5 · 10 · 30 · 40)', rows: [['First CA', 'CA1', 5], ['Second CA', 'CA2', 5], ['Third CA', 'CA3', 5], ['Holiday assignment', 'HA', 5], ['Midterm / Practical', 'P/ME', 10], ['CBT', 'CBT', 30], ['Theory', 'EXAM', 40]] },
+};
+const KIND = { ca: ['Test', 'fa-pen'], mid: ['Midterm / practical', 'fa-flask'], cbt: ['CBT', 'fa-laptop'], theory: ['Exam', 'fa-file-lines'] };
+const AS_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#059669', '#d97706', '#db2777', '#4f46e5', '#65a30d', '#dc2626'];
+
+export function Assessments({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const can = canWrite(d, 'assessments_edit');
+  const init = (d.assessments || []).map((a) => ({ id: a.id, name: a.name, short_name: a.short_name || '', max_score: String(a.max_score), kind: a.kind }));
+  const [rows, setRows] = useState(init);
+  const [base, setBase] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const [preset, setPreset] = useState(false);
+  const marks = d.marks || {};
+  const dirty = JSON.stringify(rows) !== JSON.stringify(base);
+  const total = rows.reduce((n, r) => n + (parseInt(r.max_score, 10) || 0), 0);
+  const upd = (r, patch) => setRows(rows.map((x) => (x === r ? { ...x, ...patch } : x)));
+  const move = (i, dir) => { const l = [...rows]; const j = i + dir; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; setRows(l); };
+  const info = (r) => {
+    const m = r.id ? marks[String(r.id)] || [] : [];
+    const n = m.reduce((k, [, c]) => k + c, 0);
+    const hi = m.reduce((k, [v]) => Math.max(k, v), 0);
+    const over = m.filter(([v]) => v > (parseInt(r.max_score, 10) || 0)).reduce((k, [, c]) => k + c, 0);
+    return { n, hi, over };
+  };
+  const remove = async (r) => {
+    const { n } = info(r);
+    if (n && !await confirm({ title: `Remove ${r.name || 'this assessment'}?`, tone: 'danger', confirmText: 'Remove',
+      message: `${plural(n, 'mark has', 'marks have')} been entered for it this term. They are kept, but stop counting in totals and report cards.` })) return;
+    setRows(rows.filter((x) => x !== r));
+  };
+  const blank = rows.some((r) => !r.name.trim() || !(parseInt(r.max_score, 10) > 0));
+  const names = rows.map((r) => r.name.trim().toLowerCase()).filter(Boolean);
+  const dupes = names.length !== new Set(names).size;
+  const overTotal = rows.reduce((n, r) => n + info(r).over, 0);
+  const usePreset = (k) => {
+    // Keep existing rows (and their marks) where the short code matches.
+    setRows(AS_PRESETS[k].rows.map(([name, code, max]) => {
+      const ex = rows.find((r) => (r.short_name || '').toUpperCase() === code);
+      return { id: ex ? ex.id : null, name, short_name: code, max_score: String(max), kind: ex ? ex.kind : 'ca' };
+    }));
+    setPreset(false);
+  };
+  const submit = async () => {
+    const warn = [overTotal && `${plural(overTotal, 'mark already entered is', 'marks already entered are')} above the new maximum — those totals could go over 100%.`,
+      total !== 100 && `The maximums add up to ${total}, not 100.`].filter(Boolean);
+    if (warn.length && !await confirm({ title: 'Save anyway?', message: warn.join(' '), confirmText: 'Save anyway', tone: 'danger' })) return;
+    setSaving(true);
+    const r = await save(d.save_url, {
+      'id[]': rows.map((x) => x.id || ''), 'name[]': rows.map((x) => x.name.trim()),
+      'short_name[]': rows.map((x) => x.short_name.trim()), 'max_score[]': rows.map((x) => x.max_score),
+    }, () => nav.refresh());
+    setSaving(false);
+    if (r && r.ok) setBase(rows);
+  };
+  const tc = d.term_custom;
+  return (
+    <div className="rs cm sx as">
+      <Head icon="fa-list-check" title="Assessments" sub="The tests and exams that make up each subject’s total — in the order they appear on score sheets.">
+        {can && <button type="button" className="rs-btn ghost" onClick={() => setPreset(true)}><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Start from a preset</button>}
+      </Head>
+
+      {tc && (
+        <div className="cm-attn-i mid as-term"><i className="fas fa-calendar-check" aria-hidden="true" />
+          <span><b>{tc.name} uses its own maximums</b> — changes here apply to other terms. <A to={tc.url} native>Edit {tc.name}’s settings</A></span></div>)}
+
+      <section className="rs-card as-sum">
+        <div className="as-sum-h"><b className={total === 100 ? 'ok' : 'off'}>{total}</b><span>/ 100</span>
+          <em className={total === 100 ? 'ok' : 'off'}>{total === 100 ? <><i className="fas fa-circle-check" aria-hidden="true" /> Adds up to 100</> : total < 100 ? `${100 - total} short of 100` : `${total - 100} over 100`}</em></div>
+        <div className="as-bar">
+          {rows.map((r, i) => { const v = parseInt(r.max_score, 10) || 0; return v ? (
+            <span key={i} style={{ flexGrow: v, background: AS_COLORS[i % AS_COLORS.length] }} title={`${r.name} ${v}`}>{v >= 6 && (r.short_name || r.name)}</span>) : null; })}
+          {total < 100 && <span className="gap" style={{ flexGrow: 100 - total }} />}
+        </div>
+        {total !== 100 && <small className="cm-mute">Subject totals are read as percentages for grades and positions, so the maximums should add up to 100.</small>}
+        {overTotal > 0 && <div className="cm-attn-i bad"><i className="fas fa-triangle-exclamation" aria-hidden="true" /><span>{plural(overTotal, 'mark already entered is', 'marks already entered are')} higher than the new maximum. Check them before saving, or keep the old maximum.</span></div>}
+      </section>
+
+      <section className="rs-card as-list">
+        <div className="as-row as-hd"><span /><span>Assessment</span><span>Code</span><span>Max</span><span>{d.marks_term ? `Marks · ${d.marks_term}` : 'Marks'}</span><span /></div>
+        {rows.map((r, i) => {
+          const { n, hi, over } = info(r);
+          const k = KIND[r.kind] || KIND.ca;
+          return (
+            <div key={r.id || 'n' + i} className="as-row">
+              <span className="tr-mv">{can && <>
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${r.name} up`}><i className="fas fa-chevron-up" aria-hidden="true" /></button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === rows.length - 1} aria-label={`Move ${r.name} down`}><i className="fas fa-chevron-down" aria-hidden="true" /></button></>}</span>
+              <span className="as-name"><i style={{ background: AS_COLORS[i % AS_COLORS.length] }} />
+                <input value={r.name} onChange={(e) => upd(r, { name: e.target.value })} placeholder="e.g. First CA" aria-label="Assessment name" disabled={!can} maxLength={100} />
+                <small><i className={'fas ' + k[1]} aria-hidden="true" /> {k[0]}{tc && tc.maxes[String(r.id)] != null && tc.maxes[String(r.id)] !== +r.max_score ? ` · ${tc.maxes[String(r.id)]} in ${tc.name}` : ''}</small></span>
+              <span><input value={r.short_name} onChange={(e) => upd(r, { short_name: e.target.value.toUpperCase().slice(0, 20) })} placeholder="CA1" aria-label={`${r.name} code`} disabled={!can} /></span>
+              <span><Stepper label={`${r.name} max`} value={r.max_score} onChange={(v) => upd(r, { max_score: v })} min={1} max={100} disabled={!can} /></span>
+              <span className="as-m">{n ? <><b>{n}</b> entered<small>highest {hi}</small>{over > 0 && <em><i className="fas fa-triangle-exclamation" aria-hidden="true" /> {over} above {r.max_score}</em>}</> : <small className="cm-mute">{r.id ? 'None yet' : 'New'}</small>}</span>
+              <span>{can && <button type="button" className="gr-x" onClick={() => remove(r)} aria-label={`Remove ${r.name || 'assessment'}`}><i className="fas fa-xmark" aria-hidden="true" /></button>}</span>
+            </div>);
+        })}
+        {can && <button type="button" className="gr-add" onClick={() => setRows([...rows, { id: null, name: '', short_name: '', max_score: String(Math.max(1, Math.min(100, 100 - total)) || 10), kind: 'ca' }])}><i className="fas fa-plus" aria-hidden="true" /> Add an assessment</button>}
+      </section>
+
+      <p className="cm-mute gr-note"><i className="fas fa-circle-info" aria-hidden="true" /> Renaming keeps the marks already entered. {d.subject_overrides ? `${plural(d.subject_overrides, 'subject adjusts', 'subjects adjust')} Midterm/Theory for practicals automatically. ` : ''}Need different maximums for one term? <A to={d.term_settings_url} native>Per-term settings</A></p>
+
+      {can && dirty && (
+        <Bar>
+          <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> {total === 100 ? 'Unsaved changes' : `Adds up to ${total}`}</span>
+          <button type="button" className="rs-btn ghost" onClick={() => setRows(base)}>Undo</button>
+          <button type="button" className="rs-btn primary" disabled={saving || blank || dupes} onClick={submit}>
+            <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {saving ? 'Saving…' : 'Save'}</button>
+        </Bar>)}
+
+      {preset && (
+        <Sheet title="Start from a preset" onClose={() => setPreset(false)}>
+          <div className="gr-presets">
+            {Object.entries(AS_PRESETS).map(([k, p]) => (
+              <button key={k} type="button" className="rs-card gr-pre" onClick={() => usePreset(k)}>
+                <b>{p.label}</b>
+                <span className="gr-pre-bar">{p.rows.map(([n, c, m], j) => <i key={c + j} style={{ width: m + '%', background: AS_COLORS[j % AS_COLORS.length] }} />)}</span>
+                <small>{p.rows.map(([n, c, m]) => `${c} ${m}`).join(' · ')}</small>
+              </button>))}
+            <p className="cm-mute">Assessments whose code matches keep their marks. Nothing is saved until you tap Save.</p>
+          </div>
+        </Sheet>)}
+    </div>
+  );
+}
