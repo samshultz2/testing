@@ -90,3 +90,23 @@ def test_academic_page_has_decision_context(app):
     d = _json(client, '/settings/academic')
     assert {'branches', 'latest_id', 'arms_in_use', 'slots', 'urls'} <= set(d)
     assert d['urls']['slots']
+
+
+def test_decimal_totals_between_whole_number_bands_get_the_lower_band(app):
+    from types import SimpleNamespace as B
+    from models import GradeScale
+    from utils.results_analytics_org import _grade_for
+    bands = [B(grade='A', min_score=70, max_score=100), B(grade='B', min_score=60, max_score=69),
+             B(grade='F', min_score=0, max_score=49)]
+    assert GradeScale.band_for(69.5, bands).grade == 'B'
+    assert GradeScale.band_for(70, bands).grade == 'A'
+    assert GradeScale.band_for(49.9, bands).grade == 'F'
+    assert GradeScale.band_for(55, bands) is None          # a real gap stays ungraded
+    tup = [(b.grade, b.min_score, b.max_score) for b in bands]
+    assert _grade_for(69.5, tup) == 'B' and _grade_for(55, tup) == 'F'
+
+
+def test_grades_page_has_score_spread(app):
+    client = _admin(app)
+    d = _json(client, '/settings/grades')
+    assert 'spread' in d and 'pass_mark' in d

@@ -18,22 +18,35 @@ class GradeScale(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     
     @staticmethod
+    def band_for(score, bands):
+        """The band a score belongs to. Bands are whole numbers (60–69, 70–79)
+        but totals can carry decimals: 69.5 sits between 69 and 70, so it
+        belongs to the band that ends at 69 (any score below max+1). Real gaps
+        wider than that still match nothing. ``bands`` is any iterable of
+        objects with min_score/max_score."""
+        if score is None:
+            return None
+        bands = list(bands)
+        for b in bands:
+            if b.min_score <= score <= b.max_score:
+                return b
+        best = None
+        for b in bands:
+            if b.min_score <= score < b.max_score + 1 and (best is None or b.min_score > best.min_score):
+                best = b
+        return best
+
+    @staticmethod
     def get_grade(score):
         """Get grade for a given score"""
-        grade = GradeScale.query.filter(
-            GradeScale.min_score <= score,
-            GradeScale.max_score >= score
-        ).first()
-        return grade.grade if grade else 'F'
-    
+        b = GradeScale.band_for(score, GradeScale.query.all())
+        return b.grade if b else 'F'
+
     @staticmethod
     def get_remark(score):
         """Get remark for a given score"""
-        grade = GradeScale.query.filter(
-            GradeScale.min_score <= score,
-            GradeScale.max_score >= score
-        ).first()
-        return grade.remark if grade else 'Fail'
+        b = GradeScale.band_for(score, GradeScale.query.all())
+        return b.remark if b else 'Fail'
     
     def __repr__(self):
         return f'<GradeScale {self.grade} ({self.min_score}-{self.max_score})>'

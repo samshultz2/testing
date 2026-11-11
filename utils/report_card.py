@@ -180,10 +180,8 @@ def build_report_card(student_id, term_id):
     grade_bands = GradeScale.query.order_by(GradeScale.order, GradeScale.min_score.desc()).all()
 
     def grade_for(score):
-        for b in grade_bands:
-            if b.min_score <= score <= b.max_score:
-                return b.grade, (b.remark or '')
-        return '-', '-'
+        b = GradeScale.band_for(score, grade_bands)
+        return (b.grade, (b.remark or '')) if b else ('-', '-')
 
     subjects_data = []
     total_score = 0

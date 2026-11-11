@@ -653,3 +653,156 @@ export function Academic({ d, notify }) {
     </div>
   );
 }
+
+// ---- Grade scale ------------------------------------------------------------
+// Bands drawn on a 0–100 bar; gaps, overlaps and decimal scores that fall
+// between bands are called out (with a one-tap fix); each band shows how many
+// of this term's results it would hold, live as you edit.
+const PRESETS = {
+  waec: { label: 'WAEC style (A1–F9)', rows: [['A1', 75, 100, 'Excellent'], ['B2', 70, 74, 'Very good'], ['B3', 65, 69, 'Good'], ['C4', 60, 64, 'Credit'], ['C5', 55, 59, 'Credit'], ['C6', 50, 54, 'Credit'], ['D7', 45, 49, 'Pass'], ['E8', 40, 44, 'Pass'], ['F9', 0, 39, 'Fail']] },
+  classic: { label: 'Classic (A–F)', rows: [['A', 70, 100, 'Excellent'], ['B', 60, 69, 'Very good'], ['C', 50, 59, 'Good'], ['D', 45, 49, 'Fair'], ['E', 40, 44, 'Poor'], ['F', 0, 39, 'Fail']] },
+  primary: { label: 'Primary (A–F, wider bands)', rows: [['A', 80, 100, 'Excellent'], ['B', 65, 79, 'Very good'], ['C', 50, 64, 'Good'], ['D', 40, 49, 'Fair'], ['F', 0, 39, 'Needs improvement']] },
+};
+// Same rule as GradeScale.band_for: exact band first, else a decimal just past
+// a band's top (69.5 after 60–69) belongs to that band.
+function bandFor(v, rows) {
+  const ok = rows.filter((r) => r.min_score !== '' && r.max_score !== '');
+  const exact = ok.find((r) => v >= +r.min_score && v <= +r.max_score);
+  if (exact) return exact;
+  let best = null;
+  ok.forEach((r) => { if (v >= +r.min_score && v < +r.max_score + 1 && (!best || +r.min_score > +best.min_score)) best = r; });
+  return best;
+}
+const bandColor = (i, n) => `hsl(${Math.round(150 - (150 * i) / Math.max(1, n - 1))} 62% 42%)`;
+
+function gradeIssues(rows, spread) {
+  const ok = rows.filter((r) => r.min_score !== '' && r.max_score !== '');
+  const iss = [];
+  rows.forEach((r) => {
+    if (!String(r.grade).trim()) iss.push({ bad: true, t: 'A band has no grade letter.' });
+    if (r.min_score !== '' && r.max_score !== '' && +r.min_score > +r.max_score) iss.push({ bad: true, t: `${r.grade || 'A band'}: “from” is higher than “to”.` });
+  });
+  const seen = {};
+  rows.forEach((r) => { const g = String(r.grade).trim().toUpperCase(); if (g) { if (seen[g]) iss.push({ bad: true, t: `Grade ${g} is listed twice.` }); seen[g] = 1; } });
+  const sorted = [...ok].sort((a, b) => +a.min_score - +b.min_score);
+  if (sorted.length && +sorted[0].min_score > 0) iss.push({ t: `Scores from 0 to ${+sorted[0].min_score - 1} have no grade.`, fix: true });
+  if (sorted.length && +sorted[sorted.length - 1].max_score < 100) iss.push({ t: `Scores above ${sorted[sorted.length - 1].max_score} have no grade.`, fix: true });
+  for (let i = 1; i < sorted.length; i++) {
+    const lo = sorted[i - 1], hi = sorted[i];
+    if (+hi.min_score > +lo.max_score + 1) iss.push({ t: `Gap: ${+lo.max_score + 1}–${+hi.min_score - 1} has no grade.`, fix: true });
+    if (+hi.min_score <= +lo.max_score) iss.push({ t: `${lo.grade} and ${hi.grade} overlap at ${hi.min_score}–${Math.min(+lo.max_score, +hi.max_score)}.`, fix: true });
+  }
+  const lost = spread.filter(([v]) => !bandFor(v, rows));
+  const n = lost.reduce((k, [, c]) => k + c, 0);
+  if (n) iss.push({ t: `${plural(n, 'result')} this term (e.g. ${lost[0][0]}) would get no grade with these bands.`, fix: true });
+  return iss;
+}
+
+export function Grades({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const can = canWrite(d, 'grades_edit');
+  const phone = usePhone();
+  const init = (d.grades || []).map((g) => ({ grade: g.grade, min_score: String(g.min_score), max_score: String(g.max_score), remark: g.remark || '' }));
+  const [rows, setRows] = useState(init);
+  const [base, setBase] = useState(init);
+  const [saving, setSaving] = useState(false);
+  const [preset, setPreset] = useState(false);
+  const spread = d.spread || [];
+  const total = spread.reduce((n, [, c]) => n + c, 0);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(base);
+  const issues = gradeIssues(rows, spread);
+  const blocking = issues.some((x) => x.bad);
+  const set = (i, k) => (e) => {
+    const v = k === 'grade' ? e.target.value.toUpperCase().slice(0, 5) : k === 'remark' ? e.target.value.slice(0, 50) : e.target.value.replace(/\D/g, '').slice(0, 3);
+    setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  };
+  const count = (r) => spread.filter(([v]) => bandFor(v, rows) === r).reduce((n, [, c]) => n + c, 0);
+  const add = () => {
+    const low = rows.reduce((m, r) => Math.min(m, r.min_score === '' ? 100 : +r.min_score), 100);
+    setRows([...rows, { grade: '', min_score: '0', max_score: String(Math.max(0, low - 1)), remark: '' }]);
+  };
+  // Sort high→low, top band to 100, bottom to 0, each band ends just below
+  // where the one above starts.
+  const closeGaps = () => {
+    const s = [...rows].filter((r) => r.min_score !== '').sort((a, b) => +b.min_score - +a.min_score);
+    setRows(s.map((r, i) => ({ ...r, max_score: String(i === 0 ? 100 : +s[i - 1].min_score - 1), min_score: i === s.length - 1 ? '0' : r.min_score })));
+  };
+  const usePreset = (k) => { setRows(PRESETS[k].rows.map(([g, a, b, rm]) => ({ grade: g, min_score: String(a), max_score: String(b), remark: rm }))); setPreset(false); };
+  const submit = async () => {
+    const s = [...rows].sort((a, b) => (+b.min_score || 0) - (+a.min_score || 0));
+    setSaving(true);
+    const r = await save(d.save_url, {
+      'grade[]': s.map((x) => x.grade), 'min_score[]': s.map((x) => x.min_score),
+      'max_score[]': s.map((x) => x.max_score), 'remark[]': s.map((x) => x.remark),
+    }, () => nav.refresh());
+    setSaving(false);
+    if (r && r.ok) { setRows(s); setBase(s); }
+  };
+  const view = [...rows.map((r, i) => ({ r, i }))].sort((a, b) => (+b.r.min_score || 0) - (+a.r.min_score || 0));
+  const colorOf = Object.fromEntries(view.map((x, k) => [x.i, bandColor(k, view.length)]));
+  const pm = Number(d.pass_mark) || 50;
+  const pmGrade = rows.find((r) => r.min_score !== '' && pm >= +r.min_score && pm <= +r.max_score);
+  return (
+    <div className="rs cm sx gr">
+      <Head icon="fa-star" title="Grade scale" sub="How a subject total becomes a grade and remark on report cards and broadsheets.">
+        {can && <button type="button" className="rs-btn ghost" onClick={() => setPreset(true)}><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Start from a preset</button>}
+      </Head>
+
+      <section className="rs-card gr-viz">
+        <div className="gr-bar">
+          {view.filter((x) => x.r.min_score !== '' && x.r.max_score !== '' && +x.r.max_score >= +x.r.min_score).map(({ r, i }) => (
+            <span key={i} style={{ left: `${+r.min_score}%`, width: `${Math.max(1, Math.min(100, +r.max_score) - +r.min_score + 1)}%`, background: colorOf[i] }} title={`${r.grade} ${r.min_score}–${r.max_score}`}>{r.grade}</span>))}
+          <b className="gr-pm" style={{ left: pm + '%' }}><em>Pass {pm}</em></b>
+        </div>
+        <div className="gr-ax"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+        {issues.length ? (
+          <div className="gr-iss">{issues.map((x, k) => (
+            <div key={k} className={'cm-attn-i ' + (x.bad ? 'bad' : 'mid')}><i className={'fas ' + (x.bad ? 'fa-circle-xmark' : 'fa-triangle-exclamation')} aria-hidden="true" /><span>{x.t}</span></div>))}
+            {can && issues.some((x) => x.fix) && <button type="button" className="rs-btn sm primary" onClick={closeGaps}><i className="fas fa-link" aria-hidden="true" /> Join the bands up</button>}
+          </div>
+        ) : <div className="cm-attn-i good"><i className="fas fa-circle-check" aria-hidden="true" /><span>Every score from 0 to 100 gets exactly one grade.{pmGrade ? ` The pass mark (${pm}) is a ${pmGrade.grade}.` : ''}</span></div>}
+      </section>
+
+      <section className="rs-card gr-list">
+        <div className="gr-row gr-hd"><span>Grade</span><span>From</span><span>To</span><span>Remark</span><span>{d.spread_term ? `Results · ${d.spread_term}` : 'Results'}</span><span /></div>
+        {view.map(({ r, i }) => {
+          const n = count(r);
+          return (
+            <div key={i} className="gr-row">
+              <span className="gr-g">{phone && <small className="gr-gl">Grade</small>}<i style={{ background: colorOf[i] }} /><input value={r.grade} onChange={set(i, 'grade')} placeholder="A1" aria-label="Grade" disabled={!can} /></span>
+              <span>{phone && <small>From</small>}<input inputMode="numeric" value={r.min_score} onChange={set(i, 'min_score')} aria-label={`${r.grade} from`} disabled={!can} /></span>
+              <span>{phone && <small>To</small>}<input inputMode="numeric" value={r.max_score} onChange={set(i, 'max_score')} aria-label={`${r.grade} to`} disabled={!can} /></span>
+              <span className="gr-rm"><input value={r.remark} onChange={set(i, 'remark')} placeholder="Remark" aria-label={`${r.grade} remark`} disabled={!can} /></span>
+              <span className="gr-n">{total ? <><b>{n}</b><em><i style={{ width: `${Math.round(100 * n / total)}%`, background: colorOf[i] }} /></em><small>{Math.round(100 * n / total)}%</small></> : <small className="cm-mute">—</small>}</span>
+              <span>{can && <button type="button" className="gr-x" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label={`Remove ${r.grade || 'band'}`}><i className="fas fa-xmark" aria-hidden="true" /></button>}</span>
+            </div>);
+        })}
+        {!rows.length && <p className="cm-mute sx-empty">No grades yet — start from a preset or add a band.</p>}
+        {can && <button type="button" className="gr-add" onClick={add}><i className="fas fa-plus" aria-hidden="true" /> Add a band</button>}
+      </section>
+      {!total && <p className="cm-mute gr-note"><i className="fas fa-circle-info" aria-hidden="true" /> Once scores are entered, each band shows how many results it holds.</p>}
+
+      {can && dirty && (
+        <Bar>
+          <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> Unsaved changes</span>
+          <button type="button" className="rs-btn ghost" onClick={() => setRows(base)}>Undo</button>
+          <button type="button" className="rs-btn primary" disabled={saving || blocking} onClick={submit}>
+            <i className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {saving ? 'Saving…' : 'Save'}</button>
+        </Bar>)}
+
+      {preset && (
+        <Sheet title="Start from a preset" onClose={() => setPreset(false)}>
+          <div className="gr-presets">
+            {Object.entries(PRESETS).map(([k, p]) => (
+              <button key={k} type="button" className="rs-card gr-pre" onClick={() => usePreset(k)}>
+                <b>{p.label}</b>
+                <span className="gr-pre-bar">{p.rows.map(([g, a, b], j) => <i key={g} style={{ width: `${b - a + 1}%`, background: bandColor(p.rows.length - 1 - j, p.rows.length) }} />).reverse()}</span>
+                <small>{p.rows.map(([g, a]) => `${g} ${a}+`).join(' · ')}</small>
+              </button>))}
+            <p className="cm-mute">This replaces the bands on screen. Nothing is saved until you tap Save.</p>
+          </div>
+        </Sheet>)}
+    </div>
+  );
+}

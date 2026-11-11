@@ -993,7 +993,47 @@ def grades_list():
         'back_url': url_for('settings.index'),
         'grades': [{'grade': g.grade, 'min_score': g.min_score,
                     'max_score': g.max_score, 'remark': g.remark} for g in grades],
+        'pass_mark': SchoolSettings.get('pass_mark', 50),
+        **_score_spread(),
     })
+
+
+def _score_spread():
+    """Subject totals (CA + exam) for the active term — or the latest term that
+    has scores — bucketed to 0.1, so the grade-scale editor can show how many
+    results land in each band as the bands are edited."""
+    try:
+        from sqlalchemy import func as _f
+        from models import StudentScore, ClassSubject
+        from utils.helpers import get_active_term
+
+        def totals(term_id):
+            return (db.session.query(_f.sum(StudentScore.score))
+                    .join(ClassSubject, ClassSubject.id == StudentScore.class_subject_id)
+                    .filter(ClassSubject.term_id == term_id)
+                    .group_by(StudentScore.student_id, StudentScore.class_subject_id).all())
+        t = get_active_term()
+        rows = totals(t.id) if t else []
+        if not rows:
+            last = (db.session.query(ClassSubject.term_id)
+                    .join(StudentScore, StudentScore.class_subject_id == ClassSubject.id)
+                    .order_by(ClassSubject.term_id.desc()).first())
+            if last:
+                t = db.session.get(Term, last[0])
+                rows = totals(t.id)
+        spread = {}
+        for (v,) in rows:
+            if v is None:
+                continue
+            k = round(float(v), 1)
+            spread[k] = spread.get(k, 0) + 1
+        label = None
+        if t and rows:
+            sess = getattr(t, 'session', None)
+            label = f"{t.name}{' ' + sess.name if sess else ''}"
+        return {'spread': [[k, n] for k, n in sorted(spread.items())], 'spread_term': label}
+    except Exception:
+        return {'spread': [], 'spread_term': None}
 
 
 @settings_bp.route('/grades/save', methods=['POST'])

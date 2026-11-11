@@ -209,7 +209,7 @@ def home():
     attendance = None
     if enrollment:
         week_ids = [w.id for w in Week.query.filter_by(term_id=term_id).all()]
-        attendance = _attendance_pct(enrollment.id, week_ids)
+        attendance = _attendance_pct(student.id, term_id, week_ids)
 
     announcements = [a for a in Announcement.query.filter(
         Announcement.audience.in_(['All', 'Parents'])).order_by(

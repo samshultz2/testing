@@ -92,7 +92,10 @@ def _grade_for(total, bands):
     for grade, lo, hi in bands:
         if lo <= total <= hi:
             return grade
-    return 'F'
+    # Decimal totals between whole-number bands (69.5 with 60–69 / 70–79)
+    # belong to the band that ends just below them.
+    near = [(lo, grade) for grade, lo, hi in bands if total is not None and lo <= total < hi + 1]
+    return max(near)[1] if near else 'F'
 
 
 def _mean(xs):

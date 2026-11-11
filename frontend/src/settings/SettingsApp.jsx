@@ -4,57 +4,11 @@ import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Index, Branches, Backup, Audit, School, Academic } from './Hub';
+import { Index, Branches, Backup, Audit, School, Academic, Grades } from './Hub';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
   return <div className="page-header-actions">{children}</div>;
-}
-
-// ---- Grade scale ------------------------------------------------------------
-function Grades({ d, notify }) {
-  const nav = useNav();
-  const save = useSave(notify);
-  const [rows, setRows] = useState(
-    (d.grades || []).map((g) => ({ grade: g.grade, min_score: g.min_score, max_score: g.max_score, remark: g.remark || '' })));
-  const set = (i, k) => (e) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
-  const add = () => setRows([...rows, { grade: '', min_score: '', max_score: '', remark: '' }]);
-  const del = (i) => setRows(rows.filter((_, j) => j !== i));
-  const submit = (e) => {
-    e.preventDefault();
-    save(d.save_url, {
-      'grade[]': rows.map((r) => r.grade), 'min_score[]': rows.map((r) => r.min_score),
-      'max_score[]': rows.map((r) => r.max_score), 'remark[]': rows.map((r) => r.remark),
-    }, () => nav.refresh());
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Grade Scale</h1></div>
-      <div className="card"><div className="card-body">
-        <form onSubmit={submit}>
-          <div className="table-container"><table className="data-table">
-            <thead><tr><th>Grade</th><th>Min Score</th><th>Max Score</th><th>Remark</th><th /></tr></thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i}>
-                  <td><input type="text" className="form-control" value={r.grade} onChange={set(i, 'grade')} style={{ width: 60 }} placeholder="A+" /></td>
-                  <td><input type="number" className="form-control" value={r.min_score} onChange={set(i, 'min_score')} style={{ width: 80 }} placeholder="80" /></td>
-                  <td><input type="number" className="form-control" value={r.max_score} onChange={set(i, 'max_score')} style={{ width: 80 }} placeholder="100" /></td>
-                  <td><input type="text" className="form-control" value={r.remark} onChange={set(i, 'remark')} placeholder="Excellent" /></td>
-                  <td>{canWrite(d, 'grades_edit') && <button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-          <Actions>
-            {canWrite(d, 'grades_edit') && <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add Grade</button>}
-            {canWrite(d, 'grades_edit') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
-            <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
-          </Actions>
-        </form>
-      </div></div>
-    </>
-  );
 }
 
 // ---- Behavioural traits -----------------------------------------------------
