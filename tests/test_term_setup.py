@@ -92,3 +92,30 @@ def test_terms_list_groups_by_session_with_status_and_alerts(app):
     assert all(t['state'] == 'upcoming' for t in sess['terms'])
     assert {'weeks', 'classes', 'students', 'setup_url', 'edit_url'} <= set(sess['terms'][0])
     assert any('overlap' in a['text'] for a in d['alerts'])
+
+
+def test_new_session_with_terms_copies_dates_a_year_on(app):
+    from datetime import date, timedelta
+    from models import db, AcademicSession, Term, Week
+    with app.app_context():
+        AcademicSession.query.update({AcademicSession.is_active: False})
+        s = AcademicSession(name='2050/2051', is_active=True)
+        db.session.add(s); db.session.flush()
+        db.session.add(Term(session_id=s.id, term_number=1, name='First Term',
+                            start_date=date(2050, 9, 12), end_date=date(2050, 12, 16)))
+        db.session.commit()
+    c = _admin(app)
+    d = c.get('/academics/sessions', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['next']['name'] == '2051/2052' and len(d['next']['terms']) == 3
+    r = c.post('/academics/sessions/add', headers={'X-Requested-With': 'fetch'},
+               data={'name': '2051/2052', 'with_terms': 'on', '_csrf_token': _ptoken(c)})
+    assert r.status_code == 200 and r.get_json()['ok']
+    with app.app_context():
+        ns = AcademicSession.query.filter_by(name='2051/2052').first()
+        ts = sorted(ns.terms.all(), key=lambda t: t.term_number)
+        assert [t.term_number for t in ts] == [1, 2, 3]
+        assert ts[0].start_date == date(2050, 9, 12) + timedelta(weeks=52)
+        assert ts[0].start_date.weekday() == date(2050, 9, 12).weekday()
+        assert ts[1].start_date is None
+        assert Week.query.filter_by(term_id=ts[0].id).count() >= 13

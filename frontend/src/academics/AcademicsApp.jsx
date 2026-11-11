@@ -6,42 +6,9 @@ import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import TermSetup from './TermSetup';
 import Terms from './Terms';
+import Sessions from './Sessions';
 
 // ---- Sessions list ---------------------------------------------------------
-function Sessions({ d, notify }) {
-  const nav = useNav();
-  const activate = async (url) => {
-    const r = await submitJson(url, {});
-    // Activating a session switches the whole platform's active session/term, so
-    // force a full reload (like the "view session" dropdown does) — every cached
-    // SPA section and the time-travel bar re-render against the new session.
-    if (r.ok) window.location.href = r.redirect || window.location.href;
-    else notify('error', r.error || 'Failed.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Academic Sessions</h1>
-        <div className="page-header-actions">{canWrite(d, 'structure_create') && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
-      </div>
-      <div className="card"><div className="card-body" style={{ padding: 0 }}>
-        {d.sessions.length ? (
-          <div className="data-cards" style={{ padding: '1rem' }}>{d.sessions.map((s) => (
-            <div className="data-card" key={s.id}>
-              <div className="data-card-header"><div className="data-card-title">{s.name}</div>{s.is_active && <span className="badge badge-success">Active</span>}</div>
-              <div className="data-card-row"><span className="data-card-label">Start</span><span>{s.start_date || '-'}</span></div>
-              <div className="data-card-row"><span className="data-card-label">End</span><span>{s.end_date || '-'}</span></div>
-              <div className="data-card-row"><span className="data-card-label">Terms</span><span>{s.terms}</span></div>
-              {canWrite(d, 'structure_edit') && <div className="data-card-actions">
-                <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>
-                {!s.is_active && <button type="button" className="btn btn-success btn-sm w-100" style={{ flex: 1 }} onClick={() => activate(s.activate_url)}><i aria-hidden="true" className="fas fa-check" /> Activate</button>}
-              </div>}
-            </div>))}</div>
-        ) : <Empty icon="fa-calendar" title="No Sessions"><p>Create your first academic session</p></Empty>}
-      </div></div>
-    </>
-  );
-}
-
 // ---- Session form (add / edit) --------------------------------------------
 function SessionForm({ d, notify }) {
   const nav = useNav();

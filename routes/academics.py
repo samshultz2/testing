@@ -30,19 +30,115 @@ _wants_json, _render, _ok, _err = section_responders(
 # ACADEMIC SESSIONS
 # ============================================================================
 
+def _next_session_name(name):
+    """'2025/2026' → '2026/2027' (None when the name isn't year/year)."""
+    import re
+    m = re.match(r'^\s*(\d{4})\s*([/-])\s*(\d{4})\s*$', name or '')
+    if not m:
+        return None
+    return f'{int(m.group(1)) + 1}{m.group(2)}{int(m.group(3)) + 1}'
+
+
+def _shift_year(d):
+    # 52 weeks keeps the weekday, so Monday starts stay Mondays.
+    return d + timedelta(weeks=52) if d else None
+
+
 @academics_bp.route('/sessions')
 @login_required
 def sessions_list():
-    """List all academic sessions"""
+    """Sessions as a year timeline: the current session's progress and terms,
+    a one-tap "start next session" (with its three terms), and every session's
+    terms, classes and students."""
+    from sqlalchemy import func
+    from utils.access_control import can_access_module
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
+    today = date.today()
+    terms = Term.query.all()
+    by_sess = {}
+    for t in terms:
+        by_sess.setdefault(t.session_id, []).append(t)
+    pupils = dict(db.session.query(Term.session_id, func.count(func.distinct(StudentEnrollment.student_id)))
+                  .join(ClassArmAssignment, ClassArmAssignment.term_id == Term.id)
+                  .join(StudentEnrollment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                  .group_by(Term.session_id).all())
+    classes = dict(db.session.query(Term.session_id, func.count(func.distinct(ClassArmAssignment.class_id)))
+                   .join(ClassArmAssignment, ClassArmAssignment.term_id == Term.id)
+                   .group_by(Term.session_id).all())
+
+    def span(s):
+        ts = by_sess.get(s.id, [])
+        st = s.start_date or min((t.start_date for t in ts if t.start_date), default=None)
+        en = s.end_date or max((t.end_date for t in ts if t.end_date), default=None)
+        return st, en
+
+    def term_state(t):
+        if not (t.start_date and t.end_date):
+            return 'nodates'
+        return 'upcoming' if today < t.start_date else ('ended' if today > t.end_date else 'running')
+
+    def row(s):
+        st, en = span(s)
+        state, prog = 'nodates', None
+        if st and en:
+            if today < st:
+                state = 'upcoming'
+            elif today > en:
+                state, prog = 'ended', 100
+            else:
+                state, prog = 'running', round((today - st).days / max(1, (en - st).days) * 100)
+        ts = sorted(by_sess.get(s.id, []), key=lambda t: t.term_number)
+        return {'id': s.id, 'name': s.name, 'is_active': bool(s.is_active),
+                'start_date': _fd(st), 'end_date': _fd(en),
+                'start_iso': s.start_date.isoformat() if s.start_date else '',
+                'end_iso': s.end_date.isoformat() if s.end_date else '',
+                'dates_from_terms': bool(st and not s.start_date),
+                'state': state, 'progress': prog,
+                'days_left': (en - today).days if en and state == 'running' else None,
+                'terms': [{'number': t.term_number, 'name': t.name, 'is_active': bool(t.is_active),
+                           'state': term_state(t), 'start_date': _fd(t.start_date), 'end_date': _fd(t.end_date)} for t in ts],
+                'students': pupils.get(s.id, 0), 'classes': classes.get(s.id, 0),
+                'edit_url': url_for('academics.edit_session', session_id=s.id),
+                'activate_url': url_for('academics.activate_session', session_id=s.id)}
+
+    rows = [row(s) for s in sessions]
+    cur = next((r for r in rows if r['is_active']), None)
+    names = {s.name for s in sessions}
+    nxt_name = _next_session_name(cur['name']) if cur else None
+    nxt = None
+    if cur and nxt_name and nxt_name not in names:
+        cs = next(s for s in sessions if s.id == cur['id'])
+        have = {t.term_number: t for t in by_sess.get(cs.id, [])}
+        st, en = span(cs)
+        nxt = {'name': nxt_name,
+               'start_date': _shift_year(st).isoformat() if st else '',
+               'end_date': _shift_year(en).isoformat() if en else '',
+               'terms': [{'number': n, 'name': nm,
+                          'start_date': _fd(_shift_year(have[n].start_date)) if n in have else None,
+                          'end_date': _fd(_shift_year(have[n].end_date)) if n in have else None}
+                         for n, nm in ((1, 'First Term'), (2, 'Second Term'), (3, 'Third Term'))],
+               'urgent': bool(cur['state'] == 'ended' or (cur['days_left'] is not None and cur['days_left'] <= 60))}
+
+    alerts = []
+    if not cur and rows:
+        alerts.append({'tone': 'bad', 'icon': 'fa-triangle-exclamation',
+                       'text': 'No session is current — pick the one you are in.'})
+    if cur and not cur['terms']:
+        alerts.append({'tone': 'mid', 'icon': 'fa-calendar-plus',
+                       'text': f'{cur["name"]} has no terms yet.', 'link': url_for('academics.terms_list'), 'link_label': 'Add terms'})
+    newer = [r for r in rows if cur and r['name'] > cur['name'] and r['state'] == 'running']
+    if newer:
+        alerts.append({'tone': 'info', 'icon': 'fa-forward', 'text': f'{newer[0]["name"]} has started — make it current.',
+                       'activate': newer[0]['id']})
+
     return _render({
         'page': 'sessions',
-        'sessions': [{'id': s.id, 'name': s.name, 'is_active': bool(s.is_active),
-                      'start_date': _fd(s.start_date), 'end_date': _fd(s.end_date),
-                      'terms': s.terms.count(),
-                      'edit_url': url_for('academics.edit_session', session_id=s.id),
-                      'activate_url': url_for('academics.activate_session', session_id=s.id)} for s in sessions],
+        'sessions': rows, 'current_id': cur['id'] if cur else None,
+        'next': nxt, 'alerts': alerts,
         'add_url': url_for('academics.add_session'),
+        'urls': {'terms': url_for('academics.terms_list'), 'setup': url_for('academics.term_setup'),
+                 'copy': url_for('academics.copy_term_setup'),
+                 'promotion': url_for('promotion.index') if can_access_module('promotion') else None},
     })
 
 
@@ -70,16 +166,43 @@ def add_session():
             session = AcademicSession(
                 name=name, start_date=start_date, end_date=end_date, is_active=is_active)
             db.session.add(session)
+            db.session.flush()
+            made_terms = 0
+            if request.form.get('with_terms') == 'on':
+                # Copy the current session's term pattern one year on (or plain
+                # First/Second/Third Term without dates when there is none).
+                src = AcademicSession.query.filter(AcademicSession.id != session.id,
+                                                   AcademicSession.is_active == True).first() \
+                    if not is_active else None
+                if src is None:
+                    src = (AcademicSession.query.filter(AcademicSession.id != session.id)
+                           .order_by(AcademicSession.name.desc()).first())
+                have = {t.term_number: t for t in (src.terms.all() if src else [])}
+                pattern = [(n, nm, have.get(n)) for n, nm in ((1, 'First Term'), (2, 'Second Term'), (3, 'Third Term'))]
+                for n, nm, t in pattern:
+                    nt = Term(session_id=session.id, term_number=n, name=nm,
+                              start_date=_shift_year(t.start_date) if t else None,
+                              end_date=_shift_year(t.end_date) if t else None)
+                    db.session.add(nt)
+                    db.session.flush()
+                    if nt.start_date and nt.end_date:
+                        for wn, mon, fri in get_weeks_in_range(nt.start_date, nt.end_date):
+                            db.session.add(Week(term_id=nt.id, week_number=wn, start_date=mon, end_date=fri))
+                    made_terms += 1
             db.session.commit()
             if is_active:
                 # A brand-new session has no terms yet — clear the active term so
                 # term-scoped pages don't keep showing the old session, and drop the
                 # admin's time-travel override.
                 Term.query.update({Term.is_active: False}, synchronize_session=False)
+                if made_terms:
+                    first = Term.query.filter_by(session_id=session.id).order_by(Term.term_number).first()
+                    first.is_active = True
                 db.session.commit()
                 from flask import session as _flask_session
                 _flask_session.pop('view_session_id', None)
-            return _ok('Academic session created successfully!', url_for('academics.sessions_list'))
+            return _ok(f'{name} created' + (f' with {made_terms} terms.' if made_terms else '.'),
+                       url_for('academics.sessions_list'))
 
         except Exception as e:
             db.session.rollback()
