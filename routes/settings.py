@@ -543,12 +543,80 @@ def ocr_settings():
         'key_source': cfg['key_source'],          # 'settings' | 'env' | None
         'anthropic_installed': cfg['installed'],
         'active': vision_available(),
-        'models': ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'],
+        'models': [m['id'] for m in _OCR_MODELS],
+        'model_info': _OCR_MODELS,
         'engine': selected_engine(),
         'engine_status': status_rows(),
+        'last_error': _last_vision_error(),
+        'test_url': url_for('settings.ocr_test'),
         'submit_url': url_for('settings.ocr_settings'),
         'back_url': url_for('settings.index'),
     })
+
+
+# Models offered for result-sheet reading. Cost per 100 sheets is a rough
+# estimate: ~1,800 input tokens (one photo + instructions) and ~800 output
+# tokens a sheet, at Anthropic's list prices (USD per million tokens). The 5.5
+# models also think before answering; that is billed as output and comes on top.
+_OCR_MODELS = [
+    {'id': 'claude-haiku-5-5', 'name': 'Haiku 5.5', 'note': 'Newest and cheapest', 'in': 0.10, 'out': 0.50, 'thinks': True},
+    {'id': 'claude-haiku-4-5', 'name': 'Haiku 4.5', 'note': 'Fast, reads clear slips well', 'in': 1.00, 'out': 5.00, 'thinks': False},
+    {'id': 'claude-sonnet-5-5', 'name': 'Sonnet 5.5', 'note': 'Better with messy handwriting', 'in': 2.00, 'out': 10.00, 'thinks': True},
+    {'id': 'claude-sonnet-4-6', 'name': 'Sonnet 4.6', 'note': 'Better with messy handwriting', 'in': 3.00, 'out': 15.00, 'thinks': False},
+    {'id': 'claude-opus-5-5', 'name': 'Opus 5.5', 'note': 'Most careful; rarely needed for OCR', 'in': 4.00, 'out': 20.00, 'thinks': True},
+    {'id': 'claude-opus-4-8', 'name': 'Opus 4.8', 'note': 'Most careful; rarely needed for OCR', 'in': 5.00, 'out': 25.00, 'thinks': False},
+]
+for _m in _OCR_MODELS:
+    _m['per_100'] = round(100 * (1800 * _m['in'] + 800 * _m['out']) / 1_000_000, 2)
+
+
+def _last_vision_error():
+    try:
+        from utils.waec_ocr import last_vision_error
+        return last_vision_error()
+    except Exception:
+        return None
+
+
+@settings_bp.route('/ocr/test', methods=['POST'])
+@login_required
+def ocr_test():
+    """Check the saved (or just-typed) key against Anthropic without reading an
+    image: looking a model up is free, and proves the key works and can use
+    that model."""
+    if not can_manage_ocr_settings():
+        return _err('Only an admin can change OCR settings.', url_for('settings.index'))
+    from utils.waec_ocr import _vision_config
+    cfg = _vision_config()
+    key = (request.form.get('api_key') or '').strip() or cfg['key']
+    model = (request.form.get('model') or cfg['model']).strip()
+    if not key:
+        return _err('Add an API key first.', url_for('settings.ocr_settings'))
+    try:
+        import anthropic
+    except Exception:
+        return _err('The anthropic library isn’t installed on the server (pip install anthropic).',
+                    url_for('settings.ocr_settings'))
+    try:
+        client = anthropic.Anthropic(api_key=key, timeout=15.0, max_retries=1)
+        client.models.retrieve(model)
+    except anthropic.AuthenticationError:
+        return _err('Anthropic rejected this key. Copy it again from console.anthropic.com → API Keys.',
+                    url_for('settings.ocr_settings'))
+    except anthropic.PermissionDeniedError:
+        return _err('This key isn’t allowed to use that model.', url_for('settings.ocr_settings'))
+    except anthropic.NotFoundError:
+        return _err(f'{model} isn’t available to this key — pick another model.', url_for('settings.ocr_settings'))
+    except anthropic.APIConnectionError:
+        return _err('The server couldn’t reach Anthropic. Check its internet connection.',
+                    url_for('settings.ocr_settings'))
+    except anthropic.APIStatusError as e:
+        return _err(f'Anthropic answered with an error ({e.status_code}). Try again shortly.',
+                    url_for('settings.ocr_settings'))
+    except Exception as e:
+        return _err(f'Couldn’t check the key: {e}', url_for('settings.ocr_settings'))
+    return _ok(f'The key works and can use {model}. Note: this check is free and doesn’t test your credit balance.',
+               url_for('settings.ocr_settings'))
 
 
 # ---------------------------------------------------------------------------

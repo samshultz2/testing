@@ -58,3 +58,68 @@ def test_ocr_settings_clear_key(app):
         'model': 'claude-haiku-4-5', 'clear_key': '1'})
     g = c.get('/settings/ocr', headers=HDR).get_json()
     assert g['has_key'] is False and g['enabled'] is False
+
+
+def _fake_anthropic(behaviour):
+    """A stand-in for the anthropic SDK: models.retrieve succeeds or raises."""
+    import types
+    m = types.ModuleType('anthropic')
+
+    class APIStatusError(Exception):
+        status_code = 500
+
+    class AuthenticationError(APIStatusError):
+        status_code = 401
+
+    class PermissionDeniedError(APIStatusError):
+        status_code = 403
+
+    class NotFoundError(APIStatusError):
+        status_code = 404
+
+    class APIConnectionError(Exception):
+        pass
+
+    class _Models:
+        def retrieve(self, model):
+            if behaviour == 'ok':
+                return {'id': model}
+            raise {'auth': AuthenticationError, 'missing': NotFoundError}[behaviour]()
+
+    class Anthropic:
+        def __init__(self, **kw):
+            self.models = _Models()
+
+    for k, v in dict(APIStatusError=APIStatusError, AuthenticationError=AuthenticationError,
+                     PermissionDeniedError=PermissionDeniedError, NotFoundError=NotFoundError,
+                     APIConnectionError=APIConnectionError, Anthropic=Anthropic).items():
+        setattr(m, k, v)
+    return m
+
+
+def test_ocr_key_check(app, monkeypatch):
+    import sys
+    client = _admin(app)
+    tok = auth_csrf(client)
+    hdr = {'X-Requested-With': 'fetch'}
+    monkeypatch.setitem(sys.modules, 'anthropic', _fake_anthropic('ok'))
+    r = client.post('/settings/ocr/test', headers=hdr,
+                    data={'_csrf_token': tok, 'api_key': 'sk-ant-x', 'model': 'claude-haiku-5-5'}).get_json()
+    assert r['ok'] and 'claude-haiku-5-5' in r['message']
+    monkeypatch.setitem(sys.modules, 'anthropic', _fake_anthropic('auth'))
+    r = client.post('/settings/ocr/test', headers=hdr,
+                    data={'_csrf_token': tok, 'api_key': 'sk-ant-bad', 'model': 'claude-haiku-5-5'}).get_json()
+    assert not r['ok'] and 'rejected' in r['error']
+    monkeypatch.setitem(sys.modules, 'anthropic', _fake_anthropic('missing'))
+    r = client.post('/settings/ocr/test', headers=hdr,
+                    data={'_csrf_token': tok, 'api_key': 'sk-ant-x', 'model': 'claude-nope'}).get_json()
+    assert not r['ok'] and 'claude-nope' in r['error']
+
+
+def test_ocr_page_lists_models_with_costs(app):
+    client = _admin(app)
+    d = client.get('/settings/ocr', headers={'X-Requested-With': 'fetch'}).get_json()
+    ids = [m['id'] for m in d['model_info']]
+    assert 'claude-haiku-5-5' in ids and 'claude-haiku-4-5' in ids
+    assert all(m['per_100'] > 0 for m in d['model_info'])
+    assert 'test_url' in d and 'last_error' in d

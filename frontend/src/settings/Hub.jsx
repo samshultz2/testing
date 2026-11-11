@@ -1176,3 +1176,127 @@ export function TimetableSlots({ d, notify }) {
     </div>
   );
 }
+
+// ---- AI result reading (OCR) ------------------------------------------------
+// One choice for how scans are read (Claude first / Tesseract only), the key
+// with a free "test" check, models compared by rough cost per 100 sheets, and
+// the last real failure so a silent fallback to Tesseract isn't a mystery.
+export function Ocr({ d, notify }) {
+  const nav = useNav();
+  const save = useSave(notify);
+  const can = canWrite(d, 'ocr_manage');
+  const avail = Object.fromEntries((d.engine_status || []).map((s) => [s.id, s]));
+  const startMode = !d.enabled || d.engine === 'tesseract' ? 'tesseract' : d.engine === 'claude' ? 'claude' : 'auto';
+  const init = { mode: startMode, model: d.model || 'claude-haiku-4-5', api_key: '', clear_key: false };
+  const [f, setF] = useState(init);
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const dirty = f.mode !== init.mode || f.model !== init.model || !!f.api_key || f.clear_key;
+  const models = d.model_info || [];
+  const known = models.some((m) => m.id === f.model);
+  const usesClaude = f.mode !== 'tesseract';
+  const keyReady = (d.has_key && !f.clear_key) || !!f.api_key.trim();
+  const submit = async () => {
+    setBusy(true);
+    await save(d.submit_url, {
+      enabled: usesClaude ? '1' : '0', engine: f.mode, model: f.model,
+      api_key: f.clear_key ? '' : f.api_key.trim(), clear_key: f.clear_key ? '1' : '0',
+    }, () => { nav.refresh(); setF((x) => ({ ...x, api_key: '', clear_key: false })); });
+    setBusy(false);
+  };
+  const test = async () => {
+    setTesting(true);
+    const r = await submitJson(d.test_url, { api_key: f.api_key.trim(), model: f.model });
+    setTesting(false);
+    notify(r.ok ? 'success' : 'error', r.ok ? r.message : r.error);
+  };
+  const why = !d.anthropic_installed ? 'The anthropic library isn’t installed on the server.'
+    : !d.has_key ? 'No API key yet.' : !d.enabled ? 'Claude is switched off.' : '';
+  return (
+    <div className="rs cm sx oc">
+      <Head icon="fa-robot" title="AI result reading" sub="Read WAEC/JAMB result slips and score sheets from photos." />
+      <section className={'rs-card sx-hero ' + (d.active ? 'good' : 'warn')}>
+        <span className="sx-hero-ic"><i className={'fas ' + (d.active ? 'fa-wand-magic-sparkles' : 'fa-file-image')} aria-hidden="true" /></span>
+        <div className="sx-t"><b>{d.active ? 'Claude is reading scans' : 'Scans use Tesseract (free)'}</b>
+          <small>{d.active ? `Using ${(models.find((m) => m.id === d.model) || { name: d.model }).name}. If Claude can’t read a sheet, Tesseract tries instead.` : `Tesseract reads clear printed text but struggles with handwriting. ${why}`}</small></div>
+      </section>
+      {d.last_error && (
+        <div className="cm-attn-i bad oc-err"><i className="fas fa-circle-exclamation" aria-hidden="true" />
+          <span><b>The last Claude scan failed:</b> {d.last_error}</span></div>)}
+
+      <div className="oc-grid">
+        <fieldset disabled={!can} className="sc-fs">
+          <section className="rs-card sc-sec">
+            <h3><i className="fas fa-route" aria-hidden="true" /> How scans are read</h3>
+            <div className="oc-modes" role="radiogroup" aria-label="How scans are read">
+              {[['auto', 'Claude when ready', 'Uses Claude when a key is set, otherwise Tesseract', 'fa-shuffle'],
+                ['claude', 'Claude first', 'Always tries Claude first; Tesseract only as backup', 'fa-wand-magic-sparkles'],
+                ['tesseract', 'Tesseract only', 'Free and on the server; no API costs', 'fa-file-lines']].map(([v, t, sub, ic]) => {
+                const a = avail[v === 'auto' ? 'claude' : v];
+                return (
+                  <label key={v} className={'oc-mode' + (f.mode === v ? ' on' : '')}>
+                    <input type="radio" name="mode" value={v} checked={f.mode === v} onChange={() => setF({ ...f, mode: v })} />
+                    <i className={'fas ' + ic} aria-hidden="true" /><b>{t}</b><small>{sub}</small>
+                    {v !== 'auto' && a && <em className={a.available ? 'ok' : ''}>{a.available ? 'Ready' : 'Not set up'}</em>}
+                  </label>);
+              })}
+            </div>
+            {avail.tesseract && !avail.tesseract.available && <small className="cm-mute">Tesseract isn’t installed on this server, so there’s no free backup: {avail.tesseract.hint}</small>}
+          </section>
+
+          {usesClaude && (
+            <section className="rs-card sc-sec">
+              <h3><i className="fas fa-key" aria-hidden="true" /> Anthropic API key</h3>
+              {d.has_key && !f.clear_key && (
+                <div className="oc-key"><i className="fas fa-lock" aria-hidden="true" />
+                  <span className="sx-t"><b>{d.key_masked || 'Saved'}</b><small>{d.key_source === 'env' ? 'From the server’s environment — change it there' : 'Saved encrypted in settings'}</small></span>
+                  {d.key_source === 'settings' && can && <button type="button" className="rs-btn sm ghost" onClick={() => setF({ ...f, clear_key: true, api_key: '' })}>Remove</button>}
+                </div>)}
+              {f.clear_key && <div className="cm-attn-i mid"><i className="fas fa-trash-can" aria-hidden="true" /><span>The saved key will be removed when you save.</span>
+                <button type="button" className="rs-btn sm ghost" onClick={() => setF({ ...f, clear_key: false })}>Keep it</button></div>}
+              <Field label={d.has_key ? 'Replace with a new key' : 'API key'} hint="From console.anthropic.com → API Keys. Stored encrypted; never shown again.">
+                <span className="py-key"><input type={show ? 'text' : 'password'} value={f.api_key} onChange={(e) => setF({ ...f, api_key: e.target.value, clear_key: false })}
+                  placeholder="sk-ant-…" autoComplete="off" spellCheck={false} />
+                  <button type="button" className="py-eye" onClick={() => setShow(!show)} aria-label={show ? 'Hide key' : 'Show key'}><i className={'fas ' + (show ? 'fa-eye-slash' : 'fa-eye')} aria-hidden="true" /></button></span></Field>
+              {keyReady && d.anthropic_installed && <button type="button" className="rs-btn ghost oc-test" onClick={test} disabled={testing}>
+                <i className={'fas ' + (testing ? 'fa-spinner fa-spin' : 'fa-plug-circle-check')} aria-hidden="true" /> {testing ? 'Checking…' : 'Test the key'}</button>}
+              {!d.anthropic_installed && <div className="cm-attn-i bad"><i className="fas fa-box-open" aria-hidden="true" /><span>The server needs the <code>anthropic</code> library: run <code>pip install anthropic</code> and restart.</span></div>}
+            </section>)}
+
+          {usesClaude && (
+            <section className="rs-card sc-sec">
+              <h3><i className="fas fa-microchip" aria-hidden="true" /> Model</h3>
+              <div className="oc-models" role="radiogroup" aria-label="Model">
+                {!known && <label className="oc-model on"><input type="radio" checked readOnly /><span className="sx-t"><b>{f.model}</b><small>Set outside this list</small></span></label>}
+                {models.map((m) => (
+                  <label key={m.id} className={'oc-model' + (f.model === m.id ? ' on' : '')}>
+                    <input type="radio" name="model" value={m.id} checked={f.model === m.id} onChange={() => setF({ ...f, model: m.id })} />
+                    <span className="sx-t"><b>{m.name}{m.id === d.model && <Pill tone="good">In use</Pill>}</b><small>{m.note}</small></span>
+                    <span className="oc-cost"><b>≈ ${m.per_100 < 1 ? m.per_100.toFixed(2) : m.per_100.toFixed(1)}</b><small>per 100 sheets{m.thinks ? ' + thinking' : ''}</small></span>
+                  </label>))}
+              </div>
+              <small className="cm-mute">Rough estimates at Anthropic’s list prices. The 5.5 models think before answering, which is billed on top. Start with a Haiku model; move up only if it misreads your sheets.</small>
+            </section>)}
+        </fieldset>
+
+        <aside className="sc-side">
+          <section className="rs-card sc-sec oc-note">
+            <h3><i className="fas fa-circle-info" aria-hidden="true" /> Before you start</h3>
+            <p><b>Billing is separate.</b> A Claude Pro or Max subscription does not include API use. Add credit at console.anthropic.com → Billing.</p>
+            <p><b>“Credit balance too low”</b> means the API account is empty — scans fall back to Tesseract until it’s topped up.</p>
+            <p><b>Photos stay on the server</b> except for the image sent to Claude for reading.</p>
+          </section>
+        </aside>
+      </div>
+
+      {can && dirty && (
+        <Bar>
+          <span className="sc-state"><i className="fas fa-circle" aria-hidden="true" /> Unsaved changes</span>
+          <button type="button" className="rs-btn ghost" onClick={() => setF(init)}>Undo</button>
+          <button type="button" className="rs-btn primary" disabled={busy} onClick={submit}>
+            <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> {busy ? 'Saving…' : 'Save'}</button>
+        </Bar>)}
+    </div>
+  );
+}
