@@ -31,6 +31,21 @@
 .gb-menu summary{list-style:none}
 .gb-menu summary::-webkit-details-marker{display:none}
 .gb-menu:not([open]) .rs-menu-pop{display:none}
+/* phones: the Export button sits at the left, so a right-anchored dropdown
+   would run off-screen — open it as a bottom sheet instead */
+.gb-menu .gb-sheet-hd{display:none}
+@media (max-width:759px){
+  .gb-menu[open]::before{content:'';position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1090;animation:gbFade .18s ease-out}
+  .gb-menu .rs-menu-pop{position:fixed;left:0;right:0;bottom:0;top:auto;min-width:0;max-width:none;border-radius:20px 20px 0 0;
+    border:0;padding:.4rem .8rem calc(1rem + env(safe-area-inset-bottom));z-index:1100;box-shadow:0 -10px 34px rgba(15,23,42,.22);animation:gbUp .22s ease-out}
+  .gb-menu .rs-menu-pop::before{content:'';display:block;width:42px;height:4px;border-radius:4px;background:var(--border-color);margin:.35rem auto .5rem}
+  .gb-menu .gb-sheet-hd{display:block;font-weight:800;font-size:1rem;color:var(--text-primary);padding:.2rem .75rem .5rem}
+  .gb-menu .gb-sheet-hd small{display:block;font-weight:500;font-size:.8rem;color:var(--text-muted);margin-top:.1rem}
+  .gb-menu .rs-menu-list a{padding:.95rem .8rem;font-size:1rem;border-radius:12px}
+  .gb-menu .rs-menu-list i{font-size:1.1rem;width:24px}
+}
+@keyframes gbUp{from{transform:translateY(100%)}to{transform:none}}
+@keyframes gbFade{from{opacity:0}to{opacity:1}}
 
 /* branches */
 .gb-br{display:grid;grid-template-columns:28px minmax(120px,1.1fr) 70px minmax(140px,2.2fr) 82px 70px;gap:.85rem;align-items:center;padding:.6rem .2rem;border-bottom:1px solid var(--border-light,var(--border-color))}
@@ -141,7 +156,7 @@
       {% if has %}
       <details class="gb-menu rs-menu">
         <summary class="rs-btn ghost"><i class="fas fa-download" aria-hidden="true"></i> Export</summary>
-        <div class="rs-menu-pop"><div class="rs-menu-list" role="menu">
+        <div class="rs-menu-pop"><div class="gb-sheet-hd">Export report<small>{{ exam_label }}{% if period_label %} · {{ period_label }}{% endif %}</small></div><div class="rs-menu-list" role="menu">
           <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='pdf', **export_args) }}"><i class="fas fa-file-pdf"></i><span>PDF</span></a>
           <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}"><i class="fas fa-file-word"></i><span>Word</span></a>
           <a role="menuitem" data-native href="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}"><i class="fas fa-file-excel"></i><span>Excel</span></a>
@@ -292,7 +307,9 @@
 (function () {
   // Export menu: close on outside click / Escape.
   document.querySelectorAll('.gb-menu').forEach(function (d) {
-    document.addEventListener('click', function (e) { if (d.open && !d.contains(e.target)) d.open = false; });
+    // e.target === d means the dimmed backdrop (the sheet's ::before) on phones
+    document.addEventListener('click', function (e) { if (d.open && (!d.contains(e.target) || e.target === d)) d.open = false; });
+    d.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { setTimeout(function () { d.open = false; }, 150); }); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') d.open = false; });
   });
   var cards = document.getElementById('gbCards'); if (!cards) return;
