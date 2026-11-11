@@ -1101,6 +1101,11 @@
         padding: .3rem; display: none;
     }
     .branch-switch-menu.open { display: block; }
+    /* On phones the switcher is the first thing in the header (left edge), so a
+       right-anchored menu runs off-screen — anchor it to the left instead. */
+    @media (max-width:640px){
+      .branch-switch-menu{left:0;right:auto;max-width:calc(100vw - 16px);}
+    }
     .branch-switch-menu a {
         display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem;
         border-radius: 7px; color: var(--text-primary); text-decoration: none;
