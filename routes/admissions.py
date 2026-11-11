@@ -111,6 +111,7 @@ def dashboard():
     accepted = base.filter(Applicant.status == 'Accepted').count()
     src = base.with_entities(Applicant.source, func.count(Applicant.id)).group_by(Applicant.source).all()
     gender = dict(base.with_entities(Applicant.gender, func.count(Applicant.id)).group_by(Applicant.gender).all())
+    likely = _likely_students()
     week_ago = today - timedelta(days=7)
     new_week = base.filter(Applicant.applied_date >= week_ago).count()
     cls_full = []
@@ -129,6 +130,7 @@ def dashboard():
         'gender': {'male': gender.get('Male', 0), 'female': gender.get('Female', 0)},
         'new_week': new_week,
         'action': {'stale': len(stale), 'offered': offered, 'accepted': accepted,
+                   'linkable': len(likely), 'linkable_url': url_for('admissions.applicants', possible=1),
                    'stale_url': url_for('admissions.applicants', status='Applied', session_id=session_id or ''),
                    'offered_url': url_for('admissions.applicants', status='Offered', session_id=session_id or ''),
                    'accepted_url': url_for('admissions.applicants', status='Accepted', session_id=session_id or '')},
@@ -167,11 +169,16 @@ def applicants():
                                     Applicant.surname.ilike(like, escape='\\'),
                                     Applicant.application_no.ilike(like, escape='\\'),
                                     Applicant.parent_phone.ilike(like, escape='\\')))
+    possible = request.args.get('possible') == '1'
+    likely = _likely_students() if possible else {}
+    if possible:
+        query = query.filter(Applicant.id.in_(list(likely) or [-1]))
     rows = query.order_by(Applicant.created_at.desc()).all()
     badge = admissions.STATUS_BADGE
     return _render({
         'page': 'applicants', 'tabs': TABS, 'active': 'applicants',
         'status': status or '', 'session_id': session_id or '', 'class_id': class_id or '', 'q': q,
+        'possible': possible,
         'sessions': _sessions_json(), 'classes': _classes_json(), 'statuses': admissions.ALL_STATUSES,
         'rows': [{'id': a.id, 'application_no': a.application_no, 'full_name': a.full_name,
                   'gender': a.gender, 'intended_class': a.intended_class.name if a.intended_class else '—',
@@ -182,6 +189,8 @@ def applicants():
                   'applied': a.applied_date.strftime('%d %b') if a.applied_date else '',
                   'waiting': (timeutil.today() - a.updated_at.date()).days if a.updated_at else None,
                   'source': a.source or '',
+                  'match': ({'name': likely[a.id]['student'].full_name, 'student_id': likely[a.id]['student'].student_id}
+                            if a.id in likely else None),
                   'photo_url': (url_for('admissions.applicant_photo', applicant_id=a.id)
                                 if (a.photo and a.photo.data) else ''),
                   'status_url': url_for('admissions.set_status', applicant_id=a.id),
@@ -334,6 +343,12 @@ def applicant_detail(applicant_id):
             'admitted_student_id': a.admitted_student_id,
             'student_url': url_for('main.view_student', student_id=a.admitted_student_id) if a.admitted_student_id else None,
         },
+        'matches': ([{'id': m['student'].id, 'name': m['student'].full_name, 'student_id': m['student'].student_id,
+                      'class': admissions._current_class(m['student']),
+                      'dob': m['student'].date_of_birth.strftime('%d %b %Y') if m['student'].date_of_birth else None,
+                      'reasons': m['reasons'], 'strong': m['score'] >= 6,
+                      'url': url_for('main.view_student', student_id=m['student'].id)}
+                     for m in admissions.match_students(a)] if not a.admitted_student_id else []),
         'stages': admissions.STAGES, 'outcomes': admissions.OUTCOMES, 'info': info, 'parent': parent,
         'emergency': emergency if has_emergency else None,
         'notes': a.notes,
@@ -342,6 +357,8 @@ def applicant_detail(applicant_id):
                  'status': url_for('admissions.set_status', applicant_id=a.id),
                  'convert': url_for('admissions.convert', applicant_id=a.id),
                  'copy': url_for('admissions.copy_to_student', applicant_id=a.id),
+                 'link': url_for('admissions.link_student', applicant_id=a.id),
+                 'student_search': url_for('main.api_search_students'),
                  'delete': url_for('admissions.delete_applicant', applicant_id=a.id),
                  'pdf': url_for('admissions.export_applicant', applicant_id=a.id, format='pdf'),
                  'docx': url_for('admissions.export_applicant', applicant_id=a.id, format='docx')},
@@ -514,6 +531,42 @@ def copy_to_student(applicant_id):
     msg = ('Copied to the student record: ' + ', '.join(done) + '.') if done else \
         'The student record already has everything from the application.'
     return _ok(msg, url_for('admissions.applicant_detail', applicant_id=a.id))
+
+
+@adm_bp.route('/applicants/<int:applicant_id>/link', methods=['POST'])
+@login_required
+def link_student(applicant_id):
+    """Link an application to a student profile that was created by hand
+    (admitted in real life without using Admit), then copy over the details."""
+    from models import Student
+    a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
+    st = db.session.get(Student, request.form.get('student_id', type=int) or -1)
+    if st is None:
+        return _err('Pick the student to link.', url_for('admissions.applicant_detail', applicant_id=a.id))
+    require_branch_access(st.branch_id)
+    done, err = admissions.link_to_student(a, st)
+    if err:
+        return _err(err, url_for('admissions.applicant_detail', applicant_id=a.id))
+    from utils.audit import log_action
+    log_action('admissions.link_student', detail=f'{a.application_no} -> {st.student_id}', target=a)
+    msg = f'Linked to {st.full_name} ({st.student_id}).'
+    msg += (' Copied: ' + ', '.join(done) + '.') if done else ' Their record already had everything.'
+    return _ok(msg, url_for('admissions.applicant_detail', applicant_id=a.id))
+
+
+def _likely_students(limit=300):
+    """{applicant_id: best match} for open applications that look like an
+    existing student (strong matches only: name plus DOB or parent phone)."""
+    out = {}
+    rows = (scope_query(Applicant.query, Applicant)
+            .filter(Applicant.admitted_student_id.is_(None), Applicant.status.notin_(['Rejected']))
+            .order_by(Applicant.created_at.desc()).limit(limit).all())
+    for a in rows:
+        m = admissions.match_students(a, limit=1)
+        if m and m[0]['score'] >= 6:
+            out[a.id] = m[0]
+    return out
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/delete', methods=['POST'])

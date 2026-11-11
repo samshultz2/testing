@@ -598,7 +598,7 @@ _SUBSECTION_ENDPOINTS = {
         'view': {'dashboard', 'applicants', 'applicant_detail', 'applicant_photo', 'export'},
         'create': {'add_applicant'},
         'edit': {'edit_applicant', 'set_status'},
-        'convert': {'convert', 'copy_to_student'},
+        'convert': {'convert', 'copy_to_student', 'link_student'},
         'download': {'blank_application_form', 'export_applicant'},
         'delete': {'delete_applicant'},
     },

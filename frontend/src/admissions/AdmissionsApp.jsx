@@ -12,7 +12,7 @@ import { compressPhoto } from '../lib/image';
 import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
 import { COUNTRIES, NIGERIA_STATES, NIGERIA_STATES_LGAS, DEFAULT_COUNTRY, DEFAULT_STATE, ageFromDOB } from '../lib/geoData';
 import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, Meter, usePhone, initials } from '../subjects/results';
-import { A, SecNav, Field, Pill, SearchBox, plural } from '../components/appkit';
+import { A, SecNav, Field, Pill, SearchBox, Lookup, plural } from '../components/appkit';
 
 const TONE = { Inquiry: '', Applied: 'info', Screening: 'info', Offered: 'mid', Accepted: 'mid', Admitted: 'good', Rejected: 'bad', Waitlisted: '' };
 const ICON = { Inquiry: 'fa-circle-question', Applied: 'fa-file-lines', Screening: 'fa-clipboard-check', Offered: 'fa-envelope-open-text',
@@ -53,6 +53,7 @@ function Dashboard({ d }) {
     act.stale > 0 && { to: act.stale_url, tone: 'mid', ic: 'fa-clock', t: `${plural(act.stale, 'application')} waiting over 2 weeks for a next step` },
     act.offered > 0 && { to: act.offered_url, tone: 'info', ic: 'fa-envelope-open-text', t: `${plural(act.offered, 'offer')} not yet accepted` },
     act.accepted > 0 && { to: act.accepted_url, tone: 'good', ic: 'fa-user-check', t: `${plural(act.accepted, 'applicant')} accepted — ready to admit` },
+    act.linkable > 0 && { to: act.linkable_url, tone: 'info', ic: 'fa-link', t: `${plural(act.linkable, 'applicant')} may already have a student record — link them to bring the details across` },
   ].filter(Boolean);
   return (
     <div className="rs cm ad">
@@ -148,6 +149,7 @@ function Applicants({ d, notify }) {
       <A to={r.detail_url} className="ad-card-h"><Av a={r} /><span><b>{r.full_name}</b><small>{r.intended_class} · {r.application_no}</small></span></A>
       <div className="ad-card-m">
         {r.entrance_score !== '—' && <span><i className="fas fa-star" aria-hidden="true" /> {r.entrance_score}</span>}
+        {r.match && <span className="ad-match" title={`Looks like ${r.match.name} (${r.match.student_id})`}><i className="fas fa-link" aria-hidden="true" /> Student?</span>}
         {r.waiting != null && r.waiting >= 14 && !['Admitted', 'Rejected'].includes(r.status) && <span className="late"><i className="fas fa-clock" aria-hidden="true" /> {r.waiting}d</span>}
         {r.parent_phone && <a href={'tel:' + r.parent_phone} className="cm-ib" aria-label={`Call ${r.parent_name || 'parent'}`}><i className="fas fa-phone" aria-hidden="true" /></a>}
       </div>
@@ -170,6 +172,10 @@ function Applicants({ d, notify }) {
           <option value="">All sessions</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
         {!phone && !d.status && <Seg value={view} onChange={setV} label="View" options={[{ value: 'board', label: 'Board', icon: 'fa-table-columns' }, { value: 'list', label: 'List', icon: 'fa-list' }]} />}
       </div>
+      {d.possible && (
+        <div className="cm-attn-i info ad-poss"><i className="fas fa-link" aria-hidden="true" />
+          <span>Applicants who look like a student already on the system. Open one and use <b>Link</b> to attach the application and copy its details.</span>
+          <A to={d.urls.applicants} className="rs-btn sm ghost">Show all</A></div>)}
       <Chips label="Stage" value={d.status} onChange={(v) => go('status', v)}
              items={[{ value: '', label: 'All', sub: d.rows.length }, ...d.statuses.map((x) => ({ value: x, label: x, sub: counts[x] || 0 }))]} />
 
@@ -206,6 +212,16 @@ function ApplicantDetail({ d, notify }) {
   const nav = useNav();
   const a = d.applicant;
   const [admit, setAdmit] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [pick, setPick] = useState(null);
+  const link = async (st) => {
+    if (!await confirm({ title: `Link to ${st.name || st.label}?`, confirmText: 'Link',
+      message: 'This application will be marked admitted and attached to that student. Anything their record is missing (photo, contacts, health, address…) is copied in — nothing on it is overwritten.' })) return;
+    setBusy(true);
+    const r = await submitJson(d.urls.link, { student_id: st.id });
+    setBusy(false);
+    if (r.ok) { setLinking(false); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not link.');
+  };
   const [arm, setArm] = useState(d.assignments[0] ? String(d.assignments[0].id) : '');
   const [busy, setBusy] = useState(false);
   const canEdit = canWrite(d, 'edit');
@@ -281,6 +297,25 @@ function ApplicantDetail({ d, notify }) {
         </div>
       </section>
 
+      {!a.admitted_student_id && canWrite(d, 'convert') && (d.matches.length > 0 ? (
+        <section className="rs-card ad-matches">
+          <div className="rs-card-h"><h3><i className="fas fa-link" aria-hidden="true" /> Already a student?</h3>
+            <button type="button" className="cm-link" onClick={() => setLinking(true)}>Search for someone else</button></div>
+          <p className="cm-mute">If {a.full_name} was admitted and given a student record by hand, link it here to bring the application details across.</p>
+          {d.matches.map((m) => (
+            <div key={m.id} className={'ad-mt' + (m.strong ? ' strong' : '')}>
+              <span className="ad-av">{(m.name || '?').split(' ').slice(0, 2).map((w) => w[0]).join('')}</span>
+              <span className="ad-row-t"><A to={m.url}><b>{m.name}</b></A>
+                <small>{[m.student_id, m.class, m.dob].filter(Boolean).join(' · ')}</small>
+                <span className="ad-why">{m.reasons.map((x) => <Pill key={x} tone={m.strong ? 'good' : ''}>{x}</Pill>)}</span></span>
+              <button type="button" className={'rs-btn sm ' + (m.strong ? 'primary' : 'ghost')} disabled={busy} onClick={() => link(m)}><i className="fas fa-link" aria-hidden="true" /> Link</button>
+            </div>))}
+        </section>
+      ) : (
+        <button type="button" className="ad-linkbar" onClick={() => setLinking(true)}>
+          <i className="fas fa-link" aria-hidden="true" /><span><b>Already gave {a.first_name || 'them'} a student record by hand?</b><small>Link it to this application to copy the details across.</small></span>
+          <i className="fas fa-chevron-right" aria-hidden="true" /></button>))}
+
       <div className="ad-dgrid">
         <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-id-card" aria-hidden="true" /> Applicant</h3></div><KV rows={d.info} /></section>
         <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-people-roof" aria-hidden="true" /> Parent / guardian</h3></div><KV rows={d.parent} />
@@ -288,6 +323,19 @@ function ApplicantDetail({ d, notify }) {
         {d.notes && <section className="rs-card ad-notes"><div className="rs-card-h"><h3><i className="fas fa-note-sticky" aria-hidden="true" /> Notes</h3></div><p>{d.notes}</p></section>}
       </div>
 
+      {linking && (
+        <Sheet title="Link to an existing student" onClose={() => { setLinking(false); setPick(null); }}>
+          <div className="su-form">
+            <Field label="Find the student" hint="Type at least two letters of their name or student ID">
+              <Lookup url={d.urls.student_search} placeholder="Search students" autoFocus picked={pick}
+                      onPick={setPick} onClear={() => setPick(null)} icon="fa-user-graduate" /></Field>
+            <p className="cm-mute">The application is marked admitted and linked. Missing details on the student record — photo, contacts, blood group, address… — are filled from the application; nothing is overwritten.</p>
+            <div className="su-form-f">
+              <button type="button" className="rs-btn ghost" onClick={() => { setLinking(false); setPick(null); }}>Cancel</button>
+              <button type="button" className="rs-btn primary" disabled={!pick || busy} onClick={() => link(pick)}><i className="fas fa-link" aria-hidden="true" /> Link</button>
+            </div>
+          </div>
+        </Sheet>)}
       {admit && (
         <Sheet title={`Admit ${a.full_name}`} onClose={() => setAdmit(false)}>
           <div className="su-form">

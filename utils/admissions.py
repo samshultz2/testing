@@ -200,3 +200,88 @@ def notify_decision(applicant):
         mailer.send_email_async(email, subject, '\n\n'.join(paragraphs), html=html)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Linking an application to a student created by hand
+# ---------------------------------------------------------------------------
+def _norm(v):
+    return ' '.join((v or '').lower().replace('-', ' ').split())
+
+
+def _digits(p):
+    d = ''.join(ch for ch in (p or '') if ch.isdigit())
+    return d[-10:]          # 0803… and +234803… compare equal
+
+
+def _current_class(student):
+    from models import ClassArmAssignment
+    e = (student.enrollments.join(ClassArmAssignment)
+         .order_by(ClassArmAssignment.term_id.desc(), StudentEnrollment.is_active.desc(),
+                   StudentEnrollment.id.desc()).first())
+    return e.class_arm_assignment.display_name if e and e.class_arm_assignment else None
+
+
+def match_students(applicant, limit=5, students=None):
+    """Students who look like this applicant (for linking a profile created by
+    hand). Scored on name, date of birth, gender and the parent's phone;
+    students already linked to another application are left out. Returns
+    [{student, score, reasons}] best first, only reasonable matches."""
+    from utils.branch_scope import scope_query
+    taken = {sid for (sid,) in db.session.query(Applicant.admitted_student_id)
+             .filter(Applicant.admitted_student_id.isnot(None), Applicant.id != applicant.id).all()}
+    fn, sn, mn = _norm(applicant.first_name), _norm(applicant.surname), _norm(applicant.middle_name)
+    pp = _digits(applicant.parent_phone)
+    if students is None:
+        q = scope_query(Student.query, Student).filter(
+            db.or_(func.lower(Student.surname) == sn, func.lower(Student.first_name) == fn,
+                   func.lower(Student.surname) == fn, func.lower(Student.first_name) == sn))
+        students = q.limit(200).all()
+        if pp:
+            by_phone = (Student.query.join(ParentContact, ParentContact.student_id == Student.id)
+                        .filter(ParentContact.phone_number.like('%' + pp[-7:])).limit(50).all())
+            students = list({s.id: s for s in list(students) + by_phone}.values())
+    out = []
+    for s in students:
+        if s.id in taken:
+            continue
+        score, why = 0, []
+        sf, ss, sm = _norm(s.first_name), _norm(s.surname), _norm(s.middle_name)
+        if sf == fn and ss == sn:
+            score += 4; why.append('same name')
+        elif sf == sn and ss == fn:
+            score += 3; why.append('same name (swapped)')
+        elif ss == sn or sf == fn:
+            score += 1; why.append('same surname' if ss == sn else 'same first name')
+        if mn and sm and mn == sm:
+            score += 1; why.append('same middle name')
+        if applicant.date_of_birth and s.date_of_birth:
+            if applicant.date_of_birth == s.date_of_birth:
+                score += 3; why.append('same date of birth')
+            else:
+                score -= 2
+        if applicant.gender and s.gender and applicant.gender != s.gender:
+            score -= 3
+        if pp and any(_digits(c.phone_number) == pp for c in s.parent_contacts.all()):
+            score += 3; why.append('same parent phone')
+        if score >= 3:
+            out.append({'student': s, 'score': score, 'reasons': why})
+    out.sort(key=lambda x: (-x['score'], x['student'].surname or ''))
+    return out[:limit]
+
+
+def link_to_student(applicant, student):
+    """Attach an application to an existing (hand-made) student record, mark
+    it admitted and copy over whatever the student record is missing.
+    Returns (copied_list, error)."""
+    if applicant.admitted_student_id and applicant.admitted_student_id != student.id:
+        return None, 'This application is already linked to another student.'
+    other = Applicant.query.filter(Applicant.admitted_student_id == student.id, Applicant.id != applicant.id).first()
+    if other:
+        return None, f'{student.full_name} is already linked to application {other.application_no}.'
+    applicant.admitted_student_id = student.id
+    applicant.status = 'Admitted'
+    applicant.decision_date = applicant.decision_date or timeutil.today()
+    done = copy_to_student(applicant, student)
+    db.session.commit()
+    return done, None
