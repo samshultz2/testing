@@ -38,6 +38,9 @@
 .gb-br.h{padding-top:0;font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
 .gb-rk{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;background:var(--gray-100);color:var(--text-secondary)}
 .gb-rk.top{background:#fef3c7;color:#a16207}
+.gb-br.sm .gb-rk{background:transparent;color:var(--text-muted)}
+.gb-br.sm .gb-nm{opacity:.85}
+.gb-unr{color:#b45309;font-weight:600;display:block;white-space:normal;line-height:1.25}
 .gb-nm{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gb-nm small{display:block;font-weight:500;color:var(--text-muted);font-size:.74rem}
 .gb-num{font-variant-numeric:tabular-nums;text-align:right}
@@ -207,9 +210,9 @@
     <div class="rs-card-h"><h3><i class="fas fa-ranking-star" aria-hidden="true"></i> Branches</h3><small>ranked by weighted GPA</small></div>
     <div class="gb-br h"><span>#</span><span>Branch</span><span class="gb-num e">Entries</span><span class="bh">{{ band_label }} mix</span><span class="gb-num">{{ pshort }}</span><span class="gb-num">GPA</span></div>
     {% for r in R.ranking %}{% set sm = R.summary[r.branch] %}
-    <div class="gb-br">
+    <div class="gb-br{{ ' sm' if r.small }}">
       <span class="gb-rk {{ 'top' if r.rank == 1 }}">{{ r.rank }}</span>
-      <span class="gb-nm">{{ r.branch }}<small>{{ r.top3_pct }}% at {{ R.ranking_criteria.top3_col|replace(' %', '') }}</small></span>
+      <span class="gb-nm">{{ r.branch }}<small>{% if r.small %}<span class="gb-unr">Not ranked · under 5 entries</span>{% else %}{{ r.top3_pct }}% at {{ R.ranking_criteria.top3_col|replace(' %', '') }}{% endif %}</small></span>
       <span class="gb-num e">{{ r.n }}</span>
       {{ bar(sm.pct, R.bands) }}
       <span class="gb-pass"><b class="tone-{{ tone(r.pass_pct) }}">{{ r.pass_pct }}%</b><span class="rs-meter {{ tone(r.pass_pct) }}"><i style="width:{{ r.pass_pct }}%"></i></span></span>

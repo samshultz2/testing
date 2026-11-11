@@ -5,6 +5,8 @@ printed grade-analysis-sheet template. The on-screen A1-F9 / score-band
 colour ramp (CSS color-mix(), no equivalent outside a browser) is hand-kept
 in sync with the .gb-1..gb-9 rules in templates/results/subject_branch_breakdown.html:
 header cells use the base hue at full strength, body cells a light tint.
+The PDF deliberately doesn't use that ramp: it's a restrained print layout
+(neutral headers, one single-hue intensity tint) — see grade_breakdown_pdf.
 """
 import io
 
@@ -143,237 +145,298 @@ def _apply_docx_col_widths(table, widths):
 # --------------------------------------------------------------------------- #
 
 def grade_breakdown_pdf(meta, result, band_label, pass_label):
+    """Landscape A4 report in a restrained, print-first style: one accent
+    (navy), neutral greys, a single-hue intensity tint on the percentages
+    instead of a colour per grade, hairline rules and no vertical grid."""
+    from datetime import date
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                    Spacer, KeepTogether)
+                                    Spacer, KeepTogether, CondPageBreak)
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
-    grid = colors.HexColor('#B9C2CE')
-    note_fg = colors.HexColor('#94A3B8')
-    navy = colors.HexColor(NAVY_HEX)
+    C = colors.HexColor
+    ink, body, muted, faint = C('#0F172A'), C('#334155'), C('#64748B'), C('#CBD5E1')
+    rule, hair, head_bg, zebra = C('#94A3B8'), C('#E2E8F0'), C('#F1F5F9'), C('#F8FAFC')
+    navy, good, warn = C(NAVY_HEX), C('#15803D'), C('#B45309')
     school_name = (meta.get('school_name') or _school_name() or '').strip()
+    subtitle = (meta.get('subtitle') or '').strip()
     bands = result['bands']
-    ncol = 3 + len(bands)
-    fs = 10 if ncol <= 10 else (9 if ncol <= 12 else 8)
+    pass_set = set(result.get('pass_bands') or [])
+    nb = len(bands)
+    fs = 8.5 if nb <= 7 else (8 if nb <= 9 else 7.5)
 
-    def rl_color(rgb):
-        return colors.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255)
-
-    styles = getSampleStyleSheet()
-    banner_l = ParagraphStyle('bl', parent=styles['Normal'], fontSize=15, leading=18,
-                              textColor=colors.white, fontName='Helvetica-Bold', alignment=1)
-    banner_s = ParagraphStyle('bs', parent=styles['Normal'], fontSize=11.5, leading=14,
-                              textColor=colors.white, fontName='Helvetica-Bold', alignment=1)
-    cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=fs, leading=fs + 2)
-    cellc = ParagraphStyle('cc', parent=cell, alignment=1)
-    notep = ParagraphStyle('np', parent=cellc, textColor=note_fg, fontName='Helvetica-Oblique')
-    legendp = ParagraphStyle('lg', parent=styles['Normal'], fontSize=8, textColor=note_fg,
-                             fontName='Helvetica-Oblique')
-
-    def headp_for(rgb):
-        fg = _text_on(rgb)
-        return ParagraphStyle('hp%d' % id(rgb), parent=styles['Normal'], fontSize=fs, leading=fs + 2,
-                              textColor=rl_color(fg), fontName='Helvetica-Bold', alignment=1)
-    navy_headp = headp_for(NAVY_RGB)
+    def ps(name, size=fs, font='Helvetica', color=body, align=0, leading=None, **kw):
+        return ParagraphStyle(name, fontName=font, fontSize=size, leading=leading or size + 2.6,
+                              textColor=color, alignment=align, **kw)
+    cell, cellc, cellr = ps('c'), ps('cc', align=1), ps('cr', align=2)
+    cellb = ps('cb', font='Helvetica-Bold', color=ink)
+    head = ps('h', size=fs - 1.2, font='Helvetica-Bold', color=muted)
+    headc = ps('hc', size=fs - 1.2, font='Helvetica-Bold', color=muted, align=1)
+    note = ps('n', size=7.5, color=muted, leading=10.5)
+    sec_t = ps('st', size=11.5, font='Helvetica-Bold', color=ink, leading=14)
+    sec_c = ps('sc', size=8, color=muted, align=2)
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm, bottomMargin=10 * mm,
-                            leftMargin=8 * mm, rightMargin=8 * mm, title='Grade Breakdown')
-    avail = landscape(A4)[0] - 16 * mm
+    page = landscape(A4)
+    side = 12 * mm
+    doc = SimpleDocTemplate(buf, pagesize=page, topMargin=12 * mm, bottomMargin=14 * mm,
+                            leftMargin=side, rightMargin=side, title='Grade Breakdown',
+                            author=school_name or 'Grade Breakdown')
+    avail = page[0] - 2 * side
+    report_title = 'Subject-Wise Grade Breakdown'
+    today = date.today().strftime('%d %b %Y')
 
-    def banner(title_text):
-        rows = []
-        if school_name:
-            rows.append([Paragraph(pdf_escape(school_name.upper()), banner_l)])
-        rows.append([Paragraph(pdf_escape(title_text.upper()), banner_s)])
-        bt = Table(rows, colWidths=[avail])
-        bt.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), navy), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    def footer(canv, _doc):
+        canv.saveState()
+        canv.setStrokeColor(hair); canv.setLineWidth(0.6)
+        canv.line(side, 9.5 * mm, page[0] - side, 9.5 * mm)
+        canv.setFont('Helvetica', 7); canv.setFillColor(muted)
+        left = ' · '.join(x for x in (school_name, report_title, subtitle) if x)
+        canv.drawString(side, 6 * mm, left)
+        canv.drawRightString(page[0] - side, 6 * mm, f'Generated {today}  ·  Page {canv.getPageNumber()}')
+        canv.restoreState()
+
+    def tint(pct):
+        """Single-hue (blue) intensity, capped light so numbers stay crisp."""
+        a = max(0.0, min(float(pct or 0), 100.0)) / 100 * 0.22
+        return colors.Color(1 - a * (1 - 37 / 255), 1 - a * (1 - 99 / 255), 1 - a * (1 - 235 / 255))
+
+    def pct_para(v, style=cellc):
+        if not v:
+            return Paragraph('<font color="#CBD5E1">–</font>', style)
+        return Paragraph(f'{v}%', style)
+
+    def section(title, caption=''):
+        t = Table([[Paragraph(pdf_escape(title), sec_t), Paragraph(pdf_escape(caption), sec_c)]],
+                  colWidths=[avail * 0.62, avail * 0.38])
+        t.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+            ('LINEBELOW', (0, 0), (-1, 0), 0.8, ink),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]))
-        return [bt, Spacer(1, 8)]
+        return [t, Spacer(1, 6)]
 
-    def sub_banner(title_text):
-        # A slim single-line navy bar (no school name repeat) — the summary
-        # table sits right under the main one on the same page, not its own.
-        bt = Table([[Paragraph(pdf_escape(title_text.upper()), banner_s)]], colWidths=[avail])
-        bt.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), navy), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ]))
-        return [bt, Spacer(1, 6)]
+    def base_style(header_rows):
+        return [
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (0, 0), (-1, header_rows - 1), head_bg),
+            ('LINEABOVE', (0, 0), (-1, 0), 0.8, ink),
+            ('LINEBELOW', (0, header_rows - 1), (-1, header_rows - 1), 0.8, ink),
+            ('LINEBELOW', (0, -1), (-1, -1), 0.8, ink),
+            ('TOPPADDING', (0, 0), (-1, -1), 3.2), ('BOTTOMPADDING', (0, 0), (-1, -1), 3.2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ]
 
-    def col_widths(headers, text_rows, grow_cols):
-        nat = []
-        for j in range(len(headers)):
-            w = stringWidth(str(headers[j]), 'Helvetica-Bold', fs)
-            for r in text_rows:
-                if j < len(r):
-                    w = max(w, stringWidth(str(r[j]), 'Helvetica', fs))
-            nat.append(w + 6 * mm)
-        tot = sum(nat) or 1
-        widths = list(nat)
-        if tot < avail:
-            slack = avail - tot
-            for gc in grow_cols:
-                widths[gc] += slack / len(grow_cols)
-        else:
-            widths = [w * (avail / tot) for w in nat]
-        return widths
+    def widths_for(fixed, n_flex, min_flex=11 * mm):
+        """Fixed text columns (pt) at natural width, the rest split evenly."""
+        flex = max((avail - sum(fixed)) / max(n_flex, 1), min_flex)
+        ws = list(fixed) + [flex] * n_flex
+        k = avail / sum(ws)
+        return [w * k for w in ws]
+
+    def text_w(strings, font='Helvetica', extra=12):
+        return max((stringWidth(str(s), font, fs) for s in strings), default=0) + extra
+
+    def band_head_cells(offset, row, style_cmds):
+        cells = []
+        for bx, b in enumerate(bands):
+            cells.append(Paragraph(pdf_escape(b), headc))
+            if b in pass_set:
+                style_cmds.append(('LINEBELOW', (offset + bx, row), (offset + bx, row), 1.6, good))
+        return cells
+
+    # ---- Masthead + key figures ----
+    O = result.get('overall') or {}
+    rk0 = next((r for r in (result.get('ranking') or []) if not r.get('small')), None)
+    so = result.get('subject_overall') or {}
+    weak = [s for s in result['subjects'] if (so.get(s) or {}).get('n', 0) >= 5]
+    weak = min(weak, key=lambda s: so[s]['pass_pct']) if weak else None
+    pshort = 'Credit pass' if band_label == 'Grade' else 'Pass rate'
+
+    left = []
+    if school_name:
+        left.append(Paragraph(pdf_escape(school_name.upper()), ps('sn', size=8, font='Helvetica-Bold', color=navy)))
+    left.append(Paragraph(report_title, ps('tt', size=17, font='Helvetica-Bold', color=ink, leading=21)))
+    if subtitle:
+        left.append(Paragraph(pdf_escape(subtitle), ps('sb', size=9.5, color=muted)))
+
+    kpis = [(pshort, f"{O.get('pass_pct', 0)}%", f"{O.get('pass_n', 0)} of {O.get('n', 0)} entries"),
+            ('Subjects · Branches', f"{len(result['subjects'])} · {len(result['branches'])}", f"{O.get('n', 0)} subject entries")]
+    if rk0:
+        kpis.append(('Top branch', rk0['branch'], f"GPA {rk0['gpa']:.2f} · {rk0['pass_pct']}% pass"))
+    if weak and len(result['subjects']) > 1:
+        kpis.append(('Weakest subject', weak, f"{so[weak]['pass_pct']}% {pshort.lower()}"))
+    kl, kv, ks = (ps('kl', size=6.8, font='Helvetica-Bold', color=muted),
+                  ps('kv', size=13, font='Helvetica-Bold', color=ink, leading=16),
+                  ps('ks', size=7, color=muted))
+    kpi_w = 39 * mm
+    kv_sm = ps('kvs', size=10.5, font='Helvetica-Bold', color=ink, leading=16)
+
+    def kv_for(v):   # long names (a branch/subject) step down rather than wrap
+        return kv if stringWidth(v, 'Helvetica-Bold', 13) <= kpi_w - 14 else kv_sm
+    kpi_cells = [[Paragraph(pdf_escape(l.upper()), kl), Paragraph(pdf_escape(v), kv_for(v)),
+                  Paragraph(pdf_escape(s), ks)] for l, v, s in kpis]
+    kt = Table([kpi_cells], colWidths=[kpi_w] * len(kpis))
+    kt.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LINEBEFORE', (0, 0), (-1, -1), 0.6, hair),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    mast = Table([[left, kt]], colWidths=[avail - kpi_w * len(kpis), kpi_w * len(kpis)])
+    mast.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LINEBELOW', (0, 0), (-1, 0), 2, navy),
+    ]))
+    elems = [mast, Spacer(1, 12)]
 
     # ---- Main breakdown table ----
-    headers = _main_headers(bands)
-    widths = col_widths(headers, _main_text_rows(result), grow_cols=list(range(3, 3 + len(bands))))
-    span_label = f'{band_label} Percentage Breakdown'.upper()
+    subj_w = text_w(result['subjects'], 'Helvetica-Bold')
+    br_w = text_w(result['branches'], 'Helvetica-Bold', extra=34)
+    n_w = text_w(['ENTRIES'], 'Helvetica-Bold', extra=16)
+    widths = widths_for([min(subj_w, 58 * mm), min(br_w, 62 * mm), n_w], nb)
 
-    row0 = [Paragraph('SUBJECT', navy_headp), Paragraph('BRANCH', navy_headp),
-           Paragraph('CANDIDATES (N)', navy_headp), Paragraph(pdf_escape(span_label), navy_headp)] \
-        + [''] * (len(bands) - 1)
-    row1 = ['', '', ''] + [Paragraph(f'{b} (%)', headp_for(band_rgb(i, header=True)))
-                           for i, b in enumerate(bands)]
+    style = base_style(2)
+    row0 = [Paragraph('SUBJECT', head), Paragraph('BRANCH', head), Paragraph('ENTRIES', headc),
+            Paragraph(pdf_escape(f'{band_label} distribution (% of entries)').upper(), headc)] + [''] * (nb - 1)
+    row1 = ['', '', ''] + band_head_cells(3, 1, style)
     data = [row0, row1]
-    style_cmds = [
-        ('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)), ('SPAN', (2, 0), (2, 1)),
-        ('SPAN', (3, 0), (3 + len(bands) - 1, 0)),
-        ('BACKGROUND', (0, 0), (2, 1), navy), ('BACKGROUND', (3, 0), (-1, 0), navy),
-        ('FONTSIZE', (0, 0), (-1, -1), fs), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LINEBELOW', (0, 1), (-1, 1), 1.1, navy),
-        ('LINEBELOW', (0, 2), (-1, -1), 0.4, grid),
-        ('BOX', (0, 0), (-1, -1), 0.6, navy), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
-        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-    ]
-    for bx in range(len(bands)):
-        style_cmds.append(('BACKGROUND', (3 + bx, 1), (3 + bx, 1), rl_color(band_rgb(bx, header=True))))
+    style += [('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)), ('SPAN', (2, 0), (2, 1)),
+              ('SPAN', (3, 0), (2 + nb, 0)), ('LINEBELOW', (3, 0), (2 + nb, 0), 0.4, faint),
+              ('BOTTOMPADDING', (3, 0), (-1, 0), 1.5), ('TOPPADDING', (3, 1), (-1, 1), 1.5)]
 
     row_i = 2
-    for subj in result['subjects']:
+    best_tag = (' <font size="5.6" color="#15803D"><b>BEST</b></font>')
+    for si, subj in enumerate(result['subjects']):
         branches = result['branches']
-        span_start = row_i
+        start = row_i
+        best = _best(result, subj)
         for bi, br in enumerate(branches):
-            cell_ = result['table'][subj][br]
-            if cell_ is None:
-                line = [Paragraph(pdf_escape(subj), cell) if bi == 0 else '',
-                        Paragraph(pdf_escape(br), cell),
-                        Paragraph('Not Offered', notep)] + [''] * len(bands)
-                data.append(line)
-                style_cmds.append(('SPAN', (2, row_i), (-1, row_i)))
+            c_ = result['table'][subj][br]
+            first = Paragraph(pdf_escape(subj), cellb) if bi == 0 else ''
+            if c_ is None:
+                data.append([first, Paragraph(pdf_escape(br), ps('bm', color=muted)),
+                             Paragraph('<i>Not offered</i>', ps('no', color=faint))] + [''] * nb)
+                style.append(('SPAN', (2, row_i), (-1, row_i)))
             else:
-                isb = br == _best(result, subj)
-                line = [Paragraph(pdf_escape(subj), cell) if bi == 0 else '',
-                        Paragraph(('<b><font color="#15803d">' + pdf_escape(br) + '</font></b> <font size="6" color="#15803d"><b>BEST</b></font>') if isb else pdf_escape(br), cell),
-                        Paragraph(str(cell_['n']), cellc)]
+                name = (f'<font color="#15803D"><b>{pdf_escape(br)}</b></font>{best_tag}'
+                        if br == best else pdf_escape(br))
+                line = [first, Paragraph(name, cell), Paragraph(str(c_['n']), cellc)]
                 for bx, b in enumerate(bands):
-                    line.append(Paragraph(f"{cell_['pct'][b]}%", cellc))
-                    style_cmds.append(('BACKGROUND', (3 + bx, row_i), (3 + bx, row_i),
-                                       rl_color(band_rgb(bx))))
+                    v = c_['pct'][b]
+                    line.append(pct_para(v))
+                    if v:
+                        style.append(('BACKGROUND', (3 + bx, row_i), (3 + bx, row_i), tint(v)))
                 data.append(line)
+                if bi < len(branches) - 1:
+                    style.append(('LINEBELOW', (1, row_i), (-1, row_i), 0.3, hair))
             row_i += 1
         if len(branches) > 1:
-            style_cmds.append(('SPAN', (0, span_start), (0, span_start + len(branches) - 1)))
-        style_cmds.append(('LINEBELOW', (0, row_i - 1), (-1, row_i - 1), 0.8, navy))
+            style.append(('SPAN', (0, start), (0, row_i - 1)))
+        style.append(('VALIGN', (0, start), (0, row_i - 1), 'TOP'))
+        if si % 2:
+            style.append(('BACKGROUND', (0, start), (2, row_i - 1), zebra))
+        if si < len(result['subjects']) - 1:
+            style.append(('LINEBELOW', (0, row_i - 1), (-1, row_i - 1), 0.6, rule))
     t = Table(data, colWidths=widths, repeatRows=2)
-    t.setStyle(TableStyle(style_cmds))
+    t.setStyle(TableStyle(style))
 
-    elems = [KeepTogether(banner('Subject-Wise Performance & Grade Percentage Breakdown')), t,
-            Spacer(1, 4), Paragraph('— Not Offered &nbsp;&nbsp; <font color="#15803d"><b>BEST</b></font> ='
-                                    + pdf_escape(best_legend(band_label)[1:]), legendp)]
-    for _s, _n in top_notes(result):
-        elems.append(Paragraph(f'<font color="#b45309"><b>{pdf_escape(_s)}</b> — {pdf_escape(_n)}</font>; fewer than 5 entries, '
-                               'so not ranked best.', legendp))
-
-    # ---- Overall summary table (own page) ----
-    sum_headers = _summary_headers(bands, pass_label)
-    sum_rows = _summary_text_rows(result, pass_label)
-    swidths = col_widths(sum_headers, sum_rows, grow_cols=list(range(2, 2 + len(bands))))
-    span_label2 = f'{band_label} Percentage'.upper()
-    srow0 = [Paragraph('BRANCH', navy_headp), Paragraph('TOTAL SUBJECT<br/>ENTRIES (N)', navy_headp),
-            Paragraph(pdf_escape(span_label2), navy_headp)] + [''] * (len(bands) - 1) \
-        + [Paragraph(pdf_escape(pass_label.upper()), navy_headp)]
-    srow1 = ['', ''] + [Paragraph(f'{b} (%)', headp_for(band_rgb(i, header=True)))
-                        for i, b in enumerate(bands)] + ['']
-    sdata = [srow0, srow1]
-    sstyle = [
-        ('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)),
-        ('SPAN', (2, 0), (2 + len(bands) - 1, 0)),
-        ('SPAN', (2 + len(bands), 0), (2 + len(bands), 1)),
-        ('BACKGROUND', (0, 0), (1, 1), navy), ('BACKGROUND', (2, 0), (2 + len(bands) - 1, 0), navy),
-        ('BACKGROUND', (2 + len(bands), 0), (2 + len(bands), 1), navy),
-        ('FONTSIZE', (0, 0), (-1, -1), fs), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LINEBELOW', (0, 1), (-1, 1), 1.1, navy),
-        ('LINEBELOW', (0, 2), (-1, -1), 0.4, grid),
-        ('BOX', (0, 0), (-1, -1), 0.6, navy), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
-        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+    word = 'credit' if band_label == 'Grade' else 'pass'
+    legend = [
+        f'<font color="#15803D"><b>BEST</b></font> best branch for the subject — highest {word} rate; '
+        f'if tied, better {band_label.lower()}s; branches with fewer than 5 entries can’t be best '
+        f'unless all are that small.',
+        f'<font color="#15803D">━</font> {word} {band_label.lower()}s · shading deepens with the share of '
+        f'entries · <font color="#94A3B8">–</font> none',
     ]
-    for bx in range(len(bands)):
-        sstyle.append(('BACKGROUND', (2 + bx, 1), (2 + bx, 1), rl_color(band_rgb(bx, header=True))))
+    elems += section(f'{band_label} distribution by subject and branch',
+                     f"{len(result['subjects'])} subjects · {len(result['branches'])} branches")
+    elems.append(t)
+    elems.append(Spacer(1, 5))
+    elems.append(Paragraph(' &nbsp;&nbsp;·&nbsp;&nbsp; '.join(legend), note))
+    for _s, _n in top_notes(result):
+        elems.append(Paragraph(f'<font color="#B45309"><b>{pdf_escape(_s)}</b></font> — '
+                               f'{pdf_escape(_n)}; fewer than 5 entries, so not ranked best.', note))
+
+    # ---- Summary by branch ----
+    summ = result['summary']
+    pw = text_w([f"{summ[b]['pass_pct']}% ({summ[b]['pass_n']})" for b in result['branches']] + [pass_label],
+                'Helvetica-Bold')
+    swidths = widths_for([min(br_w, 62 * mm), n_w, min(pw, 52 * mm)], nb)
+    swidths = swidths[:2] + swidths[3:] + [swidths[2]]
+    sstyle = base_style(2)
+    srow0 = [Paragraph('BRANCH', head), Paragraph('ENTRIES', headc),
+             Paragraph(pdf_escape(f'{band_label} distribution (%)').upper(), headc)] + [''] * (nb - 1) \
+        + [Paragraph(pdf_escape(pass_label.upper()), headc)]
+    srow1 = ['', ''] + band_head_cells(2, 1, sstyle) + ['']
+    sdata = [srow0, srow1]
+    sstyle += [('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)), ('SPAN', (2, 0), (1 + nb, 0)),
+               ('SPAN', (2 + nb, 0), (2 + nb, 1)), ('LINEBELOW', (2, 0), (1 + nb, 0), 0.4, faint),
+               ('LINEBEFORE', (2 + nb, 0), (2 + nb, -1), 0.6, faint)]
     for ri, br in enumerate(result['branches'], 2):
-        s = result['summary'][br]
-        line = [Paragraph(pdf_escape(br), cell), Paragraph(str(s['n']), cellc)]
+        s = summ[br]
+        line = [Paragraph(pdf_escape(br), cellb), Paragraph(str(s['n']), cellc)]
         for bx, b in enumerate(bands):
-            line.append(Paragraph(f"{s['pct'][b]}%", cellc))
-            sstyle.append(('BACKGROUND', (2 + bx, ri), (2 + bx, ri), rl_color(band_rgb(bx))))
-        line.append(Paragraph(f"<b>{s['pass_pct']}%</b> ({s['pass_n']})", cellc))
+            v = s['pct'][b]
+            line.append(pct_para(v))
+            if v:
+                sstyle.append(('BACKGROUND', (2 + bx, ri), (2 + bx, ri), tint(v)))
+        line.append(Paragraph(f"<b>{s['pass_pct']}%</b> <font color=\"#64748B\">({s['pass_n']})</font>", cellc))
         sdata.append(line)
+        if ri < len(result['branches']) + 1:
+            sstyle.append(('LINEBELOW', (0, ri), (-1, ri), 0.3, hair))
     st = Table(sdata, colWidths=swidths, repeatRows=2)
     st.setStyle(TableStyle(sstyle))
-
-    elems.append(Spacer(1, 10))
-    elems.append(KeepTogether(sub_banner(f'Overall {band_label} Percentage Summary by Branch')))
+    elems.append(Spacer(1, 16))
+    elems.append(CondPageBreak(40 * mm))
+    elems += section(f'Overall {band_label.lower()} summary by branch', 'all subjects combined')
     elems.append(st)
 
-    # ---- Composite ranking: a second summary, by different criteria (a
-    # weighted-GPA-style composite score) ----
+    # ---- Composite ranking ----
     ranking = result.get('ranking')
     if ranking:
         rc = result['ranking_criteria']
-        crit_title_style = ParagraphStyle('critT', parent=styles['Normal'], fontSize=8, leading=10,
-                                          textColor=colors.HexColor('#64748B'), fontName='Helvetica-Bold')
-        crit_body_style = ParagraphStyle('critB', parent=styles['Normal'], fontSize=8.5, leading=12,
-                                         textColor=colors.HexColor('#334155'), fontName='Helvetica')
-        crit_rows = [[Paragraph('CRITERIA &amp; WEIGHTING SYSTEM', crit_title_style)]]
-        for b in rc['bullets']:
-            crit_rows.append([Paragraph('&#8226; ' + pdf_escape(b), crit_body_style)])
-        crit_box = Table(crit_rows, colWidths=[avail])
-        crit_box.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
-            ('BOX', (0, 0), (-1, -1), 0.6, grid),
-            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-        ]))
-
-        rank_headers = ['Rank', 'Branch', 'Total Entries (N)', 'Weighted GPA', rc['top3_col'], rc['pass_col']]
-        rank_text_rows = [[str(r['rank']), r['branch'], str(r['n']), f"{r['gpa']:.2f}",
-                           f"{r['top3_pct']}%", f"{r['pass_pct']}%"] for r in ranking]
-        rwidths = col_widths(rank_headers, rank_text_rows, grow_cols=[2, 3, 4, 5])
-        rdata = [[Paragraph(h.upper(), navy_headp) for h in rank_headers]]
-        rstyle = [
-            ('BACKGROUND', (0, 0), (-1, 0), navy),
-            ('FONTSIZE', (0, 0), (-1, -1), fs), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LINEBELOW', (0, 0), (-1, 0), 1.1, navy),
-            ('LINEBELOW', (0, 1), (-1, -1), 0.4, grid),
-            ('BOX', (0, 0), (-1, -1), 0.6, navy), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
-            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ]
-        for r in ranking:
-            rdata.append([Paragraph(str(r['rank']), cellc), Paragraph(pdf_escape(r['branch']), cell),
-                         Paragraph(str(r['n']), cellc), Paragraph(f"<b>{r['gpa']:.2f}</b>", cellc),
-                         Paragraph(f"{r['top3_pct']}%", cellc), Paragraph(f"{r['pass_pct']}%", cellc)])
-        rt = Table(rdata, colWidths=rwidths, repeatRows=1)
+        rank_headers = ['Rank', 'Branch', 'Entries', 'Weighted GPA', rc['top3_col'], rc['pass_col']]
+        rw = widths_for([14 * mm, min(br_w, 70 * mm)], 4)
+        rdata = [[Paragraph(h.upper(), head if i == 1 else headc) for i, h in enumerate(rank_headers)]]
+        rstyle = base_style(1)
+        for ri, r in enumerate(ranking, 1):
+            sm = r.get('small')
+            col = muted if sm else body
+            rk = ps(f'rk{ri}', font='Helvetica-Bold', color=(faint if sm else (navy if r['rank'] == 1 else body)),
+                    align=1, size=fs + (1.5 if r['rank'] == 1 else 0))
+            nm = (f'{pdf_escape(r["branch"])}<br/><font size="6.5" color="#B45309">Not ranked · under 5 entries</font>'
+                  if sm else f'<b>{pdf_escape(r["branch"])}</b>')
+            c2 = ps(f'rc{ri}', color=col, align=1)
+            rdata.append([Paragraph(str(r['rank']), rk), Paragraph(nm, ps(f'rn{ri}', color=ink if not sm else muted)),
+                          Paragraph(str(r['n']), c2),
+                          Paragraph(f"<b>{r['gpa']:.2f}</b>", ps(f'rg{ri}', color=ink if not sm else muted, align=1)),
+                          Paragraph(f"{r['top3_pct']}%", c2), Paragraph(f"{r['pass_pct']}%", c2)])
+            if r['rank'] == 1:
+                rstyle.append(('BACKGROUND', (0, ri), (-1, ri), C('#EEF2F8')))
+            if ri < len(ranking):
+                rstyle.append(('LINEBELOW', (0, ri), (-1, ri), 0.3, hair))
+        rt = Table(rdata, colWidths=rw, repeatRows=1)
         rt.setStyle(TableStyle(rstyle))
 
-        elems.append(Spacer(1, 10))
-        elems.append(KeepTogether(sub_banner(result['ranking_title'])))
-        elems.append(crit_box)
-        elems.append(Spacer(1, 6))
+        crit = [Paragraph('<b>' + pdf_escape(result['ranking_title']) + '</b> — Criteria &amp; Weighting System', note)]
+        crit += [Paragraph('•&nbsp; ' + pdf_escape(b), ps('cb%d' % i, size=7.5, color=muted, leading=10.5,
+                                                             leftIndent=8))
+                 for i, b in enumerate(rc['bullets'])]
+        elems.append(Spacer(1, 16))
+        elems.append(CondPageBreak(45 * mm))
+        elems += section('Branch ranking', 'composite weighted GPA — higher is better')
         elems.append(rt)
+        elems.append(Spacer(1, 6))
+        elems.append(KeepTogether(crit))
 
-    doc.build(elems)
+    doc.build(elems, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()
 
 

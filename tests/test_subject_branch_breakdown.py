@@ -420,3 +420,29 @@ def test_page_shows_top_grades_note(app):
         db.session.commit()
     html = _admin(app).get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
     assert 'Top grades:' in html and 'GB TopSmall — 3 of 3 A1' in html
+
+
+def test_composite_ranking_lists_small_branches_unranked_after_the_others():
+    """Same 5-entry minimum as 'best branch': 4 perfect A1 entries can't top a
+    31-entry branch in the composite ranking — listed last, unranked."""
+    import io
+    from routes.results.analytics import _branch_grade_breakdown, _WAEC_PASS_GRADES
+    from models import WAECResult
+    from utils import grade_breakdown_export as G
+    import fitz
+    e = ([('Commerce', 'A1', 'Jemila')] * 11 + [('Commerce', g, 'Benin') for g in ['A1'] * 3 + ['B3'] * 5 + ['C6'] * 4]
+         + [('Commerce', 'A1', 'Upper')] * 4)
+    r = _branch_grade_breakdown(e, WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
+    assert [(x['branch'], x['rank'], x['small']) for x in r['ranking']] == [
+        ('Jemila', 1, False), ('Benin', 2, False), ('Upper', '—', True)]
+    assert any('fewer than 5' in b for b in r['ranking_criteria']['bullets'])
+    meta = {'school_name': 'S', 'logo_path': None, 'subtitle': 'W'}
+    doc = fitz.open(stream=G.grade_breakdown_pdf(meta, r, 'Grade', 'Credit'), filetype='pdf')
+    assert 'Not ranked' in ' '.join(p.get_text() for p in doc)
+    G.grade_breakdown_docx(meta, r, 'Grade', 'Credit')
+    G.grade_breakdown_xlsx(meta, r, 'Grade', 'Credit')
+    G.grade_breakdown_png_pages(meta, r, 'Grade', 'Credit')
+    # every branch small -> all ranked normally, no note
+    r2 = _branch_grade_breakdown([('Commerce', 'A1', 'A')] * 2 + [('Commerce', 'C6', 'B')] * 3,
+                                 WAECResult.VALID_GRADES, _WAEC_PASS_GRADES, band_label='Grade')
+    assert [x['rank'] for x in r2['ranking']] == [1, 2] and not r2['ranking_criteria']['has_small']

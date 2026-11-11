@@ -1653,9 +1653,17 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
             'top3_pct': round(top3_n / n * 100, 1),
             'pass_pct': summary[br]['pass_pct'], 'pass_n': summary[br]['pass_n'],
         })
-    ranking.sort(key=lambda r: (-r['gpa'], r['branch']))
+    # Same fairness rule as the per-subject best branch: a branch with fewer
+    # than BEST_MIN_ENTRIES subject entries can't outrank the others (3 lucky
+    # A1s shouldn't beat 200 entries) — it's listed after them, unranked,
+    # unless every branch is that small.
+    any_eligible = any(r['n'] >= BEST_MIN_ENTRIES for r in ranking)
+    for r in ranking:
+        r['small'] = any_eligible and r['n'] < BEST_MIN_ENTRIES
+    ranking.sort(key=lambda r: (r['small'], -r['gpa'], r['branch']))
     for i, r in enumerate(ranking, 1):
-        r['rank'] = i
+        r['rank'] = '\u2014' if r['small'] else i
+    has_small = any(r['small'] for r in ranking)
 
     credit_word = 'Credit Pass Rate' if band_label == 'Grade' else 'Pass Rate'
     credit_col = 'Credit Pass' if band_label == 'Grade' else 'Pass'
@@ -1669,7 +1677,11 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_labe
 
     ranking_title = 'Composite Branch Performance Ranking (Weighted GPA System)'
     ranking_criteria = {
-        'bullets': [scale_text, composite_text, secondary_text],
+        'bullets': [scale_text, composite_text, secondary_text] + (
+            [f'Minimum Entries: branches with fewer than {BEST_MIN_ENTRIES} subject entries are listed '
+             'after the ranked branches but not ranked (too few results to compare fairly).']
+            if has_small else []),
+        'has_small': has_small,
         'top3_col': f'{top3_range} %',
         'pass_col': f'{credit_col} % ({pass_range})' if pass_range else f'{credit_col} %',
     }
