@@ -2302,8 +2302,11 @@ def _student_audit_history(sid, limit=50):
 
 def _student_view_payload(student):
     """Everything the student detail page shows, JSON-serialisable."""
+    # Latest term first and, within a term, the class they're in NOW (a student
+    # moved between arms keeps an inactive enrolment for the arm they left).
     enrollments = student.enrollments.join(ClassArmAssignment).order_by(
-        ClassArmAssignment.term_id.desc()).all()
+        ClassArmAssignment.term_id.desc(), StudentEnrollment.is_active.desc(),
+        StudentEnrollment.id.desc()).all()
     waec_results = student.waec_results.all()
     jamb_results = student.jamb_results.order_by(None).all() if hasattr(student.jamb_results, 'order_by') else student.jamb_results.all()
     latest_jamb = student.jamb_results.first()
@@ -2357,6 +2360,9 @@ def _student_view_payload(student):
         'contacts': [{'name': c.name, 'is_primary': bool(c.is_primary),
                       'phone_number': c.phone_number, 'relationship': c.relationship} for c in contacts],
         'enrollments': [{'term': e.class_arm_assignment.term.name,
+                         'session': (e.class_arm_assignment.term.session.name
+                                     if e.class_arm_assignment.term.session else ''),
+                         'active': bool(e.is_active),
                          'class': e.class_arm_assignment.school_class.name,
                          'arm': ('' if e.class_arm_assignment.arm.is_default
                                  else e.class_arm_assignment.arm.name)} for e in enrollments],

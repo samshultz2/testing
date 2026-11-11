@@ -1694,10 +1694,19 @@ def enroll_student(assignment_id):
 
         added = 0          # brand-new enrollments
         reactivated = 0    # previously-removed enrollments brought back
+        elsewhere = 0      # already in another class this term — use "Move" instead
+        busy = {sid for (sid,) in db.session.query(StudentEnrollment.student_id)
+                .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .filter(ClassArmAssignment.term_id == assignment.term_id,
+                        ClassArmAssignment.id != assignment.id,
+                        StudentEnrollment.is_active == True).all()}
         for raw in student_ids:
             try:
                 sid = int(raw)
             except (TypeError, ValueError):
+                continue
+            if sid in busy:
+                elsewhere += 1
                 continue
             # A soft-removed enrollment leaves a row (unique student+assignment),
             # so re-enrolling must REACTIVATE it rather than insert a duplicate.
@@ -1721,6 +1730,9 @@ def enroll_student(assignment_id):
         total = added + reactivated
         msg = (f'{total} student(s) enrolled.' if total
                else 'No new students to enroll — the selected students were already in this class.')
+        if elsewhere:
+            msg += (f' {elsewhere} already in another class this term — use Move to change their class,'
+                    ' so their attendance and scores follow them.')
         return _ok(msg, url_for('academics.view_assignment', assignment_id=assignment_id))
     except Exception as e:
         db.session.rollback()
@@ -1818,6 +1830,12 @@ def copy_term_setup():
             
             # Get source assignments
             source_assignments = ClassArmAssignment.query.filter_by(term_id=from_term_id).all()
+            # Students already in a class in the destination term keep it — copying
+            # must not give them a second active class (two registers, split
+            # attendance).
+            placed = {sid for (sid,) in db.session.query(StudentEnrollment.student_id)
+                      .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                      .filter(ClassArmAssignment.term_id == to_term_id, StudentEnrollment.is_active == True).all()}
             
             assignments_copied = 0
             enrollments_copied = 0
@@ -1858,7 +1876,8 @@ def copy_term_setup():
                             class_arm_assignment_id=dest_assign.id
                         ).first()
                         
-                        if not existing_enroll:
+                        if not existing_enroll and src_enroll.student_id not in placed:
+                            placed.add(src_enroll.student_id)
                             new_enroll = StudentEnrollment(
                                 student_id=src_enroll.student_id,
                                 class_arm_assignment_id=dest_assign.id

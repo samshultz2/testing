@@ -413,12 +413,16 @@ def attendance_alerts():
             total_times_opened = total_school_days * 2  # Morning + Afternoon
             
             if total_times_opened > 0:
+                from utils.attendance_profile import student_term_days
+                seen = set()
                 for enrollment in enrollments:
-                    # Count attendance
-                    attendance_records = Attendance.query.filter(
-                        Attendance.enrollment_id == enrollment.id,
-                        Attendance.week_id.in_(week_ids)
-                    ).all()
+                    if enrollment.student_id in seen:
+                        continue
+                    seen.add(enrollment.student_id)
+                    # Count attendance across all of the student's enrollments
+                    # this term (moved between arms → rows under both).
+                    attendance_records = list(student_term_days(
+                        enrollment.student_id, term_id, week_ids).values())
                     
                     total_present = sum(
                         (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
@@ -485,11 +489,14 @@ def export_alerts():
     
     alerts = []
     if total_times_opened > 0:
+        from utils.attendance_profile import student_term_days
+        seen = set()
         for enrollment in enrollments:
-            attendance_records = Attendance.query.filter(
-                Attendance.enrollment_id == enrollment.id,
-                Attendance.week_id.in_(week_ids)
-            ).all()
+            if enrollment.student_id in seen:
+                continue
+            seen.add(enrollment.student_id)
+            attendance_records = list(student_term_days(
+                enrollment.student_id, term_id, week_ids).values())
             
             total_present = sum(
                 (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)

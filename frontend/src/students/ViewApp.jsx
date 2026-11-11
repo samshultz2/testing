@@ -596,7 +596,7 @@ export default function ViewApp({ initial }) {
                   <ol className="sv-timeline">{d.enrollments.map((e, i) => (
                     <li key={i} className={i === 0 ? 'now' : ''}>
                       <strong>{[e.class, e.arm].filter(Boolean).join(' ')}</strong>
-                      <span className="text-muted">{e.term}</span>
+                      <span className="text-muted">{[e.term, e.session].filter(Boolean).join(' · ')}{e.active === false ? ' · moved out' : ''}</span>
                     </li>
                   ))}</ol>
                 ) : <p className="sv-empty">Not enrolled yet.</p>}

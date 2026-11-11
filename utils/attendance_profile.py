@@ -85,10 +85,37 @@ def warning_threshold():
 
 class _Day:
     """One school day for a student, merged across their enrollments."""
-    __slots__ = ('morning_present', 'afternoon_present')
+    __slots__ = ('date', 'morning_present', 'afternoon_present')
 
-    def __init__(self, m, a):
-        self.morning_present, self.afternoon_present = m, a
+    def __init__(self, m, a, d=None):
+        self.morning_present, self.afternoon_present, self.date = m, a, d
+
+    @property
+    def total_present(self):
+        return int(bool(self.morning_present)) + int(bool(self.afternoon_present))
+
+
+def student_term_days(student_id, term_id, week_ids=None):
+    """A student's register for one term as {date: _Day}, merged across ALL of
+    their enrollments in it. Anything that reports one student's attendance
+    for a term must use this (or the helpers below) rather than reading one
+    enrollment's rows: a student moved between arms, or removed and re-added,
+    has rows under more than one enrollment."""
+    if week_ids is None:
+        week_ids = [w.id for w in Week.query.filter_by(term_id=term_id).all()]
+    if not week_ids:
+        return {}
+    ids = [e.id for e in StudentEnrollment.query
+           .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+           .filter(StudentEnrollment.student_id == student_id, ClassArmAssignment.term_id == term_id).all()]
+    out = {}
+    if not ids:
+        return out
+    for r in Attendance.query.filter(Attendance.enrollment_id.in_(ids), Attendance.week_id.in_(week_ids)).all():
+        cur = out.get(r.date)
+        out[r.date] = _Day(bool(r.morning_present) or (cur.morning_present if cur else False),
+                           bool(r.afternoon_present) or (cur.afternoon_present if cur else False), r.date)
+    return out
 
 
 def _merged_records(enrollment_ids, school_days):
@@ -104,7 +131,7 @@ def _merged_records(enrollment_ids, school_days):
         cur = out.get(r.date)
         m, a = bool(r.morning_present), bool(r.afternoon_present)
         out[r.date] = _Day(m or (cur.morning_present if cur else False),
-                           a or (cur.afternoon_present if cur else False))
+                           a or (cur.afternoon_present if cur else False), r.date)
     return out
 
 

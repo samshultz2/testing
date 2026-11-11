@@ -40,7 +40,8 @@ def _arm_map(student_ids):
     rows = (StudentEnrollment.query
             .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
             .filter(StudentEnrollment.student_id.in_(list(student_ids)))
-            .order_by(ClassArmAssignment.term_id.desc()).all())
+            .order_by(ClassArmAssignment.term_id.desc(), StudentEnrollment.is_active.desc(),
+                      StudentEnrollment.id.desc()).all())
     # Rows are latest-term-first. Keep, per student, the latest senior-section arm
     # if any, else the latest arm of any kind.
     senior_pick, any_pick = {}, {}

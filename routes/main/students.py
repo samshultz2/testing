@@ -282,6 +282,8 @@ def add_student():
                 if caa and can_access_class(caa.id):
                     exists = StudentEnrollment.query.filter_by(
                         student_id=student.id, class_arm_assignment_id=caa.id).first()
+                    if exists and not exists.is_active:
+                        exists.is_active = True      # re-placed in a class they'd left
                     if not exists:
                         db.session.add(StudentEnrollment(
                             student_id=student.id, class_arm_assignment_id=caa.id,
@@ -515,7 +517,8 @@ def _id_card_fields(student):
     rendered in one route."""
     class_label, session_name = '', ''
     enr = (student.enrollments.join(ClassArmAssignment)
-           .order_by(ClassArmAssignment.term_id.desc()).first())
+           .order_by(ClassArmAssignment.term_id.desc(), StudentEnrollment.is_active.desc(),
+                     StudentEnrollment.id.desc()).first())
     if enr and enr.class_arm_assignment:
         caa = enr.class_arm_assignment
         try:

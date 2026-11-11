@@ -70,7 +70,7 @@ def test_enroll_persists_and_reactivates(app):
     # once enrolled, the student leaves the available picker and shows as enrolled
     roster = _roster(c, caa_id)
     assert not any(s['student_id'] == 'ENR1' for s in roster['available_students'])
-    assert any(e['student_id'] == 'ENR1' for e in roster['enrollments'])
+    assert any(e['student_no'] == 'ENR1' for e in roster['enrollments'])
 
     # remove (soft delete) then re-enroll -> must reactivate, not silently skip
     with app.app_context():

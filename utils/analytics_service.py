@@ -155,16 +155,11 @@ class AcademicAnalytics:
         # Attendance risk
         active_term = get_active_term()
         if active_term:
-            enrollment = StudentEnrollment.query.join(ClassArmAssignment).filter(
-                StudentEnrollment.student_id == student_id,
-                ClassArmAssignment.term_id == active_term.id
-            ).first()
-            
-            if enrollment:
-                attendance_records = Attendance.query.filter_by(
-                    enrollment_id=enrollment.id
-                ).all()
-                
+            # All of the student's enrolments this term (moved between arms →
+            # their register rows are split across them).
+            from utils.attendance_profile import student_term_days
+            attendance_records = list(student_term_days(student_id, active_term.id).values())
+            if True:
                 if attendance_records:
                     # Calculate based on morning and afternoon presence
                     total_sessions = len(attendance_records) * 2  # 2 sessions per day

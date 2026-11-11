@@ -45,13 +45,14 @@ def _subject_totals(student_id, class_subjects, pass_mark):
     return total, passed, failed
 
 
-def _attendance_pct(enrollment_id, week_ids):
-    """Term attendance % for an enrolment, or None when there are no records."""
+def _attendance_pct(student_id, term_id, week_ids):
+    """Term attendance % for a student (merged across all their enrolments in
+    the term — a student moved between arms has rows under each), or None
+    when there are no records."""
     if not week_ids:
         return None
-    recs = Attendance.query.filter(
-        Attendance.enrollment_id == enrollment_id,
-        Attendance.week_id.in_(week_ids)).all()
+    from utils.attendance_profile import student_term_days
+    recs = list(student_term_days(student_id, term_id, week_ids).values())
     if not recs:
         return None
     marks = sum((1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
@@ -108,7 +109,7 @@ def compute_term_summaries(term_id, class_id):
         rows.append({
             'enrollment': e, 'subjects': len(css), 'total': total, 'average': average,
             'passed': passed, 'failed': failed,
-            'attendance': _attendance_pct(e.id, week_ids),
+            'attendance': _attendance_pct(e.student_id, term_id, week_ids),
         })
 
     # Class position (whole class) + arm position (within each arm), by average,
@@ -245,9 +246,8 @@ def build_report_card(student_id, term_id):
     week_ids = [w.id for w in Week.query.filter_by(term_id=term_id).all()]
     att_present = att_days_present = att_days_opened = None
     if week_ids:
-        att_recs = Attendance.query.filter(
-            Attendance.enrollment_id == enrollment.id,
-            Attendance.week_id.in_(week_ids)).all()
+        from utils.attendance_profile import student_term_days
+        att_recs = list(student_term_days(student_id, term_id, week_ids).values())
         if att_recs:
             att_present = sum(r.total_present for r in att_recs)
             att_days_present = sum(1 for r in att_recs if r.total_present > 0)

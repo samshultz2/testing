@@ -78,3 +78,77 @@ def test_rebuilding_weeks_keeps_attendance(app):
             assert w.start_date <= a.date <= w.end_date
         from utils.attendance_profile import student_term_percentage
         assert student_term_percentage(sid, tid) > 0
+
+
+def _client(app):
+    import re
+    from config import Config
+    from tests.conftest import login_token
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    tok = re.search(r'name="csrf-token" content="([0-9a-f]+)"', c.get('/students').get_data(as_text=True)).group(1)
+    return c, tok
+
+
+def test_report_card_and_risk_use_merged_attendance(app):
+    sid, tid = _setup(app, 'C')
+    with app.app_context():
+        # Put a day of register under the OLD (Gold) enrollment too: the report
+        # card must count both arms' rows, not just the current one.
+        old = (StudentEnrollment.query.join(ClassArmAssignment)
+               .filter(StudentEnrollment.student_id == sid, ClassArmAssignment.term_id == tid,
+                       StudentEnrollment.is_active == False).first())
+        wk = Week.query.filter_by(term_id=tid).first()
+        db.session.add(Attendance(enrollment_id=old.id, week_id=wk.id, date=wk.start_date - timedelta(days=3),
+                                  morning_present=True, afternoon_present=False))
+        db.session.commit()
+        from utils.report_card import _attendance_pct
+        from utils.attendance_profile import student_term_days
+        days = student_term_days(sid, tid)
+        assert len(days) == 6                         # 5 in Rose + 1 in Gold
+        assert sum(d.total_present for d in days.values()) == 11
+        assert _attendance_pct(sid, tid, [wk.id]) == round(11 / 12 * 100, 1)
+
+
+def test_cannot_enrol_into_second_class_same_term(app):
+    sid, tid = _setup(app, 'D')
+    with app.app_context():
+        gold = (ClassArmAssignment.query.join(StudentEnrollment)
+                .filter(StudentEnrollment.student_id == sid, StudentEnrollment.is_active == False,
+                        ClassArmAssignment.term_id == tid).first())
+        gid = gold.id
+    c, tok = _client(app)
+    r = c.post(f'/academics/assignments/{gid}/enroll', headers={'X-Requested-With': 'fetch'},
+               data={'student_ids[]': [str(sid)], '_csrf_token': tok})
+    assert 'already in another class' in r.get_json()['message']
+    with app.app_context():
+        active = (StudentEnrollment.query.join(ClassArmAssignment)
+                  .filter(StudentEnrollment.student_id == sid, ClassArmAssignment.term_id == tid,
+                          StudentEnrollment.is_active == True).count())
+        assert active == 1
+
+
+def test_copy_term_setup_does_not_double_place(app):
+    sid, tid = _setup(app, 'E')
+    with app.app_context():
+        src = db.session.get(Term, tid)
+        t2 = Term(session_id=src.session_id, term_number=2, name='Second Term')
+        db.session.add(t2); db.session.flush()
+        rose = (ClassArmAssignment.query.join(StudentEnrollment)
+                .filter(StudentEnrollment.student_id == sid, StudentEnrollment.is_active == True).first())
+        # already placed in a DIFFERENT class in term 2
+        other = SchoolClass(name='MVX-E', level=78); db.session.add(other); db.session.flush()
+        a2 = ClassArmAssignment(class_id=other.id, arm_id=rose.arm_id, term_id=t2.id)
+        db.session.add(a2); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=a2.id, is_active=True))
+        db.session.commit()
+        t2id = t2.id
+    c, tok = _client(app)
+    r = c.post('/academics/copy-term-setup', headers={'X-Requested-With': 'fetch'},
+               data={'from_term_id': tid, 'to_term_id': t2id, 'copy_enrollments': 'on', '_csrf_token': tok})
+    assert r.get_json()['ok']
+    with app.app_context():
+        active = (StudentEnrollment.query.join(ClassArmAssignment)
+                  .filter(StudentEnrollment.student_id == sid, ClassArmAssignment.term_id == t2id,
+                          StudentEnrollment.is_active == True).count())
+        assert active == 1

@@ -1494,11 +1494,12 @@ def execute_promotion():
                 continue
 
             # Get current class
+            # Their class at the END of the session: latest term, newest enrolment.
             current_enrollment = StudentEnrollment.query.join(ClassArmAssignment).join(Term).filter(
                 StudentEnrollment.student_id == int(student_id),
                 Term.session_id == from_session_id,
                 StudentEnrollment.is_active == True
-            ).first()
+            ).order_by(Term.term_number.desc(), StudentEnrollment.id.desc()).first()
 
             if not current_enrollment:
                 continue
@@ -1573,6 +1574,9 @@ def execute_promotion():
                 else:
                     already = StudentEnrollment.query.filter_by(
                         student_id=int(student_id), class_arm_assignment_id=assignment.id).first()
+                    if already and not already.is_active:
+                        already.is_active = True     # removed earlier — bring them back
+                        enrolled += 1
                     if not already:
                         db.session.add(StudentEnrollment(
                             student_id=int(student_id), class_arm_assignment_id=assignment.id))
@@ -1642,10 +1646,12 @@ def enroll_promoted():
         for promo in promotions:
             # Find or create class arm assignment
             # Try to keep same arm as before
+            # The arm they finished the session in (active, latest term first).
             old_enrollment = StudentEnrollment.query.join(ClassArmAssignment).join(Term).filter(
                 StudentEnrollment.student_id == promo.student_id,
                 Term.session_id == from_session_id
-            ).first()
+            ).order_by(StudentEnrollment.is_active.desc(), Term.term_number.desc(),
+                       StudentEnrollment.id.desc()).first()
             
             arm_id = old_enrollment.class_arm_assignment.arm_id if old_enrollment else None
 
@@ -1676,7 +1682,9 @@ def enroll_promoted():
                     student_id=promo.student_id,
                     class_arm_assignment_id=assignment.id
                 ).first()
-                
+                if existing and not existing.is_active:
+                    existing.is_active = True        # removed earlier — bring them back
+
                 if not existing:
                     enrollment = StudentEnrollment(
                         student_id=promo.student_id,
