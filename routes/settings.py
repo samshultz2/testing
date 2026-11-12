@@ -1908,6 +1908,12 @@ def save_timetable_slots():
 
                     slot.is_break = str(i) in is_breaks
                     slot.order = i + 1
+                    # Keep the stored length in step with the times just saved.
+                    if slot.start_time and slot.end_time:
+                        mins = (slot.end_time.hour * 60 + slot.end_time.minute) - \
+                               (slot.start_time.hour * 60 + slot.start_time.minute)
+                        if mins > 0:
+                            slot.duration_minutes = mins
 
                     # after_period only means anything for a break — "this
                     # break belongs immediately after teaching period N" — so

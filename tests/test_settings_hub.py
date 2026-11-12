@@ -179,3 +179,47 @@ def test_rebuilding_periods_keeps_placed_lessons(app):
                 else:
                     db.session.delete(x)
             db.session.commit()
+
+
+def test_changing_a_break_length_sticks_after_save_and_reload(app):
+    """Saving a longer break must survive the after-save repair (which used to
+    rebuild the break from its stale stored duration) and a page reload."""
+    from datetime import time
+    from models import db, TimetableSlot
+    cols = ('slot_number', 'name', 'start_time', 'end_time', 'is_break', 'duration_minutes',
+            'order', 'after_period', 'is_active')
+    with app.app_context():
+        snap = {x.id: {c: getattr(x, c) for c in cols} for x in TimetableSlot.query.all()}
+    client = _admin(app)
+    tok = _ptoken(client)
+    hdr = {'X-Requested-With': 'fetch'}
+    try:
+        client.post('/settings/timetable-slots/generate', data={'_csrf_token': tok}, headers=hdr)
+        d = _json(client, '/settings/timetable-slots')
+        slots = d['slots']
+        bi = next(i for i, s in enumerate(slots) if s['is_break'])
+        brk = slots[bi]
+        h, m = map(int, brk['end_time'].split(':'))
+        longer = f'{(h * 60 + m + 15) // 60:02d}:{(h * 60 + m + 15) % 60:02d}'   # +15 minutes
+        form = {'_csrf_token': tok, 'slot_id[]': [s['id'] for s in slots], 'name[]': [s['name'] for s in slots],
+                'start_time[]': [s['start_time'] for s in slots],
+                'end_time[]': [longer if i == bi else s['end_time'] for i, s in enumerate(slots)],
+                'is_break[]': [str(i) for i, s in enumerate(slots) if s['is_break']],
+                'after_period[]': [s['after_period'] if s['after_period'] is not None else '' for s in slots]}
+        r = client.post('/settings/timetable-slots/save', data=form, headers=hdr)
+        assert r.status_code == 200 and r.get_json()['ok']
+        again = _json(client, '/settings/timetable-slots')          # the page view repairs too
+        saved = next(s for s in again['slots'] if s['id'] == brk['id'])
+        assert saved['end_time'] == longer, (saved, longer)
+        with app.app_context():
+            assert db.session.get(TimetableSlot, brk['id']).duration_minutes == (
+                (int(longer[:2]) * 60 + int(longer[3:])) - (int(brk['start_time'][:2]) * 60 + int(brk['start_time'][3:])))
+    finally:
+        with app.app_context():
+            for x in TimetableSlot.query.all():
+                if x.id in snap:
+                    for c, v in snap[x.id].items():
+                        setattr(x, c, v)
+                else:
+                    db.session.delete(x)
+            db.session.commit()

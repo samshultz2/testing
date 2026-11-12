@@ -34,13 +34,16 @@ from datetime import timedelta, datetime as _dt
 
 
 def _duration(slot, default_minutes):
-    if slot.duration_minutes:
-        return timedelta(minutes=slot.duration_minutes)
+    """A slot's length. Its own start/end times win: they're what the user
+    last saved. The stored ``duration_minutes`` is only a fallback (it used to
+    win, so editing a break's times was undone by the next repair)."""
     if slot.start_time and slot.end_time:
         d = (_dt.combine(_dt.today(), slot.end_time)
              - _dt.combine(_dt.today(), slot.start_time))
         if d.total_seconds() > 0:
             return d
+    if slot.duration_minutes:
+        return timedelta(minutes=slot.duration_minutes)
     return timedelta(minutes=default_minutes)
 
 
