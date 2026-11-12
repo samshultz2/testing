@@ -349,7 +349,8 @@ def admissions_data():
                 u.state = (request.form.get('state') or '').strip() or None
                 u.ownership = (request.form.get('ownership') or '').strip() or None
                 u.cutoff_bump = request.form.get('cutoff_bump', type=int) or 0
-                u.is_active = request.form.get('is_active') != '0'
+                if 'is_active' in request.form or not uid:
+                    u.is_active = request.form.get('is_active') != '0'
                 if not u.name:
                     flash('University name is required.', 'error')
                 else:
@@ -359,8 +360,18 @@ def admissions_data():
                     flash('University saved.', 'success')
             elif action == 'delete_university':
                 u = db.session.get(University, request.form.get('id', type=int))
+                n = _aspiration_use('university', u.id) if u else 0
+                if u and n:
+                    flash(f'{plural_s(n, "student")} chose {u.name} — switch it off instead of deleting it.', 'error')
+                elif u:
+                    UniversityCourseModel().query.filter_by(university_id=u.id).delete()
+                    db.session.delete(u); db.session.commit(); flash('Institution deleted.', 'success')
+            elif action == 'toggle_university':
+                u = db.session.get(University, request.form.get('id', type=int))
                 if u:
-                    db.session.delete(u); db.session.commit(); flash('University deleted.', 'success')
+                    u.is_active = not u.is_active
+                    db.session.commit()
+                    flash(f'{u.name} is {"shown to students again" if u.is_active else "hidden from students’ choices"}.', 'success')
             elif action == 'save_course':
                 cid = request.form.get('id', type=int)
                 c = db.session.get(Course, cid) if cid else Course()
@@ -369,7 +380,8 @@ def admissions_data():
                 c.base_cutoff = request.form.get('base_cutoff', type=int) or 180
                 c.jamb_subjects = (request.form.get('jamb_subjects') or '').strip() or None
                 c.waec_subjects = (request.form.get('waec_subjects') or '').strip() or None
-                c.is_active = request.form.get('is_active') != '0'
+                if 'is_active' in request.form or not cid:
+                    c.is_active = request.form.get('is_active') != '0'
                 if not c.name:
                     flash('Course name is required.', 'error')
                 else:
@@ -379,8 +391,18 @@ def admissions_data():
                     flash('Course saved.', 'success')
             elif action == 'delete_course':
                 c = db.session.get(Course, request.form.get('id', type=int))
-                if c:
+                n = _aspiration_use('course', c.id) if c else 0
+                if c and n:
+                    flash(f'{plural_s(n, "student")} chose {c.name} — switch it off instead of deleting it.', 'error')
+                elif c:
+                    UniversityCourseModel().query.filter_by(course_id=c.id).delete()
                     db.session.delete(c); db.session.commit(); flash('Course deleted.', 'success')
+            elif action == 'toggle_course':
+                c = db.session.get(Course, request.form.get('id', type=int))
+                if c:
+                    c.is_active = not c.is_active
+                    db.session.commit()
+                    flash(f'{c.name} is {"shown to students again" if c.is_active else "hidden from students’ choices"}.', 'success')
             elif action == 'save_override':
                 from models import UniversityCourse
                 uid = request.form.get('university_id', type=int)
@@ -417,6 +439,10 @@ def admissions_data():
         except Exception as e:
             db.session.rollback()
             flash(f'Could not save: {e}', 'error')
+        # Back to the same tab / page / search the change was made from.
+        ref = request.referrer or ''
+        if ref.startswith(request.host_url.rstrip('/') + url_for('settings.admissions_data')):
+            return redirect(ref)
         return redirect(url_for('settings.admissions_data'))
 
     from models import UniversityCourse
@@ -484,14 +510,74 @@ def admissions_data():
     def _pages(total):
         return (total + PER - 1) // PER
 
+    uni_use, course_use, picks = _aspiration_overview()
     return render_template('settings/admissions.html',
+                           uni_use=uni_use, course_use=course_use, picks=picks,
+                           students_aiming=_students_aiming(),
                            universities=universities, courses=courses, overrides=overrides,
                            course_names=course_names, type_counts=type_counts,
-                           per_page=PER, active_tab=request.args.get('tab', 'institutions'),
+                           per_page=PER, active_tab=request.args.get('tab', ''),
                            filters={'q': q, 'itype': itype, 'ownership': ownership, 'cq': cq_text},
                            uni_total=uni_total, upage=upage, uni_pages=_pages(uni_total),
                            course_total=course_total, cpage=cpage, course_pages=_pages(course_total),
                            override_total=override_total, opage=opage, override_pages=_pages(override_total))
+
+
+def UniversityCourseModel():
+    from models import UniversityCourse
+    return UniversityCourse
+
+
+def plural_s(n, word):
+    return f'{n} {word}{"" if n == 1 else "s"}'
+
+
+_ASP_COLS = {'university': ('target_university_id', 'target2_university_id', 'admitted_university_id'),
+             'course': ('target_course_id', 'target2_course_id', 'admitted_course_id')}
+
+
+def _aspiration_use(kind, obj_id):
+    """How many students point at this institution/course (1st or 2nd choice, or
+    where they were admitted) — the reason not to delete it."""
+    cols = [getattr(Student, c) for c in _ASP_COLS[kind]]
+    return Student.query.filter(db.or_(*[c == obj_id for c in cols])).count()
+
+
+def _students_aiming():
+    return Student.query.filter(Student.is_active == True, Student.target_course_id != None).count()  # noqa: E711,E712
+
+
+def _aspiration_overview():
+    """Students per institution / course (any choice), and the most chosen
+    institution+course pairs with the cut-off a student would see and whether
+    it's a real figure or the base+bump estimate."""
+    from models import University, Course
+    from models.models_university import effective_cutoff
+    from collections import Counter
+    uni_use, course_use, pairs = Counter(), Counter(), Counter()
+    rows = (db.session.query(Student.target_university_id, Student.target_course_id,
+                             Student.target2_university_id, Student.target2_course_id,
+                             Student.admitted_university_id, Student.admitted_course_id)
+            .filter(db.or_(Student.target_university_id != None, Student.target_course_id != None,  # noqa: E711
+                           Student.target2_university_id != None, Student.admitted_university_id != None)).all())
+    for u1, c1, u2, c2, ua, ca in rows:
+        for u in {u1, u2, ua} - {None}:
+            uni_use[u] += 1
+        for c in {c1, c2, ca} - {None}:
+            course_use[c] += 1
+        for u, c in ((u1, c1), (u2, c2)):
+            if u and c:
+                pairs[(u, c)] += 1
+    UC = UniversityCourseModel()
+    picks = []
+    for (uid, cid), n in pairs.most_common(12):
+        u, c = db.session.get(University, uid), db.session.get(Course, cid)
+        if not (u and c):
+            continue
+        real = UC.query.filter_by(university_id=uid, course_id=cid, is_active=True).first()
+        picks.append({'u': u, 'c': c, 'n': n, 'cutoff': effective_cutoff(u, c),
+                      'real': bool(real and real.jamb_cutoff)})
+    return dict(uni_use), dict(course_use), picks
 
 
 @settings_bp.route('/ocr', methods=['GET', 'POST'])

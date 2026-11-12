@@ -580,3 +580,39 @@ def test_aspiration_hub_candidate_list_and_next_steps(app):
     for want in ('What to do next', 'Candidates and their targets', 'Why candidates fall short', 'Target Ada',
                  'Admission funnel', 'without a target', 'NoTarget Bayo', 'id="as-fix"'):
         assert want in body, want
+
+
+def test_institution_chosen_by_a_student_cannot_be_deleted_only_hidden(app):
+    _seed(app)
+    from models import Student
+    with app.app_context():
+        u = University.query.filter_by(abbreviation='UNILAG').first()
+        law = Course.query.filter_by(name='Law').first()
+        s = Student.query.filter_by(is_active=True).first()
+        if s is None:
+            return
+        old = (s.target_university_id, s.target_course_id)
+        s.target_university_id, s.target_course_id = u.id, law.id
+        db.session.commit()
+        uid, sid = u.id, s.id
+    c = _admin(app)
+    try:
+        page = c.get('/settings/admissions?tab=picks').get_data(as_text=True)
+        assert 'Most chosen' in page and 'Law' in page
+        c.post('/settings/admissions', data={'action': 'delete_university', 'id': uid, '_csrf_token': c._csrf})
+        with app.app_context():
+            assert db.session.get(University, uid) is not None          # refused: a student chose it
+        c.post('/settings/admissions', data={'action': 'toggle_university', 'id': uid, '_csrf_token': c._csrf})
+        with app.app_context():
+            assert db.session.get(University, uid).is_active is False   # hidden instead
+        # Editing a row without sending is_active keeps it hidden.
+        c.post('/settings/admissions', data={'action': 'save_university', 'id': uid, 'name': 'University of Lagos',
+                                             'abbreviation': 'UNILAG', '_csrf_token': c._csrf})
+        with app.app_context():
+            assert db.session.get(University, uid).is_active is False
+    finally:
+        with app.app_context():
+            st = db.session.get(Student, sid)
+            st.target_university_id, st.target_course_id = old
+            db.session.get(University, uid).is_active = True
+            db.session.commit()

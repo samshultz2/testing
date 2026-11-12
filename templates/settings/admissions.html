@@ -4,238 +4,301 @@
 
 {% macro csrf() %}<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">{% endmacro %}
 
-{% block content %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.adm-tabs { display:flex; flex-wrap:wrap; gap:.4rem; border-bottom:1px solid var(--border-color); margin-bottom:1rem; }
-.adm-tab { padding:.55rem .9rem; border:none; background:none; cursor:pointer; color:var(--text-muted);
-           border-bottom:2px solid transparent; font-size:.9rem; font-weight:600; }
-.adm-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
-.adm-panel { display:none; }
-.adm-panel.active { display:block; }
-.adm-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
-.adm-chip { padding:.3rem .7rem; border:1px solid var(--border-color); border-radius:999px; font-size:.8rem;
-            text-decoration:none; color:var(--text-muted); background:var(--bg-card); }
-.adm-chip.active { background:var(--primary); color:#fff; border-color:var(--primary); }
-.adm-pager { display:flex; align-items:center; gap:.75rem; justify-content:center; margin-top:.75rem; }
-.adm-toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:.75rem; }
-.adm-toolbar input, .adm-toolbar select { padding:.45rem .6rem; border:1px solid var(--border-color);
-            border-radius:var(--radius-md,8px); background:var(--bg-input,var(--bg-card)); color:inherit; }
+.ad{max-width:1180px}
+.ad-tabs{display:flex;gap:.35rem;flex-wrap:wrap;margin:0 0 1rem;background:var(--gray-100,#eef2f7);padding:4px;border-radius:13px;width:max-content;max-width:100%;overflow-x:auto}
+.ad-tab{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem .9rem;border:0;border-radius:10px;background:none;font:inherit;font-weight:700;font-size:.86rem;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.ad-tab em{font-style:normal;font-weight:600;color:var(--text-muted);font-size:.78rem}
+.ad-tab.active{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ad-panel{display:none}.ad-panel.active{display:block}
+.ad-card{padding:0;overflow:hidden;margin:0 0 1rem}
+.ad-card-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ad-card-h h3{margin:0;font-size:.98rem;display:flex;align-items:center;gap:.5rem}.ad-card-h h3 i{color:var(--primary)}
+.ad-card-h small{color:var(--text-muted);font-size:.8rem}
+.ad-bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.75rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ad-bar input[type=search],.ad-bar select{height:38px;border:1.5px solid var(--border-color);border-radius:10px;padding:0 .7rem;font:inherit;background:var(--bg-card);color:var(--text-primary)}
+.ad-bar input[type=search]{flex:1;min-width:180px;max-width:360px}
+.ad-chips{display:flex;gap:.35rem;flex-wrap:wrap;padding:.75rem 1rem 0}
+.ad-chip{padding:.35rem .75rem;border:1px solid var(--border-color);border-radius:999px;font-size:.8rem;font-weight:600;text-decoration:none;color:var(--text-secondary);background:var(--bg-card)}
+.ad-chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.ad-chip em{font-style:normal;opacity:.75;margin-left:.25rem}
+.ad-row{display:grid;gap:.55rem;align-items:center;padding:.6rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ad-row:last-child{border-bottom:0}
+.ad-row.off{background:color-mix(in srgb,var(--text-muted) 6%,transparent)}
+.ad-row.off input:not([type=hidden]){color:var(--text-muted)}
+.ad-uni{grid-template-columns:minmax(0,2.4fr) 90px 110px 110px 74px 96px auto}
+.ad-course{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 74px minmax(0,1.6fr) minmax(0,1.6fr) 96px auto}
+.ad-cut{grid-template-columns:minmax(0,1.6fr) minmax(0,1.4fr) 90px auto}
+.ad-hd{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--gray-50,#f8fafc)}
+.ad-row input:not([type=hidden]),.ad-row select{width:100%;min-width:0;height:36px;border:1.5px solid transparent;border-radius:9px;padding:0 .5rem;font:inherit;font-size:.88rem;background:none;color:var(--text-primary)}
+.ad-row input:not([type=hidden]):hover,.ad-row select:hover{border-color:var(--border-color)}
+.ad-row input:not([type=hidden]):focus,.ad-row select:focus{outline:none;border-color:var(--primary);background:var(--bg-card)}
+.ad-row.new{background:color-mix(in srgb,var(--primary) 4%,transparent)}
+.ad-row.new input:not([type=hidden]),.ad-row.new select{border-color:var(--border-color);background:var(--bg-card)}
+.ad-name{font-weight:700}
+.ad-use{font-size:.76rem;color:var(--text-muted);white-space:nowrap}.ad-use b{color:var(--primary)}
+.ad-acts{display:flex;gap:.3rem;justify-content:flex-end}
+.ad-ic{width:34px;height:34px;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-card);color:var(--text-secondary);cursor:pointer;display:inline-grid;place-items:center}
+.ad-ic:hover{border-color:var(--primary);color:var(--primary)}.ad-ic.del:hover{border-color:var(--danger);color:var(--danger)}
+.ad-ic.save{background:var(--primary);border-color:var(--primary);color:#fff}
+.ad-ic:disabled{opacity:.35;cursor:not-allowed}
+.ad-pager{display:flex;align-items:center;gap:.75rem;justify-content:center;padding:.8rem}
+.ad-note{font-size:.82rem;color:var(--text-muted);padding:.65rem 1rem;margin:0;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ad-note code{font-size:.78rem}
+.ad-pick{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.7rem;align-items:center;padding:.6rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ad-pick:last-child{border-bottom:0}
+.ad-pick .t{display:flex;flex-direction:column;min-width:0}.ad-pick .t b{font-size:.9rem}.ad-pick .t small{color:var(--text-muted);font-size:.78rem}
+.ad-pick .n{font-size:.8rem;color:var(--text-muted);white-space:nowrap}.ad-pick .n b{color:var(--text-primary);font-size:.95rem}
+.ad-pick .c{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap}.ad-pick .c b{font-size:1rem}
+.ad-pick .c small{font-size:.7rem;font-weight:700}.ad-pick .c small.real{color:var(--success)}.ad-pick .c small.est{color:var(--warning)}
+.ad-import{padding:1rem;display:flex;flex-direction:column;gap:.7rem}
+.ad-import textarea{width:100%;min-height:150px;border:1.5px solid var(--border-color);border-radius:12px;padding:.7rem;font-family:ui-monospace,monospace;font-size:.84rem;background:var(--bg-card);color:var(--text-primary)}
+.ad-import label{display:flex;align-items:center;gap:.5rem;font-size:.88rem}
+.ad-import p{margin:0;font-size:.86rem;color:var(--text-secondary);line-height:1.5}
+@media (max-width:900px){
+  .ad-hd{display:none}
+  .ad-uni,.ad-course,.ad-cut{grid-template-columns:1fr 1fr;padding:.8rem 1rem;gap:.45rem}
+  .ad-row .ad-name,.ad-row .ad-wide{grid-column:1/-1}
+  .ad-acts{justify-content:flex-end}
+  .ad-row input:not([type=hidden]),.ad-row select{border-color:var(--border-color);background:var(--bg-card)}
+  .ad-tabs{width:100%;flex-wrap:nowrap}
+  .ad-bar input[type=search]{max-width:none}
+}
 </style>
+{% endblock %}
 
-<div class="page-header">
-    <div>
-        <h1>Admissions data</h1>
-        <p class="text-muted text-sm">Institutions, courses and competitive JAMB cut-offs that power students' university-choice dropdowns and the auto-filled JAMB target. Lists are grouped, searchable and paginated.</p>
-    </div>
-    <form method="post" style="margin-left:auto;">
+{% block content %}
+{% set real_cuts = picks|selectattr('real')|list|length %}
+<div class="rs ad">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-graduation-cap" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Admissions data</h1><p>The institutions, courses and JAMB cut-offs students choose from — and the target score they’re shown.</p></div>
+    <div class="rs-head-a">
+      <form method="post" data-confirm="Load the starter list of Nigerian institutions, courses and cut-offs? Existing entries are kept and updated, nothing is deleted.">
         {{ csrf() }}<input type="hidden" name="action" value="seed">
-        <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-seedling"></i> Seed starter data</button>
-    </form>
-</div>
-
-<div class="adm-tabs" role="tablist">
-    <button type="button" class="adm-tab" data-tab="institutions"><i class="fas fa-building-columns"></i> Institutions <span class="text-muted">({{ type_counts.All }})</span></button>
-    <button type="button" class="adm-tab" data-tab="courses"><i class="fas fa-book"></i> Courses <span class="text-muted">({{ course_total }})</span></button>
-    <button type="button" class="adm-tab" data-tab="cutoffs"><i class="fas fa-sliders"></i> Cut-offs <span class="text-muted">({{ override_total }})</span></button>
-    <button type="button" class="adm-tab" data-tab="import"><i class="fas fa-file-import"></i> Import</button>
-</div>
-
-<!-- ================= INSTITUTIONS ================= -->
-<div class="adm-panel" data-panel="institutions">
-    <div class="card">
-        <div class="card-header"><h3>Institutions <span class="text-muted text-sm">({{ uni_total }} match)</span></h3></div>
-        <div class="card-body" style="overflow-x:auto;">
-            <div class="adm-chips">
-                {% for label, count in [('All', type_counts.All), ('University', type_counts.University), ('Polytechnic', type_counts.Polytechnic), ('College', type_counts.College), ('Other', type_counts.Other)] %}
-                {% set val = '' if label == 'All' else label %}
-                <a class="adm-chip {% if filters.itype == val %}active{% endif %}"
-                   href="{{ url_for('settings.admissions_data', tab='institutions', itype=val, q=filters.q, ownership=filters.ownership) }}">{{ label }} ({{ count }})</a>
-                {% endfor %}
-            </div>
-            <form method="get" class="adm-toolbar">
-                <input type="hidden" name="tab" value="institutions">
-                <input type="hidden" name="itype" value="{{ filters.itype }}">
-                <input type="text" name="q" value="{{ filters.q }}" placeholder="Search name, abbr or state…" style="min-width:220px;">
-                <select name="ownership">
-                    <option value="">All ownership</option>
-                    {% for o in ['Federal','State','Private'] %}<option value="{{ o }}" {% if filters.ownership==o %}selected{% endif %}>{{ o }}</option>{% endfor %}
-                </select>
-                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
-                {% if filters.q or filters.ownership or filters.itype %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='institutions') }}">Clear</a>{% endif %}
-            </form>
-            <p class="text-muted text-sm">The <strong>cut-off bump</strong> is added to a course's base cut-off for this institution (competitive schools run higher).</p>
-            <table class="table" style="width:100%;min-width:640px;">
-                <thead><tr><th>Name</th><th>Abbr.</th><th>State</th><th>Ownership</th><th>Bump</th><th></th></tr></thead>
-                <tbody>
-                {% for u in universities %}
-                <tr>
-                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_university"><input type="hidden" name="id" value="{{ u.id }}">
-                    <td><input name="name" value="{{ u.name }}" style="width:100%;min-width:180px;"></td>
-                    <td><input name="abbreviation" value="{{ u.abbreviation or '' }}" style="width:80px;"></td>
-                    <td><input name="state" value="{{ u.state or '' }}" style="width:90px;"></td>
-                    <td><select name="ownership">{% for o in ['Federal','State','Private'] %}<option {% if u.ownership==o %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></td>
-                    <td><input name="cutoff_bump" type="number" value="{{ u.cutoff_bump or 0 }}" style="width:64px;"></td>
-                    <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete {{ u.name }}?');">{{ csrf() }}<input type="hidden" name="action" value="delete_university"><input type="hidden" name="id" value="{{ u.id }}"><button class="btn btn-secondary btn-sm" title="Delete"><i class="fas fa-trash"></i></button></form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="6" class="text-muted text-center" style="padding:1rem;">No institutions match.</td></tr>
-                {% endfor %}
-                <tr>
-                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_university">
-                    <td><input name="name" placeholder="New institution" style="width:100%;min-width:180px;"></td>
-                    <td><input name="abbreviation" placeholder="Abbr" style="width:80px;"></td>
-                    <td><input name="state" placeholder="State" style="width:90px;"></td>
-                    <td><select name="ownership"><option>Federal</option><option>State</option><option>Private</option></select></td>
-                    <td><input name="cutoff_bump" type="number" value="0" style="width:64px;"></td>
-                    <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
-                </tr>
-                </tbody>
-            </table>
-            {% if uni_pages > 1 %}
-            <div class="adm-pager">
-                {% if upage > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='institutions', q=filters.q, itype=filters.itype, ownership=filters.ownership, page=upage-1) }}">‹ Prev</a>{% endif %}
-                <span class="text-muted text-sm">Page {{ upage }} of {{ uni_pages }}</span>
-                {% if upage < uni_pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='institutions', q=filters.q, itype=filters.itype, ownership=filters.ownership, page=upage+1) }}">Next ›</a>{% endif %}
-            </div>
-            {% endif %}
-        </div>
+        <button type="submit" class="rs-btn ghost"><i class="fas fa-seedling" aria-hidden="true"></i> {{ 'Update starter data' if type_counts.All else 'Load starter data' }}</button>
+      </form>
     </div>
-</div>
+  </header>
 
-<!-- ================= COURSES ================= -->
-<div class="adm-panel" data-panel="courses">
-    <div class="card">
-        <div class="card-header"><h3>Courses <span class="text-muted text-sm">({{ course_total }} match)</span></h3></div>
-        <div class="card-body" style="overflow-x:auto;">
-            <form method="get" class="adm-toolbar">
-                <input type="hidden" name="tab" value="courses">
-                <input type="text" name="cq" value="{{ filters.cq }}" placeholder="Search course or department…" style="min-width:220px;">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
-                {% if filters.cq %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses') }}">Clear</a>{% endif %}
-            </form>
-            <p class="text-muted text-sm"><strong>Base cut-off</strong> is the competitive JAMB score nationally; subjects are comma-separated (JAMB is English + 3 others). Use <code>|</code> for interchangeable options in one slot — e.g. <code>Commerce|Financial Accounting</code> is satisfied by either.</p>
-            <table class="table" style="width:100%;min-width:820px;">
-                <thead><tr><th>Course</th><th>Department</th><th>Base</th><th>JAMB subjects</th><th>WAEC subjects</th><th></th></tr></thead>
-                <tbody>
-                {% for c in courses %}
-                <tr>
-                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_course"><input type="hidden" name="id" value="{{ c.id }}">
-                    <td><input name="name" value="{{ c.name }}" style="width:100%;min-width:150px;"></td>
-                    <td><input name="department" value="{{ c.department or '' }}" style="width:130px;"></td>
-                    <td><input name="base_cutoff" type="number" value="{{ c.base_cutoff or 180 }}" style="width:64px;"></td>
-                    <td><input name="jamb_subjects" value="{{ c.jamb_subjects or '' }}" style="width:100%;min-width:200px;"></td>
-                    <td><input name="waec_subjects" value="{{ c.waec_subjects or '' }}" style="width:100%;min-width:200px;"></td>
-                    <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete {{ c.name }}?');">{{ csrf() }}<input type="hidden" name="action" value="delete_course"><input type="hidden" name="id" value="{{ c.id }}"><button class="btn btn-secondary btn-sm" title="Delete"><i class="fas fa-trash"></i></button></form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="6" class="text-muted text-center" style="padding:1rem;">No courses match.</td></tr>
-                {% endfor %}
-                <tr>
-                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_course">
-                    <td><input name="name" placeholder="New course" style="width:100%;min-width:150px;"></td>
-                    <td><input name="department" placeholder="Department" style="width:130px;"></td>
-                    <td><input name="base_cutoff" type="number" value="200" style="width:64px;"></td>
-                    <td><input name="jamb_subjects" placeholder="English Language, ..." style="width:100%;min-width:200px;"></td>
-                    <td><input name="waec_subjects" placeholder="English Language, Mathematics, ..." style="width:100%;min-width:200px;"></td>
-                    <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
-                </tr>
-                </tbody>
-            </table>
-            {% if course_pages > 1 %}
-            <div class="adm-pager">
-                {% if cpage > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses', cq=filters.cq, cpage=cpage-1) }}">‹ Prev</a>{% endif %}
-                <span class="text-muted text-sm">Page {{ cpage }} of {{ course_pages }}</span>
-                {% if cpage < course_pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses', cq=filters.cq, cpage=cpage+1) }}">Next ›</a>{% endif %}
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
+  <div class="rs-tiles">
+    <div class="rs-tile"><span class="l">Institutions</span><span class="v">{{ type_counts.All }}</span><span class="s">{{ type_counts.University }} universities · {{ type_counts.Polytechnic }} polytechnics</span></div>
+    <div class="rs-tile"><span class="l">Courses</span><span class="v">{{ course_names|length }}</span></div>
+    <div class="rs-tile"><span class="l">Real cut-offs</span><span class="v">{{ override_total }}</span><span class="s">Others use course base + bump</span></div>
+    <div class="rs-tile"><span class="l">Students with a target</span><span class="v">{{ students_aiming }}</span></div>
+  </div>
 
-<!-- ================= CUT-OFFS ================= -->
-<div class="adm-panel" data-panel="cutoffs">
-    <div class="card">
-        <div class="card-header"><h3>Course cut-offs by institution <span class="text-muted text-sm">({{ override_total }})</span></h3></div>
-        <div class="card-body" style="overflow-x:auto;">
-            <p class="text-muted text-sm">The real competitive score an institution uses for a specific department — overrides the course base + the institution's bump. To add one, type the institution (name or abbreviation) and course.</p>
-            <datalist id="courseList">{% for name in course_names %}<option value="{{ name }}">{% endfor %}</datalist>
-            <table class="table" style="width:100%;min-width:560px;">
-                <thead><tr><th>Institution</th><th>Course</th><th>Cut-off</th><th></th></tr></thead>
-                <tbody>
-                <tr>
-                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_override">
-                    <td><input name="university" list="" placeholder="Institution name or abbr" style="width:100%;min-width:200px;" required></td>
-                    <td><input name="course" list="courseList" placeholder="Course" style="width:100%;min-width:180px;" required></td>
-                    <td><input name="jamb_cutoff" type="number" min="0" max="400" placeholder="e.g. 250" style="width:74px;"></td>
-                    <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
-                </tr>
-                {% for o in overrides %}
-                <tr>
-                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_override">
-                    <input type="hidden" name="university_id" value="{{ o.university_id }}"><input type="hidden" name="course_id" value="{{ o.course_id }}">
-                    <td>{{ o.university.name }}{% if o.university.abbreviation %} <span class="text-muted text-sm">({{ o.university.abbreviation }})</span>{% endif %}</td>
-                    <td>{{ o.course.name }}{% if o.course.department %} <span class="text-muted text-sm">· {{ o.course.department }}</span>{% endif %}</td>
-                    <td><input name="jamb_cutoff" type="number" min="0" max="400" value="{{ o.jamb_cutoff }}" style="width:74px;"></td>
-                    <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('Remove this cut-off?');">{{ csrf() }}<input type="hidden" name="action" value="delete_override"><input type="hidden" name="id" value="{{ o.id }}"><button class="btn btn-secondary btn-sm" title="Remove"><i class="fas fa-trash"></i></button></form>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="4" class="text-muted text-center" style="padding:1rem;">No per-course cut-offs set yet.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% if override_pages > 1 %}
-            <div class="adm-pager">
-                {% if opage > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='cutoffs', opage=opage-1) }}">‹ Prev</a>{% endif %}
-                <span class="text-muted text-sm">Page {{ opage }} of {{ override_pages }}</span>
-                {% if opage < override_pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='cutoffs', opage=opage+1) }}">Next ›</a>{% endif %}
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
+  {% if not type_counts.All %}
+  <div class="rs-blank"><span><i class="fas fa-building-columns" aria-hidden="true"></i></span><h3>No institutions yet</h3>
+    <p>Load the starter list to give students something to choose from — you can edit everything afterwards.</p></div>
+  {% endif %}
 
-<!-- ================= IMPORT ================= -->
-<div class="adm-panel" data-panel="import">
-    <div class="card">
-        <div class="card-header"><h3>Import cut-offs</h3></div>
-        <div class="card-body">
-            <p class="text-muted text-sm">Paste real figures from a source you trust — one row per line as
-                <code>Institution, Course, Cut-off</code> (comma, tab or pipe separated). Institutions and courses
-                are matched by name or abbreviation. This is the reliable way to load actual values: authoritative
-                <em>departmental</em> cut-offs aren't published as structured data, so scraping the blogs mostly
-                returns the school's flat institutional number.</p>
-            <form method="post">{{ csrf() }}<input type="hidden" name="action" value="import_overrides">
-                <textarea name="import_text" rows="6" style="width:100%;font-family:monospace;font-size:.85rem;"
-                    placeholder="UNIBEN, Medicine and Surgery, 220&#10;UNILAG, Law, 280&#10;UI, Pharmacy, 282"></textarea>
-                <label class="d-flex align-center gap-2 text-sm" style="margin:.5rem 0;">
-                    <input type="checkbox" name="create_missing" value="1"> Create courses that don't exist yet
-                </label>
-                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-file-import"></i> Import</button>
-            </form>
-        </div>
-    </div>
+  <div class="ad-tabs" role="tablist">
+    <button type="button" class="ad-tab" data-tab="picks"><i class="fas fa-users" aria-hidden="true"></i> Students’ picks</button>
+    <button type="button" class="ad-tab" data-tab="institutions"><i class="fas fa-building-columns" aria-hidden="true"></i> Institutions <em>{{ type_counts.All }}</em></button>
+    <button type="button" class="ad-tab" data-tab="courses"><i class="fas fa-book" aria-hidden="true"></i> Courses <em>{{ course_names|length }}</em></button>
+    <button type="button" class="ad-tab" data-tab="cutoffs"><i class="fas fa-bullseye" aria-hidden="true"></i> Cut-offs <em>{{ override_total }}</em></button>
+    <button type="button" class="ad-tab" data-tab="import"><i class="fas fa-file-import" aria-hidden="true"></i> Import</button>
+  </div>
+
+  <!-- ================= STUDENTS' PICKS ================= -->
+  <div class="ad-panel" data-panel="picks">
+    <section class="rs-card ad-card">
+      <div class="ad-card-h"><h3><i class="fas fa-ranking-star" aria-hidden="true"></i> Most chosen institution + course</h3>
+        <small>{{ real_cuts }} of {{ picks|length }} have a real cut-off</small></div>
+      {% if picks %}
+      <p class="ad-note">Students see the cut-off on the right as their JAMB target. <b>Estimates</b> come from the course’s base score plus the institution’s bump — add the real figure where you have it.</p>
+      {% for p in picks %}
+      <div class="ad-pick">
+        <span class="t"><b>{{ p.c.name }}</b><small>{{ p.u.name }}{% if p.u.abbreviation %} ({{ p.u.abbreviation }}){% endif %}</small></span>
+        <span class="n"><b>{{ p.n }}</b> student{{ 's' if p.n != 1 }}</span>
+        <span class="c"><b>{{ p.cutoff }}</b>{% if p.real %}<small class="real">Real cut-off</small>{% else %}<small class="est">Estimate</small>{% endif %}</span>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="rs-blank"><span><i class="fas fa-user-graduate" aria-hidden="true"></i></span><h3>No choices yet</h3><p>When students pick an institution and course on their profile, the most popular show here.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ================= INSTITUTIONS ================= -->
+  <div class="ad-panel" data-panel="institutions">
+    <section class="rs-card ad-card">
+      <div class="ad-card-h"><h3><i class="fas fa-building-columns" aria-hidden="true"></i> Institutions</h3><small>{{ uni_total }} match</small></div>
+      <div class="ad-chips">
+        {% for label, count in [('All', type_counts.All), ('University', type_counts.University), ('Polytechnic', type_counts.Polytechnic), ('College', type_counts.College), ('Other', type_counts.Other)] %}
+        {% set val = '' if label == 'All' else label %}
+        <a class="ad-chip {% if filters.itype == val %}active{% endif %}" href="{{ url_for('settings.admissions_data', tab='institutions', itype=val, q=filters.q, ownership=filters.ownership) }}">{{ label }}<em>{{ count }}</em></a>
+        {% endfor %}
+      </div>
+      <form method="get" class="ad-bar">
+        <input type="hidden" name="tab" value="institutions"><input type="hidden" name="itype" value="{{ filters.itype }}">
+        <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name, abbreviation or state" aria-label="Search institutions">
+        <select name="ownership" aria-label="Ownership" data-autosubmit>
+          <option value="">Any ownership</option>
+          {% for o in ['Federal','State','Private'] %}<option value="{{ o }}" {% if filters.ownership==o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="rs-btn sm primary"><i class="fas fa-magnifying-glass" aria-hidden="true"></i> Search</button>
+        {% if filters.q or filters.ownership or filters.itype %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='institutions') }}">Clear</a>{% endif %}
+      </form>
+      <p class="ad-note"><b>Bump</b> is added to every course’s base cut-off at that institution (competitive schools run higher). Switch an institution off to hide it from students without losing anyone’s choice.</p>
+      <div class="ad-row ad-uni ad-hd"><span>Name</span><span>Abbr.</span><span>State</span><span>Ownership</span><span>Bump</span><span>Students</span><span></span></div>
+      <form method="post" class="ad-row ad-uni new">{{ csrf() }}<input type="hidden" name="action" value="save_university">
+        <input name="name" class="ad-name" placeholder="Add an institution" aria-label="New institution name" required>
+        <input name="abbreviation" placeholder="Abbr." aria-label="Abbreviation">
+        <input name="state" placeholder="State" aria-label="State">
+        <select name="ownership" aria-label="Ownership"><option>Federal</option><option>State</option><option>Private</option></select>
+        <input name="cutoff_bump" type="number" value="0" aria-label="Cut-off bump">
+        <span></span>
+        <span class="ad-acts"><button class="ad-ic save" aria-label="Add institution"><i class="fas fa-plus" aria-hidden="true"></i></button></span>
+      </form>
+      {% for u in universities %}{% set used = uni_use.get(u.id, 0) %}
+      <form method="post" class="ad-row ad-uni{% if not u.is_active %} off{% endif %}">{{ csrf() }}<input type="hidden" name="action" value="save_university"><input type="hidden" name="id" value="{{ u.id }}">
+        <input name="name" class="ad-name" value="{{ u.name }}" aria-label="Name">
+        <input name="abbreviation" value="{{ u.abbreviation or '' }}" placeholder="Abbr." aria-label="Abbreviation">
+        <input name="state" value="{{ u.state or '' }}" placeholder="State" aria-label="State">
+        <select name="ownership" aria-label="Ownership">{% for o in ['Federal','State','Private'] %}<option {% if u.ownership==o %}selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+        <input name="cutoff_bump" type="number" value="{{ u.cutoff_bump or 0 }}" aria-label="Cut-off bump">
+        <span class="ad-use">{% if used %}<b>{{ used }}</b> student{{ 's' if used != 1 }}{% elif not u.is_active %}Hidden{% else %}—{% endif %}</span>
+        <span class="ad-acts">
+          <button class="ad-ic save" aria-label="Save {{ u.name }}" title="Save"><i class="fas fa-check" aria-hidden="true"></i></button>
+          <button class="ad-ic" form="tg-u-{{ u.id }}" aria-label="{{ 'Hide' if u.is_active else 'Show' }} {{ u.name }}" title="{{ 'Hide from students' if u.is_active else 'Show to students' }}"><i class="fas {{ 'fa-eye-slash' if u.is_active else 'fa-eye' }}" aria-hidden="true"></i></button>
+          <button class="ad-ic del" form="del-u-{{ u.id }}" {% if used %}disabled title="{{ used }} student{{ 's' if used != 1 }} chose it — hide it instead"{% else %}title="Delete"{% endif %} aria-label="Delete {{ u.name }}"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </span>
+      </form>
+      <form method="post" id="tg-u-{{ u.id }}" hidden>{{ csrf() }}<input type="hidden" name="action" value="toggle_university"><input type="hidden" name="id" value="{{ u.id }}"></form>
+      <form method="post" id="del-u-{{ u.id }}" hidden data-confirm="Delete {{ u.name }}? Its course cut-offs go too.">{{ csrf() }}<input type="hidden" name="action" value="delete_university"><input type="hidden" name="id" value="{{ u.id }}"></form>
+      {% else %}
+      <div class="rs-blank"><span><i class="fas fa-magnifying-glass" aria-hidden="true"></i></span><h3>No institutions match</h3></div>
+      {% endfor %}
+      {% if uni_pages > 1 %}
+      <div class="ad-pager">
+        {% if upage > 1 %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='institutions', q=filters.q, itype=filters.itype, ownership=filters.ownership, page=upage-1) }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Previous</a>{% endif %}
+        <span class="cm-mute">Page {{ upage }} of {{ uni_pages }}</span>
+        {% if upage < uni_pages %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='institutions', q=filters.q, itype=filters.itype, ownership=filters.ownership, page=upage+1) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ================= COURSES ================= -->
+  <div class="ad-panel" data-panel="courses">
+    <section class="rs-card ad-card">
+      <div class="ad-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> Courses</h3><small>{{ course_total }} match</small></div>
+      <form method="get" class="ad-bar">
+        <input type="hidden" name="tab" value="courses">
+        <input type="search" name="cq" value="{{ filters.cq }}" placeholder="Search course or department" aria-label="Search courses">
+        <button type="submit" class="rs-btn sm primary"><i class="fas fa-magnifying-glass" aria-hidden="true"></i> Search</button>
+        {% if filters.cq %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='courses') }}">Clear</a>{% endif %}
+      </form>
+      <p class="ad-note"><b>Base</b> is the competitive JAMB score nationally. Subjects are comma-separated (JAMB is English + 3 others); use <code>|</code> for either-or in one slot, e.g. <code>Commerce|Financial Accounting</code>.</p>
+      <div class="ad-row ad-course ad-hd"><span>Course</span><span>Department</span><span>Base</span><span>JAMB subjects</span><span>WAEC subjects</span><span>Students</span><span></span></div>
+      <form method="post" class="ad-row ad-course new">{{ csrf() }}<input type="hidden" name="action" value="save_course">
+        <input name="name" class="ad-name" placeholder="Add a course" aria-label="New course name" required>
+        <input name="department" placeholder="Department" aria-label="Department">
+        <input name="base_cutoff" type="number" value="200" aria-label="Base cut-off">
+        <input name="jamb_subjects" class="ad-wide" placeholder="English Language, …" aria-label="JAMB subjects">
+        <input name="waec_subjects" class="ad-wide" placeholder="English Language, Mathematics, …" aria-label="WAEC subjects">
+        <span></span>
+        <span class="ad-acts"><button class="ad-ic save" aria-label="Add course"><i class="fas fa-plus" aria-hidden="true"></i></button></span>
+      </form>
+      {% for c in courses %}{% set used = course_use.get(c.id, 0) %}
+      <form method="post" class="ad-row ad-course{% if not c.is_active %} off{% endif %}">{{ csrf() }}<input type="hidden" name="action" value="save_course"><input type="hidden" name="id" value="{{ c.id }}">
+        <input name="name" class="ad-name" value="{{ c.name }}" aria-label="Course">
+        <input name="department" value="{{ c.department or '' }}" placeholder="Department" aria-label="Department">
+        <input name="base_cutoff" type="number" value="{{ c.base_cutoff or 180 }}" aria-label="Base cut-off">
+        <input name="jamb_subjects" class="ad-wide" value="{{ c.jamb_subjects or '' }}" aria-label="JAMB subjects" title="{{ c.jamb_subjects or '' }}">
+        <input name="waec_subjects" class="ad-wide" value="{{ c.waec_subjects or '' }}" aria-label="WAEC subjects" title="{{ c.waec_subjects or '' }}">
+        <span class="ad-use">{% if used %}<b>{{ used }}</b> student{{ 's' if used != 1 }}{% elif not c.is_active %}Hidden{% else %}—{% endif %}</span>
+        <span class="ad-acts">
+          <button class="ad-ic save" aria-label="Save {{ c.name }}" title="Save"><i class="fas fa-check" aria-hidden="true"></i></button>
+          <button class="ad-ic" form="tg-c-{{ c.id }}" aria-label="{{ 'Hide' if c.is_active else 'Show' }} {{ c.name }}" title="{{ 'Hide from students' if c.is_active else 'Show to students' }}"><i class="fas {{ 'fa-eye-slash' if c.is_active else 'fa-eye' }}" aria-hidden="true"></i></button>
+          <button class="ad-ic del" form="del-c-{{ c.id }}" {% if used %}disabled title="{{ used }} student{{ 's' if used != 1 }} chose it — hide it instead"{% else %}title="Delete"{% endif %} aria-label="Delete {{ c.name }}"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </span>
+      </form>
+      <form method="post" id="tg-c-{{ c.id }}" hidden>{{ csrf() }}<input type="hidden" name="action" value="toggle_course"><input type="hidden" name="id" value="{{ c.id }}"></form>
+      <form method="post" id="del-c-{{ c.id }}" hidden data-confirm="Delete {{ c.name }}? Its cut-offs go too.">{{ csrf() }}<input type="hidden" name="action" value="delete_course"><input type="hidden" name="id" value="{{ c.id }}"></form>
+      {% else %}
+      <div class="rs-blank"><span><i class="fas fa-magnifying-glass" aria-hidden="true"></i></span><h3>No courses match</h3></div>
+      {% endfor %}
+      {% if course_pages > 1 %}
+      <div class="ad-pager">
+        {% if cpage > 1 %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='courses', cq=filters.cq, cpage=cpage-1) }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Previous</a>{% endif %}
+        <span class="cm-mute">Page {{ cpage }} of {{ course_pages }}</span>
+        {% if cpage < course_pages %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='courses', cq=filters.cq, cpage=cpage+1) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ================= CUT-OFFS ================= -->
+  <div class="ad-panel" data-panel="cutoffs">
+    <section class="rs-card ad-card">
+      <div class="ad-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Real cut-offs by institution</h3><small>{{ override_total }} set</small></div>
+      <p class="ad-note">The score an institution actually uses for a course. It replaces the estimate (course base + institution bump). Type the institution’s name or abbreviation.</p>
+      <datalist id="courseList">{% for name in course_names %}<option value="{{ name }}">{% endfor %}</datalist>
+      <div class="ad-row ad-cut ad-hd"><span>Institution</span><span>Course</span><span>Cut-off</span><span></span></div>
+      <form method="post" class="ad-row ad-cut new">{{ csrf() }}<input type="hidden" name="action" value="save_override">
+        <input name="university" class="ad-wide" placeholder="Institution, e.g. UNILAG" aria-label="Institution" required>
+        <input name="course" class="ad-wide" list="courseList" placeholder="Course" aria-label="Course" required>
+        <input name="jamb_cutoff" type="number" min="0" max="400" placeholder="e.g. 250" aria-label="Cut-off" required>
+        <span class="ad-acts"><button class="ad-ic save" aria-label="Add cut-off"><i class="fas fa-plus" aria-hidden="true"></i></button></span>
+      </form>
+      {% for o in overrides %}
+      <form method="post" class="ad-row ad-cut">{{ csrf() }}<input type="hidden" name="action" value="save_override">
+        <input type="hidden" name="university_id" value="{{ o.university_id }}"><input type="hidden" name="course_id" value="{{ o.course_id }}">
+        <span class="ad-name ad-wide">{{ o.university.name }}{% if o.university.abbreviation %} <small class="cm-mute">({{ o.university.abbreviation }})</small>{% endif %}</span>
+        <span class="ad-wide">{{ o.course.name }}{% if o.course.department %} <small class="cm-mute">· {{ o.course.department }}</small>{% endif %}</span>
+        <input name="jamb_cutoff" type="number" min="0" max="400" value="{{ o.jamb_cutoff }}" aria-label="Cut-off">
+        <span class="ad-acts">
+          <button class="ad-ic save" aria-label="Save cut-off" title="Save"><i class="fas fa-check" aria-hidden="true"></i></button>
+          <button class="ad-ic del" form="del-o-{{ o.id }}" aria-label="Remove cut-off" title="Remove"><i class="fas fa-trash-can" aria-hidden="true"></i></button>
+        </span>
+      </form>
+      <form method="post" id="del-o-{{ o.id }}" hidden data-confirm="Remove this cut-off? Students fall back to the estimate.">{{ csrf() }}<input type="hidden" name="action" value="delete_override"><input type="hidden" name="id" value="{{ o.id }}"></form>
+      {% else %}
+      <div class="rs-blank"><span><i class="fas fa-bullseye" aria-hidden="true"></i></span><h3>No real cut-offs yet</h3><p>Add one above, or paste a list in Import.</p></div>
+      {% endfor %}
+      {% if override_pages > 1 %}
+      <div class="ad-pager">
+        {% if opage > 1 %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='cutoffs', opage=opage-1) }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Previous</a>{% endif %}
+        <span class="cm-mute">Page {{ opage }} of {{ override_pages }}</span>
+        {% if opage < override_pages %}<a class="rs-btn sm ghost" href="{{ url_for('settings.admissions_data', tab='cutoffs', opage=opage+1) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ================= IMPORT ================= -->
+  <div class="ad-panel" data-panel="import">
+    <section class="rs-card ad-card">
+      <div class="ad-card-h"><h3><i class="fas fa-file-import" aria-hidden="true"></i> Import cut-offs</h3></div>
+      <form method="post" class="ad-import">{{ csrf() }}<input type="hidden" name="action" value="import_overrides">
+        <p>Paste figures from a source you trust, one per line: <code>Institution, Course, Cut-off</code> (comma, tab or pipe). Institutions and courses are matched by name or abbreviation; rows that don’t match are skipped and listed afterwards.</p>
+        <textarea name="import_text" aria-label="Cut-offs to import" placeholder="UNIBEN, Medicine and Surgery, 220&#10;UNILAG, Law, 280&#10;UI, Pharmacy, 282" required></textarea>
+        <label><input type="checkbox" name="create_missing" value="1"> Create courses that don’t exist yet</label>
+        <button type="submit" class="rs-btn primary" style="align-self:flex-start"><i class="fas fa-file-import" aria-hidden="true"></i> Import</button>
+        <p class="cm-mute" style="font-size:.8rem">Departmental cut-offs aren’t published as structured data, so pasting real figures is more reliable than anything scraped.</p>
+      </form>
+    </section>
+  </div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
 (function () {
     var active = {{ active_tab|tojson }};
-    var valid = ['institutions', 'courses', 'cutoffs', 'import'];
-    if (valid.indexOf(active) === -1) active = 'institutions';
+    var valid = ['picks', 'institutions', 'courses', 'cutoffs', 'import'];
+    if (valid.indexOf(active) === -1) active = {{ ('picks' if picks else 'institutions')|tojson }};
     function show(tab) {
-        document.querySelectorAll('.adm-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
-        document.querySelectorAll('.adm-panel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === tab); });
+        document.querySelectorAll('.ad-tab').forEach(function (b) { var on = b.getAttribute('data-tab') === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+        document.querySelectorAll('.ad-panel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === tab); });
     }
-    document.querySelectorAll('.adm-tab').forEach(function (b) {
+    document.querySelectorAll('.ad-tab').forEach(function (b) {
         b.addEventListener('click', function () {
             var t = b.getAttribute('data-tab');
             show(t);
-            // Reflect the tab in the URL without reloading, so pagination stays consistent.
             try { var u = new URL(window.location); u.searchParams.set('tab', t); history.replaceState(null, '', u); } catch (e) {}
         });
     });
