@@ -5064,6 +5064,14 @@
 ]
 ],
 [
+"mock_waec.to_term_results",
+"/mock-waec/exam/<int:exam_id>/to-term-results",
+[
+"GET",
+"POST"
+]
+],
+[
 "mock_waec.trends",
 "/mock-waec/trends",
 [

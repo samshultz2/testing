@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_exam_nav with context %}
+{% block title %}Send to term results — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Send to term results</span>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.tt{max-width:1180px}
+.tt-how{display:flex;gap:.9rem;align-items:flex-start;padding:.9rem 1rem}
+.tt-how>i{color:var(--primary);font-size:1.1rem;margin-top:.15rem}
+.tt-how p{margin:0;font-size:.88rem;color:var(--text-secondary);line-height:1.5}
+.tt-how b{color:var(--text-primary)}
+.tt-eg{display:inline-flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-top:.45rem;font-size:.8rem;font-weight:700}
+.tt-eg span{padding:.15rem .5rem;border-radius:7px;background:var(--gray-100,#eef2f7);color:var(--text-primary)}
+.tt-eg i{color:var(--text-muted);font-size:.7rem}
+.tt-bar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.tt-term{display:inline-flex;align-items:center;gap:.5rem;height:42px;padding:0 .4rem 0 .8rem;border:1.5px solid var(--border-color);border-radius:12px;background:var(--bg-card);margin:0}
+.tt-term i{color:var(--primary)}
+.tt-term select{border:0;background:none;font:inherit;font-weight:700;height:100%;color:var(--text-primary);cursor:pointer}
+.tt-sub{border:1px solid var(--border-color);border-radius:16px;background:var(--bg-card);overflow:clip}
+.tt-sub+.tt-sub{margin-top:.6rem}
+.tt-sub summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:.7rem;padding:.8rem 1rem}
+.tt-sub summary::-webkit-details-marker{display:none}
+.tt-sub summary h3{margin:0;font-size:.98rem;flex:1;min-width:0}
+.tt-sub summary h3 small{display:block;font-size:.76rem;font-weight:600;color:var(--text-muted);margin-top:.1rem}
+.tt-sub summary .chev{color:var(--text-muted);font-size:.75rem;transition:transform .15s}
+.tt-sub[open] summary .chev{transform:rotate(180deg)}
+.tt-pills{display:flex;gap:.3rem;flex-wrap:wrap;justify-content:flex-end}
+.tt-p{display:inline-flex;align-items:center;gap:.3rem;padding:.18rem .55rem;border-radius:999px;font-size:.72rem;font-weight:800;white-space:nowrap}
+.tt-p.new{background:color-mix(in srgb,var(--success) 14%,transparent);color:var(--success)}
+.tt-p.replace,.tt-p.partial{background:color-mix(in srgb,var(--warning) 16%,transparent);color:color-mix(in srgb,var(--warning) 80%,#000)}
+.tt-p.same{background:var(--gray-100,#eef2f7);color:var(--text-muted)}
+.tt-p.bad{background:color-mix(in srgb,var(--danger) 11%,transparent);color:var(--danger)}
+.tt-p.muted{background:var(--gray-100,#eef2f7);color:var(--text-muted)}
+.tt-t{width:100%;border-collapse:collapse;font-size:.86rem}
+.tt-t th{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);text-align:left;padding:.5rem 1rem;background:var(--gray-50,#f8fafc);border-top:1px solid var(--border-color)}
+.tt-t td{padding:.5rem 1rem;border-top:1px solid var(--border-light,var(--border-color));vertical-align:middle}
+.tt-t .n{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tt-t td.n b{font-size:.95rem}
+.tt-t td.n small{display:block;font-size:.68rem;color:var(--text-muted)}
+.tt-t .old{color:var(--text-muted);text-decoration:line-through;font-size:.72rem;margin-right:.25rem}
+.tt-t .who b{display:block}.tt-t .who small{color:var(--text-muted);font-size:.74rem}
+.tt-t .arrow{color:var(--text-muted);font-size:.7rem}
+.tt-why{font-size:.78rem;color:var(--text-muted)}
+.tt-foot{position:sticky;bottom:0;z-index:20;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;box-shadow:0 -6px 18px rgba(0,0,0,.08);padding:.7rem 1rem;margin-top:.4rem}
+.tt-foot-in{max-width:1180px;margin:0 auto;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
+.tt-sw{display:flex;align-items:center;gap:.6rem;margin:0;cursor:pointer;font-size:.86rem;font-weight:600;position:relative}
+.tt-sw input{position:absolute;left:0;top:0;opacity:0;width:1px;height:1px}
+.tt-sw .t{width:38px;height:22px;border-radius:999px;background:var(--gray-300,#cbd5e1);position:relative;flex:none;transition:background .15s}
+.tt-sw .t::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.tt-sw:has(input:checked) .t{background:var(--warning)}
+.tt-sw:has(input:checked) .t::after{transform:translateX(16px)}
+.tt-sw:has(input:focus-visible) .t{outline:2px solid var(--primary);outline-offset:2px}
+.tt-sw small{display:block;font-weight:500;color:var(--text-muted);font-size:.74rem}
+.tt-foot .rs-btn{margin-left:auto;height:46px}
+@media (max-width:760px){
+  .tt-how{padding:.8rem}
+  .tt-sub summary{flex-wrap:wrap}
+  .tt-pills{width:100%;justify-content:flex-start}
+  .tt-t thead{display:none}
+  .tt-t,.tt-t tbody{display:block;width:100%}
+  .tt-t td.n{text-align:left}
+  .tt-t td.n::before{content:attr(data-l);display:block;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)}
+  .tt-t tr{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.2rem .7rem;align-items:center;padding:.6rem .9rem;border-top:1px solid var(--border-light,var(--border-color))}
+  .tt-t td{border:0;padding:0}
+  .tt-t td.who{grid-column:1/-1}
+  .tt-t td.mock{grid-column:1}
+  .tt-t td.st{grid-column:1/-1}
+  .tt-t td.n small{display:inline;margin-left:.15rem}
+  .tt-foot .rs-btn{flex:1;margin-left:0}
+  .tt{padding-bottom:150px}
+  .tt-foot{position:fixed;left:0;right:0;bottom:0;z-index:1100;border-radius:0;border-width:1px 0 0;margin:0;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom))}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set c = plan.counts %}
+{% set n_new = c.get('new', 0) %}{% set n_rep = c.get('replace', 0) + c.get('partial', 0) %}
+{% set n_same = c.get('same', 0) %}
+{% set n_bad = c.get('no_class', 0) + c.get('no_subject', 0) + c.get('no_columns', 0) %}
+{% set n_skip = c.get('absent', 0) + c.get('no_score', 0) %}
+{% set STATUS = {'new': ('new', 'Ready'), 'replace': ('replace', 'Has scores — kept'), 'partial': ('partial', 'Some filled — rest kept'),
+  'same': ('same', 'Already recorded'), 'absent': ('muted', 'Absent in mock'), 'no_score': ('muted', 'No score'),
+  'no_class': ('bad', 'Not in a class this term'), 'no_subject': ('bad', 'Subject not set for class'), 'no_columns': ('bad', 'No CBT / Theory columns')} %}
+<div class="rs tt">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-share-from-square" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Send to term results</h1><p>{{ exam.display_name }} scores → CBT and Theory on the school's term results</p></div>
+  </header>
+  <div class="no-print">{{ mw_exam_nav(exam, 'toterm') }}</div>
+
+  <section class="rs-card tt-how">
+    <i class="fas fa-circle-info" aria-hidden="true"></i>
+    <div><p>Each mock score is out of <b>100</b>. On the term results it becomes the exam part of the subject — <b>CBT + Theory</b>: out of <b>70</b> when the subject also has a mid-term / practical, <b>80</b> when it doesn’t — shared between CBT and Theory in whole numbers, never above either column’s maximum. CAs and other columns are not touched.</p>
+      <div class="tt-eg"><span>64 / 100</span><i class="fas fa-arrow-right"></i><span>45 / 70</span><i class="fas fa-arrow-right"></i><span>CBT 19 / 30</span><span>Theory 26 / 40</span></div></div>
+  </section>
+
+  <div class="tt-bar">
+    <form method="get" class="tt-term"><i class="fas fa-calendar" aria-hidden="true"></i>
+      <select name="term_id" aria-label="Term" data-autosubmit>
+        {% for t in terms %}<option value="{{ t.id }}" {% if term and t.id == term.id %}selected{% endif %}>{{ t.name }}{% if exam.session %} · {{ exam.session.name }}{% endif %}</option>{% endfor %}
+      </select></form>
+  </div>
+
+  {% if not term %}
+  <div class="rs-blank"><span><i class="fas fa-calendar-xmark" aria-hidden="true"></i></span><h3>No terms in this session</h3><p>Create the terms for {{ exam.session.name if exam.session else 'this session' }} first.</p></div>
+  {% elif not plan.rows %}
+  <div class="rs-blank"><span><i class="fas fa-table" aria-hidden="true"></i></span><h3>No mock results yet</h3><p>Enter this mock’s scores first, then send them to the term results.</p>
+    <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="rs-btn primary">Enter results</a></div>
+  {% else %}
+  <div class="rs-tiles">
+    <div class="rs-tile good"><span class="l">Ready to record</span><span class="v">{{ n_new }}</span><span class="s">subject results with no CBT / Theory yet</span></div>
+    <div class="rs-tile{{ ' mid' if n_rep }}"><span class="l">Already have scores</span><span class="v">{{ n_rep }}</span><span class="s">kept unless you choose to replace</span></div>
+    <div class="rs-tile"><span class="l">Already up to date</span><span class="v">{{ n_same }}</span><span class="s">same CBT / Theory already recorded</span></div>
+    <div class="rs-tile{{ ' bad' if n_bad }}"><span class="l">Can’t be matched</span><span class="v">{{ n_bad }}</span><span class="s">{{ n_skip }} absent / no score also skipped</span></div>
+  </div>
+
+  {% if n_bad %}
+  <section class="rs-card" style="padding:.85rem 1rem">
+    <b style="font-size:.9rem"><i class="fas fa-triangle-exclamation" aria-hidden="true" style="color:var(--danger)"></i> Some results can’t go across yet</b>
+    <ul style="margin:.4rem 0 0;padding-left:1.1rem;font-size:.84rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:.2rem">
+      {% if c.get('no_class') %}<li><b>{{ c.no_class }}</b> belong to students who aren’t enrolled in a class in {{ term.name }} — enrol them, or pick the right term above.</li>{% endif %}
+      {% if c.get('no_subject') %}<li><b>{{ c.no_subject }}</b> are subjects that aren’t set up for the student’s class in {{ term.name }} — add them under <a href="{{ url_for('subjects.class_subjects_list', term_id=term.id) }}">Class subjects</a>.</li>{% endif %}
+      {% if c.get('no_columns') %}<li><b>{{ c.no_columns }}</b> are subjects with no CBT or Theory column this term (check Settings → Assessments).</li>{% endif %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% for subj, rows in plan.by_subject.items() %}
+  {% set ref = rows|selectattr('columns')|first %}
+  {% set sc = namespace(new=0, rep=0, same=0, bad=0) %}
+  {% for r in rows %}{% if r.status == 'new' %}{% set sc.new = sc.new + 1 %}{% elif r.status in ('replace', 'partial') %}{% set sc.rep = sc.rep + 1 %}{% elif r.status == 'same' %}{% set sc.same = sc.same + 1 %}{% elif STATUS[r.status][0] == 'bad' %}{% set sc.bad = sc.bad + 1 %}{% endif %}{% endfor %}
+  <details class="tt-sub" {% if loop.first %}open{% endif %}>
+    <summary>
+      <h3>{{ subj }}<small>{% if ref %}{% for col in ref.columns %}{{ col.label }} {{ col.max }}{{ ' + ' if not loop.last }}{% endfor %} = out of {{ ref.target }}{% else %}not matched to a class subject{% endif %} · {{ rows|length }} student{{ 's' if rows|length != 1 }}</small></h3>
+      <span class="tt-pills">
+        {% if sc.new %}<span class="tt-p new">{{ sc.new }} ready</span>{% endif %}
+        {% if sc.rep %}<span class="tt-p replace">{{ sc.rep }} have scores</span>{% endif %}
+        {% if sc.same %}<span class="tt-p same">{{ sc.same }} up to date</span>{% endif %}
+        {% if sc.bad %}<span class="tt-p bad">{{ sc.bad }} can’t match</span>{% endif %}
+      </span>
+      <i class="fas fa-chevron-down chev" aria-hidden="true"></i>
+    </summary>
+    <table class="tt-t">
+      <thead><tr><th>Student</th><th class="n">Mock</th><th class="n">Term total</th>{% if ref %}{% for col in ref.columns %}<th class="n">{{ col.label }}</th>{% endfor %}{% else %}<th class="n">CBT</th><th class="n">Theory</th>{% endif %}<th>Status</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td class="who"><b>{{ r.student.full_name if r.student else 'Unknown' }}</b><small>{{ r.student.student_id if r.student }}{% if r.assignment and r.assignment.arm_label %} · {{ r.assignment.arm_label }}{% endif %}</small></td>
+          <td class="n mock" data-l="Mock"><b>{{ r.mock if r.mock is not none else '—' }}</b><small>/ 100</small></td>
+          <td class="n" data-l="Total"><b>{{ r.scaled if r.scaled is not none else '—' }}</b>{% if r.target %}<small>/ {{ r.target }}</small>{% endif %}</td>
+          {% if r.columns %}{% for col in r.columns %}
+          <td class="n" data-l="{{ col.label }}">{% if col.old is not none and col.old != col.new %}<span class="old">{{ '%g'|format(col.old) }}</span>{% endif %}<b>{{ col.new }}</b><small>/ {{ col.max }}</small></td>
+          {% endfor %}{% else %}{% for _ in (ref.columns if ref else [1, 2]) %}<td class="n">—</td>{% endfor %}{% endif %}
+          <td class="st">{% set s = STATUS[r.status] %}<span class="tt-p {{ s[0] }}"{% if r.status in ('replace', 'partial') %} data-rep{% endif %}>{{ s[1] }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endfor %}
+
+  <form method="post" class="tt-foot" id="ttForm" data-confirm="Record these CBT and Theory scores in {{ term.name }}?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="term_id" value="{{ term.id }}">
+    <div class="tt-foot-in">
+      <label class="tt-sw"><input type="checkbox" name="replace" value="1" id="ttReplace"><span class="t"></span>
+        <span>Replace scores already entered<small id="ttHint">{{ n_rep }} subject result{{ 's' if n_rep != 1 }} already have CBT / Theory — they’re kept</small></span></label>
+      {% if can_results %}
+      <button type="submit" class="rs-btn primary" id="ttGo" {% if not (n_new or n_rep) %}disabled{% endif %}><i class="fas fa-share-from-square" aria-hidden="true"></i> <span id="ttLabel">Record {{ n_new }} in {{ term.name }}</span></button>
+      {% else %}
+      <span class="rs-muted" style="margin-left:auto">You can preview this, but recording needs permission to edit term results.</span>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+</div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var box = document.getElementById('ttReplace'); if (!box) return;
+  var NEW = {{ n_new }}, REP = {{ n_rep }}, TERM = {{ (term.name if term else '')|tojson }};
+  var go = document.getElementById('ttGo'), label = document.getElementById('ttLabel'), hint = document.getElementById('ttHint');
+  var form = document.getElementById('ttForm');
+  function upd() {
+    var n = NEW + (box.checked ? REP : 0);
+    if (form) form.setAttribute('data-confirm', 'Record CBT and Theory for ' + n + ' subject result' + (n === 1 ? '' : 's') + ' in ' + TERM + '?'
+      + (box.checked && REP ? ' ' + REP + ' already entered will be replaced.' : ''));
+    if (label) label.textContent = 'Record ' + n + ' in ' + TERM;
+    if (go) go.disabled = !n;
+    hint.textContent = REP ? (box.checked ? REP + ' existing CBT / Theory score set' + (REP === 1 ? '' : 's') + ' will be replaced'
+                                          : REP + ' subject result' + (REP === 1 ? '' : 's') + ' already have CBT / Theory — they’re kept') : 'Nothing to replace';
+  }
+  var reps = document.querySelectorAll('[data-rep]');
+  var orig = Array.prototype.map.call(reps, function (e) { return e.textContent; });
+  var _upd = upd;
+  upd = function () { _upd(); reps.forEach(function (e, i) { e.textContent = box.checked ? 'Will replace' : orig[i]; }); };
+  box.addEventListener('change', upd); upd();
+})();
+</script>
+{% endblock %}

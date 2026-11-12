@@ -250,6 +250,53 @@ def broadsheet_pdf_view(exam_id):
                      as_attachment=request.args.get('download') == '1', download_name=name)
 
 
+@mock_waec_bp.route('/exam/<int:exam_id>/to-term-results', methods=['GET', 'POST'])
+@login_required
+@csrf_protect
+def to_term_results(exam_id):
+    """Copy this mock's scores (out of 100) into the term results as CBT +
+    Theory — scaled to each subject's CBT + Theory total (70 with a mid-term /
+    practical, 80 without) and split in whole numbers. Preview first; nothing is
+    written until the user confirms."""
+    from models import Term
+    from utils.helpers import get_active_term
+    from utils.access_control import is_admin, module_level
+    from utils import mock_to_term as m2t
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    can_results = is_admin() or module_level('results') == 'edit'
+    terms = Term.query.filter_by(session_id=exam.session_id).order_by(Term.term_number).all()
+    active = get_active_term()
+    default = active.id if active and any(t.id == active.id for t in terms) else (terms[-1].id if terms else None)
+    term_id = request.values.get('term_id', type=int) or default
+    term = next((t for t in terms if t.id == term_id), None)
+    if request.method == 'POST':
+        if not can_results:
+            flash('You need permission to edit term results to do this.', 'error')
+            return redirect(url_for('mock_waec.to_term_results', exam_id=exam_id, term_id=term_id))
+        if not term:
+            abort(400)
+        replace = request.form.get('replace') == '1'
+        res = m2t.apply(m2t.plan(exam, term.id), term.id, replace=replace)
+        if res['locked']:
+            flash(f'{term.name} results are published — an admin must unpublish them first.', 'error')
+        else:
+            msg = f'{res["saved"]} CBT / Theory score{"s" if res["saved"] != 1 else ""} recorded in {term.name} results'
+            msg += f' across {res["classes"]} class{"es" if res["classes"] != 1 else ""}.'
+            if res['skipped']:
+                msg += f' {res["skipped"]} already had a score and were left as they were.'
+            if res['blocked']:
+                msg += f' {res["blocked"]} existing score(s) need a teacher who may edit results.'
+            flash(msg, 'success')
+            from utils.audit import log_action
+            log_action('mock_waec.to_term_results',
+                       detail=f'{exam.display_name} → {term.name}: {res["saved"]} saved, replace={replace}')
+        return redirect(url_for('mock_waec.to_term_results', exam_id=exam_id, term_id=term.id))
+    p = m2t.plan(exam, term.id) if term else {'rows': [], 'by_subject': {}, 'counts': {}}
+    return render_template('mock_waec/to_term.html', exam=exam, terms=terms, term=term,
+                           plan=p, can_results=can_results)
+
+
 @mock_waec_bp.route('/viewer')
 @login_required
 def pdf_viewer():

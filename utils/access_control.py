@@ -1045,7 +1045,7 @@ _SUBSECTION_ENDPOINTS = {
                                      'mock_waec.result_slip_pdf', 'mock_waec.result_slips_pdf_view',
                                      'mock_waec.export_results'},
         'mock_waec_results_create': {'mock_waec.grid_entry', 'mock_waec.add_result',
-                                     'mock_waec.paste_entry'},
+                                     'mock_waec.paste_entry', 'mock_waec.to_term_results'},
         'mock_waec_results_edit': {'mock_waec.edit_student_results'},
         'mock_waec_results_delete': {'mock_waec.delete_result'},
         # mock_jamb is likewise a separate blueprint from 'results' -- every

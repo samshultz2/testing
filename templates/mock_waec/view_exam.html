@@ -10,6 +10,9 @@
 {% set can_edit = can_write_sub('external_exams', 'mock_waec_results_edit') %}
 <div class="rs bx">
   {% call bx_head('fa-clipboard-check', exam.display_name, exam.name ~ (' · ' ~ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '')) %}
+    {% if can_write_sub('external_exams', 'mock_waec_results_create') %}
+    <a href="{{ url_for('mock_waec.to_term_results', exam_id=exam.id) }}" class="rs-btn ghost" title="Record these scores as CBT + Theory in the term results"><i class="fas fa-share-from-square" aria-hidden="true"></i><span class="rs-hide-sm">Send to term results</span></a>
+    {% endif %}
     {% if can_view or can_exp %}
     <details class="bx-menu">
       <summary class="rs-btn ghost" aria-label="Print and export"><i class="fas fa-print" aria-hidden="true"></i><span class="rs-hide-sm">Print &amp; export</span></summary>
