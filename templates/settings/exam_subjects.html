@@ -32,7 +32,8 @@
 .ex-name small{font-size:.68rem;font-weight:800;color:var(--warning);text-transform:uppercase}
 .ex-pill{position:relative;display:flex;align-items:center;justify-content:center;gap:.3rem;height:32px;border:1.5px solid var(--border-color);border-radius:999px;font-size:.76rem;font-weight:700;color:var(--text-muted);cursor:pointer;background:var(--bg-card)}
 .ex-pill input{position:absolute;opacity:0;pointer-events:none}
-.ex-pill .k{display:none}
+.ex-pill .ex-lbl{display:none;text-transform:none;letter-spacing:0;color:inherit;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-pill:has(input:checked) .ex-lbl{color:#fff}
 .ex-pill i{font-size:.7rem;opacity:.25}
 .ex-pill:has(input:checked){border-color:var(--primary);background:var(--primary);color:#fff}
 .ex-pill:has(input:checked) i{opacity:1}
@@ -58,10 +59,13 @@
 @media (max-width:1000px){.ex-grid{grid-template-columns:minmax(0,1fr)}.ex-side{position:static}}
 @media (max-width:760px){
   .ex-hd{display:none}
-  .ex-row{grid-template-columns:repeat(var(--cols),1fr) 32px;padding:.65rem 1rem;row-gap:.45rem}
-  .ex-row .ex-name{grid-column:1/-1}
+  .ex-row{grid-template-columns:1fr 1fr 32px;padding:.65rem 1rem;row-gap:.45rem}
+  .ex-row .ex-name{grid-column:1/3;grid-row:1}
+  .ex-row>:last-child{grid-column:3;grid-row:1}
+  .ex-row .ex-pill:nth-of-type(odd){grid-column:1}.ex-row .ex-pill:nth-of-type(even){grid-column:2}
   .ex-pill{font-size:.7rem;height:30px}
-  .ex-pill .k{display:inline}
+  .ex-pill .ex-lbl{display:inline}
+  .ex-pill{padding:0 .35rem;min-width:0;color:var(--text-secondary)}
   .ex-bar .rs-btn{flex:1}
   .ex-banner-h form,.ex-banner-h form .rs-btn{width:100%}
   .ex-banner .cm-attn-i{flex-wrap:wrap}.ex-banner .cm-attn-i form{margin-left:0!important;width:100%}.ex-banner .cm-attn-i form .rs-btn{width:100%}
@@ -144,9 +148,9 @@
               {% for st in streams %}{% if view and ((subj in cur.streams.get(st, [])) != (subj in base.streams.get(st, []))) %}{% set ns.chg = true %}{% endif %}{% endfor %}
               <div class="ex-row{% if ns.chg %} chg{% endif %}">
                 <span class="ex-name">{% if not view %}<input type="hidden" name="{{ exam }}_subject[]" value="{{ subj }}">{% endif %}{{ subj }}{% if ns.chg %}<small>changed</small>{% endif %}</span>
-                <label class="ex-pill gen" title="Compulsory for every stream"><input type="checkbox" name="{{ exam }}_general[]" value="{{ subj }}" {% if g %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i><span class="k">All</span></label>
+                <label class="ex-pill gen" title="Compulsory for every stream"><input type="checkbox" name="{{ exam }}_general[]" value="{{ subj }}" {% if g %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i><span class="ex-lbl">All</span></label>
                 {% for st in streams %}
-                <label class="ex-pill" title="{{ st }}"><input type="checkbox" name="{{ exam }}_stream_{{ st }}[]" value="{{ subj }}" data-stream="{{ st }}" {% if subj in cur.streams.get(st, []) %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i><span class="k">{{ st }}</span></label>
+                <label class="ex-pill" title="{{ st }}"><input type="checkbox" name="{{ exam }}_stream_{{ st }}[]" value="{{ subj }}" data-stream="{{ st }}" {% if subj in cur.streams.get(st, []) %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i><span class="ex-lbl">{{ st }}</span></label>
                 {% endfor %}
                 {% if not view %}<button type="button" class="ex-rm" aria-label="Remove {{ subj }}" title="Remove subject"><i class="fas fa-xmark" aria-hidden="true"></i></button>{% else %}<span></span>{% endif %}
               </div>
@@ -220,9 +224,9 @@
     // usual subjects) and is ticked here for this session only.
     var field = editingYear ? (ex + '_new[]') : (ex + '_subject[]');
     var html = '<span class="ex-name"><input type="hidden" name="' + field + '" value="' + esc(name) + '">' + esc(name) + (editingYear ? '<small>new</small>' : '') + '</span>'
-      + '<label class="ex-pill gen"><input type="checkbox" name="' + ex + '_general[]" value="' + esc(name) + '"><i class="fas fa-check"></i><span class="k">All</span></label>';
+      + '<label class="ex-pill gen"><input type="checkbox" name="' + ex + '_general[]" value="' + esc(name) + '"><i class="fas fa-check"></i><span class="ex-lbl">All</span></label>';
     STREAMS.forEach(function (st) {
-      html += '<label class="ex-pill"><input type="checkbox" name="' + ex + '_stream_' + st + '[]" value="' + esc(name) + '" data-stream="' + esc(st) + '"><i class="fas fa-check"></i><span class="k">' + esc(st) + '</span></label>';
+      html += '<label class="ex-pill"><input type="checkbox" name="' + ex + '_stream_' + st + '[]" value="' + esc(name) + '" data-stream="' + esc(st) + '"><i class="fas fa-check"></i><span class="ex-lbl">' + esc(st) + '</span></label>';
     });
     html += '<button type="button" class="ex-rm" aria-label="Remove ' + esc(name) + '"><i class="fas fa-xmark"></i></button>';
     var div = document.createElement('div'); div.className = 'ex-row'; div.innerHTML = html;

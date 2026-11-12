@@ -244,13 +244,20 @@ export default function StudentForm({ data }) {
   const jambSubjects = opt.jamb_subjects || opt.waec_subjects || [];
 
   // Selecting a stream fills the WAEC + JAMB subjects from that stream's
-  // compulsory set (matches the classic page: change overwrites the selection).
+  // compulsory set. Empty lists are filled straight away; a list the student
+  // already has is only replaced if the user says so (re-picking a stream
+  // used to silently wipe a custom list).
   const onStream = (v) => {
     set('stream', v);
-    const wsubs = (opt.stream_waec || {})[v];
-    if (wsubs) setWaec(capped(wsubs, WAEC_SUBJECTS_MAX));
-    const jsubs = (opt.stream_jamb || {})[v];
-    if (jsubs) setJamb(capped(jsubs, JAMB_SUBJECTS_MAX));
+    const wsubs = (opt.stream_waec || {})[v] || [];
+    const jsubs = (opt.stream_jamb || {})[v] || [];
+    const same = (have, next) => have.size === next.length && next.every((x) => have.has(x));
+    const hasW = waec.size > 0 && wsubs.length && !same(waec, wsubs);
+    const hasJ = jamb.size > 0 && jsubs.length && !same(jamb, jsubs);
+    const replace = !(hasW || hasJ) || window.confirm(
+      `Replace this student's ${[hasW && 'WAEC', hasJ && 'JAMB'].filter(Boolean).join(' and ')} subjects with the ${v} set?\n\nChoose Cancel to keep the subjects they already have.`);
+    if (wsubs.length && (replace || waec.size === 0)) setWaec(capped(wsubs, WAEC_SUBJECTS_MAX));
+    if (jsubs.length && (replace || jamb.size === 0)) setJamb(capped(jsubs, JAMB_SUBJECTS_MAX));
   };
 
   // Extrapolate the chosen stream's compulsory subjects to every SSS2/SSS3
