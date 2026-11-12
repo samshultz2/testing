@@ -78,6 +78,7 @@ def index():
             'performance': url_for('settings.performance'),
             'admissions': url_for('settings.admissions_data'),
             'exam_subjects': url_for('settings.exam_subjects'),
+            'waec_numbers': url_for('settings.waec_numbers') if is_admin() else None,
             'payments': url_for('settings.payments_settings') if can_manage_payment_settings() else None,
             'error_log': url_for('main.error_log'),
             'share': url_for('main.share_app'),
@@ -892,6 +893,54 @@ def _apply_sitting_to_students(year):
 
 
 # ---------------------------------------------------------------------------
+# WAEC candidate numbers: centre number (per branch / school) + 001, 002 … in
+# surname order. See utils.waec_numbers.
+# ---------------------------------------------------------------------------
+
+@settings_bp.route('/waec-numbers', methods=['GET', 'POST'])
+@login_required
+def waec_numbers():
+    from models import Branch
+    from utils import waec_numbers as wn
+    from utils.exam_subject_config import current_exam_year
+    if not is_admin():
+        return _err('Only an admin can manage WAEC numbers.', url_for('settings.index'))
+    year = current_exam_year()
+    mode = 'renumber' if request.values.get('mode') == 'renumber' else 'fill'
+    back = url_for('settings.waec_numbers', mode=mode)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'centres':
+            school, err = wn.clean_centre(request.form.get('school_centre'))
+            if err:
+                return _err(err, back)
+            wn.set_school_centre(school)
+            for b in Branch.query.all():
+                key = f'centre_{b.id}'
+                if key in request.form:
+                    c, err = wn.clean_centre(request.form.get(key))
+                    if err:
+                        return _err(f'{b.name}: {err}', back)
+                    b.waec_centre = c
+            db.session.commit()
+            log_action('waec.centres', 'Updated WAEC centre numbers')
+            return _ok('Centre numbers saved.', back)
+        if action == 'generate':
+            p = wn.plan(_sitting_students(year) if year else [], mode)
+            n = wn.apply(p)
+            log_action('waec.numbers', f'{n} WAEC candidate numbers set ({mode})')
+            return _ok(f'Saved {n} WAEC number{"s" if n != 1 else ""}.', back)
+        return _err('Unknown action.', back)
+
+    branches = Branch.query.filter_by(is_active=True).order_by(Branch.is_default.desc(), Branch.name).all()
+    students = _sitting_students(year) if year else []
+    p = wn.plan(students, mode)
+    return render_template('settings/waec_numbers.html', plan=p, mode=mode, branches=branches,
+                           school_centre=wn.school_centre() or '', year=year, total=len(students),
+                           back_url=url_for('settings.index'))
+
+
+# ---------------------------------------------------------------------------
 # Branches (multi-branch support)
 # ---------------------------------------------------------------------------
 
@@ -917,10 +966,12 @@ def branches():
         'branches': [{
             'id': b.id, 'name': b.name, 'code': b.code, 'phone': b.phone,
             'address': b.address, 'is_active': b.is_active, 'is_default': b.is_default,
+            'waec_centre': b.waec_centre or '',
             'students': stu.get(b.id, 0), 'staff': usr.get(b.id, 0), 'classes': cls.get(b.id, 0),
             'edit_url': url_for('settings.edit_branch', branch_id=b.id),
         } for b in rows],
         'unassigned': {'students': stu.get(None, 0), 'staff': usr.get(None, 0)},
+        'waec_numbers_url': url_for('settings.waec_numbers'),
     })
 
 
@@ -960,9 +1011,14 @@ def add_branch():
                     f"unaffected — upgrade your subscription to add more.",
                     url_for('settings.branches'))
     first = Branch.query.count() == 0
+    from utils.waec_numbers import clean_centre
+    centre, centre_err = clean_centre(request.form.get('waec_centre'))
+    if centre_err:
+        return _err(centre_err, url_for('settings.branches'))
     db.session.add(Branch(
         name=name,
         code=code,
+        waec_centre=centre,
         address=(request.form.get('address') or '').strip() or None,
         phone=(request.form.get('phone') or '').strip() or None,
         is_default=first))   # the very first branch is the default
@@ -983,6 +1039,12 @@ def edit_branch(branch_id):
     if code and Branch.query.filter(Branch.code == code, Branch.id != branch_id).first():
         return _err(f'Branch code "{code}" is already used by another branch.',
                     url_for('settings.branches'))
+    if 'waec_centre' in request.form:
+        from utils.waec_numbers import clean_centre
+        centre, centre_err = clean_centre(request.form.get('waec_centre'))
+        if centre_err:
+            return _err(centre_err, url_for('settings.branches'))
+        b.waec_centre = centre
     b.name = (request.form.get('name') or b.name).strip()
     b.code = code
     b.address = (request.form.get('address') or '').strip() or None

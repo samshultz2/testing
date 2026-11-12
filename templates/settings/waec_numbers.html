@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}WAEC candidate numbers — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>WAEC candidate numbers</span>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
+<style>
+.wn{max-width:1100px}
+.wn-card{padding:0;overflow:hidden;margin:0 0 1rem}
+.wn-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.wn-h h3{margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem}.wn-h h3 i{color:var(--primary)}
+.wn-h small{color:var(--text-muted);font-size:.8rem}
+.wn-how{display:grid;grid-template-columns:auto 1fr;gap:1.2rem;align-items:center;padding:1rem 1.1rem}
+.wn-num{display:flex;align-items:stretch;font-family:ui-monospace,monospace;font-size:1.5rem;font-weight:800;letter-spacing:.06em}
+.wn-num span{display:flex;flex-direction:column;align-items:center;padding:.45rem .7rem;border-radius:10px}
+.wn-num span small{font-family:inherit;font-size:.62rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase;margin-top:.15rem;font-family:system-ui,sans-serif}
+.wn-num .c{background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary)}
+.wn-num .s{background:color-mix(in srgb,var(--warning) 16%,transparent);color:var(--warning);margin-left:4px}
+.wn-how p{margin:0;font-size:.86rem;color:var(--text-secondary);line-height:1.55}
+.wn-centres{padding:1rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.8rem}
+.wn-centres .cm-f input{font-family:ui-monospace,monospace;letter-spacing:.08em;font-weight:700}
+.wn-save{display:flex;justify-content:flex-end;padding:0 1rem 1rem}
+.wn-modes{display:inline-flex;background:var(--gray-100,#eef2f7);padding:3px;border-radius:11px;gap:2px}
+.wn-modes a{padding:.4rem .85rem;border-radius:9px;font-weight:700;font-size:.84rem;color:var(--text-secondary);text-decoration:none}
+.wn-modes a.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.wn-row{display:grid;grid-template-columns:44px minmax(0,1fr) 130px 130px 92px;gap:.7rem;align-items:center;padding:.5rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color));font-size:.88rem}
+.wn-row:last-child{border-bottom:0}
+.wn-hd{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--gray-50,#f8fafc)}
+.wn-row .i{color:var(--text-muted);font-variant-numeric:tabular-nums}
+.wn-row .n b{font-weight:700}.wn-row .n small{display:block;color:var(--text-muted);font-size:.74rem}
+.wn-row code{font-size:.84rem;background:none;padding:0;font-weight:700;letter-spacing:.03em}
+.wn-row code.old{color:var(--text-muted);font-weight:500;text-decoration:line-through}
+.wn-row.change{background:color-mix(in srgb,var(--warning) 7%,transparent)}
+.wn-row.new{background:color-mix(in srgb,var(--success) 6%,transparent)}
+.wn-go{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;padding:1rem 1.1rem;margin:0 0 1rem}
+.wn-go .t{flex:1;min-width:0}.wn-go b{display:block}.wn-go small{color:var(--text-muted);font-size:.84rem}
+@media (max-width:760px){
+  .wn-how{grid-template-columns:1fr}.wn-num{font-size:1.15rem}
+  .wn-hd{display:none}
+  .wn-row{grid-template-columns:32px minmax(0,1fr) auto;row-gap:.2rem}
+  .wn-row .cur{grid-column:2;grid-row:2}.wn-row .prop{grid-column:2/-1;grid-row:3}.wn-row .st{grid-column:3;grid-row:1}
+  .wn-row .cur:empty{display:none}
+  .wn-go{flex-direction:column;align-items:stretch}.wn-go .rs-btn{width:100%}.wn-modes{align-self:flex-start}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set c = plan.counts %}
+{% set to_save = c.new + c.change %}
+<div class="rs wn">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-hashtag" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>WAEC candidate numbers</h1><p>Set each centre’s number once, then give every candidate their examination number in one go.</p></div>
+  </header>
+
+  <section class="rs-card wn-card">
+    <div class="wn-how">
+      <div class="wn-num" aria-label="Example: 4250101001"><span class="c">{{ (school_centre or (branches|selectattr('waec_centre')|map(attribute='waec_centre')|first) or '4250101') }}<small>Centre number</small></span><span class="s">001<small>Candidate</small></span></div>
+      <p>A WAEC (WASSCE) examination number is <b>10 digits</b>: the school’s <b>7-digit centre number</b> from WAEC, then a <b>3-digit candidate number</b> — 001, 002, 003… given in alphabetical order of surname (then first name). Each branch that is its own WAEC centre has its own centre number and its own 001.</p>
+    </div>
+  </section>
+
+  <form method="post" class="rs-card wn-card">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="centres">
+    <div class="wn-h"><h3><i class="fas fa-building" aria-hidden="true"></i> Centre numbers</h3><small>7 digits, as given by WAEC</small></div>
+    <div class="wn-centres">
+      <label class="cm-f"><span>{{ 'Whole school (branches without their own)' if branches else 'School centre number' }}</span>
+        <input name="school_centre" value="{{ school_centre }}" inputmode="numeric" maxlength="7" pattern="\d{7}" placeholder="e.g. 4250101"></label>
+      {% for b in branches %}
+      <label class="cm-f"><span>{{ b.name }}{% if b.is_default %} · default{% endif %}</span>
+        <input name="centre_{{ b.id }}" value="{{ b.waec_centre or '' }}" inputmode="numeric" maxlength="7" pattern="\d{7}" placeholder="{{ 'Uses the whole-school number' if school_centre else 'e.g. 4250102' }}"></label>
+      {% endfor %}
+    </div>
+    <div class="wn-save"><button type="submit" class="rs-btn primary sm"><i class="fas fa-check" aria-hidden="true"></i> Save centre numbers</button></div>
+  </form>
+
+  <div class="rs-tiles">
+    <div class="rs-tile"><span class="l">Candidates · WAEC {{ year or '' }}</span><span class="v">{{ total }}</span><span class="s">SSS3 students this session</span></div>
+    <div class="rs-tile"><span class="l">Already numbered</span><span class="v">{{ c.keep }}</span></div>
+    <div class="rs-tile{% if c.new %} good{% endif %}"><span class="l">To get a number</span><span class="v">{{ c.new }}</span></div>
+    <div class="rs-tile{% if c.change %} warn{% endif %}"><span class="l">Number would change</span><span class="v">{{ c.change }}</span></div>
+  </div>
+
+  {% if plan.missing %}
+  <div class="cm-attn-i bad" style="margin:0 0 1rem"><i class="fas fa-building-circle-exclamation" aria-hidden="true"></i>
+    <span><b>{{ plan.missing|length }} candidate{{ 's' if plan.missing|length != 1 }} can’t be numbered</b> — their branch has no centre number and there’s no whole-school number. Add one above.</span></div>
+  {% endif %}
+
+  {% if total %}
+  <section class="rs-card wn-go">
+    <div class="t">
+      {% if mode == 'renumber' %}<b>Renumber everyone from 001</b><small>Every candidate is numbered again in surname order. Only do this before numbers are sent to WAEC — registered numbers must not change.</small>
+      {% else %}<b>Number new candidates only</b><small>Numbers already given stay as they are. New candidates get the next free numbers at their centre, in surname order — safe after registration.</small>{% endif %}
+    </div>
+    <div class="wn-modes" role="tablist" aria-label="How to number">
+      <a href="{{ url_for('settings.waec_numbers') }}" class="{{ 'on' if mode == 'fill' }}">New only</a>
+      <a href="{{ url_for('settings.waec_numbers', mode='renumber') }}" class="{{ 'on' if mode == 'renumber' }}">Renumber all</a>
+    </div>
+    <form method="post" data-confirm="{{ ('Renumber all ' ~ total ~ ' candidates? ' ~ c.change ~ ' existing number(s) will change.') if mode == 'renumber' else ('Save ' ~ to_save ~ ' new WAEC number(s)?') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="generate"><input type="hidden" name="mode" value="{{ mode }}">
+      <button type="submit" class="rs-btn {{ 'danger' if mode == 'renumber' and c.change else 'primary' }}" {% if not to_save %}disabled{% endif %}>
+        <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> {{ 'Nothing to save' if not to_save else 'Save ' ~ to_save ~ ' number' ~ ('s' if to_save != 1) }}</button>
+    </form>
+  </section>
+
+  {% for g in plan.centres %}
+  <section class="rs-card wn-card">
+    <div class="wn-h"><h3><i class="fas fa-building-columns" aria-hidden="true"></i> {{ g.label }} · centre {{ g.centre }}</h3><small>{{ g.rows|length }} candidate{{ 's' if g.rows|length != 1 }} · preview</small></div>
+    {% for msg in g.issues %}<div class="cm-attn-i bad" style="margin:.7rem 1rem"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span>{{ msg }}</span></div>{% endfor %}
+    <div class="wn-row wn-hd"><span>#</span><span>Candidate</span><span>Now</span><span>Will be</span><span></span></div>
+    {% for r in g.rows %}
+    <div class="wn-row {{ r.status }}">
+      <span class="i">{{ r.proposed[7:] }}</span>
+      <span class="n"><b>{{ r.student.surname|upper }}</b> {{ r.student.first_name }} {{ r.student.middle_name or '' }}<small>{{ r.student.student_id or '' }}{% if r.student.stream %} · {{ r.student.stream }}{% endif %}</small></span>
+      <span class="cur">{% if r.current and r.status == 'change' %}<code class="old">{{ r.current }}</code>{% elif r.current %}<code>{{ r.current }}</code>{% endif %}</span>
+      <span class="prop">{% if r.status != 'keep' %}<code>{{ r.proposed }}</code>{% endif %}</span>
+      <span class="st">{% if r.status == 'keep' %}<span class="cm-pill">Kept</span>{% elif r.status == 'new' %}<span class="cm-pill good">New</span>{% else %}<span class="cm-pill mid">Changes</span>{% endif %}</span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-user-graduate" aria-hidden="true"></i></span><h3>No SSS3 candidates this session</h3><p>Candidates are the students enrolled in SSS3 this term.</p></div>
+  {% endif %}
+</div>
+{% endblock %}
