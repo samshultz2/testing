@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
@@ -23,15 +23,48 @@ function Bars({ rows, labelKey, valueKey }) {
   );
 }
 
+// Weekly trend: fixed to its card's width however many weeks the term has.
+// Values sit on the bars only when there's room; otherwise tap / hover a week
+// to read it in the header line. 50% and 75% guides + the term average.
 function ColumnChart({ rows }) {
+  const ref = useRef(null);
+  const [w, setW] = useState(0);
+  const [sel, setSel] = useState(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return undefined;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(el); return () => ro.disconnect();
+  }, []);
   if (!rows || !rows.length) return <p className="att-sub">No data.</p>;
+  const n = rows.length;
+  const roomy = w / n >= 46;
+  const everyLbl = w / n >= 26 ? 1 : Math.ceil(26 / Math.max(1, w / n));
+  const avg = rows.reduce((a, t) => a + (t.percentage || 0), 0) / n;
+  const best = rows.reduce((b, t) => (t.percentage > b.percentage ? t : b), rows[0]);
+  const worst = rows.reduce((b, t) => (t.percentage < b.percentage ? t : b), rows[0]);
+  const cur = sel != null ? rows[sel] : null;
   return (
-    <div className="att-trend" aria-label="Attendance percentage trend">
-      {rows.map((t, i) => (
-        <div key={i} className="att-trend-col" title={`${t.label}: ${fmtPct(t.percentage)}`}>
-          <span className="att-trend-v">{fmtPct(t.percentage)}</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%', background: pctHex(t.percentage) }} />
-          <div className="att-trend-lbl">{t.label}</div>
-        </div>))}
+    <div className="att-tc" ref={ref}>
+      <div className="att-tc-read" aria-live="polite">
+        {cur
+          ? <><b>{cur.label}</b><span className={'ak-pct ' + pctTone(cur.percentage)}>{fmtPct(cur.percentage)}</span>
+              <small>{cur.percentage >= avg ? '+' : ''}{fmtNum(cur.percentage - avg)} vs average</small></>
+          : <><span>Average <b>{fmtPct(avg)}</b></span><span className="sep" /><span>Best <b>{best.label}</b> {fmtPct(best.percentage)}</span><span className="sep" /><span>Lowest <b>{worst.label}</b> {fmtPct(worst.percentage)}</span></>}
+      </div>
+      <div className="att-tc-plot" role="img" aria-label={`Weekly attendance, average ${fmtPct(avg)}`}>
+        {[75, 50].map((g) => <span key={g} className="att-tc-guide" style={{ bottom: g + '%' }}><i>{g}%</i></span>)}
+        <span className="att-tc-avg" style={{ bottom: avg + '%' }} title={`Average ${fmtPct(avg)}`} />
+        {rows.map((t, i) => (
+          <button type="button" key={i} className={'att-tc-col' + (sel === i ? ' on' : '')}
+                  onClick={() => setSel(sel === i ? null : i)} onMouseEnter={() => setSel(i)} onMouseLeave={() => setSel(null)}
+                  aria-label={`${t.label}: ${fmtPct(t.percentage)}`} title={`${t.label}: ${fmtPct(t.percentage)}`}>
+            {roomy && <span className="v">{Math.round(t.percentage)}%</span>}
+            <span className="b" style={{ height: Math.max(3, Math.min(100, t.percentage)) + '%', background: pctHex(t.percentage) }} />
+          </button>))}
+      </div>
+      <div className="att-tc-x">
+        {rows.map((t, i) => <span key={i}>{i % everyLbl === 0 ? t.label : ''}</span>)}
+      </div>
     </div>
   );
 }

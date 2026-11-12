@@ -532,6 +532,26 @@ button.ak-band{cursor:pointer}
 .sp2-iv{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .att-trend-col{position:relative}
 .att-trend-v{font-size:.66rem;font-weight:700;color:var(--text-muted);margin-bottom:2px}
+.att-trend-col{min-width:0}.att-trend-v{max-width:100%;overflow:hidden;text-overflow:clip;white-space:nowrap}
+.ak-hero-chips{min-width:0;max-width:100%}.ak-hero .ak-chip{max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* weekly trend (fits any number of weeks) */
+.att-tc{display:flex;flex-direction:column;gap:.5rem;min-width:0}
+.att-tc-read{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.8rem;color:var(--text-muted);min-height:26px}
+.att-tc-read b{color:var(--text-primary)}
+.att-tc-read .sep{width:3px;height:3px;border-radius:50%;background:var(--border-color)}
+.att-tc-read .ak-pct{font-size:.85rem}
+.att-tc-plot{position:relative;height:150px;display:flex;align-items:flex-end;gap:clamp(2px,1.2%,8px);border-bottom:1px solid var(--border-color);padding-top:16px;min-width:0}
+.att-tc-guide{position:absolute;left:0;right:0;border-top:1px dashed var(--border-light,var(--border-color));pointer-events:none}
+.att-tc-guide{z-index:2}.att-tc-guide i{position:absolute;right:0;top:-.95rem;border-radius:4px;padding-right:3px;font-size:.6rem;font-style:normal;color:var(--text-muted);background:var(--bg-card);padding-left:3px}
+.att-tc-avg{position:absolute;left:0;right:0;border-top:2px solid color-mix(in srgb,var(--primary) 55%,transparent);pointer-events:none;z-index:1}
+.att-tc-col{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;border:0;background:none;padding:0;cursor:pointer;position:relative;border-radius:5px 5px 0 0}
+.att-tc-col .b{width:100%;max-width:40px;border-radius:5px 5px 0 0;transition:filter .15s,opacity .15s}
+.att-tc-col .v{font-size:.62rem;font-weight:700;color:var(--text-muted);margin-bottom:2px;white-space:nowrap}
+.att-tc-plot:hover .att-tc-col .b,.att-tc-plot:has(.on) .att-tc-col .b{opacity:.45}
+.att-tc-plot .att-tc-col.on .b,.att-tc-plot .att-tc-col:hover .b{opacity:1;filter:saturate(1.15)}
+.att-tc-col:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.att-tc-x{display:flex;gap:clamp(2px,1.2%,8px)}
+.att-tc-x span{flex:1 1 0;min-width:0;text-align:center;font-size:.64rem;color:var(--text-muted);white-space:nowrap;overflow:visible}
 /* sheet */
 .ak-sheet-bg{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:1rem}
 .ak-sheet{width:100%;max-width:520px;max-height:88vh;overflow-y:auto;background:var(--bg-card);border-radius:18px;padding:1rem 1.2rem 1.2rem;box-shadow:0 24px 60px rgba(0,0,0,.25)}
