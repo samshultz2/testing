@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "components/_pdf_view.html" import pdf_view_css, pdf_view_js, pdf_view_markup with context %}
+{% block title %}Blank application form - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admissions.dashboard') }}">Admissions</a> / <span>Blank application form</span>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{{ pdf_view_css() }}
+<style>
+.bf{max-width:1300px}
+.bf-grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:1rem;align-items:start}
+.bf-side{display:flex;flex-direction:column;gap:.9rem;position:sticky;top:76px}
+.bf-k{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin:0 0 .55rem}
+.bf-pick{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.bf-opt{position:relative;display:flex;flex-direction:column;gap:.5rem;padding:.7rem;border-radius:14px;border:2px solid var(--border-color);background:var(--bg-card);cursor:pointer;margin:0;text-align:left}
+.bf-opt input{position:absolute;left:0;top:0;opacity:0;width:1px;height:1px}
+.bf-opt:has(input:checked){border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 15%,transparent)}
+.bf-opt:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.bf-sw{height:64px;border-radius:9px;border:1px solid var(--border-color);background:#fff;padding:7px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.bf-sw i{display:block;height:7px;border-radius:2px}
+.bf-sw .h{height:11px}
+.bf-sw.col .h{background:#1E2A4A}.bf-sw.col .a{background:#B8862B;width:40%}.bf-sw.col .f{background:#eef2f9;border:1px solid #AEB9CC}
+.bf-sw.bw .h{background:#111}.bf-sw.bw .a{background:#555;width:40%}.bf-sw.bw .f{background:#fff;border:1px solid #222}
+.bf-opt b{font-size:.9rem;display:flex;align-items:center;gap:.4rem}
+.bf-opt small{font-size:.74rem;color:var(--text-muted);line-height:1.35}
+.bf-opt .ck{position:absolute;top:.55rem;right:.55rem;width:20px;height:20px;border-radius:50%;background:var(--primary);color:#fff;font-size:.62rem;display:none;place-items:center}
+.bf-opt:has(input:checked) .ck{display:grid}
+.bf-acts{display:flex;flex-direction:column;gap:.5rem}
+.bf-acts .rs-btn{width:100%;height:46px}
+.bf-notes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:.45rem;font-size:.82rem;color:var(--text-secondary)}
+.bf-notes li{display:flex;gap:.55rem}.bf-notes i{color:var(--primary);margin-top:.18rem;width:14px;text-align:center}
+.bf-main{padding:0;overflow:clip;display:flex;flex-direction:column}
+.bf-mh{display:flex;align-items:center;gap:.55rem;padding:.6rem .9rem;border-bottom:1px solid var(--border-color);font-size:.84rem}
+.bf-mh .st{margin-left:auto;color:var(--text-muted);font-weight:600;display:inline-flex;gap:.4rem;align-items:center}
+.bf-main .pdv{height:calc(100vh - 150px);min-height:520px}
+.bf-bar{display:none}
+@media (max-width:1000px){
+  .bf-grid{grid-template-columns:minmax(0,1fr)}
+  .bf-side{position:static}
+  .bf-side .bf-acts,.bf-side .bf-tips{display:none}
+  .bf-main .pdv{height:72vh;min-height:420px}
+  .bf{padding-bottom:84px}
+  .bf-bar{display:flex;gap:.6rem;position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom));background:var(--bg-card);border-top:1px solid var(--border-color);box-shadow:0 -6px 18px rgba(0,0,0,.08)}
+  .bf-bar .rs-btn{flex:1;height:46px;padding:0 .5rem}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rs bf">
+  <header class="rs-head">
+    <a href="{{ url_for('admissions.dashboard') }}" class="rs-icon-btn" aria-label="Back to admissions" title="Back" style="display:grid;place-items:center;text-decoration:none"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
+    <div class="rs-head-t"><h1>Blank application form</h1><p>A one-page form parents can fill on screen or print and complete by hand.</p></div>
+  </header>
+
+  <div class="bf-grid">
+    <aside class="bf-side">
+      <section class="rs-card">
+        <p class="bf-k">Version</p>
+        <div class="bf-pick" role="radiogroup" aria-label="Version">
+          <label class="bf-opt"><input type="radio" name="ver" value="0" checked><span class="ck"><i class="fas fa-check"></i></span>
+            <span class="bf-sw col" aria-hidden="true"><i class="h"></i><i class="a"></i><i class="f"></i><i class="f"></i></span>
+            <b>Colour</b><small>School colours — for sharing, colour printing and filling on screen.</small></label>
+          <label class="bf-opt"><input type="radio" name="ver" value="1"><span class="ck"><i class="fas fa-check"></i></span>
+            <span class="bf-sw bw" aria-hidden="true"><i class="h"></i><i class="a"></i><i class="f"></i><i class="f"></i></span>
+            <b>Black &amp; white</b><small>Strong black lines, greyscale logo — for mono printers and photocopies.</small></label>
+        </div>
+      </section>
+      <section class="rs-card bf-acts">
+        <a id="bfDl" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download PDF</a>
+        <a id="bfOpen" href="#" target="_blank" rel="noopener" class="rs-btn"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open in new tab to print</a>
+      </section>
+      <section class="rs-card bf-tips">
+        <p class="bf-k">Good to know</p>
+        <ul class="bf-notes">
+          <li><i class="fas fa-keyboard" aria-hidden="true"></i><span>Every box is fillable — parents can type into it in any PDF reader, then print or send it back.</span></li>
+          <li><i class="fas fa-school" aria-hidden="true"></i><span>Name, logo, address and motto come from <a href="{{ url_for('settings.school_settings') }}">Settings → School</a>.</span></li>
+          <li><i class="fas fa-stamp" aria-hidden="true"></i><span>The “For office use only” box is for your staff when the form comes back.</span></li>
+        </ul>
+      </section>
+    </aside>
+
+    <section class="rs-card bf-main">
+      <div class="bf-mh"><i class="fas fa-file-pdf" aria-hidden="true" style="color:var(--danger)"></i><b id="bfName">Colour version</b>
+        <span class="st" id="bfState">Loading…</span></div>
+      {{ pdf_view_markup('bfView') }}
+    </section>
+  </div>
+
+  <div class="bf-bar">
+    <a id="bfOpen2" href="#" class="rs-btn"><i class="fas fa-expand" aria-hidden="true"></i> View</a>
+    <a id="bfDl2" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
+  </div>
+</div>
+{{ pdf_view_js() }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var BASE = {{ pdf_url|tojson }}, VIEWER = {{ viewer_url|tojson }};
+  var $ = function (id) { return document.getElementById(id); };
+  var state = $('bfState');
+  var v = PdfView($('bfView'), {
+    onBusy: function (on) { if (on) state.textContent = 'Loading…'; },
+    onPages: function (n) { state.textContent = n + ' page' + (n === 1 ? '' : 's') + ' · fillable'; },
+    onError: function () { state.textContent = 'Preview not available — use Download'; }
+  });
+  function pick(bw) {
+    var url = BASE + (bw ? '?bw=1' : '');
+    var sep = bw ? '&' : '?';
+    $('bfDl').href = $('bfDl2').href = url + sep + 'download=1';
+    $('bfOpen').href = url;
+    $('bfOpen2').href = VIEWER + '?src=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(bw ? 'Application form (black & white)' : 'Application form');
+    $('bfName').textContent = bw ? 'Black & white version' : 'Colour version';
+    v.load(url);
+  }
+  document.querySelectorAll('input[name=ver]').forEach(function (r) { r.addEventListener('change', function () { pick(r.value === '1'); }); });
+  pick(false);
+})();
+</script>
+{% endblock %}

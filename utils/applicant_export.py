@@ -244,14 +244,13 @@ def applicant_docx(record, school, filename='applicant.docx'):
 
 
 def applicant_blank_pdf(school, bw=False):
-    """A branded, *fillable* blank application form (interactive AcroForm PDF).
+    """A branded, *fillable* blank application form (interactive AcroForm PDF)
+    on one A4 page — type into it on screen, or print it and fill it by hand.
 
-    Every field is a real PDF form field the applicant can type into (or print
-    and fill by hand). Built with reportlab. Returns bytes.
-
-    ``bw=True`` produces a black-and-white print-friendly variant: black text,
-    strong dark field borders, white fills and no colour accents, so it stays
-    crisp and legible on a monochrome printer."""
+    ``bw=False`` is the colour version (navy / gold accents, soft field fills).
+    ``bw=True`` is the black-and-white print version: black ink, strong field
+    borders, white fills and a greyscale logo, so it stays crisp on a mono
+    printer or photocopier. Returns bytes."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -268,170 +267,272 @@ def applicant_blank_pdf(school, bw=False):
     except Exception:
         pass
 
+    school = school or {}
     PW, PH = A4
     margin = 14 * mm
     avail = PW - 2 * margin
     if bw:
-        # Monochrome, high-contrast: black ink, strong grey borders, white
-        # field fills, and no colour accents — prints cleanly on a mono printer.
-        navy = colors.black
-        gold = colors.HexColor('#333333')
-        ink = colors.black
-        muted = colors.HexColor('#333333')
-        line = colors.HexColor('#555555')
-        panel = colors.white
-        field_border = colors.HexColor('#333333')
-        field_bw = 1.0
+        navy = ink = colors.black
+        gold = colors.HexColor('#222222')
+        muted = colors.HexColor('#2b2b2b')
+        line = colors.HexColor('#6b6b6b')
+        fill = colors.white
+        border, border_w = colors.HexColor('#1a1a1a'), 0.9
+        office_bg = colors.white
     else:
         navy = colors.HexColor(NAVY); gold = colors.HexColor(GOLD)
         ink = colors.HexColor(INK); muted = colors.HexColor(MUTED)
-        line = colors.HexColor(LINE); panel = colors.HexColor(PANEL)
-        field_border = line; field_bw = 0.7
+        line = colors.HexColor(LINE)
+        fill = colors.HexColor('#FBFCFE')
+        border, border_w = colors.HexColor('#AEB9CC'), 0.8
+        office_bg = colors.HexColor('#F6F1E6')
 
     buf = io.BytesIO()
     c = _canvas.Canvas(buf, pagesize=A4)
-    c.setTitle('Application Form')
+    c.setTitle('Application Form%s — %s' % (' (black & white)' if bw else '', school.get('name') or 'School'))
     form = c.acroForm
-    state = {'y': 0, 'n': 0, 'page': 0}
+    st = {'y': 0, 'n': 0, 'page': 0}
+
+    def logo_reader():
+        path = school.get('logo_path')
+        if not path or not os.path.exists(path):
+            return None
+        from reportlab.lib.utils import ImageReader
+        if not bw:
+            return ImageReader(path)
+        try:  # greyscale logo for the black & white version
+            from PIL import Image
+            im = Image.open(path)
+            if im.mode in ('RGBA', 'LA', 'P'):
+                im = im.convert('RGBA')
+                bg = Image.new('RGBA', im.size, (255, 255, 255, 255))
+                bg.alpha_composite(im); im = bg
+            g = io.BytesIO(); im.convert('L').save(g, format='PNG'); g.seek(0)
+            return ImageReader(g)
+        except Exception:
+            return ImageReader(path)
+
+    def footer():
+        c.setStrokeColor(line); c.setLineWidth(0.5)
+        c.line(margin, margin + 6 * mm, PW - margin, margin + 6 * mm)
+        c.setFillColor(muted); c.setFont(obl, 7.5)
+        c.drawString(margin, margin + 2.6 * mm, 'Application form · %s' % (school.get('name') or 'School'))
+        c.drawRightString(PW - margin, margin + 2.6 * mm, 'Page %d' % st['page'])
 
     def new_page(first=False):
-        state['page'] += 1
-        c.setStrokeColor(gold); c.setLineWidth(1.6)
-        c.roundRect(margin * 0.5, margin * 0.5, PW - margin, PH - margin, 9, stroke=1, fill=0)
-        top = PH - margin - 3 * mm
+        st['page'] += 1
+        c.setStrokeColor(gold); c.setLineWidth(1.4 if not bw else 1)
+        c.roundRect(margin * 0.5, margin * 0.5, PW - margin, PH - margin, 8, stroke=1, fill=0)
+        top = PH - margin - 2 * mm
         if first:
-            x = margin + 4 * mm
+            x = margin
             lx = x
-            logo = (school or {}).get('logo_path')
-            if logo and os.path.exists(logo):
-                try:
-                    from reportlab.lib.utils import ImageReader
-                    ir = ImageReader(logo); iw, ih = ir.getSize()
-                    h = 20 * mm; w = h * (iw / ih) if ih else 20 * mm
-                    c.drawImage(ir, x, top - h, width=min(w, 22 * mm), height=h,
-                                mask='auto', preserveAspectRatio=True)
-                    lx = x + min(w, 22 * mm) + 5 * mm
-                except Exception:
-                    lx = x
-            name = ((school or {}).get('name') or 'School').upper()
-            size = 20
-            while size > 12 and stringWidth(name, boldf, size) > (avail - (lx - x)):
+            ir = None
+            try:
+                ir = logo_reader()
+            except Exception:
+                ir = None
+            if ir is not None:
+                iw, ih = ir.getSize()
+                h = 21 * mm
+                w = min(h * (iw / ih) if ih else h, 24 * mm)
+                c.drawImage(ir, x, top - h, width=w, height=h, mask='auto', preserveAspectRatio=True)
+                lx = x + w + 5 * mm
+            name = (school.get('name') or 'School').upper()
+            size = 19
+            while size > 12 and stringWidth(name, boldf, size) > (PW - margin - lx):
                 size -= 1
             c.setFillColor(navy); c.setFont(boldf, size)
-            c.drawString(lx, top - 6.5 * mm, name)
-            c.setFillColor(ink); c.setFont(base, 9)
-            addr = (school or {}).get('address') or ''
-            if addr:
-                c.drawString(lx, top - 11.5 * mm, addr[:110])
-            contact = '    '.join(p for p in [(school or {}).get('phone') or '',
-                                              (school or {}).get('email') or ''] if p)
+            c.drawString(lx, top - 6 * mm, name)
+            c.setFillColor(ink); c.setFont(base, 8.8)
+            yy = top - 11 * mm
+            if school.get('address'):
+                c.drawString(lx, yy, school['address'][:115]); yy -= 4 * mm
+            contact = '   ·   '.join(p for p in [school.get('phone') or '', school.get('email') or ''] if p)
             if contact:
-                c.drawString(lx, top - 15.5 * mm, contact[:110])
-            motto = (school or {}).get('motto') or ''
-            if motto:
-                c.setFillColor(gold); c.setFont(obl, 9.5)
-                c.drawString(lx, top - 20 * mm, ('—  ' + motto + '  —')[:110])
-            c.setFillColor(navy); c.setFont(boldf, 15)
-            c.drawString(margin, top - 27 * mm, 'APPLICATION FORM')
-            c.setFillColor(muted); c.setFont(obl, 8.5)
-            c.drawRightString(PW - margin, top - 27 * mm, 'Please complete in BLOCK letters.')
-            c.setStrokeColor(gold); c.setLineWidth(1)
-            c.line(margin, top - 30 * mm, PW - margin, top - 30 * mm)
-            state['y'] = top - 37 * mm
+                c.drawString(lx, yy, contact[:115]); yy -= 4 * mm
+            if school.get('motto'):
+                c.setFillColor(gold); c.setFont(obl, 9)
+                c.drawString(lx, yy - 0.5 * mm, school['motto'][:110])
+            # title band
+            ty = top - 27.5 * mm
+            if bw:
+                c.setStrokeColor(colors.black); c.setLineWidth(1.2)
+                c.line(margin, ty - 2.5 * mm, PW - margin, ty - 2.5 * mm)
+            else:
+                c.setFillColor(navy)
+                c.roundRect(margin, ty - 3 * mm, avail, 9.5 * mm, 2.5 * mm, stroke=0, fill=1)
+            c.setFillColor(colors.white if not bw else colors.black); c.setFont(boldf, 13.5)
+            tx = margin + (3.5 * mm if not bw else 0)
+            c.drawString(tx, ty, 'APPLICATION FORM')
+            c.setFont(obl, 8.3)
+            c.drawRightString(PW - margin - (3.5 * mm if not bw else 0), ty + 0.3 * mm,
+                              'Please write in BLOCK LETTERS and tick the boxes that apply')
+            st['y'] = ty - 6 * mm
         else:
-            state['y'] = top
-        # footer
-        c.setStrokeColor(line); c.setLineWidth(0.6)
-        c.line(margin, margin + 7 * mm, PW - margin, margin + 7 * mm)
-        c.setFillColor(muted); c.setFont(obl, 8)
-        c.drawString(margin, margin + 3.5 * mm, 'Blank application form · %s'
-                     % ((school or {}).get('name') or 'School'))
-        c.drawRightString(PW - margin, margin + 3.5 * mm, 'Page %d' % state['page'])
+            st['y'] = top
+        footer()
 
     def ensure(space):
-        if state['y'] - space < margin + 12 * mm:
+        if st.get('fixed'):          # inside a box already sized to fit
+            return
+        if st['y'] - space < margin + 10 * mm:
             c.showPage(); new_page(first=False)
 
-    def heading(text):
-        ensure(11 * mm)
-        state['y'] -= 1.5 * mm
+    def heading(text, num):
+        ensure(16 * mm)
+        y = st['y'] - 4.2 * mm
+        if bw:
+            c.setFillColor(colors.black)
+            c.circle(margin + 2.3 * mm, y + 1.2 * mm, 2.3 * mm, stroke=0, fill=1)
+        else:
+            c.setFillColor(gold)
+            c.circle(margin + 2.3 * mm, y + 1.2 * mm, 2.3 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.white); c.setFont(boldf, 7.5)
+        c.drawCentredString(margin + 2.3 * mm, y + 0.25 * mm, str(num))
         c.setFillColor(navy); c.setFont(boldf, 11)
-        c.drawString(margin, state['y'] - 3.2 * mm, text)
+        c.drawString(margin + 6.5 * mm, y, text)
         c.setStrokeColor(line); c.setLineWidth(0.5)
-        c.line(margin, state['y'] - 5 * mm, PW - margin, state['y'] - 5 * mm)
-        state['y'] -= 6.5 * mm
+        c.line(margin + 6.5 * mm + stringWidth(text, boldf, 11) + 3 * mm, y + 1.2 * mm, PW - margin, y + 1.2 * mm)
+        st['y'] -= 6.8 * mm
 
-    fh = 7 * mm   # field height
+    FH = 7.2 * mm          # field height
+    LAB = 3.6 * mm         # label band above a field
+    GAP_Y = 2.6 * mm       # space under a row
 
-    def field(label, x, w, big=False):
-        h = (fh + 5 * mm) if big else fh
-        c.setFillColor(muted); c.setFont(boldf, 8)
-        c.drawString(x, state['y'] - 2.6 * mm, label.upper())
-        state['n'] += 1
-        form.textfield(name='f%d' % state['n'], tooltip=label,
-                       x=x, y=state['y'] - 4 * mm - h, width=w, height=h,
-                       borderColor=field_border, fillColor=panel, textColor=ink,
-                       borderWidth=field_bw, forceBorder=True, fontSize=11,
-                       fieldFlags=('multiline' if big else ''))
-        return h
+    def label(text, x, y):
+        c.setFillColor(muted); c.setFont(boldf, 7.3)
+        c.drawString(x, y - 2.6 * mm, text.upper())
 
-    def row(fields, maxw=None):
-        # fields: list of (label, weight, big?)
-        big = any(len(f) > 2 and f[2] for f in fields)
-        gap = 5 * mm
+    def textbox(name, tip, x, y, w, h, multiline=False, size=10.5, maxlen=None):
+        st['n'] += 1
+        kw = dict(name='%s_%d' % (name, st['n']), tooltip=tip, x=x, y=y, width=w, height=h,
+                  borderColor=border, fillColor=fill, textColor=ink, borderWidth=border_w,
+                  forceBorder=True, fontSize=size, fieldFlags=('multiline' if multiline else ''))
+        if maxlen:
+            kw['maxlen'] = maxlen
+        form.textfield(**kw)
+
+    def checks(name, opts, x, y):
+        """Tick boxes on one line, starting at x, vertically centred in a field row."""
+        cx = x
+        for o in opts:
+            st['n'] += 1
+            sz = 4.6 * mm
+            form.checkbox(name='%s_%d' % (name, st['n']), tooltip=o, x=cx, y=y + (FH - sz) / 2, size=sz,
+                          borderColor=border, fillColor=fill, textColor=ink, borderWidth=border_w,
+                          buttonStyle='check', forceBorder=True)
+            c.setFillColor(ink); c.setFont(base, 9.5)
+            c.drawString(cx + sz + 1.6 * mm, y + FH / 2 - 1.2 * mm, o)
+            cx += sz + 1.6 * mm + stringWidth(o, base, 9.5) + 6 * mm
+
+    def cell(f, x, w):
+        """One labelled cell. f = (label, weight, kind[, options]); kind: text|big|checks|date."""
+        lab, kind = f[0], (f[2] if len(f) > 2 else 'text')
+        y_top = st['y']
+        label(lab + (' (DD / MM / YYYY)' if kind == 'date' else ''), x, y_top)
+        h = FH * 1.55 if kind == 'big' else FH
+        fy = y_top - LAB - h
+        key = ''.join(ch for ch in lab.lower() if ch.isalnum())[:16] or 'f'
+        if kind == 'checks':
+            checks(key, f[3], x, fy)
+        elif kind == 'date':
+            parts = [('DD', 9 * mm, 2), ('MM', 9 * mm, 2), ('YYYY', 15 * mm, 4)]
+            cx = x
+            for i, (tip, pw, ml) in enumerate(parts):
+                textbox(key, '%s — %s' % (lab, tip), cx, fy, pw, h, maxlen=ml)
+                cx += pw
+                if i < 2:
+                    c.setFillColor(muted); c.setFont(base, 11)
+                    c.drawCentredString(cx + 2 * mm, fy + 2.1 * mm, '/')
+                    cx += 4 * mm
+        else:
+            textbox(key, lab, x, fy, w, h, multiline=(kind == 'big'))
+        return LAB + h
+
+    def row(fields, left=None, width=None):
+        x0 = margin if left is None else left
+        span_all = avail if width is None else width
+        gap = 4 * mm
         wsum = sum(f[1] for f in fields)
-        span = (maxw if maxw is not None else avail) - gap * (len(fields) - 1)
-        ensure((fh + 5 * mm if big else fh) + 6 * mm)
-        x = margin
-        maxh = 0
+        span = span_all - gap * (len(fields) - 1)
+        tall = max((FH * 1.55 if (len(f) > 2 and f[2] == 'big') else FH) for f in fields) + LAB
+        ensure(tall + GAP_Y)
+        x, hmax = x0, 0
         for f in fields:
             w = span * (f[1] / wsum)
-            maxh = max(maxh, field(f[0], x, w, big=(len(f) > 2 and f[2])))
+            hmax = max(hmax, cell(f, x, w))
             x += w + gap
-        state['y'] -= (maxh + 6 * mm)
+        st['y'] -= hmax + GAP_Y
 
     new_page(first=True)
 
-    # Photo box (top-right of the applicant section)
-    heading('Applicant')
-    box_w, box_h = 32 * mm, 38 * mm
-    bx = PW - margin - box_w
-    c.setStrokeColor(line); c.setDash(2, 2); c.setLineWidth(0.8)
-    c.rect(bx, state['y'] - box_h + 6 * mm, box_w, box_h, stroke=1, fill=0)
-    c.setDash(); c.setFillColor(muted); c.setFont(base, 8)
-    c.drawCentredString(bx + box_w / 2, state['y'] - box_h + box_h / 2 + 4 * mm, 'Passport')
-    c.drawCentredString(bx + box_w / 2, state['y'] - box_h + box_h / 2, 'photograph')
-    # the first two rows sit alongside the photo box → keep them to its left
-    clear = avail - box_w - 12 * mm
-    row([('First name', 1), ('Surname', 1)], maxw=clear)
-    row([('Middle name', 1), ('Gender', 1)], maxw=clear)
-    row([('Date of birth', 1)])
+    # 1 · Applicant — three rows beside a passport-photo box of the same height.
+    heading('Applicant', 1)
+    box_w = 33 * mm
+    rows_h = 3 * (LAB + FH) + 2 * GAP_Y
+    bx, by = PW - margin - box_w, st['y'] - rows_h
+    c.setStrokeColor(line if not bw else colors.HexColor('#444444')); c.setDash(2.5, 2); c.setLineWidth(0.8)
+    c.roundRect(bx, by, box_w, rows_h, 2 * mm, stroke=1, fill=0)
+    c.setDash()
+    c.setFillColor(muted); c.setFont(boldf, 7.5)
+    c.drawCentredString(bx + box_w / 2, by + rows_h / 2 + 2.5 * mm, 'PASSPORT')
+    c.drawCentredString(bx + box_w / 2, by + rows_h / 2 - 1 * mm, 'PHOTOGRAPH')
+    c.setFont(base, 7)
+    c.drawCentredString(bx + box_w / 2, by + rows_h / 2 - 5 * mm, 'paste here')
+    left_w = avail - box_w - 6 * mm
+    row([('First name', 1), ('Surname', 1)], width=left_w)
+    row([('Middle name', 1), ('Gender', 1, 'checks', ['Male', 'Female'])], width=left_w)
+    row([('Date of birth', 1, 'date')], width=left_w)
 
-    heading('Origin & Health')
-    row([('Country', 1), ('State of origin', 1), ('L.G.A. of origin', 1.1)])
-    row([("Father's occupation", 1.3), ('Languages spoken at home', 1.3),
-         ('Blood group', 0.7), ('Genotype', 0.7)])
+    heading('Origin & Health', 2)
+    row([('Country', 1), ('State of origin', 1), ('L.G.A. of origin', 1)])
+    row([("Father's occupation", 1.25), ('Languages spoken at home', 1.25),
+         ('Blood group', 0.6), ('Genotype', 0.6)])
 
-    heading('Application')
-    row([('Intended class', 1), ('Previous school', 1.4)])
+    heading('Application', 3)
+    row([('Class applying for', 0.9), ('Previous school', 1.4), ('How did you hear about us?', 1.1)])
 
-    heading('Parent / Guardian')
-    row([('Full name', 1.4), ('Phone', 1), ('Email', 1.2)])
-    row([('Residential address', 1, True)])
+    heading('Parent / Guardian', 4)
+    row([('Full name', 1.4), ('Relationship', 0.75), ('Phone', 0.95), ('Email', 1.3)])
+    row([('Residential address', 1, 'big')])
 
-    heading('Emergency Contact')
-    row([('Full name', 1.4), ('Phone', 1)])
-    row([('Address', 1, True)])
+    heading('Emergency contact', 5)
+    row([('Full name', 1.4), ('Relationship', 0.75), ('Phone', 1)])
+    row([('Address', 1, 'big')])
 
-    # signature line
-    ensure(20 * mm)
-    state['y'] -= 4 * mm
+    # Declaration + signatures
+    ensure(26 * mm)
+    st['y'] -= 1 * mm
+    c.setFillColor(ink); c.setFont(obl, 8.3)
+    c.drawString(margin, st['y'] - 3 * mm,
+                 'I confirm that the information on this form is correct, and I agree to the school’s rules and fee terms.')
+    sy = st['y'] - 10.5 * mm
     c.setStrokeColor(ink); c.setLineWidth(0.7)
-    c.line(margin, state['y'] - 6 * mm, margin + 70 * mm, state['y'] - 6 * mm)
-    c.line(PW - margin - 55 * mm, state['y'] - 6 * mm, PW - margin, state['y'] - 6 * mm)
-    c.setFillColor(muted); c.setFont(base, 9)
-    c.drawString(margin, state['y'] - 11 * mm, 'Parent / Guardian signature')
-    c.drawString(PW - margin - 55 * mm, state['y'] - 11 * mm, 'Date')
+    c.line(margin, sy, margin + 82 * mm, sy)
+    c.line(PW - margin - 50 * mm, sy, PW - margin, sy)
+    c.setFillColor(muted); c.setFont(boldf, 7.3)
+    c.drawString(margin, sy - 3.6 * mm, 'PARENT / GUARDIAN SIGNATURE')
+    c.drawString(PW - margin - 50 * mm, sy - 3.6 * mm, 'DATE')
+    st['y'] = sy - 6 * mm
+
+    # For office use only
+    oh = 2 * LAB + 2 * FH + GAP_Y + 7.5 * mm
+    if st['y'] - oh >= margin + 7.5 * mm:
+        oy = st['y'] - oh
+        c.setFillColor(office_bg); c.setStrokeColor(gold if not bw else colors.black); c.setLineWidth(0.8)
+        c.setDash(3, 2) if bw else None
+        c.roundRect(margin, oy, avail, oh, 2.5 * mm, stroke=1, fill=1)
+        c.setDash()
+        c.setFillColor(navy); c.setFont(boldf, 8.5)
+        c.drawString(margin + 3.5 * mm, oy + oh - 4.2 * mm, 'FOR OFFICE USE ONLY')
+        st['y'] = oy + oh - 6 * mm
+        inner = avail - 7 * mm
+        st['fixed'] = True
+        row([('Application no.', 1), ('Date received', 1), ('Entrance score', 0.8)], left=margin + 3.5 * mm, width=inner)
+        row([('Decision', 1.6, 'checks', ['Offered', 'Not offered', 'Waiting list']), ("Officer's name / signature", 1.2)],
+            left=margin + 3.5 * mm, width=inner)
+        st['fixed'] = False
 
     c.showPage(); c.save()
     return buf.getvalue()

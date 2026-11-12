@@ -64,6 +64,9 @@ BLUEPRINT_MODULE = {
 _ALWAYS_ALLOWED_ENDPOINTS = {
     'main.dashboard', 'main.global_search', 'main.set_view_branch', 'main.set_theme',
     'main.dashboard_customize', 'auth.logout', 'auth.change_password',
+    # The full-screen PDF viewer page holds no data of its own; the PDF it
+    # loads is fetched separately and checked against that PDF's own module.
+    'mock_waec.pdf_viewer',
     # Per-user self-service: the header bell and this device's web-push
     # subscription belong to the signed-in user, not to any module.
     'main.api_notifications', 'main.api_notification_read', 'main.api_notifications_read_all',
@@ -599,7 +602,7 @@ _SUBSECTION_ENDPOINTS = {
         'create': {'add_applicant'},
         'edit': {'edit_applicant', 'set_status'},
         'convert': {'convert', 'copy_to_student', 'link_student'},
-        'download': {'blank_application_form', 'export_applicant'},
+        'download': {'blank_application_form', 'blank_form_page', 'export_applicant'},
         'delete': {'delete_applicant'},
     },
     'attendance': {

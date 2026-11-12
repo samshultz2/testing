@@ -66,7 +66,7 @@ def _render(payload):
     payload['urls'] = {**{
         'dashboard': url_for('admissions.dashboard'), 'applicants': url_for('admissions.applicants'),
         'add': url_for('admissions.add_applicant'), 'export': url_for('admissions.export'),
-        'blank_form': url_for('admissions.blank_application_form'),
+        'blank_form': url_for('admissions.blank_form_page'),
     }, **payload.get('urls', {})}
     from utils.spa import render_or_json
     return render_or_json('admissions/app.html', 'adm_json', payload)
@@ -365,8 +365,8 @@ def applicant_detail(applicant_id):
     })
 
 
-@adm_bp.route('/applicants/blank-form.pdf')
 @adm_bp.route('/applicants/blank-form')          # legacy path, kept for old links
+@adm_bp.route('/applicants/blank-form.pdf')      # canonical (url_for builds this one)
 @login_required
 def blank_application_form():
     """Download a branded, fillable (interactive AcroForm) blank application form.
@@ -376,7 +376,20 @@ def blank_application_form():
     bw = request.args.get('bw') in ('1', 'true', 'yes')
     data = applicant_blank_pdf(school_profile(), bw=bw)
     name = 'application_form_bw.pdf' if bw else 'application_form.pdf'
-    return pdf_response(io.BytesIO(data), name, inline=False)
+    # The .pdf link previews (?download=1 saves); the legacy path keeps downloading.
+    inline = request.path.endswith('.pdf') and request.args.get('download') != '1'
+    return pdf_response(io.BytesIO(data), name, inline=inline)
+
+
+@adm_bp.route('/blank-form')
+@login_required
+def blank_form_page():
+    """Pick the colour or black & white blank application form, preview it,
+    then open, download or print it."""
+    from utils.school import school_profile
+    return render_template('admissions/blank_form.html', school=school_profile(),
+                           pdf_url=url_for('admissions.blank_application_form'),
+                           viewer_url=url_for('mock_waec.pdf_viewer'))
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/export')

@@ -253,13 +253,15 @@ def broadsheet_pdf_view(exam_id):
 @mock_waec_bp.route('/viewer')
 @login_required
 def pdf_viewer():
-    """Full-screen PDF viewer for any Mock WAEC PDF — renders in the page, so
+    """Full-screen PDF viewer for Mock WAEC PDFs and the blank application
+    form — renders in the page, so
     phones view it instead of downloading it (Android Chrome won't show a
     PDF opened in a tab). Only this module's own PDF links are accepted."""
     from urllib.parse import urlsplit
     src = request.args.get('src', '')
     parts = urlsplit(src)
-    if parts.scheme or parts.netloc or not parts.path.startswith('/mock-waec/') \
+    allowed = parts.path.startswith('/mock-waec/') or parts.path == '/admissions/applicants/blank-form.pdf'
+    if parts.scheme or parts.netloc or not allowed \
             or not parts.path.endswith('.pdf') or '..' in parts.path:
         abort(400)
     title = (request.args.get('title') or 'Document')[:120]

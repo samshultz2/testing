@@ -323,6 +323,13 @@
 ]
 ],
 [
+"admissions.blank_form_page",
+"/admissions/blank-form",
+[
+"GET"
+]
+],
+[
 "admissions.convert",
 "/admissions/applicants/<int:applicant_id>/convert",
 [

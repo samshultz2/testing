@@ -83,3 +83,32 @@ def test_applicant_export_pdf_and_docx(app):
         o = db.session.get(Applicant, aid)
         if o:
             db.session.delete(o); db.session.commit()
+
+
+def test_blank_form_page_offers_colour_and_bw(app):
+    client = _admin(app)
+    html = client.get('/admissions/blank-form').get_data(as_text=True)
+    assert 'Black &amp; white' in html and 'Colour' in html
+    assert '/admissions/applicants/blank-form.pdf' in html
+    # The .pdf link previews inline; ?download=1 saves; the legacy path still downloads.
+    r = client.get('/admissions/applicants/blank-form.pdf?bw=1')
+    assert r.data[:4] == b'%PDF' and 'inline' in r.headers['Content-Disposition']
+    r = client.get('/admissions/applicants/blank-form.pdf?bw=1&download=1')
+    assert 'attachment' in r.headers['Content-Disposition'] and 'bw' in r.headers['Content-Disposition']
+    assert 'attachment' in client.get('/admissions/applicants/blank-form').headers['Content-Disposition']
+    # Full-screen viewer accepts the form, refuses other paths.
+    assert client.get('/mock-waec/viewer?src=/admissions/applicants/blank-form.pdf%3Fbw%3D1').status_code == 200
+    assert client.get('/mock-waec/viewer?src=/admissions/applicants/1/export.pdf').status_code == 400
+
+
+def test_blank_form_has_new_fields_and_fits_one_page(app):
+    import fitz
+    from utils.applicant_export import applicant_blank_pdf
+    for bw in (False, True):
+        doc = fitz.open(stream=applicant_blank_pdf({'name': 'Test School', 'motto': 'Learn'}, bw=bw), filetype='pdf')
+        assert doc.page_count == 1
+        text = doc[0].get_text()
+        for s in ('RELATIONSHIP', 'HOW DID YOU HEAR ABOUT US?', 'FOR OFFICE USE ONLY', 'DD / MM / YYYY', 'Male', 'Female'):
+            assert s in text, s
+        kinds = {w.field_type_string for w in doc[0].widgets()}
+        assert {'Text', 'CheckBox'} <= kinds
