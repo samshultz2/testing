@@ -137,3 +137,42 @@ def test_update_their_lists_swaps_only_the_changed_subjects(app, monkeypatch):
         finally:
             SchoolSettings.query.filter_by(key='exam_subject_config').delete()
             db.session.commit()
+
+
+def test_a_session_can_add_a_brand_new_subject(app, monkeypatch):
+    """A session can add (not just swap) — including a subject the school never
+    listed — and 'update their lists' appends it without removing anything."""
+    from types import SimpleNamespace
+    import routes.settings as rs
+    from models import db, SchoolSettings
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    from utils.exam_subject_config import get_config, stream_waec_subjects, sitting_changes
+    with app.app_context():
+        SchoolSettings.query.filter_by(key='exam_subject_config').delete()
+        db.session.commit()
+        base = get_config()['waec']
+    y = 2098
+    form = {'_csrf_token': auth_csrf(c), 'action': 'save_year', 'year': y,
+            'waec_general[]': base['general'] + ['Marketing'], 'waec_new[]': ['Marketing']}
+    for st, subs in base['streams'].items():
+        form[f'waec_stream_{st}[]'] = subs
+    r = c.post(f'/settings/exam-subjects?year={y}', data=form)
+    assert r.status_code in (302, 303)
+    try:
+        with app.app_context():
+            cfg = get_config()['waec']
+            assert 'Marketing' in cfg['catalog'] and 'Marketing' not in cfg['general']   # usual set untouched
+            assert 'Marketing' in stream_waec_subjects('Science', y)
+            ch = {x['stream']: x for x in sitting_changes('waec', y)}
+            assert ch['Science']['added'] == ['Marketing'] and ch['Science']['removed'] == []
+            st = SimpleNamespace(id=7, stream='Science', waec_subjects='Mathematics, Physics', jamb_subjects='')
+            st.waec_subject_list = ['Mathematics', 'Physics']
+            st.jamb_subject_list = []
+            monkeypatch.setattr(rs, '_sitting_students', lambda year: [st])
+            assert rs._apply_sitting_to_students(y) == 1
+            assert st.waec_subjects == 'Mathematics, Physics, Marketing'
+    finally:
+        with app.app_context():
+            SchoolSettings.query.filter_by(key='exam_subject_config').delete()
+            db.session.commit()

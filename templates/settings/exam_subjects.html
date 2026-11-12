@@ -152,10 +152,8 @@
               </div>
             {% endfor %}
             </div>
-            {% if not view %}
-            <div class="ex-add"><input type="text" placeholder="Add a subject…" data-add-input="{{ exam }}" aria-label="New {{ exam|upper }} subject">
+            <div class="ex-add"><input type="text" placeholder="{{ 'Add a subject that’s new this session…' if view else 'Add a subject…' }}" data-add-input="{{ exam }}" aria-label="New {{ exam|upper }} subject">
               <button type="button" class="rs-btn sm ghost" data-add-btn="{{ exam }}"><i class="fas fa-plus" aria-hidden="true"></i> Add</button></div>
-            {% endif %}
           </div>
           {% endfor %}
         </section>
@@ -216,9 +214,12 @@
 
   function addRow(ex, name) {
     var rows = document.querySelector('.ex-rows[data-exam="' + ex + '"]');
-    var have = Array.prototype.map.call(rows.querySelectorAll('input[type=hidden]'), function (h) { return h.value.toLowerCase(); });
+    var have = Array.prototype.map.call(rows.querySelectorAll('.ex-name'), function (h) { return h.textContent.replace(/(changed|new)$/i, '').trim().toLowerCase(); });
     if (have.indexOf(name.toLowerCase()) > -1) return;
-    var html = '<span class="ex-name"><input type="hidden" name="' + ex + '_subject[]" value="' + esc(name) + '">' + esc(name) + '</span>'
+    // In a session view a new subject joins the school's list (unticked in the
+    // usual subjects) and is ticked here for this session only.
+    var field = editingYear ? (ex + '_new[]') : (ex + '_subject[]');
+    var html = '<span class="ex-name"><input type="hidden" name="' + field + '" value="' + esc(name) + '">' + esc(name) + (editingYear ? '<small>new</small>' : '') + '</span>'
       + '<label class="ex-pill gen"><input type="checkbox" name="' + ex + '_general[]" value="' + esc(name) + '"><i class="fas fa-check"></i><span class="k">All</span></label>';
     STREAMS.forEach(function (st) {
       html += '<label class="ex-pill"><input type="checkbox" name="' + ex + '_stream_' + st + '[]" value="' + esc(name) + '" data-stream="' + esc(st) + '"><i class="fas fa-check"></i><span class="k">' + esc(st) + '</span></label>';
@@ -230,7 +231,15 @@
   document.querySelectorAll('[data-add-btn]').forEach(function (btn) {
     var ex = btn.getAttribute('data-add-btn');
     var input = document.querySelector('[data-add-input="' + ex + '"]');
-    function commit() { var v = (input.value || '').trim(); if (v) { addRow(ex, v); input.value = ''; input.focus(); summary(); } }
+    function commit() {
+      var v = (input.value || '').trim(); if (!v) return;
+      addRow(ex, v); input.value = ''; input.focus();
+      if (editingYear) {                       // tick it for every stream by default; untick what doesn't apply
+        var last = document.querySelector('.ex-rows[data-exam="' + ex + '"] .ex-row:last-child input[name$="_general[]"]');
+        if (last) last.checked = true;
+      }
+      summary();
+    }
     btn.addEventListener('click', commit);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
   });

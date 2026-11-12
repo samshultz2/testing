@@ -45,3 +45,35 @@ def test_performance_page_clear_button(app):
     r = c.post('/settings/performance', data={'_csrf_token': auth_csrf(c)})
     assert r.status_code in (302, 303)
     assert pl.recent_slow_queries() == []
+
+
+def test_performance_groups_the_same_page_and_query(app):
+    from utils import perf_logging as pl
+    pl.clear_perf_buffers()
+    for sid, ms in ((12, 1800), (40, 2600), (7, 2100)):
+        pl._SLOW_REQUESTS.append({'at': 'now', 'ms': ms, 'method': 'GET', 'path': f'/students/{sid}/edit',
+                                  'status': 200, 'host': 'h', 'user': 'admin'})
+    pl._SLOW_REQUESTS.append({'at': 'now', 'ms': 1600, 'method': 'GET', 'path': '/finance/',
+                              'status': 200, 'host': 'h', 'user': 'admin'})
+    pl._SLOW_QUERIES.append({'at': 'now', 'ms': 700, 'sql': "SELECT * FROM students WHERE id = 5 AND name = 'Ada'"})
+    pl._SLOW_QUERIES.append({'at': 'now', 'ms': 900, 'sql': "SELECT * FROM students WHERE id = 9 AND name = 'Bo'"})
+    c = _admin(app)
+    body = c.get('/settings/performance').get_data(as_text=True)
+    assert 'GET /students/:id/edit' in body            # three loads, one row
+    assert body.index('/students/:id/edit') < body.index('GET /finance/')   # biggest total first
+    assert body.count('SELECT * FROM students WHERE id = ? AND name = ?') >= 1
+    pl.clear_perf_buffers()
+
+
+def test_slowest_tile_names_the_slowest_page_not_the_busiest(app):
+    from utils import perf_logging as pl
+    pl.clear_perf_buffers()
+    for _ in range(4):
+        pl._SLOW_REQUESTS.append({'at': 'now', 'ms': 1600, 'method': 'GET', 'path': '/busy',
+                                  'status': 200, 'host': 'h', 'user': 'a'})
+    pl._SLOW_REQUESTS.append({'at': 'now', 'ms': 5000, 'method': 'GET', 'path': '/rare-but-slow',
+                              'status': 200, 'host': 'h', 'user': 'a'})
+    body = _admin(app).get('/settings/performance').get_data(as_text=True)
+    tile = body[body.index('Slowest page load'):body.index('Slow queries')]
+    assert '5.0' in tile and '/rare-but-slow' in tile
+    pl.clear_perf_buffers()

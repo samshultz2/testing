@@ -237,13 +237,49 @@ def performance():
         clear_perf_buffers()
         flash('Cleared the captured performance samples.', 'success')
         return redirect(url_for('settings.performance'))
+    reqs, qs = recent_slow_requests(100), recent_slow_queries(100)
     return render_template(
         'settings/performance.html',
-        slow_requests=recent_slow_requests(50),
-        slow_queries=recent_slow_queries(50),
+        slow_requests=reqs[:50],
+        slow_queries=qs[:50],
+        req_groups=_perf_groups(reqs, lambda r: f"{r.get('method', '')} {_norm_path(r.get('path', ''))}"),
+        query_groups=_perf_groups(qs, lambda q: _norm_sql(q.get('sql', ''))),
         req_ms=current_app.config.get('SLOW_REQUEST_MS', 1500),
         query_ms=current_app.config.get('SLOW_QUERY_MS', 500),
     )
+
+
+def _norm_path(path):
+    """/students/164/edit → /students/:id/edit, so one slow page isn't split
+    across every record it was opened for."""
+    import re as _re
+    return _re.sub(r'/\d+(?=/|$)', '/:id', path or '')
+
+
+def _norm_sql(sql):
+    """Literal values → ?, so the same query with different ids groups together."""
+    import re as _re
+    sql = _re.sub(r"'(?:[^']|'')*'", '?', sql or '')
+    sql = _re.sub(r'\b\d+(\.\d+)?\b', '?', sql)
+    return _re.sub(r'\(\s*\?(\s*,\s*\?)+\s*\)', '(?, …)', sql)
+
+
+def _perf_groups(rows, key):
+    """Group samples by a key: how often, average, worst and last seen, and the
+    total time lost — sorted by total, which is what's worth fixing first."""
+    groups = {}
+    for r in rows:
+        k = key(r)
+        g = groups.setdefault(k, {'key': k, 'n': 0, 'total': 0, 'worst': 0, 'last': r.get('at'), 'sample': r})
+        g['n'] += 1
+        g['total'] += r.get('ms') or 0
+        if (r.get('ms') or 0) > g['worst']:
+            g['worst'] = r.get('ms') or 0
+            g['sample'] = r
+    out = sorted(groups.values(), key=lambda g: -g['total'])
+    for g in out:
+        g['avg'] = round(g['total'] / g['n']) if g['n'] else 0
+    return out
 
 
 def _resolve_named(model, text, extra=None):
@@ -725,6 +761,19 @@ def exam_subjects():
         back = url_for('settings.exam_subjects', year=year) if year else url_for('settings.exam_subjects')
         try:
             if action == 'save_year' and year:
+                # Subjects new this session join the school's list first (unticked
+                # in the usual set), so they can be ticked for this session.
+                cfg_now = get_config()
+                grow = {}
+                for exam in ('waec', 'jamb'):
+                    new = [x.strip() for x in request.form.getlist(f'{exam}_new[]') if x.strip()]
+                    have = {c.lower() for c in cfg_now[exam]['catalog']}
+                    add = [x for x in new if x.lower() not in have]
+                    if add:
+                        grow[exam] = {'catalog': cfg_now[exam]['catalog'] + add,
+                                      'general': cfg_now[exam]['general'], 'streams': cfg_now[exam]['streams']}
+                if grow:
+                    save_config(grow)
                 for exam in ('waec', 'jamb'):
                     general = [x.strip() for x in request.form.getlist(f'{exam}_general[]') if x.strip()]
                     streams = {st: [x.strip() for x in request.form.getlist(f'{exam}_stream_{st}[]') if x.strip()]

@@ -2,66 +2,128 @@
 {% block title %}Performance — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Performance</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
+<style>
+.pf{max-width:1180px}
+.pf-card{padding:0;overflow:hidden;margin:0 0 1rem}
+.pf-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.pf-h h3{margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem}.pf-h h3 i{color:var(--primary)}
+.pf-h small{color:var(--text-muted);font-size:.8rem}
+.pf-row{display:grid;grid-template-columns:minmax(0,1fr) 70px 90px 90px 140px;gap:.8rem;align-items:center;padding:.65rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.pf-row:last-child{border-bottom:0}
+.pf-hd{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--gray-50,#f8fafc)}
+.pf-hd span:not(:first-child){text-align:right}
+.pf-k{min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.pf-k code{font-size:.82rem;font-weight:700;background:none;padding:0;color:var(--text-primary);word-break:break-all}
+.pf-k code.sql{font-weight:500;font-size:.76rem;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pf-k small{font-size:.74rem;color:var(--text-muted)}
+.pf-bar{height:6px;border-radius:4px;background:var(--gray-100,#eef2f7);overflow:hidden}.pf-bar i{display:block;height:100%;border-radius:4px;background:var(--warning)}
+.pf-bar i.bad{background:var(--danger)}
+.pf-n{text-align:right;font-size:.86rem;font-variant-numeric:tabular-nums}
+.pf-n b{font-size:.95rem}.pf-n small{display:block;font-size:.68rem;color:var(--text-muted)}
+.pf-n .bad{color:var(--danger)}.pf-n .mid{color:var(--warning)}
+.pf-raw summary{cursor:pointer;padding:.8rem 1rem;font-weight:700;font-size:.88rem;list-style:none;display:flex;align-items:center;gap:.5rem}
+.pf-raw summary::-webkit-details-marker{display:none}
+.pf-raw summary::after{content:"\f078";font-family:"Font Awesome 6 Free","Font Awesome 5 Free";font-weight:900;margin-left:auto;font-size:.7rem;color:var(--text-muted)}
+.pf-raw[open] summary::after{content:"\f077"}
+.pf-s{display:grid;grid-template-columns:120px 70px minmax(0,1fr) 60px 110px;gap:.6rem;padding:.45rem 1rem;border-top:1px solid var(--border-light,var(--border-color));font-size:.8rem;align-items:center}
+.pf-s.q{grid-template-columns:120px 70px minmax(0,1fr)}
+.pf-s code{font-size:.76rem;background:none;padding:0;word-break:break-all}
+.pf-s .m{color:var(--text-muted)}
+.pf-tip{padding:.9rem 1rem;font-size:.84rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:.35rem}
+@media (max-width:760px){
+  .pf-hd{display:none}
+  .pf-row{grid-template-columns:repeat(3,1fr);row-gap:.5rem}
+  .pf-row .pf-k{grid-column:1/-1}.pf-row .pf-last{display:none}
+  .pf-n{text-align:left}
+  .pf-s,.pf-s.q{grid-template-columns:1fr auto;row-gap:.2rem}.pf-s code{grid-column:1/-1}.pf-s .u{display:none}
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Performance</h1>
-        <p class="text-muted text-sm">
-            Recent slow requests and SQL queries seen by this worker. Thresholds:
-            requests &ge; <strong>{{ req_ms }}ms</strong>, queries &ge; <strong>{{ query_ms }}ms</strong>
-            (set <code>SLOW_REQUEST_MS</code> / <code>SLOW_QUERY_MS</code>).
-        </p>
-    </div>
-    <form method="post" style="margin-left:auto;">
+{% set worst_req = (slow_requests|map(attribute='ms')|max) if slow_requests else 0 %}
+{% set worst_q = (slow_queries|map(attribute='ms')|max) if slow_queries else 0 %}
+{% set top_total = (req_groups[0].total if req_groups else 1) %}
+{% set top_qtotal = (query_groups[0].total if query_groups else 1) %}
+<div class="rs pf">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-gauge-high" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Performance</h1><p>Pages and database queries that ran slowly on this server since it last started — grouped so the biggest time-wasters come first.</p></div>
+    {% if slow_requests or slow_queries %}
+    <div class="rs-head-a">
+      <form method="post" data-confirm="Clear the captured samples? New slow pages will show up as they happen.">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-eraser"></i> Clear samples</button>
-    </form>
-</div>
-
-<div class="card mb-3">
-    <div class="card-header"><h3>Slow requests <span class="text-muted text-sm">({{ slow_requests|length }})</span></h3></div>
-    <div class="card-body" style="overflow-x:auto;">
-        {% if slow_requests %}
-        <table class="table" style="width:100%;">
-            <thead><tr><th>When</th><th>Duration</th><th>Method</th><th>Path</th><th>Status</th><th>User</th></tr></thead>
-            <tbody>
-            {% for r in slow_requests %}
-                <tr>
-                    <td class="text-muted text-sm">{{ r.at }}</td>
-                    <td><strong>{{ r.ms }}ms</strong></td>
-                    <td>{{ r.method }}</td>
-                    <td style="max-width:340px;word-break:break-all;">{{ r.path }}</td>
-                    <td>{{ r.status }}</td>
-                    <td class="text-sm">{{ r.user }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted">No slow requests recorded since the last restart. That's a good sign.</p>
-        {% endif %}
+        <button type="submit" class="rs-btn ghost"><i class="fas fa-eraser" aria-hidden="true"></i> Clear samples</button>
+      </form>
     </div>
-</div>
+    {% endif %}
+  </header>
 
-<div class="card">
-    <div class="card-header"><h3>Slow queries <span class="text-muted text-sm">({{ slow_queries|length }})</span></h3></div>
-    <div class="card-body" style="overflow-x:auto;">
-        {% if slow_queries %}
-        <table class="table" style="width:100%;">
-            <thead><tr><th>When</th><th>Duration</th><th>SQL (truncated)</th></tr></thead>
-            <tbody>
-            {% for q in slow_queries %}
-                <tr>
-                    <td class="text-muted text-sm">{{ q.at }}</td>
-                    <td><strong>{{ q.ms }}ms</strong></td>
-                    <td><code class="text-sm" style="word-break:break-all;">{{ q.sql }}</code></td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted">No slow queries recorded since the last restart.</p>
-        {% endif %}
+  <div class="rs-tiles">
+    <div class="rs-tile{% if req_groups %} warn{% endif %}"><span class="l">Slow pages</span><span class="v">{{ req_groups|length }}</span><span class="s">{{ slow_requests|length }} slow load{{ 's' if slow_requests|length != 1 }} · over {{ req_ms }} ms</span></div>
+    <div class="rs-tile{% if worst_req >= 2 * req_ms %} bad{% endif %}"><span class="l">Slowest page load</span><span class="v">{{ '%.1f'|format(worst_req / 1000) if worst_req else '—' }}{% if worst_req %}<small>s</small>{% endif %}</span>{% if req_groups %}<span class="s">{{ (req_groups|sort(attribute='worst', reverse=true)|first).key }}</span>{% endif %}</div>
+    <div class="rs-tile{% if query_groups %} warn{% endif %}"><span class="l">Slow queries</span><span class="v">{{ query_groups|length }}</span><span class="s">{{ slow_queries|length }} slow run{{ 's' if slow_queries|length != 1 }} · over {{ query_ms }} ms</span></div>
+    <div class="rs-tile"><span class="l">Slowest query</span><span class="v">{{ worst_q if worst_q else '—' }}{% if worst_q %}<small>ms</small>{% endif %}</span></div>
+  </div>
+
+  {% if not slow_requests and not slow_queries %}
+  <div class="rs-blank"><span><i class="fas fa-circle-check" aria-hidden="true"></i></span><h3>Nothing slow recorded</h3>
+    <p>No page took over {{ req_ms }} ms and no query over {{ query_ms }} ms since the last restart or clear.</p></div>
+  {% endif %}
+
+  {% if req_groups %}
+  <section class="rs-card pf-card">
+    <div class="pf-h"><h3><i class="fas fa-window-maximize" aria-hidden="true"></i> Slow pages</h3><small>Sorted by total time lost</small></div>
+    <div class="pf-row pf-hd"><span>Page</span><span>Times</span><span>Average</span><span>Worst</span><span>Last seen</span></div>
+    {% for g in req_groups %}
+    <div class="pf-row">
+      <span class="pf-k"><code>{{ g.key }}</code>
+        <span class="pf-bar"><i class="{{ 'bad' if g.avg >= 2 * req_ms }}" style="width:{{ (100 * g.total / top_total)|round|int }}%"></i></span>
+        <small>{{ '%.1f'|format(g.total / 1000) }} s lost in all{% if g.sample.status and g.sample.status >= 400 %} · ended in error {{ g.sample.status }}{% endif %}</small></span>
+      <span class="pf-n"><b>{{ g.n }}</b><small>times</small></span>
+      <span class="pf-n"><b class="{{ 'bad' if g.avg >= 2 * req_ms else 'mid' }}">{{ '%.1f'|format(g.avg / 1000) }} s</b><small>average</small></span>
+      <span class="pf-n"><b>{{ '%.1f'|format(g.worst / 1000) }} s</b><small>worst</small></span>
+      <span class="pf-n pf-last"><b>{{ g.last }}</b><small>{{ g.sample.user }}</small></span>
     </div>
+    {% endfor %}
+    <details class="pf-raw"><summary><i class="fas fa-list" aria-hidden="true"></i> Every slow page load ({{ slow_requests|length }})</summary>
+      {% for r in slow_requests %}
+      <div class="pf-s"><span class="m">{{ r.at }}</span><b>{{ r.ms }} ms</b><code>{{ r.method }} {{ r.path }}</code><span class="m">{{ r.status }}</span><span class="m u">{{ r.user }}</span></div>
+      {% endfor %}
+    </details>
+  </section>
+  {% endif %}
+
+  {% if query_groups %}
+  <section class="rs-card pf-card">
+    <div class="pf-h"><h3><i class="fas fa-database" aria-hidden="true"></i> Slow database queries</h3><small>Same query with different values grouped together</small></div>
+    <div class="pf-row pf-hd"><span>Query</span><span>Times</span><span>Average</span><span>Worst</span><span>Last seen</span></div>
+    {% for g in query_groups %}
+    <div class="pf-row">
+      <span class="pf-k"><code class="sql" title="{{ g.key }}">{{ g.key }}</code>
+        <span class="pf-bar"><i class="{{ 'bad' if g.avg >= 2 * query_ms }}" style="width:{{ (100 * g.total / top_qtotal)|round|int }}%"></i></span></span>
+      <span class="pf-n"><b>{{ g.n }}</b><small>times</small></span>
+      <span class="pf-n"><b class="{{ 'bad' if g.avg >= 2 * query_ms else 'mid' }}">{{ g.avg }} ms</b><small>average</small></span>
+      <span class="pf-n"><b>{{ g.worst }} ms</b><small>worst</small></span>
+      <span class="pf-n pf-last"><b>{{ g.last }}</b></span>
+    </div>
+    {% endfor %}
+    <details class="pf-raw"><summary><i class="fas fa-list" aria-hidden="true"></i> Every slow query ({{ slow_queries|length }})</summary>
+      {% for q in slow_queries %}
+      <div class="pf-s q"><span class="m">{{ q.at }}</span><b>{{ q.ms }} ms</b><code>{{ q.sql }}</code></div>
+      {% endfor %}
+    </details>
+  </section>
+  {% endif %}
+
+  <section class="rs-card pf-card">
+    <div class="pf-tip">
+      <span><i class="fas fa-circle-info" aria-hidden="true" style="color:var(--primary)"></i> <b>Reading this:</b> a page that’s slow every time needs fixing; one slow load among many is usually a busy moment.</span>
+      <span>Samples live in memory for this server process only and reset when it restarts. Thresholds are set with <code>SLOW_REQUEST_MS</code> ({{ req_ms }} ms) and <code>SLOW_QUERY_MS</code> ({{ query_ms }} ms).</span>
+    </div>
+  </section>
 </div>
 {% endblock %}
