@@ -5,115 +5,305 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
 <style>
-.mw-row{display:grid;grid-template-columns:1fr 110px 110px;gap:.6rem;margin-bottom:.5rem;align-items:center}
-.mw-row.is-empty{display:none}
-.mw-head{display:grid;grid-template-columns:1fr 110px 110px;gap:.6rem;font-size:.8rem;color:var(--text-muted);font-weight:600;margin-bottom:.35rem}
-.entry-hint{display:flex;gap:.6rem;background:var(--primary-light);color:var(--primary);border-radius:8px;padding:.7rem 1rem;font-size:.85rem;margin-bottom:1rem;line-height:1.4}
+.ae{max-width:1180px}
+.ae-grid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:1rem;align-items:start}
+/* Student list (desktop sidebar / phone sheet) */
+.ae-side{position:sticky;top:76px;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 100px)}
+.ae-side-h{padding:.85rem 1rem .6rem;border-bottom:1px solid var(--border-light,var(--border-color));display:flex;flex-direction:column;gap:.55rem}
+.ae-side-h b{font-size:.95rem;display:flex;justify-content:space-between;align-items:center}
+.ae-side-h b small{color:var(--text-muted);font-weight:600;font-size:.78rem}
+.ae-prog{height:6px;border-radius:4px;background:var(--gray-100,#eef2f7);overflow:hidden}.ae-prog i{display:block;height:100%;background:var(--success);border-radius:4px}
+.ae-search{position:relative}.ae-search i{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.8rem}
+.ae-search input{width:100%;height:38px;border:1.5px solid var(--border-color);border-radius:10px;padding:0 .7rem 0 2.1rem;font:inherit;background:var(--bg-card);color:var(--text-primary)}
+.ae-list{overflow-y:auto;flex:1}
+.ae-st{display:flex;align-items:center;gap:.65rem;width:100%;padding:.55rem 1rem;border:0;border-bottom:1px solid var(--border-light,var(--border-color));background:none;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.ae-st:hover{background:var(--gray-50,#f8fafc)}
+.ae-st.on{background:color-mix(in srgb,var(--primary) 9%,var(--bg-card));box-shadow:inset 3px 0 0 var(--primary)}
+.ae-av{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:.72rem;font-weight:800;background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary)}
+.ae-st .t{min-width:0;display:flex;flex-direction:column}.ae-st .t b{font-size:.86rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ae-st .t small{font-size:.72rem;color:var(--text-muted)}
+.ae-done summary{cursor:pointer;padding:.7rem 1rem;font-weight:700;font-size:.84rem;color:var(--text-secondary);list-style:none;border-top:1px solid var(--border-color)}
+.ae-done summary::-webkit-details-marker{display:none}
+.ae-done a{display:flex;align-items:center;gap:.6rem;padding:.45rem 1rem;font-size:.82rem;color:var(--text-secondary);text-decoration:none}
+.ae-done a:hover{color:var(--primary)}.ae-done a i{color:var(--success)}
+/* Entry card */
+.ae-main{padding:0;overflow:hidden}
+.ae-who{display:flex;align-items:center;gap:.8rem;padding:1rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ae-who .ae-av{width:44px;height:44px;font-size:.9rem}
+.ae-who .t{flex:1;min-width:0}.ae-who b{font-size:1.05rem;display:block}.ae-who small{color:var(--text-muted);font-size:.8rem}
+.ae-pick{display:none}
+.ae-rows{display:flex;flex-direction:column}
+.ae-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 34px;gap:.7rem;align-items:center;padding:.55rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ae-row:focus-within{background:color-mix(in srgb,var(--primary) 5%,transparent)}
+.ae-subj{font-weight:700;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ae-subj small{display:block;font-weight:500;font-size:.72rem;color:var(--text-muted)}
+.ae-score{height:46px;width:100%;border:1.5px solid var(--border-color);border-radius:12px;text-align:center;font:inherit;font-size:1.15rem;font-weight:800;background:var(--bg-card);color:var(--text-primary);font-variant-numeric:tabular-nums}
+.ae-score:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 15%,transparent)}
+.ae-score.bad{border-color:var(--danger);color:var(--danger)}
+.ae-grade{position:relative}
+.ae-grade select{appearance:none;-webkit-appearance:none;width:100%;height:46px;border-radius:12px;border:1.5px solid var(--border-color);text-align:center;text-align-last:center;font:inherit;font-weight:800;font-size:1rem;background:var(--gray-50,#f8fafc);color:var(--text-muted);cursor:pointer;padding:0 .3rem}
+.ae-grade select.cr{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));border-color:color-mix(in srgb,var(--success) 45%,transparent);color:var(--success)}
+.ae-grade select.ps{background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));border-color:color-mix(in srgb,var(--warning) 45%,transparent);color:var(--warning)}
+.ae-grade select.fl{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));border-color:color-mix(in srgb,var(--danger) 40%,transparent);color:var(--danger)}
+.ae-grade .man{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;background:var(--text-primary);color:var(--bg-card);font-size:.55rem;display:none;place-items:center}
+.ae-grade.touched .man{display:grid}
+.ae-x{width:34px;height:34px;border:0;border-radius:9px;background:none;color:var(--text-muted);cursor:pointer}.ae-x:hover{background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger)}
+.ae-add{display:flex;gap:.5rem;align-items:center;padding:.8rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ae-add select{flex:1;max-width:320px;height:40px;border:1.5px dashed var(--border-color);border-radius:10px;padding:0 .6rem;font:inherit;background:var(--bg-card);color:var(--text-secondary)}
+.ae-sum{display:flex;gap:.5rem;flex-wrap:wrap;padding:.85rem 1.1rem}
+.ae-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .75rem;border-radius:999px;font-size:.82rem;font-weight:700;background:var(--gray-100,#eef2f7);color:var(--text-secondary)}
+.ae-chip.good{background:color-mix(in srgb,var(--success) 13%,transparent);color:var(--success)}
+.ae-chip.bad{background:color-mix(in srgb,var(--danger) 11%,transparent);color:var(--danger)}
+.ae-bar{display:flex;gap:.6rem;justify-content:flex-end;align-items:center;padding:.85rem 1.1rem;border-top:1px solid var(--border-color);background:var(--gray-50,#f8fafc)}
+.ae-bar .hint{margin-right:auto;font-size:.8rem;color:var(--text-muted)}
+.ae-bar .hint kbd{font-size:.72rem;padding:.05rem .35rem;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-card)}
+.ae-empty{padding:2.2rem 1rem;text-align:center;color:var(--text-muted)}
+/* Phone sheet */
+.ae-sheet{position:fixed;inset:0;z-index:1200;display:none}
+.ae-sheet.open{display:block}
+.ae-sheet .bg{position:absolute;inset:0;background:rgba(15,23,42,.45)}
+.ae-sheet .panel{position:absolute;left:0;right:0;bottom:0;max-height:82vh;background:var(--bg-card);border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -10px 30px rgba(0,0,0,.18)}
+.ae-sheet .grab{width:40px;height:4px;border-radius:3px;background:var(--gray-300,#cbd5e1);margin:.55rem auto .2rem}
+@media (max-width:1000px){
+  .ae-grid{grid-template-columns:minmax(0,1fr)}
+  .ae-side{display:none}
+  .ae-pick{display:flex;align-items:center;gap:.4rem;margin-left:auto;height:38px;padding:0 .8rem;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-card);font:inherit;font-weight:700;font-size:.84rem;color:var(--primary);cursor:pointer}
+}
+@media (max-width:760px){
+  .ae{padding-bottom:90px}
+  .ae-who{padding:.85rem 1rem}
+  .ae-row{grid-template-columns:minmax(0,1fr) 92px 70px 30px;gap:.5rem;padding:.55rem .9rem}
+  .ae-subj{font-size:.9rem;white-space:normal;line-height:1.25}
+  .ae-score,.ae-grade select{height:50px}
+  .ae-bar{position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom));box-shadow:0 -6px 18px rgba(0,0,0,.08);background:var(--bg-card)}
+  .ae-bar .hint{display:none}
+  .ae-src{display:none}
+  .ae-bar .rs-btn{flex:1}
+  .sl-sub .sl-long{display:none}
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="rs bx bx-legacy">
-<div class="page-header"><div><h1>Add result &mdash; {{ exam.display_name }}</h1></div></div>
-<div class="no-print">{{ mw_exam_nav(exam, 'add') }}</div>
+{% set total = students|length + done|length %}
+<div class="rs ae">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-pen-to-square" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Enter results — {{ exam.display_name }}</h1><p>One student at a time: type each score, the grade fills itself in.</p></div>
+  </header>
+  <div class="no-print">{{ mw_exam_nav(exam, 'add') }}</div>
 
-<div class="card" style="max-width:680px;"><div class="card-body">
 {% if students %}
-    <form method="POST">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div class="form-group">
-            <label class="form-label">Student <span class="text-danger">*</span></label>
-            <select name="student_id" id="studentSelect" class="form-control" required>
-                <option value="">— Select SSS3 student —</option>
-                {% for s in students %}<option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>{% endfor %}
-            </select>
-        </div>
+  <div class="ae-grid">
+    <aside class="rs-card ae-side" id="aeSide">
+      <div class="ae-side-h">
+        <b>Students to enter <small>{{ done|length }} of {{ total }} done</small></b>
+        <span class="ae-prog"><i style="width:{{ (100 * done|length / total)|round|int if total else 0 }}%"></i></span>
+        <label class="ae-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" placeholder="Find a student" aria-label="Find a student" data-filter></label>
+      </div>
+      <div class="ae-list" data-list></div>
+      {% if done %}
+      <details class="ae-done"><summary><i class="fas fa-circle-check" aria-hidden="true" style="color:var(--success)"></i> Already entered ({{ done|length }})</summary>
+        {% for d in done %}<a href="{{ d.edit_url }}"><i class="fas fa-check" aria-hidden="true"></i> {{ d.name }} <small class="cm-mute">· edit</small></a>{% endfor %}
+      </details>
+      {% endif %}
+    </aside>
 
-        <div class="entry-hint"><i class="fas fa-circle-info"></i>
-            <span>Subjects fill from the student's registered WAEC subjects. Enter a score (0&ndash;100) &mdash; the grade is auto-calculated and can be overridden if it's wrong. Blank scores are skipped.</span>
-        </div>
-
-        <div class="mw-head"><span>Subject</span><span>Score</span><span>Grade</span></div>
-        {% for i in range(12) %}
-        <div class="mw-row is-empty">
-            <select name="subject[]" class="form-control mw-subject">
-                <option value="">Select Subject</option>
-                {% for subj in subjects %}<option value="{{ subj }}">{{ subj }}</option>{% endfor %}
-            </select>
-            <input type="number" min="0" max="100" name="score[]" class="form-control mw-score" placeholder="—">
-            <select name="grade[]" class="form-control mw-grade">
-                <option value="">—</option>
-                {% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
-            </select>
-        </div>
-        {% endfor %}
-
-        <div class="page-header-actions mt-3">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save results</button>
-            <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary">Cancel</a>
-        </div>
+    <form method="POST" class="rs-card ae-main" id="aeForm" autocomplete="off">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="student_id" id="aeStudent" value="" required>
+      <input type="hidden" name="next" id="aeNext" value="">
+      <div class="ae-who">
+        <span class="ae-av" id="aeAv">?</span>
+        <div class="t"><b id="aeName">Choose a student</b><small id="aeMeta">Pick from the list to start.</small></div>
+        <button type="button" class="ae-pick" id="aePick"><i class="fas fa-user-group" aria-hidden="true"></i> Change</button>
+      </div>
+      <div class="ae-rows" id="aeRows"><div class="ae-empty"><i class="fas fa-hand-pointer" aria-hidden="true"></i> Choose a student to start entering scores.</div></div>
+      <div class="ae-add" id="aeAdd" hidden>
+        <select id="aeAddSel" aria-label="Add a subject"><option value="">+ Add a subject…</option>{% for subj in subjects %}<option value="{{ subj }}">{{ subj }}</option>{% endfor %}</select>
+      </div>
+      <div class="ae-sum" id="aeSum" hidden></div>
+      <div class="ae-bar">
+        <span class="hint"><kbd>Enter</kbd> moves to the next subject · grades fill in from the score; tap a grade to change it</span>
+        <button type="submit" class="rs-btn ghost" id="aeSave" disabled><i class="fas fa-check" aria-hidden="true"></i> Save</button>
+        <button type="submit" class="rs-btn primary" id="aeSaveNext" disabled><i class="fas fa-forward" aria-hidden="true"></i> Save &amp; next student</button>
+      </div>
     </form>
-{% else %}
-    <div class="empty-state"><i class="fas fa-user-slash"></i>
-        <p>No SSS3 students found for the current term. Set up SSS3 class enrolment first.</p>
-        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-primary">Back</a>
+  </div>
+
+  <div class="ae-sheet" id="aeSheet" aria-hidden="true">
+    <div class="bg" data-close></div>
+    <div class="panel" role="dialog" aria-label="Choose a student">
+      <span class="grab"></span>
+      <div class="ae-side-h">
+        <b>Students to enter <small>{{ done|length }} of {{ total }} done</small></b>
+        <label class="ae-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" placeholder="Find a student" aria-label="Find a student" data-filter></label>
+      </div>
+      <div class="ae-list" data-list></div>
     </div>
+  </div>
+{% else %}
+  <div class="rs-blank"><span><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+    <h3>{{ 'Everyone has results for this mock' if done else 'No SSS3 students this term' }}</h3>
+    <p>{{ 'Use the results page to edit a student’s scores.' if done else 'Set up SSS3 class enrolment first.' }}</p>
+    <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="rs-btn primary">Back to results</a></div>
 {% endif %}
-</div></div>
+</div>
 
 <script nonce="{{ csp_nonce }}">
 (function () {
-    var SUBJECT_MAP = {{ subject_map | tojson }};
-    var DEFAULTS = {{ default_subjects | tojson }};
-    var STREAM_DEFAULTS = {{ stream_defaults | tojson }};
-    var rows = Array.prototype.slice.call(document.querySelectorAll('.mw-row'));
+  var STUDENTS = {{ student_rows | tojson }};
+  var SUBJECT_MAP = {{ subject_map | tojson }};
+  var DEFAULTS = {{ default_subjects | tojson }};
+  var STREAM_DEFAULTS = {{ stream_defaults | tojson }};
+  var GRADES = {{ grades | tojson }};
+  var PRESELECT = {{ preselect | tojson }};
+  var form = document.getElementById('aeForm');
+  if (!form) return;
+  var rowsEl = document.getElementById('aeRows'), addBox = document.getElementById('aeAdd'), addSel = document.getElementById('aeAddSel');
+  var sum = document.getElementById('aeSum'), save = document.getElementById('aeSave'), saveNext = document.getElementById('aeSaveNext');
+  var sheet = document.getElementById('aeSheet'), current = null;
+  var TOUCH = window.matchMedia('(pointer: coarse)').matches;
 
-    function gradeFromScore(v) {
-        if (v === '' || v === null || isNaN(v)) return '';
-        var s = Math.max(0, Math.min(100, parseInt(v, 10)));
-        if (s >= 75) return 'A1'; if (s >= 70) return 'B2'; if (s >= 65) return 'B3';
-        if (s >= 60) return 'C4'; if (s >= 55) return 'C5'; if (s >= 50) return 'C6';
-        if (s >= 45) return 'D7'; if (s >= 40) return 'E8'; return 'F9';
-    }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function initials(n) { return (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase(); }
+  function gradeFromScore(v) {
+    var s = Math.max(0, Math.min(100, parseInt(v, 10)));
+    if (s >= 75) return 'A1'; if (s >= 70) return 'B2'; if (s >= 65) return 'B3';
+    if (s >= 60) return 'C4'; if (s >= 55) return 'C5'; if (s >= 50) return 'C6';
+    if (s >= 45) return 'D7'; if (s >= 40) return 'E8'; return 'F9';
+  }
+  function band(g) { return !g ? '' : /^(A1|B2|B3|C4|C5|C6)$/.test(g) ? 'cr' : /^(D7|E8)$/.test(g) ? 'ps' : 'fl'; }
+  function subjectsFor(id) {
+    var e = SUBJECT_MAP[id];
+    if (e && e.waec && e.waec.length) return { list: e.waec, from: 'registered WAEC subjects' };
+    if (e && e.stream && STREAM_DEFAULTS[e.stream]) return { list: STREAM_DEFAULTS[e.stream], from: e.stream + ' stream subjects' };
+    return { list: DEFAULTS, from: 'the school’s general subjects' };
+  }
 
-    function subjectsForStudent(entry) {
-        if (!entry) return DEFAULTS;
-        if (entry.waec && entry.waec.length) return entry.waec;          // registered subjects win
-        if (entry.stream && STREAM_DEFAULTS[entry.stream]) return STREAM_DEFAULTS[entry.stream];
-        return DEFAULTS;
-    }
-
-    function applySubjects(list) {
-        list = list || [];
-        rows.forEach(function (row, idx) {
-            var subj = list[idx] || '';
-            row.querySelector('.mw-subject').value = subj;
-            row.classList.toggle('is-empty', !subj);   // only show rows with a subject
-            if (!subj) {
-                row.querySelector('.mw-score').value = '';
-                row.querySelector('.mw-grade').value = '';
-            }
-        });
-    }
-
-    // Score -> auto-derive grade (unless the user has hand-edited that grade).
-    rows.forEach(function (row) {
-        var score = row.querySelector('.mw-score');
-        var grade = row.querySelector('.mw-grade');
-        score.addEventListener('input', function () {
-            if (grade.dataset.touched) return;
-            grade.value = gradeFromScore(score.value);
-        });
-        grade.addEventListener('change', function () { grade.dataset.touched = '1'; });
+  // ---- Student lists (sidebar + phone sheet) ----
+  function renderLists() {
+    document.querySelectorAll('[data-list]').forEach(function (box) {
+      var q = (box.parentNode.querySelector('[data-filter]') || {}).value || '';
+      q = q.trim().toLowerCase();
+      box.innerHTML = STUDENTS.filter(function (s) { return !q || (s.name + ' ' + s.sid).toLowerCase().indexOf(q) > -1; })
+        .map(function (s) {
+          return '<button type="button" class="ae-st' + (current && current.id === s.id ? ' on' : '') + '" data-id="' + s.id + '">'
+            + '<span class="ae-av">' + esc(initials(s.name)) + '</span><span class="t"><b>' + esc(s.name) + '</b><small>'
+            + esc([s.sid, s.stream].filter(Boolean).join(' · ')) + '</small></span></button>';
+        }).join('') || '<div class="ae-empty">No student matches.</div>';
     });
+  }
+  document.querySelectorAll('[data-filter]').forEach(function (i) { i.addEventListener('input', renderLists); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.ae-st');
+    if (b) { choose(+b.getAttribute('data-id')); closeSheet(); }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-close')) closeSheet();
+  });
+  function openSheet() { sheet.classList.add('open'); sheet.setAttribute('aria-hidden', 'false'); var f = sheet.querySelector('[data-filter]'); if (f) setTimeout(function () { f.focus(); }, 50); }
+  function closeSheet() { sheet.classList.remove('open'); sheet.setAttribute('aria-hidden', 'true'); }
+  document.getElementById('aePick').addEventListener('click', openSheet);
 
-    var sel = document.getElementById('studentSelect');
-    if (sel) sel.addEventListener('change', function () {
-        applySubjects(subjectsForStudent(SUBJECT_MAP[this.value]));
+  // ---- Subject rows ----
+  function rowHtml(subj) {
+    var opts = '<option value="">—</option>' + GRADES.map(function (g) { return '<option value="' + g + '">' + g + '</option>'; }).join('');
+    return '<div class="ae-row"><span class="ae-subj">' + esc(subj) + '<input type="hidden" name="subject[]" value="' + esc(subj) + '"></span>'
+      + '<input class="ae-score" name="score[]" inputmode="numeric" pattern="[0-9]*" maxlength="3" enterkeyhint="next" placeholder="Score" aria-label="' + esc(subj) + ' score">'
+      + '<span class="ae-grade"><select name="grade[]" aria-label="' + esc(subj) + ' grade">' + opts + '</select><span class="man" title="Changed by hand">✎</span></span>'
+      + '<button type="button" class="ae-x" aria-label="Remove ' + esc(subj) + '" title="Not taking this subject"><i class="fas fa-xmark"></i></button></div>';
+  }
+  function dirty() { return Array.prototype.some.call(rowsEl.querySelectorAll('.ae-score'), function (i) { return i.value.trim() !== ''; }); }
+  function choose(id) {
+    if (current && current.id === id) return;
+    if (current && dirty() && !window.confirm('You have scores for ' + current.name + ' that aren’t saved. Switch student and lose them?')) return;
+    current = STUDENTS.filter(function (s) { return s.id === id; })[0];
+    if (!current) return;
+    document.getElementById('aeStudent').value = id;
+    document.getElementById('aeAv').textContent = initials(current.name);
+    document.getElementById('aeName').textContent = current.name;
+    var sub = subjectsFor(id);
+    document.getElementById('aeMeta').innerHTML = esc([current.sid, current.stream].filter(Boolean).join(' · ')) + '<span class="ae-src"> — ' + sub.list.length + ' subjects from ' + esc(sub.from) + '</span>';
+    rowsEl.innerHTML = sub.list.map(rowHtml).join('');
+    addBox.hidden = false; sum.hidden = false;
+    renderLists(); update();
+    var first = rowsEl.querySelector('.ae-score'); if (first) first.focus({ preventScroll: true });
+    try { history.replaceState(null, '', location.pathname + '?student=' + id); } catch (e) {}
+  }
+  rowsEl.addEventListener('input', function (e) {
+    var inp = e.target;
+    if (!inp.classList.contains('ae-score')) return;
+    inp.value = inp.value.replace(/\D/g, '').slice(0, 3);
+    var row = inp.closest('.ae-row'), sel = row.querySelector('select'), wrap = row.querySelector('.ae-grade');
+    var v = inp.value, over = v !== '' && +v > 100;
+    inp.classList.toggle('bad', over);
+    if (!wrap.classList.contains('touched')) sel.value = v === '' || over ? '' : gradeFromScore(v);
+    update();
+    // Phone number pads have no Enter key: once a score is complete (3 digits,
+    // or 2 digits that can't grow — anything but "10"), move to the next one.
+    if (TOUCH && !over && (v.length === 3 || (v.length === 2 && v !== '10'))) {
+      var all = Array.prototype.slice.call(rowsEl.querySelectorAll('.ae-score')), i = all.indexOf(inp);
+      if (all[i + 1]) all[i + 1].focus(); else inp.blur();
+    }
+  });
+  rowsEl.addEventListener('change', function (e) {
+    if (e.target.tagName === 'SELECT') { e.target.closest('.ae-grade').classList.toggle('touched', e.target.value !== ''); update(); }
+  });
+  rowsEl.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.classList.contains('ae-score')) return;
+    e.preventDefault();
+    var all = Array.prototype.slice.call(rowsEl.querySelectorAll('.ae-score')), i = all.indexOf(e.target);
+    if (all[i + 1]) all[i + 1].focus(); else saveNext.focus();
+  });
+  rowsEl.addEventListener('click', function (e) {
+    var x = e.target.closest && e.target.closest('.ae-x');
+    if (x) { x.closest('.ae-row').remove(); update(); }
+  });
+  addSel.addEventListener('change', function () {
+    var v = addSel.value; addSel.value = '';
+    if (!v) return;
+    var have = Array.prototype.map.call(rowsEl.querySelectorAll('input[name="subject[]"]'), function (h) { return h.value; });
+    if (have.indexOf(v) > -1) return;
+    rowsEl.insertAdjacentHTML('beforeend', rowHtml(v));
+    rowsEl.lastElementChild.querySelector('.ae-score').focus();
+    update();
+  });
+
+  // ---- Live summary + buttons ----
+  function update() {
+    var rows = Array.prototype.slice.call(rowsEl.querySelectorAll('.ae-row')), entered = 0, credits = 0, bad = 0, eng = null, mth = null;
+    rows.forEach(function (r) {
+      var sc = r.querySelector('.ae-score'), sel = r.querySelector('select'), subj = r.querySelector('input[name="subject[]"]').value;
+      sel.className = band(sel.value);
+      if (sc.classList.contains('bad')) bad++;
+      if (sc.value !== '' && !sc.classList.contains('bad')) entered++;
+      var cr = band(sel.value) === 'cr';
+      if (cr) credits++;
+      if (/^english/i.test(subj)) eng = sel.value ? cr : eng;
+      if (/^math/i.test(subj)) mth = sel.value ? cr : mth;
     });
+    if (current) {
+      var chips = ['<span class="ae-chip">' + entered + ' of ' + rows.length + ' scores</span>',
+        '<span class="ae-chip' + (credits >= 5 ? ' good' : '') + '">' + credits + ' credit' + (credits === 1 ? '' : 's') + ' (A1–C6)</span>'];
+      if (eng !== null || mth !== null) {
+        var both = eng && mth;
+        chips.push('<span class="ae-chip ' + (both ? 'good' : 'bad') + '">' + (both ? '✓ English & Maths credits' : 'English & Maths: ' + [eng === false ? 'English' : '', mth === false ? 'Maths' : ''].filter(Boolean).join(', ') + (eng === false || mth === false ? ' below credit' : ' pending')) + '</span>');
+      }
+      if (bad) chips.push('<span class="ae-chip bad">' + bad + ' score' + (bad === 1 ? '' : 's') + ' over 100</span>');
+      sum.innerHTML = chips.join('');
+    }
+    var ok = current && entered > 0 && !bad;
+    save.disabled = saveNext.disabled = !ok;
+  }
+  save.addEventListener('click', function () { document.getElementById('aeNext').value = ''; });
+  saveNext.addEventListener('click', function () { document.getElementById('aeNext').value = '1'; });
+  form.addEventListener('submit', function () { window.onbeforeunload = null; save.disabled = saveNext.disabled = true; });
+  window.addEventListener('beforeunload', function (e) { if (current && dirty() && !form.dataset.sending) { e.preventDefault(); e.returnValue = ''; } });
+  form.addEventListener('submit', function () { form.dataset.sending = '1'; });
+
+  renderLists();
+  if (PRESELECT) choose(PRESELECT);
+  else if (window.matchMedia('(max-width: 1000px)').matches && STUDENTS.length) openSheet();
 })();
 </script>
-</div>
 {% endblock %}

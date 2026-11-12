@@ -25,9 +25,9 @@
 </nav>
 {% if active in ('grid', 'add', 'paste') and create %}
 <nav class="sl-sub" aria-label="Ways to enter results">
-  <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="{{ 'on' if active == 'grid' }}"><i class="fas fa-table-cells" aria-hidden="true"></i> Grid (whole class)</a>
+  <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="{{ 'on' if active == 'grid' }}"><i class="fas fa-table-cells" aria-hidden="true"></i> Grid<span class="sl-long"> (whole class)</span></a>
   <a href="{{ url_for('mock_waec.add_result', exam_id=exam.id) }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> One student</a>
-  <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="{{ 'on' if active == 'paste' }}"><i class="fas fa-paste" aria-hidden="true"></i> Paste / CSV</a>
+  <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="{{ 'on' if active == 'paste' }}"><i class="fas fa-paste" aria-hidden="true"></i> Paste<span class="sl-long"> / CSV</span></a>
 </nav>
 {% endif %}
 {% endmacro %}

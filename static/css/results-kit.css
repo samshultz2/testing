@@ -743,6 +743,7 @@
   .sl-nav a span{display:none}
   .sl-nav a.on span{display:inline}
   .sl-sub{margin:-.35rem -1rem 0;padding:0 1rem}
+  .sl-sub .sl-long{display:none}
   .sl-alerts{grid-template-columns:minmax(0,1fr)}
   .sl-quick{grid-template-columns:repeat(3,1fr)}
   .sl-trend{height:120px}

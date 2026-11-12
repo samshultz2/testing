@@ -688,9 +688,19 @@ def add_result(exam_id):
             grade = supplied if supplied in WAEC_GRADES else None
             _upsert_result(student_id, exam_id, subject, score, grade)
             saved += 1
+        if not saved:
+            flash('Enter at least one score before saving.', 'warning')
+            return redirect(url_for('mock_waec.add_result', exam_id=exam_id, student=student_id))
         db.session.commit()
         recompute_student_safe(student_id)
-        flash(f'{saved} subject result(s) saved.', 'success')
+        name = next((st.full_name for st in students if st.id == student_id), 'the student')
+        flash(f'{saved} subject result{"s" if saved != 1 else ""} saved for {name}.', 'success')
+        # "Save & next": straight on to the next student still without results.
+        if request.form.get('next') == '1':
+            rest = [st for st in students if st.id != student_id]
+            if rest:
+                return redirect(url_for('mock_waec.add_result', exam_id=exam_id, student=rest[0].id))
+            flash('Every SSS3 student now has results for this mock.', 'success')
         # SSS3 arm teachers can't open the cohort exam view — send them to the
         # student's own progress page instead.
         from utils.access_control import has_sss3_exam_access
@@ -700,10 +710,18 @@ def add_result(exam_id):
 
     from utils.exam_subject_config import get_config, stream_waec_map
     _wcfg = get_config()['waec']
+    all_sss3 = get_sss3_students()
+    done = [{'id': st.id, 'name': st.full_name, 'sid': st.student_id or '',
+             'edit_url': url_for('mock_waec.edit_student_results', exam_id=exam_id, student_id=st.id)}
+            for st in all_sss3 if st.id in entered]
+    pick = request.args.get('student', type=int)
     return render_template('mock_waec/add_result.html',
         exam=exam, students=students, subjects=_wcfg['catalog'] or WAEC_SUBJECTS, grades=WAEC_GRADES,
         default_subjects=_wcfg['general'] or WAEC_DEFAULT_SUBJECTS, stream_defaults=stream_waec_map(),
-        subject_map=student_subject_map(students))
+        subject_map=student_subject_map(students), done=done,
+        preselect=pick if any(st.id == pick for st in students) else None,
+        student_rows=[{'id': st.id, 'name': st.full_name, 'sid': st.student_id or '', 'stream': st.stream or ''}
+                      for st in students])
 
 
 # =============================================================================
