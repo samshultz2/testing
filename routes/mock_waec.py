@@ -265,11 +265,19 @@ def to_term_results(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     can_results = is_admin() or module_level('results') == 'edit'
-    terms = Term.query.filter_by(session_id=exam.session_id).order_by(Term.term_number).all()
+    # Third term is WAEC time: SSS3 has no internal results then (they're
+    # hidden from third-term results / analytics), so only 1st and 2nd term.
+    terms = [t for t in Term.query.filter_by(session_id=exam.session_id).order_by(Term.term_number).all()
+             if t.term_number != 3]
     active = get_active_term()
     default = active.id if active and any(t.id == active.id for t in terms) else (terms[-1].id if terms else None)
     term_id = request.values.get('term_id', type=int) or default
     term = next((t for t in terms if t.id == term_id), None)
+    if term_id and not term and request.method == 'POST':
+        flash('Mock scores can only go into first or second term results — third term is WAEC time.', 'error')
+        return redirect(url_for('mock_waec.to_term_results', exam_id=exam_id))
+    if term_id and not term:
+        term = next((t for t in terms if t.id == default), None)
     if request.method == 'POST':
         if not can_results:
             flash('You need permission to edit term results to do this.', 'error')

@@ -42,12 +42,22 @@ def test_send_mock_scores_to_term_results(app):
     with app.app_context():
         s = Student(student_id='MT' + tag, first_name='Ada', surname='Term' + tag, gender='Female')
         db.session.add(s); db.session.commit(); sid = s.id
-    enroll_sss3(app, sid)
     with app.app_context():
+        from models import Term, SchoolClass, ClassArm
         mid, cbt, exam_t = _types()
-        en = StudentEnrollment.query.filter_by(student_id=sid).first()
-        asg = db.session.get(ClassArmAssignment, en.class_arm_assignment_id)
-        term_id, session_id = asg.term_id, asg.term.session_id
+        # Its own session with a first and a third term (mocks only go into 1st / 2nd).
+        sess = AcademicSession(name='MTT ' + tag); db.session.add(sess); db.session.flush()
+        t1 = Term(session_id=sess.id, term_number=1, name='First ' + tag)
+        t3 = Term(session_id=sess.id, term_number=3, name='Third ' + tag)
+        db.session.add_all([t1, t3]); db.session.flush()
+        sss3 = SchoolClass.query.filter_by(name='SSS3').first() or SchoolClass(name='SSS3', level=12)
+        arm = ClassArm.query.first() or ClassArm(name='A', is_active=True)
+        db.session.add_all([sss3, arm]); db.session.flush()
+        asg = ClassArmAssignment(class_id=sss3.id, arm_id=arm.id, term_id=t1.id)
+        db.session.add(asg); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=asg.id, is_active=True))
+        db.session.commit()
+        term_id, session_id, third_id = t1.id, sess.id, t3.id
         prac = Subject(name='Physics ' + tag, short_name='P' + tag)
         nopr = Subject(name='Literature ' + tag, short_name='L' + tag)
         db.session.add_all([prac, nopr]); db.session.flush()
@@ -77,6 +87,12 @@ def test_send_mock_scores_to_term_results(app):
     assert f'out of {total_p}' in html and f'out of {total_n}' in html
 
     tok = auth_csrf(c)
+    # Third term (WAEC time) is not offered and can't be written to.
+    assert f'value="{third_id}"' not in html
+    r = c.post(f'/mock-waec/exam/{ex_id}/to-term-results', data={'_csrf_token': tok, 'term_id': third_id})
+    assert r.status_code == 302
+    with app.app_context():
+        assert not StudentScore.query.filter_by(student_id=sid).count()
     r = c.post(f'/mock-waec/exam/{ex_id}/to-term-results', data={'_csrf_token': tok, 'term_id': term_id})
     assert r.status_code == 302
 

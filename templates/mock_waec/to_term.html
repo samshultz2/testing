@@ -97,15 +97,18 @@
       <div class="tt-eg"><span>64 / 100</span><i class="fas fa-arrow-right"></i><span>45 / 70</span><i class="fas fa-arrow-right"></i><span>CBT 19 / 30</span><span>Theory 26 / 40</span></div></div>
   </section>
 
+  {% if terms %}
   <div class="tt-bar">
     <form method="get" class="tt-term"><i class="fas fa-calendar" aria-hidden="true"></i>
       <select name="term_id" aria-label="Term" data-autosubmit>
         {% for t in terms %}<option value="{{ t.id }}" {% if term and t.id == term.id %}selected{% endif %}>{{ t.name }}{% if exam.session %} · {{ exam.session.name }}{% endif %}</option>{% endfor %}
       </select></form>
+    <span class="rs-muted" style="font-size:.8rem"><i class="fas fa-circle-info" aria-hidden="true"></i> First and second term only — third term is WAEC time, so SSS3 has no term results then.</span>
   </div>
+  {% endif %}
 
   {% if not term %}
-  <div class="rs-blank"><span><i class="fas fa-calendar-xmark" aria-hidden="true"></i></span><h3>No terms in this session</h3><p>Create the terms for {{ exam.session.name if exam.session else 'this session' }} first.</p></div>
+  <div class="rs-blank"><span><i class="fas fa-calendar-xmark" aria-hidden="true"></i></span><h3>No first or second term in this session</h3><p>Mock scores go into first or second term results (third term is WAEC time). Create those terms for {{ exam.session.name if exam.session else 'this session' }} first.</p></div>
   {% elif not plan.rows %}
   <div class="rs-blank"><span><i class="fas fa-table" aria-hidden="true"></i></span><h3>No mock results yet</h3><p>Enter this mock’s scores first, then send them to the term results.</p>
     <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="rs-btn primary">Enter results</a></div>
