@@ -3,108 +3,243 @@
 {% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>External Exam Subjects</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
 <style>
-.es-table{width:100%;border-collapse:collapse;font-size:.9rem}
-.es-table th,.es-table td{padding:.5rem .6rem;border-bottom:1px solid var(--border-light);text-align:center}
-.es-table th:first-child,.es-table td:first-child{text-align:left}
-.es-table thead th{font-size:.75rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted)}
-.es-add{display:flex;gap:.5rem;align-items:center;margin-top:.75rem;flex-wrap:wrap}
-.es-tablewrap{overflow-x:auto}
-.es-name{font-weight:500}
-.es-rm{color:var(--danger);background:none;border:0;cursor:pointer;font-size:.95rem}
+.ex{max-width:1180px}
+.ex-sits{display:flex;gap:.6rem;overflow-x:auto;padding:2px 2px .4rem;margin:0 0 1rem;scrollbar-width:thin}
+.ex-sit{flex:0 0 auto;min-width:170px;display:flex;flex-direction:column;gap:.15rem;padding:.75rem .9rem;border:1.5px solid var(--border-color);border-radius:14px;background:var(--bg-card);text-decoration:none;color:inherit}
+.ex-sit:hover{border-color:var(--primary)}
+.ex-sit.on{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--bg-card));box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 12%,transparent)}
+.ex-sit b{font-size:.95rem}.ex-sit small{font-size:.75rem;color:var(--text-muted)}
+.ex-sit em{font-style:normal;font-size:.72rem;font-weight:800;margin-top:.2rem;color:var(--text-muted)}
+.ex-sit em.chg{color:var(--warning)}
+.ex-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1rem;align-items:start}
+.ex-card{padding:0;overflow:hidden;margin:0 0 1rem}
+.ex-card-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ex-card-h h3{margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem}.ex-card-h h3 i{color:var(--primary)}
+.ex-tabs{display:inline-flex;background:var(--gray-100,#eef2f7);padding:3px;border-radius:11px;gap:2px}
+.ex-tabs button{border:0;background:none;font:inherit;font-weight:700;font-size:.84rem;padding:.4rem .85rem;border-radius:9px;cursor:pointer;color:var(--text-secondary)}
+.ex-tabs button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ex-exam[hidden]{display:none}
+.ex-hd,.ex-row{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--cols),92px) 36px;gap:.4rem;align-items:center;padding:.45rem 1rem}
+.ex-hd{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--gray-50,#f8fafc);border-bottom:1px solid var(--border-light,var(--border-color))}
+.ex-hd span:not(:first-child){text-align:center}
+.ex-row{border-bottom:1px solid var(--border-light,var(--border-color))}
+.ex-row:last-of-type{border-bottom:0}
+.ex-row.chg{background:color-mix(in srgb,var(--warning) 7%,transparent)}
+.ex-name{font-weight:600;font-size:.9rem;display:flex;align-items:center;gap:.4rem;min-width:0}
+.ex-name small{font-size:.68rem;font-weight:800;color:var(--warning);text-transform:uppercase}
+.ex-pill{position:relative;display:flex;align-items:center;justify-content:center;gap:.3rem;height:32px;border:1.5px solid var(--border-color);border-radius:999px;font-size:.76rem;font-weight:700;color:var(--text-muted);cursor:pointer;background:var(--bg-card)}
+.ex-pill input{position:absolute;opacity:0;pointer-events:none}
+.ex-pill .k{display:none}
+.ex-pill i{font-size:.7rem;opacity:.25}
+.ex-pill:has(input:checked){border-color:var(--primary);background:var(--primary);color:#fff}
+.ex-pill:has(input:checked) i{opacity:1}
+.ex-pill.gen:has(input:checked){background:#0f766e;border-color:#0f766e}
+.ex-pill:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.ex-rm{width:32px;height:32px;border:0;border-radius:9px;background:none;color:var(--text-muted);cursor:pointer}.ex-rm:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.ex-add{display:flex;gap:.5rem;padding:.8rem 1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.ex-add input{flex:1;min-width:0;max-width:340px;height:38px;border:1.5px dashed var(--border-color);border-radius:10px;padding:0 .75rem;font:inherit;background:var(--bg-card);color:var(--text-primary)}
+.ex-side{position:sticky;top:76px;display:flex;flex-direction:column;gap:1rem}
+.ex-sum{padding:1rem}
+.ex-sum h4{margin:0 0 .6rem;font-size:.9rem}
+.ex-st{margin:0 0 .8rem}.ex-st:last-child{margin:0}
+.ex-st b{font-size:.84rem;display:flex;justify-content:space-between}.ex-st b span{color:var(--text-muted);font-weight:600}
+.ex-chips{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.3rem}
+.ex-chips span{font-size:.72rem;padding:.15rem .5rem;border-radius:999px;background:var(--gray-100,#eef2f7);color:var(--text-secondary)}
+.ex-chips span.add{background:color-mix(in srgb,var(--success) 15%,transparent);color:var(--success);font-weight:700}
+.ex-chg{display:flex;flex-direction:column;gap:.35rem;margin:.6rem 0 0}
+.ex-chg div{font-size:.84rem}.ex-chg ins{text-decoration:none;color:var(--success);font-weight:700}.ex-chg del{color:var(--danger)}
+.ex-banner{padding:1rem 1.1rem;margin:0 0 1rem;display:flex;flex-direction:column;gap:.5rem}
+.ex-banner-h{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
+.ex-banner-h .t{flex:1;min-width:0}.ex-banner-h b{font-size:1.02rem;display:block}.ex-banner-h small{color:var(--text-muted);font-size:.84rem}
+.ex-bar{display:flex;justify-content:flex-end;gap:.5rem;margin:0 0 1rem}
+@media (max-width:1000px){.ex-grid{grid-template-columns:minmax(0,1fr)}.ex-side{position:static}}
+@media (max-width:760px){
+  .ex-hd{display:none}
+  .ex-row{grid-template-columns:repeat(var(--cols),1fr) 32px;padding:.65rem 1rem;row-gap:.45rem}
+  .ex-row .ex-name{grid-column:1/-1}
+  .ex-pill{font-size:.7rem;height:30px}
+  .ex-pill .k{display:inline}
+  .ex-bar .rs-btn{flex:1}
+  .ex-banner-h form,.ex-banner-h form .rs-btn{width:100%}
+  .ex-banner .cm-attn-i{flex-wrap:wrap}.ex-banner .cm-attn-i form{margin-left:0!important;width:100%}.ex-banner .cm-attn-i form .rs-btn{width:100%}
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>External Exam Subjects</h1>
-        <p class="text-muted text-sm">Per-school WAEC &amp; JAMB subjects. Tick <strong>General</strong> for subjects every stream must offer, and tick a stream for subjects compulsory only for that stream. A stream's effective list is <em>General + that stream's ticks</em>. These drive the auto-fill on the student and result-entry pages.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
-    </div>
-</div>
+{% set cols = 1 + streams|length %}
+<div class="rs ex">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-file-signature" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>External Exam Subjects</h1><p>Which WAEC and JAMB subjects each stream must offer. Sessions can swap a subject or two — set that per session below.</p></div>
+  </header>
 
-<form method="post">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-
-    {% for exam, cfg in [('waec', config.waec), ('jamb', config.jamb)] %}
-    <div class="card mb-3">
-        <div class="card-header"><h3>{{ 'WAEC / NECO' if exam == 'waec' else 'JAMB (UTME)' }} subjects</h3></div>
-        <div class="card-body">
-            <div class="es-tablewrap">
-            <table class="es-table" data-exam="{{ exam }}">
-                <thead><tr>
-                    <th>Subject</th><th>General<br><span class="text-muted" style="font-weight:400">(all streams)</span></th>
-                    {% for st in streams %}<th>{{ st }}</th>{% endfor %}
-                    <th></th>
-                </tr></thead>
-                <tbody>
-                {% for subj in cfg.catalog %}
-                    <tr>
-                        <td class="es-name"><input type="hidden" name="{{ exam }}_subject[]" value="{{ subj }}">{{ subj }}</td>
-                        <td><input type="checkbox" name="{{ exam }}_general[]" value="{{ subj }}" {% if subj in cfg.general %}checked{% endif %}></td>
-                        {% for st in streams %}
-                        <td><input type="checkbox" name="{{ exam }}_stream_{{ st }}[]" value="{{ subj }}" {% if subj in cfg.streams.get(st, []) %}checked{% endif %}></td>
-                        {% endfor %}
-                        <td><button type="button" class="es-rm" title="Remove subject" aria-label="Remove {{ subj }}"><i class="fas fa-times"></i></button></td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            </div>
-            <div class="es-add">
-                <input type="text" class="form-control" style="max-width:260px" placeholder="Add a subject…" data-add-input="{{ exam }}">
-                <button type="button" class="btn btn-secondary btn-sm" data-add-btn="{{ exam }}"><i class="fas fa-plus"></i> Add subject</button>
-            </div>
-        </div>
-    </div>
+  <nav class="ex-sits" aria-label="Which subjects to edit">
+    <a class="ex-sit {% if not view %}on{% endif %}" href="{{ url_for('settings.exam_subjects') }}">
+      <b>Usual subjects</b><small>Used by every session without its own</small><em>Default</em></a>
+    {% for s in sittings %}{% set n = (s.changes.waec|length) + (s.changes.jamb|length) %}
+    <a class="ex-sit {% if view and view.year == s.year %}on{% endif %}" href="{{ url_for('settings.exam_subjects', year=s.year) }}">
+      <b>{{ s.label }}</b><small>WAEC/JAMB {{ s.year }}{% if s.who %} · {{ s.who }}{% endif %}</small>
+      <em class="{{ 'chg' if s.custom else '' }}">{% if s.custom %}{{ 'Own subjects' if not n else n ~ ' stream' ~ ('s' if n != 1) ~ ' changed' }}{% else %}Usual subjects{% endif %}</em></a>
     {% endfor %}
+  </nav>
 
-    <div class="page-header-actions">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save subjects</button>
-        <a href="{{ back_url }}" class="btn btn-secondary">Cancel</a>
+  {% if view %}
+  {% set anychg = view.changes.waec or view.changes.jamb %}
+  <section class="rs-card ex-banner">
+    <div class="ex-banner-h">
+      <div class="t"><b>{{ view.label }} session · WAEC/JAMB {{ view.year }}</b>
+        <small>{% if view.students %}{{ view.students|length }} student{{ 's' if view.students|length != 1 }} sit{{ 's' if view.students|length == 1 }} in this session ({{ 'SSS3' if view.year == current_year else 'SSS2' }} now).{% elif view.year == current_year %}No SSS3 students are enrolled this term yet.{% elif current_year and view.year == current_year + 1 %}No SSS2 students are enrolled this term yet.{% else %}A past sitting — changes here only affect pages that look back at it.{% endif %}
+          {% if not view.waec.custom and not view.jamb.custom %} Uses the usual subjects — tick below to change just this session.{% endif %}</small></div>
+      {% if view.waec.custom or view.jamb.custom %}
+      <form method="post" data-confirm="Go back to the usual subjects for {{ view.label }}?">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="clear_year"><input type="hidden" name="year" value="{{ view.year }}">
+        <button type="submit" class="rs-btn sm ghost"><i class="fas fa-rotate-left" aria-hidden="true"></i> Use the usual subjects</button>
+      </form>{% endif %}
     </div>
-</form>
+    {% if anychg %}
+    <div class="ex-chg">
+      {% for exam in ('waec', 'jamb') %}{% for c in view.changes[exam] %}
+      <div><b>{{ exam|upper }} · {{ c.stream }}:</b>
+        {% for x in c.removed %}<del>{{ x }}</del>{% if not loop.last or c.added %}, {% endif %}{% endfor %}
+        {% for x in c.added %}<ins>+ {{ x }}</ins>{% if not loop.last %}, {% endif %}{% endfor %}</div>
+      {% endfor %}{% endfor %}
+    </div>
+    {% endif %}
+    {% set stale = (view.stale.waec or 0) + (view.stale.jamb or 0) %}
+    {% if stale %}
+    <div class="cm-attn-i mid"><i class="fas fa-user-pen" aria-hidden="true"></i>
+      <span><b>{{ view.stale.waec }} WAEC / {{ view.stale.jamb }} JAMB student lists</b> still have the old subjects — they were filled before this change.</span>
+      <form method="post" style="margin-left:auto" data-confirm="Swap the changed subjects on these students’ lists? Their other subjects stay as they are.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="apply_year"><input type="hidden" name="year" value="{{ view.year }}">
+        <button type="submit" class="rs-btn sm primary">Update their lists</button>
+      </form>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <form method="post" id="exForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    {% if view %}<input type="hidden" name="action" value="save_year"><input type="hidden" name="year" value="{{ view.year }}">{% endif %}
+    <div class="ex-grid">
+      <div>
+        <section class="rs-card ex-card">
+          <div class="ex-card-h">
+            <h3><i class="fas fa-list-check" aria-hidden="true"></i> {{ 'Subjects for this session' if view else 'Usual subjects' }}</h3>
+            <div class="ex-tabs" role="tablist"><button type="button" class="on" data-exam="waec">WAEC / NECO</button><button type="button" data-exam="jamb">JAMB</button></div>
+          </div>
+          {% for exam in ('waec', 'jamb') %}
+          {% set base = config[exam] %}
+          {% set cur = view[exam] if view else base %}
+          <div class="ex-exam" data-exam="{{ exam }}" {% if exam != 'waec' %}hidden{% endif %} style="--cols:{{ cols }}">
+            <div class="ex-hd"><span>Subject</span><span>All streams</span>{% for st in streams %}<span>{{ st }}</span>{% endfor %}<span></span></div>
+            <div class="ex-rows" data-exam="{{ exam }}">
+            {% for subj in base.catalog %}
+              {% set g = subj in cur.general %}
+              {% set ns = namespace(chg=(view and g != (subj in base.general))) %}
+              {% for st in streams %}{% if view and ((subj in cur.streams.get(st, [])) != (subj in base.streams.get(st, []))) %}{% set ns.chg = true %}{% endif %}{% endfor %}
+              <div class="ex-row{% if ns.chg %} chg{% endif %}">
+                <span class="ex-name">{% if not view %}<input type="hidden" name="{{ exam }}_subject[]" value="{{ subj }}">{% endif %}{{ subj }}{% if ns.chg %}<small>changed</small>{% endif %}</span>
+                <label class="ex-pill gen" title="Compulsory for every stream"><input type="checkbox" name="{{ exam }}_general[]" value="{{ subj }}" {% if g %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i><span class="k">All</span></label>
+                {% for st in streams %}
+                <label class="ex-pill" title="{{ st }}"><input type="checkbox" name="{{ exam }}_stream_{{ st }}[]" value="{{ subj }}" data-stream="{{ st }}" {% if subj in cur.streams.get(st, []) %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i><span class="k">{{ st }}</span></label>
+                {% endfor %}
+                {% if not view %}<button type="button" class="ex-rm" aria-label="Remove {{ subj }}" title="Remove subject"><i class="fas fa-xmark" aria-hidden="true"></i></button>{% else %}<span></span>{% endif %}
+              </div>
+            {% endfor %}
+            </div>
+            {% if not view %}
+            <div class="ex-add"><input type="text" placeholder="Add a subject…" data-add-input="{{ exam }}" aria-label="New {{ exam|upper }} subject">
+              <button type="button" class="rs-btn sm ghost" data-add-btn="{{ exam }}"><i class="fas fa-plus" aria-hidden="true"></i> Add</button></div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </section>
+        <div class="ex-bar"><button type="submit" class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> {{ 'Save for ' ~ view.label if view else 'Save subjects' }}</button></div>
+      </div>
+
+      <aside class="ex-side">
+        <section class="rs-card ex-sum" id="exSum">
+          <h4>What each stream offers</h4>
+          <div id="exSumBody"></div>
+          <p class="cm-mute" style="font-size:.76rem;margin:.6rem 0 0">“All streams” subjects plus that stream’s own. Students’ lists are filled from this when a stream is set.{% if view %} <span class="ex-chips" style="display:inline-flex"><span class="add">New this session</span></span>{% endif %}</p>
+        </section>
+      </aside>
+    </div>
+  </form>
+</div>
 
 <script nonce="{{ csp_nonce }}">
 (function () {
   var STREAMS = {{ streams|tojson }};
+  var BASE = {{ {'waec': config.waec, 'jamb': config.jamb}|tojson }};
+  var editingYear = {{ (view.year if view else none)|tojson }};
+  var exam = 'waec';
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-
-  function addRow(exam, name) {
-    var table = document.querySelector('.es-table[data-exam="' + exam + '"] tbody');
-    if (!table) return;
-    // Skip duplicates (case-insensitive).
-    var existing = Array.prototype.map.call(table.querySelectorAll('input[type=hidden]'), function (h) { return h.value.toLowerCase(); });
-    if (existing.indexOf(name.toLowerCase()) > -1) return;
-    var tr = document.createElement('tr');
-    var html = '<td class="es-name"><input type="hidden" name="' + exam + '_subject[]" value="' + esc(name) + '">' + esc(name) + '</td>'
-             + '<td><input type="checkbox" name="' + exam + '_general[]" value="' + esc(name) + '"></td>';
-    STREAMS.forEach(function (st) {
-      html += '<td><input type="checkbox" name="' + exam + '_stream_' + st + '[]" value="' + esc(name) + '"></td>';
-    });
-    html += '<td><button type="button" class="es-rm" title="Remove subject"><i class="fas fa-times"></i></button></td>';
-    tr.innerHTML = html;
-    table.appendChild(tr);
+  function baseList(ex, st) {
+    var b = BASE[ex], out = (b.general || []).slice();
+    (b.streams[st] || []).forEach(function (x) { if (out.indexOf(x) < 0) out.push(x); });
+    return out;
   }
+  function summary() {
+    var wrap = document.querySelector('.ex-rows[data-exam="' + exam + '"]');
+    var gen = [], per = {};
+    STREAMS.forEach(function (st) { per[st] = []; });
+    wrap.querySelectorAll('.ex-row').forEach(function (r) {
+      var g = r.querySelector('input[name$="_general[]"]');
+      if (g && g.checked) gen.push(g.value);
+      r.querySelectorAll('input[data-stream]').forEach(function (c) { if (c.checked) per[c.getAttribute('data-stream')].push(c.value); });
+    });
+    var html = '';
+    STREAMS.forEach(function (st) {
+      var list = gen.slice(); per[st].forEach(function (x) { if (list.indexOf(x) < 0) list.push(x); });
+      var base = baseList(exam, st);
+      html += '<div class="ex-st"><b>' + esc(st) + ' <span>' + list.length + ' subjects</span></b><div class="ex-chips">'
+        + list.map(function (x) { return '<span' + (editingYear && base.indexOf(x) < 0 ? ' class="add"' : '') + '>' + esc(x) + '</span>'; }).join('')
+        + '</div></div>';
+    });
+    document.getElementById('exSumBody').innerHTML = html;
+  }
+  document.querySelectorAll('.ex-tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      exam = b.getAttribute('data-exam');
+      document.querySelectorAll('.ex-tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.querySelectorAll('.ex-exam').forEach(function (p) { p.hidden = p.getAttribute('data-exam') !== exam; });
+      summary();
+    });
+  });
+  document.getElementById('exForm').addEventListener('change', summary);
 
+  function addRow(ex, name) {
+    var rows = document.querySelector('.ex-rows[data-exam="' + ex + '"]');
+    var have = Array.prototype.map.call(rows.querySelectorAll('input[type=hidden]'), function (h) { return h.value.toLowerCase(); });
+    if (have.indexOf(name.toLowerCase()) > -1) return;
+    var html = '<span class="ex-name"><input type="hidden" name="' + ex + '_subject[]" value="' + esc(name) + '">' + esc(name) + '</span>'
+      + '<label class="ex-pill gen"><input type="checkbox" name="' + ex + '_general[]" value="' + esc(name) + '"><i class="fas fa-check"></i><span class="k">All</span></label>';
+    STREAMS.forEach(function (st) {
+      html += '<label class="ex-pill"><input type="checkbox" name="' + ex + '_stream_' + st + '[]" value="' + esc(name) + '" data-stream="' + esc(st) + '"><i class="fas fa-check"></i><span class="k">' + esc(st) + '</span></label>';
+    });
+    html += '<button type="button" class="ex-rm" aria-label="Remove ' + esc(name) + '"><i class="fas fa-xmark"></i></button>';
+    var div = document.createElement('div'); div.className = 'ex-row'; div.innerHTML = html;
+    rows.appendChild(div);
+  }
   document.querySelectorAll('[data-add-btn]').forEach(function (btn) {
-    var exam = btn.getAttribute('data-add-btn');
-    var input = document.querySelector('[data-add-input="' + exam + '"]');
-    function commit() {
-      var v = (input.value || '').trim();
-      if (v) { addRow(exam, v); input.value = ''; input.focus(); }
-    }
+    var ex = btn.getAttribute('data-add-btn');
+    var input = document.querySelector('[data-add-input="' + ex + '"]');
+    function commit() { var v = (input.value || '').trim(); if (v) { addRow(ex, v); input.value = ''; input.focus(); summary(); } }
     btn.addEventListener('click', commit);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
   });
-
   document.addEventListener('click', function (e) {
-    var rm = e.target.closest ? e.target.closest('.es-rm') : null;
-    if (rm) { var tr = rm.closest('tr'); if (tr) tr.parentNode.removeChild(tr); }
+    var rm = e.target.closest ? e.target.closest('.ex-rm') : null;
+    if (rm) { var r = rm.closest('.ex-row'); if (r) { r.parentNode.removeChild(r); summary(); } }
   });
+  summary();
+  var on = document.querySelector('.ex-sit.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
 })();
 </script>
 {% endblock %}

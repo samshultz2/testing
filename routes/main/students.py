@@ -869,7 +869,7 @@ def edit_student(student_id):
             'scholarships': [sc.as_dict() for sc in student.scholarships.all()],
         },
         'contacts': contacts or [_blank_contact()],
-        'options': _student_form_options(),
+        'options': _student_form_options(exam_year=_exam_year_for(student)),
         'return_to': return_to,
         'urls': {'submit': url_for('main.edit_student', student_id=student.id),
                  'cancel': return_to or view_url, 'back': view_url,
@@ -983,19 +983,18 @@ def bulk_set_stream():
     # JAMB subjects (from the per-school config). Fill where the student has none
     # yet (don't clobber a custom list). Clearing the stream (stream=None) leaves
     # the subject lists untouched.
-    from utils.exam_subject_config import stream_waec_subjects, stream_jamb_subjects
+    from utils.exam_subject_config import stream_waec_subjects, stream_jamb_subjects, student_exam_year
     waec_filled = jamb_filled = 0
-    waec_defaults = stream_waec_subjects(stream) if stream else []
-    jamb_defaults = stream_jamb_subjects(stream) if stream else []
-    if waec_defaults or jamb_defaults:
-        waec_joined = ', '.join(waec_defaults)
-        jamb_joined = ', '.join(jamb_defaults)
+    if stream:
+        # Each student gets the set for the session they'll sit WAEC/JAMB in.
         for student in Student.query.filter(Student.id.in_(ids)).all():
-            if waec_defaults and not student.waec_subject_list:
-                student.waec_subjects = waec_joined
+            y = student_exam_year(student)
+            w, j = stream_waec_subjects(stream, y), stream_jamb_subjects(stream, y)
+            if w and not student.waec_subject_list:
+                student.waec_subjects = ', '.join(w)
                 waec_filled += 1
-            if jamb_defaults and not student.jamb_subject_list:
-                student.jamb_subjects = jamb_joined
+            if j and not student.jamb_subject_list:
+                student.jamb_subjects = ', '.join(j)
                 jamb_filled += 1
     db.session.commit()
 
@@ -1185,14 +1184,22 @@ def bulk_add_subject():
     return jsonify({'updated': updated, 'skipped': skipped, 'subject': subject})
 
 
+def _exam_year_for(student):
+    try:
+        from utils.exam_subject_config import student_exam_year
+        return student_exam_year(student)
+    except Exception:
+        return None
+
+
 @main_bp.route('/students/apply-stream-waec', methods=['POST'])
 @admin_required
 def apply_stream_waec():
     """Fill WAEC subjects from each student's stream where not already set."""
-    from utils.exam_subject_config import stream_waec_subjects
+    from utils.exam_subject_config import stream_waec_subjects, student_exam_year
     updated = 0
     for student in Student.query.filter_by(is_active=True).all():
-        defaults = stream_waec_subjects(student.stream)
+        defaults = stream_waec_subjects(student.stream, student_exam_year(student)) if student.stream else []
         if defaults and not student.waec_subject_list:
             student.waec_subjects = ', '.join(defaults)
             updated += 1
@@ -1237,15 +1244,18 @@ def apply_stream_subjects():
                 if st.is_active and st.stream == stream:
                     students[st.id] = st
 
-    waec_joined = ', '.join(waec_defaults)
-    jamb_joined = ', '.join(jamb_defaults)
+    # Each student gets the set for the session they'll sit in (SSS2 → next
+    # session's, SSS3 → this one's), which differs when a session swaps subjects.
+    from utils.exam_subject_config import student_exam_year
     waec_filled = jamb_filled = 0
     for st in students.values():
-        if waec_defaults and not st.waec_subject_list:
-            st.waec_subjects = waec_joined
+        y = student_exam_year(st)
+        w, j = stream_waec_subjects(stream, y), stream_jamb_subjects(stream, y)
+        if w and not st.waec_subject_list:
+            st.waec_subjects = ', '.join(w)
             waec_filled += 1
-        if jamb_defaults and not st.jamb_subject_list:
-            st.jamb_subjects = jamb_joined
+        if j and not st.jamb_subject_list:
+            st.jamb_subjects = ', '.join(j)
             jamb_filled += 1
     db.session.commit()
     log_action('apply_stream_subjects',

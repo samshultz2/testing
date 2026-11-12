@@ -1,71 +1,106 @@
 {% extends "base.html" %}
 {% block title %}Notification Preferences — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Notifications</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/app-kit.css') }}">
+<style>
+.nf{max-width:860px}
+.nf-card{padding:0;overflow:hidden;margin:0 0 1rem}
+.nf-card h3{margin:0;font-size:.98rem;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color));display:flex;align-items:center;gap:.5rem}
+.nf-card h3 i{color:var(--primary)}.nf-card h3 small{margin-left:auto;font-weight:500;color:var(--text-muted);font-size:.78rem}
+.nf-ch{display:flex;align-items:center;gap:.85rem;padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color));cursor:pointer}
+.nf-ch:last-child{border-bottom:0}
+.nf-ic{width:42px;height:42px;border-radius:12px;flex:none;display:grid;place-items:center;font-size:1.05rem;background:color-mix(in srgb,var(--primary) 11%,transparent);color:var(--primary)}
+.nf-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.nf-t b{font-size:.95rem}.nf-t small{color:var(--text-muted);font-size:.8rem;line-height:1.35}
+.nf-st{display:inline-flex;align-items:center;gap:.3rem;font-size:.74rem;font-weight:700;margin-top:.1rem}
+.nf-st.ok{color:var(--success)}.nf-st.warn{color:var(--warning)}.nf-st.off{color:var(--text-muted)}
+.nf-st a{color:inherit;text-decoration:underline}
+.nf-sw{position:relative;width:48px;height:28px;flex:none}
+.nf-sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.nf-sw i{position:absolute;inset:0;border-radius:999px;background:var(--gray-300,#cbd5e1);transition:background .15s;pointer-events:none}
+.nf-sw i::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .15s}
+.nf-sw input:checked+i{background:var(--primary)}.nf-sw input:checked+i::after{transform:translateX(20px)}
+.nf-sw input:focus-visible+i{outline:2px solid var(--primary);outline-offset:2px}
+.nf-sw input:disabled+i{opacity:.45}
+.nf-topics{display:flex;flex-wrap:wrap;gap:.45rem;padding:.9rem 1rem}
+.nf-topic{position:relative;display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .85rem;border:1.5px solid var(--border-color);border-radius:999px;font-size:.86rem;font-weight:600;cursor:pointer;color:var(--text-secondary);background:var(--bg-card)}
+.nf-topic input{position:absolute;opacity:0;pointer-events:none}
+.nf-topic i{font-size:.75rem;opacity:.35}
+.nf-topic:has(input:checked){border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
+.nf-topic:has(input:checked) i{opacity:1}
+.nf-topic:has(input:disabled){opacity:.5;cursor:not-allowed}
+.nf-topic:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.nf-note{padding:0 1rem .9rem;margin:0;font-size:.8rem;color:var(--text-muted)}
+.nf-dev{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:.85rem 1rem}
+.nf-dev span{font-size:.85rem;color:var(--text-secondary)}
+.nf-bar{display:flex;justify-content:flex-end;gap:.5rem}
+@media (max-width:760px){.nf-bar .rs-btn{width:100%}}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Notification Preferences</h1>
-        <p class="text-muted text-sm">Choose which channels you receive notifications on.</p>
-    </div>
-</div>
+{% set icons = {'inapp': 'fa-bell', 'email': 'fa-envelope', 'sms': 'fa-comment-sms', 'push': 'fa-mobile-screen'} %}
+{% set what = {'inapp': 'Shown in the bell at the top of the app', 'email': 'Sent to your email address', 'sms': 'Text messages to your phone (may cost the school per message)', 'push': 'Pop-up alerts on your phone or computer, even when the app is closed'} %}
+<div class="rs nf">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-bell" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Notification Preferences</h1><p>Choose where your alerts reach you. These settings are just for you.</p></div>
+  </header>
 
-{% if not has_user %}
-<div class="card"><div class="card-body text-muted">
-    Sign in with a staff account to manage personal notification preferences.
-</div></div>
-{% else %}
-{% if not flag_on %}
-<div class="card mb-3"><div class="card-body text-muted">
-    Your <strong>web-push</strong> choices — including the category filters below — apply immediately.
-    In-app, email and SMS enforcement turns on with the <code>NOTIFY_PREFS</code> flag (currently off);
-    those choices are saved and take effect once it's enabled.
-</div></div>
-{% endif %}
-<div class="card">
-    <div class="card-body">
-        <form method="post">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            {% for ch in channels %}
-            <label class="d-flex align-center gap-2" style="padding:.5rem 0;border-bottom:1px solid var(--border-light);">
-                <input type="checkbox" name="ch_{{ ch }}" {% if prefs.get(ch) %}checked{% endif %}>
-                <span>{{ labels.get(ch, ch) }}</span>
-                {% if ch == 'inapp' %}<span class="text-muted text-sm">(on by default)</span>
-                {% elif ch == 'push' %}<span class="text-muted text-sm">(on by default once enabled on a device)</span>
-                {% else %}<span class="text-muted text-sm">(off by default; needs the {{ ch|upper }} gateway configured)</span>{% endif %}
-            </label>
-            {% endfor %}
+  {% if not has_user %}
+  <div class="rs-blank"><span><i class="fas fa-user-lock" aria-hidden="true"></i></span><h3>Sign in with a staff account</h3><p>Notification preferences belong to a staff account.</p></div>
+  {% else %}
+  {% if not flag_on %}
+  <div class="cm-attn-i mid" style="margin:0 0 1rem"><i class="fas fa-circle-info" aria-hidden="true"></i>
+    <span>Push choices, including categories, apply straight away. In-app, email and SMS choices are saved and take effect once the school turns on notification preferences (<code>NOTIFY_PREFS</code>).</span></div>
+  {% endif %}
 
-            {% if push_topics %}
-            <div class="mt-3" style="padding-top:.75rem;">
-                <div class="text-sm" style="font-weight:600;">Web push categories</div>
-                <p class="text-muted text-sm" style="margin:.15rem 0 .5rem;">
-                    Choose which kinds of alerts push to your devices. Unchecked categories still show in the bell.
-                </p>
-                {% for t in push_topics %}
-                <label class="d-flex align-center gap-2" style="padding:.35rem 0 .35rem 1rem;">
-                    <input type="checkbox" name="pushcat_{{ t }}" {% if push_topic_prefs.get(t) %}checked{% endif %}
-                           {% if not prefs.get('push') %}disabled{% endif %}>
-                    <span>{{ push_topic_labels.get(t, t) }}</span>
-                </label>
-                {% endfor %}
-                {% if not prefs.get('push') %}
-                <p class="text-muted text-sm" style="padding-left:1rem;">Turn on <strong>Web push</strong> above to use category filters.</p>
-                {% endif %}
-            </div>
-            {% endif %}
+  <form method="post">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <section class="rs-card nf-card">
+      <h3><i class="fas fa-tower-broadcast" aria-hidden="true"></i> Channels</h3>
+      {% for ch in channels %}{% set r = ready.get(ch, {}) %}
+      <label class="nf-ch">
+        <span class="nf-ic"><i class="fas {{ icons.get(ch, 'fa-bell') }}" aria-hidden="true"></i></span>
+        <span class="nf-t"><b>{{ labels.get(ch, ch) }}</b><small>{{ what.get(ch, '') }}</small>
+          {% if ch == 'inapp' %}<span class="nf-st ok"><i class="fas fa-circle-check" aria-hidden="true"></i> Always available</span>
+          {% elif not r.server %}<span class="nf-st off"><i class="fas fa-circle-minus" aria-hidden="true"></i> Not set up on this server yet — your choice is kept for when it is</span>
+          {% elif ch == 'push' and not r.target %}<span class="nf-st warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Turn it on for this device below</span>
+          {% elif ch == 'push' %}<span class="nf-st ok"><i class="fas fa-circle-check" aria-hidden="true"></i> On {{ r.to }}</span>
+          {% elif not r.target %}<span class="nf-st warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> No {{ 'email address' if ch == 'email' else 'phone number' }} on your account{% if account_url %} — <a href="{{ account_url }}">add one</a>{% endif %}</span>
+          {% else %}<span class="nf-st ok"><i class="fas fa-circle-check" aria-hidden="true"></i> To {{ r.to }}</span>{% endif %}
+        </span>
+        <span class="nf-sw"><input type="checkbox" name="ch_{{ ch }}" {% if prefs.get(ch) %}checked{% endif %} aria-label="{{ labels.get(ch, ch) }}" data-ch="{{ ch }}"><i></i></span>
+      </label>
+      {% endfor %}
+    </section>
 
-            <div class="mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save preferences</button></div>
-        </form>
-        <div id="push-setup" class="mt-3" style="display:none;border-top:1px solid var(--border-light);padding-top:1rem;">
-            <p class="text-muted text-sm">Web push lets this browser receive alerts even when EduSyncra isn't open.</p>
-            <button type="button" id="push-enable" class="btn btn-secondary btn-sm"><i class="fas fa-bell"></i> Enable on this device</button>
-            <button type="button" id="push-disable" class="btn btn-secondary btn-sm" style="display:none;"><i class="fas fa-bell-slash"></i> Disable on this device</button>
-            <span id="push-status" class="text-muted text-sm" style="margin-left:.5rem;"></span>
-        </div>
-    </div>
-</div>
-<script nonce="{{ csp_nonce }}">
+    {% if push_topics %}
+    <section class="rs-card nf-card">
+      <h3><i class="fas fa-filter" aria-hidden="true"></i> What pushes to your devices <small>The bell still shows everything</small></h3>
+      <div class="nf-topics">
+        {% for t in push_topics %}
+        <label class="nf-topic"><input type="checkbox" name="pushcat_{{ t }}" class="nf-pushcat" {% if push_topic_prefs.get(t) %}checked{% endif %} {% if not prefs.get('push') %}disabled{% endif %}><i class="fas fa-check" aria-hidden="true"></i> {{ push_topic_labels.get(t, t) }}</label>
+        {% endfor %}
+      </div>
+      <p class="nf-note" id="nf-push-note" {% if prefs.get('push') %}hidden{% endif %}>Turn on Web push above to choose categories.</p>
+    </section>
+    {% endif %}
+
+    <section class="rs-card nf-card" id="push-setup" style="display:none">
+      <h3><i class="fas fa-mobile-screen" aria-hidden="true"></i> This device</h3>
+      <div class="nf-dev">
+        <button type="button" id="push-enable" class="rs-btn primary sm"><i class="fas fa-bell" aria-hidden="true"></i> Get push alerts here</button>
+        <button type="button" id="push-disable" class="rs-btn ghost sm" style="display:none;"><i class="fas fa-bell-slash" aria-hidden="true"></i> Stop push alerts here</button>
+        <span id="push-status"></span>
+      </div>
+    </section>
+
+    <div class="nf-bar"><button type="submit" class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Save preferences</button></div>
+  </form>
+  <script nonce="{{ csp_nonce }}">
 (function () {
   var box = document.getElementById('push-setup');
   if (!box || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -89,7 +124,7 @@
   function refresh(sub) {
     enableBtn.style.display = sub ? 'none' : '';
     disableBtn.style.display = sub ? '' : 'none';
-    status.textContent = sub ? 'Enabled on this device.' : '';
+    status.textContent = sub ? 'This device gets push alerts.' : 'This device doesn’t get push alerts yet.';
   }
   fetch('/api/push/public-key').then(function (r) { return r.json(); }).then(function (cfg) {
     if (!cfg.enabled || !cfg.key) return;         // web push not configured on the server
@@ -114,5 +149,16 @@
   }).catch(function () {});
 })();
 </script>
-{% endif %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var push = document.querySelector('input[data-ch="push"]');
+  if (!push) return;
+  push.addEventListener('change', function () {
+    document.querySelectorAll('.nf-pushcat').forEach(function (c) { c.disabled = !push.checked; });
+    var n = document.getElementById('nf-push-note'); if (n) n.hidden = push.checked;
+  });
+})();
+</script>
+  {% endif %}
+</div>
 {% endblock %}

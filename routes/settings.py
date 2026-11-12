@@ -713,31 +713,133 @@ def ocr_test():
 @settings_bp.route('/exam-subjects', methods=['GET', 'POST'])
 @login_required
 def exam_subjects():
-    from utils.exam_subject_config import get_config, save_config
+    from utils.exam_subject_config import (get_config, save_config, set_sitting, sitting,
+                                           sitting_changes, current_exam_year)
     from utils.helpers import STREAMS
     if not is_admin():
         return _err('Only an admin can change exam subjects.', url_for('settings.index'))
+    year = request.values.get('year', type=int)
 
     if request.method == 'POST':
+        action = request.form.get('action') or 'save'
+        back = url_for('settings.exam_subjects', year=year) if year else url_for('settings.exam_subjects')
         try:
+            if action == 'save_year' and year:
+                for exam in ('waec', 'jamb'):
+                    general = [x.strip() for x in request.form.getlist(f'{exam}_general[]') if x.strip()]
+                    streams = {st: [x.strip() for x in request.form.getlist(f'{exam}_stream_{st}[]') if x.strip()]
+                               for st in STREAMS}
+                    base = get_config()[exam]
+                    same = (general == base['general'] and all(streams[st] == base['streams'].get(st, []) for st in STREAMS))
+                    set_sitting(exam, year, None if same else general, streams)
+                log_action('exam_subjects.save_year', f'Subjects for the {year} sitting')
+                return _ok(f'Subjects for the {year} sitting saved.', back)
+            if action == 'clear_year' and year:
+                for exam in ('waec', 'jamb'):
+                    set_sitting(exam, year, None, {})
+                log_action('exam_subjects.clear_year', f'{year} sitting uses the usual subjects')
+                return _ok(f'The {year} sitting now uses the usual subjects.', back)
+            if action == 'apply_year' and year:
+                n = _apply_sitting_to_students(year)
+                log_action('exam_subjects.apply_year', f'{n} students updated for the {year} sitting')
+                return _ok(f'Updated {n} student{"s" if n != 1 else ""}’ subject lists for the {year} sitting.', back)
             cfg = {}
             for exam in ('waec', 'jamb'):
-                catalog = [s.strip() for s in request.form.getlist(f'{exam}_subject[]') if s.strip()]
-                general = [s.strip() for s in request.form.getlist(f'{exam}_general[]') if s.strip()]
+                catalog = [s_.strip() for s_ in request.form.getlist(f'{exam}_subject[]') if s_.strip()]
+                general = [s_.strip() for s_ in request.form.getlist(f'{exam}_general[]') if s_.strip()]
                 streams = {}
                 for st in STREAMS:
-                    streams[st] = [s.strip() for s in
-                                   request.form.getlist(f'{exam}_stream_{st}[]') if s.strip()]
+                    streams[st] = [s_.strip() for s_ in
+                                   request.form.getlist(f'{exam}_stream_{st}[]') if s_.strip()]
                 cfg[exam] = {'catalog': catalog, 'general': general, 'streams': streams}
             save_config(cfg)
             log_action('exam_subjects.save', 'Updated WAEC/JAMB subject configuration')
         except Exception as e:
-            return _err(f'Error: {str(e)}', url_for('settings.exam_subjects'))
-        return _ok('External-exam subjects saved.', url_for('settings.exam_subjects'))
+            return _err(f'Error: {str(e)}', back)
+        return _ok('External-exam subjects saved.', back)
 
+    from utils.helpers import exam_year_choices
+    cy = current_exam_year()
+    cfg = get_config()
+    choices = dict(exam_year_choices())
+    if cy:
+        choices.setdefault(cy + 1, f'{cy}/{cy + 1}')
+    sittings = []
+    for y in sorted(choices, reverse=True):
+        ch = {e: sitting_changes(e, y) for e in ('waec', 'jamb')}
+        custom = any(str(y) in cfg[e].get('years', {}) for e in ('waec', 'jamb'))
+        sittings.append({'year': y, 'label': choices[y], 'custom': custom, 'changes': ch,
+                         'who': 'SSS3 now' if y == cy else 'SSS2 now' if cy and y == cy + 1 else None})
+    view = None
+    if year:
+        view = {'year': year, 'label': choices.get(year, str(year)),
+                'waec': sitting('waec', year), 'jamb': sitting('jamb', year),
+                'changes': {e: sitting_changes(e, year) for e in ('waec', 'jamb')},
+                'students': _sitting_students(year), 'stale': _sitting_stale(year)}
     return render_template('settings/exam_subjects.html',
-                           config=get_config(), streams=STREAMS,
-                           back_url=url_for('settings.index'))
+                           config=cfg, streams=STREAMS, sittings=sittings, view=view,
+                           current_year=cy, back_url=url_for('settings.index'))
+
+
+def _sitting_students(year):
+    """Students who sit WAEC/JAMB in ``year``: SSS3 now for this session's
+    sitting, SSS2 now for next session's. [] for past sittings."""
+    from utils.exam_subject_config import current_exam_year, student_exam_year
+    import re as _re
+    from models import StudentEnrollment, ClassArmAssignment, SchoolClass
+    from utils.helpers import get_active_term
+    cy, t = current_exam_year(), get_active_term()
+    if not (cy and t) or year not in (cy, cy + 1):
+        return []
+    want = ('sss3', 'ss3', 'seniorsecondary3') if year == cy else ('sss2', 'ss2', 'seniorsecondary2')
+    ids = [c.id for c in SchoolClass.query.all() if _re.sub(r'[^a-z0-9]', '', (c.name or '').lower()) in want]
+    if not ids:
+        return []
+    q = (Student.query.join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+         .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+         .filter(ClassArmAssignment.term_id == t.id, ClassArmAssignment.class_id.in_(ids),
+                 StudentEnrollment.is_active == True, Student.is_active == True)  # noqa: E712
+         .distinct())
+    return q.all()
+
+
+def _sitting_stale(year):
+    """How many of this sitting's students still carry a subject the sitting
+    swapped out (or lack one it swapped in), per exam."""
+    from utils.exam_subject_config import sitting_changes
+    out = {}
+    studs = _sitting_students(year)
+    for exam, attr in (('waec', 'waec_subject_list'), ('jamb', 'jamb_subject_list')):
+        ch = {c['stream']: c for c in sitting_changes(exam, year)}
+        n = 0
+        for st in studs:
+            c = ch.get(st.stream)
+            have = getattr(st, attr) or []
+            if c and have and (any(x in have for x in c['removed']) or any(x not in have for x in c['added'])):
+                n += 1
+        out[exam] = n
+    return out
+
+
+def _apply_sitting_to_students(year):
+    """Swap the sitting's removed subjects for its added ones on each of its
+    students' saved lists (other subjects they chose are left alone)."""
+    from utils.exam_subject_config import sitting_changes
+    changed = set()
+    for exam, field, attr in (('waec', 'waec_subjects', 'waec_subject_list'),
+                              ('jamb', 'jamb_subjects', 'jamb_subject_list')):
+        ch = {c['stream']: c for c in sitting_changes(exam, year)}
+        for st in _sitting_students(year):
+            c = ch.get(st.stream)
+            have = list(getattr(st, attr) or [])
+            if not (c and have):
+                continue
+            new = [x for x in have if x not in c['removed']] + [x for x in c['added'] if x not in have]
+            if new != have:
+                setattr(st, field, ', '.join(new))
+                changed.add(st.id)
+    db.session.commit()
+    return len(changed)
 
 
 # ---------------------------------------------------------------------------
@@ -2021,4 +2123,33 @@ def notification_prefs():
                            prefs=get_prefs(uid) if uid else {}, channels=CHANNELS,
                            labels=CHANNEL_LABELS, has_user=bool(uid), flag_on=flag_enabled(),
                            push_topics=PUSH_TOPICS, push_topic_labels=PUSH_TOPIC_LABELS,
-                           push_topic_prefs=get_push_topics(uid) if uid else {})
+                           push_topic_prefs=get_push_topics(uid) if uid else {},
+                           ready=_channel_readiness(uid), account_url=_safe_url('auth.account'))
+
+
+def _channel_readiness(uid):
+    """Per channel: is the server set up to send on it, and does this user
+    have the address it needs — so a ticked box that can never fire is visible."""
+    out = {'inapp': {'server': True, 'target': True, 'to': 'The bell at the top of every page'}}
+    user = db.session.get(User, uid) if uid else None
+    try:
+        from utils import mailer
+        out['email'] = {'server': mailer.is_configured(), 'target': bool(user and user.email),
+                        'to': (user.email if user and user.email else None)}
+    except Exception:
+        out['email'] = {'server': False, 'target': False, 'to': None}
+    try:
+        from utils import sms_gateway
+        out['sms'] = {'server': sms_gateway.is_configured(), 'target': bool(user and user.phone),
+                      'to': (user.phone if user and user.phone else None)}
+    except Exception:
+        out['sms'] = {'server': False, 'target': False, 'to': None}
+    try:
+        from utils import webpush
+        from models import PushSubscription
+        n = PushSubscription.query.filter_by(user_id=uid).count() if uid else 0
+        out['push'] = {'server': webpush.is_configured(), 'target': n > 0, 'devices': n,
+                       'to': f'{n} device{"s" if n != 1 else ""}' if n else None}
+    except Exception:
+        out['push'] = {'server': False, 'target': False, 'devices': 0, 'to': None}
+    return out
