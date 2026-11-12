@@ -113,10 +113,11 @@ def plan(exam, term_id):
         if key not in cs_cache:
             rows = ClassSubject.query.filter_by(term_id=term_id, class_id=asg.class_id, is_active=True).filter(
                 (ClassSubject.arm_id == None) | (ClassSubject.arm_id == asg.arm_id)).all()  # noqa: E711
-            idx = {}
+            exact, canon = {}, {}
             for cs in rows:
-                idx.setdefault(_norm(cs.subject.name), cs)
-            cs_cache[key] = idx
+                exact.setdefault((cs.subject.name or '').strip().lower(), cs)
+                canon.setdefault(_norm(cs.subject.name), cs)
+            cs_cache[key] = (exact, canon)
         return cs_cache[key]
 
     col_cache = {}
@@ -135,7 +136,9 @@ def plan(exam, term_id):
         asg = row['assignment']
         if not asg:
             row['status'] = 'no_class'; continue
-        cs = class_subjects(asg).get(_norm(r.subject))
+        exact, canon = class_subjects(asg)
+        # Same name first; otherwise the WAEC-standard name ("Maths" ↔ "Mathematics").
+        cs = exact.get((r.subject or '').strip().lower()) or canon.get(_norm(r.subject))
         if not cs:
             row['status'] = 'no_subject'; continue
         row['class_subject'] = cs

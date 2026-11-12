@@ -37,7 +37,7 @@ def _types():
 def test_send_mock_scores_to_term_results(app):
     from models import (Subject, ClassSubject, StudentEnrollment, ClassArmAssignment, StudentScore,
                         SubjectAssessmentOverride)
-    from utils.assessments import subject_columns, is_cbt, is_theory
+    from utils.mock_to_term import _exam_columns
     tag = uuid.uuid4().hex[:5].upper()
     with app.app_context():
         s = Student(student_id='MT' + tag, first_name='Ada', surname='Term' + tag, gender='Female')
@@ -53,8 +53,9 @@ def test_send_mock_scores_to_term_results(app):
         db.session.add_all([prac, nopr]); db.session.flush()
         # Physics keeps the mid-term column; Literature drops it and Theory is worth 10 more.
         db.session.add(SubjectAssessmentOverride(subject_id=nopr.id, assessment_type_id=mid.id, max_score=0))
-        th_p = next(mx for at, mx in subject_columns(prac, term_id) if is_theory(at))
-        db.session.add(SubjectAssessmentOverride(subject_id=nopr.id, assessment_type_id=exam_t.id, max_score=th_p + 10))
+        # Whatever Theory column the feature picks, Literature's is worth 10 more.
+        th_at, th_p = _exam_columns(prac, term_id)[-1]
+        db.session.add(SubjectAssessmentOverride(subject_id=nopr.id, assessment_type_id=th_at.id, max_score=th_p + 10))
         for sub in (prac, nopr):
             db.session.add(ClassSubject(subject_id=sub.id, class_id=asg.class_id, term_id=term_id, is_active=True))
         ex = MockWAECExam(name='Mock T', exam_number=77, session_id=session_id, exam_date=date(2026, 2, 1))
@@ -64,8 +65,8 @@ def test_send_mock_scores_to_term_results(app):
                                           grade=waec_grade_from_score(sc)))
         db.session.commit()
         ex_id, prac_id, nopr_id = ex.id, prac.id, nopr.id
-        cols = {sub_id: [(at.id, mx) for at, mx in subject_columns(db.session.get(Subject, sub_id), term_id)
-                         if is_cbt(at) or is_theory(at)] for sub_id in (prac_id, nopr_id)}
+        cols = {sub_id: [(at.id, mx) for at, mx in _exam_columns(db.session.get(Subject, sub_id), term_id)]
+                for sub_id in (prac_id, nopr_id)}
 
     c = app.test_client()
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
