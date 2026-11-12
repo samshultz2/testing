@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "components/_pdf_view.html" import pdf_view_css, pdf_view_js, pdf_view_markup with context %}
 {% block title %}{{ title }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>{{ title }}</span>{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{{ pdf_view_css() }}
 <style>
 .pv{max-width:1500px}
 .pv-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:1rem;align-items:start}
@@ -38,16 +40,14 @@
 .pv-sw:has(input:focus-visible) .t{outline:2px solid var(--primary);outline-offset:2px}
 .pv-hint{font-size:.74rem;color:var(--text-muted);margin:.5rem 0 0}
 /* Preview */
-.pv-main{display:flex;flex-direction:column;overflow:hidden;padding:0}
-.pv-tool{display:flex;align-items:center;gap:.4rem;padding:.55rem .7rem;border-bottom:1px solid var(--border-color);background:var(--bg-card)}
-.pv-tool .pg{min-width:5.5rem;text-align:center;font-size:.84rem;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums}
-.pv-tool .sep{width:1px;height:22px;background:var(--border-color);margin:0 .2rem}
-.pv-tool .busy{margin-left:auto;font-size:.8rem;color:var(--text-muted);display:none;align-items:center;gap:.4rem}
-.pv-main.loading .pv-tool .busy{display:inline-flex}
-.pv-wrap{min-height:72vh;max-height:calc(100vh - 190px);background:var(--gray-200,#e5e9ef);overflow:auto;text-align:center;padding:1rem .75rem;position:relative}
-.pv-wrap canvas{box-shadow:0 2px 10px rgba(0,0,0,.18);background:#fff;border-radius:2px;transition:opacity .15s}
-.pv-main.loading canvas{opacity:.45}
-.pv-load{padding:3rem 1rem;color:var(--text-muted);font-size:.9rem}
+.pv-main{display:flex;flex-direction:column;overflow:clip;padding:0;position:sticky;top:76px}
+.pv-mh{display:flex;align-items:center;gap:.6rem;padding:.6rem .9rem;border-bottom:1px solid var(--border-color);font-size:.84rem}
+.pv-mh b{font-size:.92rem}
+.pv-mh .st{margin-left:auto;color:var(--text-muted);display:inline-flex;align-items:center;gap:.4rem;font-weight:600}
+.pv-mh .st .dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+.pv-mh .st.busy .dot{background:var(--warning);animation:pvpulse 1s infinite}
+@keyframes pvpulse{50%{opacity:.3}}
+.pv-main .pdv{height:calc(100vh - 150px);min-height:480px}
 .pv-fail{padding:2rem 1rem;text-align:center;color:var(--text-muted);font-size:.9rem}
 .pv-bar{display:none}
 .pv-sheet-bg{display:none}
@@ -64,7 +64,9 @@
   .pv-bar{display:flex;gap:.6rem;position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom));background:var(--bg-card);border-top:1px solid var(--border-color);box-shadow:0 -6px 18px rgba(0,0,0,.08)}
   .pv-bar .rs-btn{flex:1;height:46px;padding:0 .5rem}
   .pv-head-a{display:none}
-  .pv-wrap{min-height:0;max-height:none;padding:.6rem .4rem}
+  .pv-main{position:static}
+  .pv-main .pdv{height:calc(100vh - 230px);min-height:420px}
+  .pv-mh{padding:.55rem .8rem}
   .pv-sw{padding:.55rem 0}
   .pv-chip{min-height:36px}
 }
@@ -176,20 +178,9 @@
     </aside>
 
     <section class="rs-card pv-main" id="pvMain">
-      <div class="pv-tool" id="pdfToolbar">
-        <button type="button" id="pdfPrev" class="rs-icon-btn" title="Previous page" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
-        <span id="pdfPageIndicator" class="pg">Page 1</span>
-        <button type="button" id="pdfNext" class="rs-icon-btn" title="Next page" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
-        <span class="sep"></span>
-        <button type="button" id="pdfZoomOut" class="rs-icon-btn" title="Zoom out" aria-label="Zoom out"><i class="fas fa-magnifying-glass-minus" aria-hidden="true"></i></button>
-        <button type="button" id="pdfFit" class="rs-icon-btn" title="Fit to width" aria-label="Fit to width"><i class="fas fa-arrows-left-right-to-line" aria-hidden="true"></i></button>
-        <button type="button" id="pdfZoomIn" class="rs-icon-btn" title="Zoom in" aria-label="Zoom in"><i class="fas fa-magnifying-glass-plus" aria-hidden="true"></i></button>
-        <span class="busy"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Updating…</span>
-      </div>
-      <div id="pdfCanvasWrap" class="pv-wrap">
-        <canvas id="pdfCanvas" style="display:none"></canvas>
-        <div id="pdfLoading" class="pv-load"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Loading preview…</div>
-      </div>
+      <div class="pv-mh"><i class="fas fa-file-pdf" aria-hidden="true" style="color:var(--danger)"></i><b>Preview</b><span class="rs-muted" id="pvPages" style="font-size:.8rem"></span>
+        <span class="st busy" id="pvState"><span class="dot"></span><span>Loading…</span></span></div>
+      {{ pdf_view_markup('pdfView') }}
       <div id="pdfFallback" class="pv-fail" style="display:none">
         <i class="fas fa-triangle-exclamation" aria-hidden="true" style="color:var(--warning);font-size:1.4rem"></i>
         <p style="margin:.5rem 0">The preview couldn’t load here. <a id="openTab2" href="#" target="_blank" rel="noopener"><strong>Open the PDF in a new tab</strong></a>, or refresh this page if your session may have timed out.</p>
@@ -201,19 +192,18 @@
   <div class="pv-sheet-bg" id="pvBg" data-close></div>
   <div class="pv-bar">
     <button type="button" class="rs-btn" id="pvOpen"><i class="fas fa-sliders" aria-hidden="true"></i> Options</button>
-    <a id="openTab3" href="#" target="_blank" rel="noopener" class="rs-btn" title="Open in a new tab — view without downloading"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open</a>
+    <a id="openTab3" href="#" class="rs-btn" title="View full screen without downloading"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open</a>
     <a id="dl2" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
   </div>
 </div>
 
+{{ pdf_view_js() }}
 <script nonce="{{ csp_nonce }}">
 (function () {
   var base = "{{ pdf_url }}";
   var $ = function (id) { return document.getElementById(id); };
   var dl = $('dl'), dl2 = $('dl2'), openTab = $('openTab'), openTab2 = $('openTab2');
-  var fallback = $('pdfFallback'), fallbackDetail = $('pdfFallbackDetail'), main = $('pvMain');
-  var canvasWrap = $('pdfCanvasWrap'), canvas = $('pdfCanvas'), loading = $('pdfLoading'), toolbar = $('pdfToolbar');
-  var pageIndicator = $('pdfPageIndicator'), prevBtn = $('pdfPrev'), nextBtn = $('pdfNext');
+  var fallback = $('pdfFallback'), fallbackDetail = $('pdfFallbackDetail'), state = $('pvState'), viewEl = $('pdfView');
   var colsSel = $('colsSel'), orientSel = $('orientSel'), sizeSel = $('sizeSel'), layoutModeSel = $('layoutModeSel');
   var signersSel = $('signersSel'), bwOpt = $('bwOpt');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
@@ -243,91 +233,32 @@
     return base + (p.length ? ('?' + p.join('&')) : '');
   }
 
-  // Rendered with PDF.js onto a <canvas> rather than an <iframe>: Chrome's own
-  // PDF viewer silently refuses PDFs loaded into a subframe on some devices,
-  // while rendering the bytes ourselves behaves the same in every browser.
-  var pdfjsLibPromise = import('/static/vendor/pdfjs/pdf.min.mjs').then(function (mod) {
-    mod.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
-    return mod;
+  var viewer = PdfView(viewEl, {
+    onBusy: function (on) { state.classList.toggle('busy', on); state.lastChild.textContent = on ? 'Updating…' : 'Up to date'; },
+    onPages: function (n) { $('pvPages').textContent = '· ' + n + ' page' + (n === 1 ? '' : 's'); viewEl.style.display = ''; fallback.style.display = 'none'; },
+    onError: function (err) {
+      viewEl.style.display = 'none'; fallback.style.display = '';
+      state.classList.remove('busy'); state.lastChild.textContent = 'Not loaded';
+      if (fallbackDetail) fallbackDetail.textContent = err ? ('Detail: ' + (err.message || err)) : '';
+    }
   });
-  var pdfDoc = null, pageNum = 1, scale = 1, fit = true, naturalWidth = 0, renderToken = 0, fetchToken = 0;
-
-  function showFallback(err) {
-    if (err && err.stale) return;
-    main.classList.remove('loading');
-    canvasWrap.style.display = 'none';
-    fallback.style.display = '';
-    if (fallbackDetail) fallbackDetail.textContent = err ? ('Detail: ' + (err.message || err)) : '';
-  }
-  function fitScale() {
-    var w = canvasWrap.clientWidth - 24;
-    return naturalWidth ? Math.max(0.25, w / naturalWidth) : 1;
-  }
-  function renderPage() {
-    if (!pdfDoc) return;
-    var myToken = ++renderToken;
-    pdfDoc.getPage(pageNum).then(function (page) {
-      if (myToken !== renderToken) return;
-      naturalWidth = page.getViewport({ scale: 1 }).width;
-      if (fit) scale = fitScale();
-      var viewport = page.getViewport({ scale: scale });
-      // Draw at the screen's real pixel density so text stays sharp on phones.
-      var ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * ratio);
-      canvas.height = Math.floor(viewport.height * ratio);
-      canvas.style.width = Math.floor(viewport.width) + 'px';
-      canvas.style.height = Math.floor(viewport.height) + 'px';
-      return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport,
-        transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null }).promise.then(function () {
-        if (myToken !== renderToken) return;
-        pageIndicator.textContent = 'Page ' + pageNum + ' of ' + pdfDoc.numPages;
-        prevBtn.disabled = pageNum <= 1;
-        nextBtn.disabled = pageNum >= pdfDoc.numPages;
-      });
-    }).catch(showFallback);
-  }
   function counts() {
     var sn = $('subjN'), on = $('optN');
     if (sn) sn.textContent = subjBoxes.filter(function (b) { return b.checked; }).length + ' of ' + subjBoxes.length;
     if (on) on.textContent = opts.filter(function (b) { return b.checked; }).length + ' of ' + opts.length + ' on';
   }
+  var VIEWER = "{{ url_for('mock_waec.pdf_viewer') }}", TITLE = {{ title|tojson }};
   function refresh() {
     counts();
-    var url = build(''), myFetch = ++fetchToken;
+    var url = build('');
     dl.href = dl2.href = build('download=1');
-    openTab.href = url; if (openTab2) openTab2.href = url; $('openTab3').href = url;
-    fallback.style.display = 'none';
-    canvasWrap.style.display = '';
-    main.classList.add('loading');
-    // X-Requested-With: an expired session then answers 401, not a login page.
-    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
-      .then(function (r) {
-        var ct = r.headers.get('Content-Type') || '';
-        if (!r.ok || ct.indexOf('application/pdf') === -1) throw new Error('not a pdf (http ' + r.status + ')');
-        return r.arrayBuffer();
-      })
-      .then(function (buf) { return pdfjsLibPromise.then(function (lib) { return lib.getDocument({ data: buf }).promise; }); })
-      .then(function (doc) {
-        if (myFetch !== fetchToken) throw { stale: true };
-        var keep = pdfDoc ? Math.min(pageNum, doc.numPages) : 1;
-        pdfDoc = doc; pageNum = keep;
-        loading.style.display = 'none';
-        canvas.style.display = '';
-        main.classList.remove('loading');
-        renderPage();
-      })
-      .catch(showFallback);
+    openTab.href = url; if (openTab2) openTab2.href = url;
+    // Phones: our own full-screen viewer (Android Chrome downloads PDFs opened in a tab).
+    $('openTab3').href = VIEWER + '?src=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(TITLE);
+    viewer.load(url);
   }
   var timer = null;
   function soon() { clearTimeout(timer); timer = setTimeout(refresh, 300); }
-
-  prevBtn.addEventListener('click', function () { if (pageNum > 1) { pageNum -= 1; renderPage(); } });
-  nextBtn.addEventListener('click', function () { if (pdfDoc && pageNum < pdfDoc.numPages) { pageNum += 1; renderPage(); } });
-  $('pdfZoomIn').addEventListener('click', function () { fit = false; scale = Math.min(scale * 1.25, 4); renderPage(); });
-  $('pdfZoomOut').addEventListener('click', function () { fit = false; scale = Math.max(scale / 1.25, 0.25); renderPage(); });
-  $('pdfFit').addEventListener('click', function () { fit = true; renderPage(); });
-  var rz = null;
-  window.addEventListener('resize', function () { if (!fit) return; clearTimeout(rz); rz = setTimeout(renderPage, 150); });
 
   // Segmented buttons drive the (hidden) selects the URL builder reads.
   document.querySelectorAll('.pv-seg').forEach(function (seg) {

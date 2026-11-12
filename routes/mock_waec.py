@@ -250,6 +250,26 @@ def broadsheet_pdf_view(exam_id):
                      as_attachment=request.args.get('download') == '1', download_name=name)
 
 
+@mock_waec_bp.route('/viewer')
+@login_required
+def pdf_viewer():
+    """Full-screen PDF viewer for any Mock WAEC PDF — renders in the page, so
+    phones view it instead of downloading it (Android Chrome won't show a
+    PDF opened in a tab). Only this module's own PDF links are accepted."""
+    from urllib.parse import urlsplit
+    src = request.args.get('src', '')
+    parts = urlsplit(src)
+    if parts.scheme or parts.netloc or not parts.path.startswith('/mock-waec/') \
+            or not parts.path.endswith('.pdf') or '..' in parts.path:
+        abort(400)
+    title = (request.args.get('title') or 'Document')[:120]
+    sep = '&' if parts.query else '?'
+    return render_template('mock_waec/pdf_viewer.html', src=src, title=title,
+                           download=src + sep + 'download=1',
+                           back=(request.referrer if (request.referrer or '').startswith(request.host_url)
+                                 else url_for('mock_waec.index')))
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/blank')
 @login_required
 def broadsheet_blank(exam_id):

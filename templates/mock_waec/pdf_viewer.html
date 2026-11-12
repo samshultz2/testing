@@ -1,0 +1,68 @@
+{% from "components/_pdf_view.html" import pdf_view_css, pdf_view_js, pdf_view_markup with context %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16191e">
+<title>{{ title }} - {{ app_name }}</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+{{ pdf_view_css() }}
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#16191e;color:#eef1f5;font-family:var(--font-sans,'Inter',system-ui,-apple-system,sans-serif)}
+body{display:flex;flex-direction:column;height:100dvh}
+.vw-top{display:flex;align-items:center;gap:.5rem;padding:calc(.5rem + env(safe-area-inset-top)) .6rem .5rem;background:#16191e;border-bottom:1px solid #2a2f37;flex:none}
+.vw-top a,.vw-top button{height:40px;min-width:40px;border-radius:12px;border:0;background:none;color:#eef1f5;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;font:inherit;font-weight:700;font-size:.88rem;text-decoration:none;cursor:pointer;padding:0 .7rem}
+.vw-top a:hover,.vw-top button:hover{background:#262b33}
+.vw-top .t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.vw-top .t b{font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vw-top .t small{font-size:.74rem;color:#9aa3b0}
+.vw-top .dl{background:#2563eb;color:#fff}
+.vw-top .dl:hover{background:#1d4ed8}
+.pdv{flex:1}
+.vw-err{flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;padding:2rem;text-align:center;color:#c3cad4}
+.vw-err a{color:#93b4ff;font-weight:700}
+@media (max-width:560px){.vw-top .lbl{display:none}.vw-top .dl{padding:0 .8rem}}
+</style>
+</head>
+<body>
+<header class="vw-top">
+  <a href="{{ back }}" id="vwBack" aria-label="Back" title="Back"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
+  <div class="t"><b>{{ title }}</b><small id="vwInfo">Loading…</small></div>
+  <button type="button" id="vwShare" hidden aria-label="Share" title="Share"><i class="fas fa-share-nodes" aria-hidden="true"></i></button>
+  <a href="{{ download }}" class="dl" aria-label="Download PDF" title="Download PDF"><i class="fas fa-download" aria-hidden="true"></i><span class="lbl">Download</span></a>
+</header>
+{{ pdf_view_markup('vwView', dark=True) }}
+<div class="vw-err" id="vwErr"><i class="fas fa-triangle-exclamation fa-2x" aria-hidden="true" style="color:#f5b041"></i>
+  <div>This document couldn’t be shown. Your session may have timed out — <a href="{{ back }}">go back</a> and try again, or <a href="{{ download }}">download it</a>.</div></div>
+{{ pdf_view_js() }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var info = document.getElementById('vwInfo'), view = document.getElementById('vwView');
+  var v = PdfView(view, {
+    onPages: function (n) { info.textContent = n + ' page' + (n === 1 ? '' : 's') + ' · double-tap to zoom'; },
+    onError: function () { view.style.display = 'none'; document.getElementById('vwErr').style.display = 'flex'; info.textContent = 'Not loaded'; }
+  });
+  v.load({{ src|tojson }});
+  // Back: return to where we came from when there is history.
+  document.getElementById('vwBack').addEventListener('click', function (e) {
+    if (history.length > 1 && document.referrer && document.referrer.indexOf(location.origin) === 0) { e.preventDefault(); history.back(); }
+  });
+  var share = document.getElementById('vwShare');
+  if (navigator.share) {
+    share.hidden = false;
+    share.addEventListener('click', function () {
+      fetch({{ src|tojson }}, { credentials: 'same-origin' }).then(function (r) { return r.blob(); }).then(function (b) {
+        var f = new File([b], {{ (title ~ '.pdf')|tojson }}, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [f] })) return navigator.share({ files: [f], title: {{ title|tojson }} });
+        return navigator.share({ title: {{ title|tojson }}, url: location.href });
+      }).catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>

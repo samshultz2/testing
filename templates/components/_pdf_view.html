@@ -1,0 +1,196 @@
+{# Native-feeling PDF viewer (PDF.js on canvases): every page in one continuous
+   scroll, pages drawn only when they come into view, a floating pill with
+   page / zoom controls, double-tap to zoom. Used by the PDF preview pages and
+   the full-screen viewer.
+
+     {{ pdf_view_css() }} in <head>, {{ pdf_view_js() }} once, then:
+       var v = PdfView(hostEl, {onBusy: fn(bool), onError: fn(err), onPages: fn(n)});
+       v.load(url);   // keeps the reading position when reloading a new version
+#}
+
+{% macro pdf_view_markup(id='pdv', dark=False) %}
+<div class="pdv{{ ' dark' if dark }}" id="{{ id }}">
+  <div class="pdv-scroll" tabindex="0" aria-label="PDF pages">
+    <div class="pdv-pages"></div>
+    <div class="pdv-msg"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Loading preview…</div>
+  </div>
+  <div class="pdv-float" role="toolbar" aria-label="Pages and zoom">
+    <button type="button" data-a="prev" aria-label="Previous page" title="Previous page"><i class="fas fa-chevron-up" aria-hidden="true"></i></button>
+    <span class="pdv-pg" aria-live="polite">–</span>
+    <button type="button" data-a="next" aria-label="Next page" title="Next page"><i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+    <span class="pdv-sep"></span>
+    <button type="button" data-a="out" aria-label="Zoom out" title="Zoom out"><i class="fas fa-minus" aria-hidden="true"></i></button>
+    <button type="button" data-a="fit" class="pdv-zoom" aria-label="Fit to width" title="Fit to width">100%</button>
+    <button type="button" data-a="in" aria-label="Zoom in" title="Zoom in"><i class="fas fa-plus" aria-hidden="true"></i></button>
+  </div>
+  <div class="pdv-busy" aria-hidden="true"><i></i></div>
+</div>
+{% endmacro %}
+
+{% macro pdf_view_css() %}
+<style>
+.pdv{position:relative;display:flex;flex-direction:column;min-height:0;background:#e6e9ee;--pdv-ink:#1f2937}
+.pdv.dark{background:#1d2026}
+:root[data-theme="dark"] .pdv{background:#14171c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pdv{background:#14171c}}
+.pdv-scroll{flex:1;overflow:auto;overscroll-behavior:contain;padding:18px 14px 84px;outline:none;-webkit-overflow-scrolling:touch}
+.pdv-pages{display:flex;flex-direction:column;align-items:center;gap:16px;min-width:min-content}
+.pdv-page{position:relative;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12),0 6px 22px rgba(0,0,0,.14);border-radius:3px;flex:none;transition:opacity .2s}
+.pdv-page canvas{display:block;width:100%;height:100%;border-radius:3px}
+.pdv-page .n{position:absolute;right:8px;bottom:-14px;transform:translateY(100%);font-size:.68rem;font-weight:700;color:#8a93a1;display:none}
+.pdv.busy .pdv-page{opacity:.55}
+.pdv-msg{padding:3rem 1rem;text-align:center;color:#6b7280;font-size:.9rem}
+.pdv-msg:empty{display:none}
+.pdv.dark .pdv-msg{color:#aab2bf}
+.pdv-float{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px;
+  background:rgba(24,27,33,.86);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 26px rgba(0,0,0,.25);color:#fff;z-index:5;transition:opacity .25s,transform .25s;white-space:nowrap}
+.pdv-float button{width:36px;height:36px;border:0;border-radius:999px;background:none;color:#fff;cursor:pointer;font:inherit;font-size:.82rem;display:grid;place-items:center}
+.pdv-float button:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.pdv-float button:disabled{opacity:.35;cursor:default}
+.pdv-float .pdv-zoom{width:auto;padding:0 .55rem;font-weight:700;font-variant-numeric:tabular-nums;min-width:52px}
+.pdv-pg{font-size:.8rem;font-weight:700;padding:0 .35rem;font-variant-numeric:tabular-nums;min-width:58px;text-align:center}
+.pdv-sep{width:1px;height:20px;background:rgba(255,255,255,.22);margin:0 3px}
+.pdv.idle .pdv-float{opacity:.0;transform:translateX(-50%) translateY(8px);pointer-events:none}
+.pdv:hover .pdv-float,.pdv:focus-within .pdv-float{opacity:1;transform:translateX(-50%);pointer-events:auto}
+.pdv-busy{position:absolute;left:0;right:0;top:0;height:3px;overflow:hidden;display:none;z-index:6}
+.pdv.busy .pdv-busy{display:block}
+.pdv-busy i{position:absolute;top:0;bottom:0;width:35%;background:var(--primary,#2563eb);border-radius:3px;animation:pdvbar 1s ease-in-out infinite}
+@keyframes pdvbar{0%{left:-35%}100%{left:100%}}
+@media (max-width:760px){
+  .pdv-scroll{padding:12px 8px 80px}
+  .pdv-pages{gap:12px}
+  .pdv-float button{width:40px;height:40px}
+}
+</style>
+{% endmacro %}
+
+{% macro pdf_view_js() %}
+<script nonce="{{ csp_nonce }}">
+window.PdfView = window.PdfView || function (host, cb) {
+  cb = cb || {};
+  var scroller = host.querySelector('.pdv-scroll'), pagesEl = host.querySelector('.pdv-pages'), msg = host.querySelector('.pdv-msg');
+  var pg = host.querySelector('.pdv-pg'), zoomBtn = host.querySelector('.pdv-zoom');
+  var btn = function (a) { return host.querySelector('[data-a="' + a + '"]'); };
+  var lib = import('/static/vendor/pdfjs/pdf.min.mjs').then(function (m) {
+    m.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs'; return m;
+  });
+  var doc = null, sizes = [], scale = 1, fit = true, token = 0, ltok = 0, current = 1, io = null;
+
+  function busy(on) { host.classList.toggle('busy', on); if (cb.onBusy) cb.onBusy(on); }
+  function fitScale() {
+    var w = scroller.clientWidth - (window.innerWidth <= 760 ? 16 : 28);
+    var widest = Math.max.apply(null, sizes.map(function (s) { return s.w; }).concat([1]));
+    return Math.max(0.2, w / widest);
+  }
+  function setLabel() {
+    zoomBtn.textContent = Math.round(scale * 100) + '%';
+    zoomBtn.title = fit ? 'Fitted to width' : 'Fit to width';
+    if (doc) {
+      pg.textContent = current + ' / ' + doc.numPages;
+      btn('prev').disabled = current <= 1; btn('next').disabled = current >= doc.numPages;
+    }
+  }
+  function draw(el) {
+    if (!doc || el.dataset.drawn === String(scale)) return;
+    var n = +el.dataset.n, my = token;
+    el.dataset.drawn = String(scale);
+    doc.getPage(n).then(function (page) {
+      if (my !== token) return;
+      var vp = page.getViewport({ scale: scale }), r = Math.min(window.devicePixelRatio || 1, 3);
+      var c = document.createElement('canvas');
+      c.width = Math.floor(vp.width * r); c.height = Math.floor(vp.height * r);
+      return page.render({ canvasContext: c.getContext('2d'), viewport: vp, transform: r !== 1 ? [r, 0, 0, r, 0, 0] : null }).promise.then(function () {
+        if (my !== token) return;
+        var old = el.querySelector('canvas'); if (old) old.remove();
+        el.insertBefore(c, el.firstChild);
+      });
+    }).catch(function () { el.dataset.drawn = ''; });
+  }
+  function layout(keepAt) {
+    // keepAt: fraction of the document to keep in view after re-laying out.
+    if (fit) scale = fitScale();
+    token++;
+    Array.prototype.forEach.call(pagesEl.children, function (el, i) {
+      el.style.width = Math.floor(sizes[i].w * scale) + 'px';
+      el.style.height = Math.floor(sizes[i].h * scale) + 'px';
+      el.dataset.drawn = '';
+    });
+    if (keepAt != null) scroller.scrollTop = keepAt * scroller.scrollHeight;
+    if (io) { io.disconnect(); Array.prototype.forEach.call(pagesEl.children, function (el) { io.observe(el); }); }
+    setLabel();
+  }
+  function where() { return scroller.scrollHeight ? scroller.scrollTop / scroller.scrollHeight : 0; }
+  function zoom(f, toFit) {
+    var at = where();
+    if (toFit) fit = true; else { fit = false; scale = Math.min(5, Math.max(0.2, scale * f)); }
+    layout(at);
+  }
+  function go(n) {
+    var el = pagesEl.children[n - 1]; if (!el) return;
+    scroller.scrollTo({ top: el.offsetTop - 12, behavior: 'smooth' });
+  }
+  function track() {
+    if (!doc) return;
+    var mid = scroller.scrollTop + scroller.clientHeight * 0.35, n = 1;
+    Array.prototype.some.call(pagesEl.children, function (el, i) { if (el.offsetTop <= mid) { n = i + 1; return false; } return true; });
+    if (n !== current) { current = n; setLabel(); }
+  }
+
+  btn('prev').addEventListener('click', function () { go(current - 1); });
+  btn('next').addEventListener('click', function () { go(current + 1); });
+  btn('in').addEventListener('click', function () { zoom(1.25); });
+  btn('out').addEventListener('click', function () { zoom(0.8); });
+  zoomBtn.addEventListener('click', function () { zoom(1, true); });
+  scroller.addEventListener('scroll', function () { track(); wake(); }, { passive: true });
+  scroller.addEventListener('dblclick', function () { if (fit) zoom(2); else zoom(1, true); });
+  scroller.addEventListener('keydown', function (e) {
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); zoom(1.25); }
+    else if (e.key === '-') { e.preventDefault(); zoom(0.8); }
+    else if (e.key === '0') { e.preventDefault(); zoom(1, true); }
+  });
+  var rt = null, lastW = scroller.clientWidth;
+  window.addEventListener('resize', function () {
+    clearTimeout(rt); rt = setTimeout(function () { if (fit && doc && scroller.clientWidth !== lastW) { lastW = scroller.clientWidth; layout(where()); } }, 150);
+  });
+  // The floating controls fade out while reading and come back on any touch.
+  var idleT = null;
+  function wake() { host.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(function () { host.classList.add('idle'); }, 2600); }
+  host.addEventListener('pointerdown', wake);
+  if ('IntersectionObserver' in window) io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) draw(e.target); });
+  }, { root: scroller, rootMargin: '600px 0px' });
+
+  function load(url) {
+    var keep = doc ? where() : null, my = ++ltok;
+    busy(true);
+    return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) {
+        var ct = r.headers.get('Content-Type') || '';
+        if (!r.ok || ct.indexOf('application/pdf') === -1) throw new Error('not a pdf (http ' + r.status + ')');
+        return r.arrayBuffer();
+      })
+      .then(function (buf) { return lib.then(function (m) { return m.getDocument({ data: buf }).promise; }); })
+      .then(function (d) {
+        if (my !== ltok) return;
+        var ps = []; for (var i = 1; i <= d.numPages; i++) ps.push(d.getPage(i));
+        return Promise.all(ps).then(function (pages) {
+          if (my !== ltok) return;
+          if (doc) doc.destroy();
+          doc = d;
+          sizes = pages.map(function (p) { var v = p.getViewport({ scale: 1 }); return { w: v.width, h: v.height }; });
+          pagesEl.innerHTML = sizes.map(function (_, i) { return '<div class="pdv-page" data-n="' + (i + 1) + '"><span class="n">' + (i + 1) + '</span></div>'; }).join('');
+          msg.textContent = '';
+          current = Math.min(current, d.numPages) || 1;
+          layout(keep);
+          if (!io) Array.prototype.forEach.call(pagesEl.children, draw);
+          track(); busy(false); wake();
+          if (cb.onPages) cb.onPages(d.numPages);
+        });
+      })
+      .catch(function (err) { if (my !== ltok) return; busy(false); if (cb.onError) cb.onError(err); });
+  }
+  setLabel();
+  return { load: load, zoom: zoom };
+};
+</script>
+{% endmacro %}

@@ -5001,6 +5001,13 @@
 ]
 ],
 [
+"mock_waec.pdf_viewer",
+"/mock-waec/viewer",
+[
+"GET"
+]
+],
+[
 "mock_waec.result_slip",
 "/mock-waec/exam/<int:exam_id>/student/<int:student_id>/slip",
 [
