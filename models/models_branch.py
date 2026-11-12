@@ -21,6 +21,7 @@ class Branch(db.Model):
     # WAEC school centre number (7 digits). A candidate's examination number is
     # this + a 3-digit candidate number (see utils.waec_numbers).
     waec_centre = db.Column(db.String(20))
+    neco_centre = db.Column(db.String(20))       # NECO centre number, same idea
     is_default = db.Column(db.Boolean, default=False)   # the fallback branch
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)

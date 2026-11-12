@@ -28,7 +28,7 @@ export function Index({ d }) {
       hasAny('traits_view', 'traits_edit') && [u.traits, 'fa-star-half-stroke', 'Behaviour traits', 'Affective domain on report cards'],
       hasAny('slots_view', 'slots_edit') && [u.timetable_slots, 'fa-calendar-days', 'Timetable periods', 'Period times and breaks'],
       u.exam_subjects && [u.exam_subjects, 'fa-file-signature', 'Exam subjects', 'WAEC/JAMB catalogue and compulsories', true],
-      u.waec_numbers && [u.waec_numbers, 'fa-hashtag', 'WAEC candidate numbers', 'Centre numbers and 001, 002… in surname order', true],
+      u.waec_numbers && [u.waec_numbers, 'fa-hashtag', 'WAEC & NECO candidate numbers', 'Centre numbers and 001, 002… in surname order', true],
     ] },
     { key: 'people', title: 'People & access', tone: 'violet', items: [
       admin && [u.people || u.users, 'fa-users-gear', 'Users & permissions', h.users != null ? `${plural(h.users, 'active account')}` : 'Accounts, roles and access', !!u.people],
@@ -84,14 +84,14 @@ export function Index({ d }) {
 }
 
 // ---- Branches ---------------------------------------------------------------
-const BLANK_BRANCH = { name: '', code: '', phone: '', address: '', waec_centre: '', is_active: true, make_default: false };
+const BLANK_BRANCH = { name: '', code: '', phone: '', address: '', waec_centre: '', neco_centre: '', is_active: true, make_default: false };
 
 function BranchSheet({ b, url, save, onClose, refresh }) {
-  const [f, setF] = useState(b ? { name: b.name, code: b.code || '', phone: b.phone || '', address: b.address || '', waec_centre: b.waec_centre || '', is_active: b.is_active, make_default: false } : BLANK_BRANCH);
+  const [f, setF] = useState(b ? { name: b.name, code: b.code || '', phone: b.phone || '', address: b.address || '', waec_centre: b.waec_centre || '', neco_centre: b.neco_centre || '', is_active: b.is_active, make_default: false } : BLANK_BRANCH);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const submit = (e) => {
     e.preventDefault();
-    const fields = { name: f.name, code: f.code, phone: f.phone, address: f.address, waec_centre: f.waec_centre };
+    const fields = { name: f.name, code: f.code, phone: f.phone, address: f.address, waec_centre: f.waec_centre, neco_centre: f.neco_centre };
     if (b) { if (f.is_active) fields.is_active = 'on'; if (f.make_default) fields.make_default = 'on'; }
     save(url, fields, () => { onClose(); refresh(); });
   };
@@ -106,6 +106,9 @@ function BranchSheet({ b, url, save, onClose, refresh }) {
         <Field label="WAEC centre number" hint="7 digits from WAEC — candidates here are numbered 001, 002… after it. Leave blank if this branch isn’t its own centre.">
           <input value={f.waec_centre} inputMode="numeric" maxLength={7} placeholder="e.g. 4250101"
                  onChange={(e) => setF({ ...f, waec_centre: e.target.value.replace(/\D/g, '').slice(0, 7) })} /></Field>
+        <Field label="NECO centre number" hint="As on your NECO slip. Leave blank if this branch isn’t its own NECO centre.">
+          <input value={f.neco_centre} maxLength={12} placeholder="NECO centre"
+                 onChange={(e) => setF({ ...f, neco_centre: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) })} /></Field>
         {b && <Toggle title="Active" sub="Inactive branches are hidden from pickers" on={f.is_active} onChange={(v) => setF({ ...f, is_active: v })} disabled={b.is_default} />}
         {b && !b.is_default && <Toggle title="Make this the default branch" sub="Unassigned records belong here" on={f.make_default} onChange={(v) => setF({ ...f, make_default: v })} />}
         <button type="submit" className="rs-btn primary wide"><i className="fas fa-check" aria-hidden="true" /> {b ? 'Save changes' : 'Add branch'}</button>
@@ -151,6 +154,7 @@ export function Branches({ d, notify }) {
                 {!b.is_active && <Pill tone="bad">Inactive</Pill>}
                 {b.code ? <Pill icon="fa-id-card">IDs {b.code}#####</Pill> : <Pill tone="warn" icon="fa-id-card">No code — uses school prefix</Pill>}
                 {b.waec_centre ? <Pill icon="fa-hashtag">WAEC centre {b.waec_centre}</Pill> : null}
+                {b.neco_centre ? <Pill icon="fa-hashtag">NECO centre {b.neco_centre}</Pill> : null}
               </div>
               <div className="sx-br-n">
                 <span><b>{b.students}</b>students</span><span><b>{b.staff}</b>staff</span><span><b>{b.classes}</b>classes this term</span>

@@ -1,4 +1,7 @@
-"""WAEC candidate (examination) numbers.
+"""WAEC / NECO candidate (examination) numbers.
+
+NECO works the same way here (its own centre number per branch or school, its
+own 001, 002 …), saved to the student's NECO registration number.
 
 A WASSCE school candidate's examination number is 10 digits: the school's
 7-digit centre number followed by a 3-digit candidate number (001, 002, …).
@@ -17,32 +20,51 @@ anything changes. Two modes:
 """
 import re
 
-CENTRE_RE = re.compile(r'^\d{7}$')
+# board -> where its numbers live and what a centre number looks like.
+BOARDS = {
+    'waec': {'name': 'WAEC', 'field': 'waec_reg_number', 'branch_attr': 'waec_centre',
+             'setting': 'waec_centre_number', 'pattern': re.compile(r'^\d{7}$'),
+             'hint': 'A WAEC centre number is 7 digits, e.g. 4250101.', 'example': '4250101'},
+    'neco': {'name': 'NECO', 'field': 'neco_reg_number', 'branch_attr': 'neco_centre',
+             'setting': 'neco_centre_number', 'pattern': re.compile(r'^[A-Z0-9]{4,12}$'),
+             'hint': 'A NECO centre number is 4–12 letters or digits, as on your NECO slip.', 'example': '1234567'},
+}
+CENTRE_RE = BOARDS['waec']['pattern']
 
 
-def clean_centre(raw):
+def _b(board):
+    return BOARDS.get(board or 'waec', BOARDS['waec'])
+
+
+def clean_centre(raw, board='waec'):
     """(centre_or_None, error_or_None). Blank is allowed (not set)."""
-    c = re.sub(r'\s+', '', raw or '')
+    c = re.sub(r'\s+', '', raw or '').upper()
     if not c:
         return None, None
-    if not CENTRE_RE.match(c):
-        return None, 'A WAEC centre number is 7 digits, e.g. 4250101.'
+    if not _b(board)['pattern'].match(c):
+        return None, _b(board)['hint']
     return c, None
 
 
-def school_centre():
+def school_centre(board='waec'):
     from models import SchoolSettings
-    return (SchoolSettings.get('waec_centre_number', '') or '').strip() or None
+    return (SchoolSettings.get(_b(board)['setting'], '') or '').strip() or None
 
 
-def set_school_centre(centre):
+def set_school_centre(centre, board='waec'):
     from models import SchoolSettings
-    SchoolSettings.set('waec_centre_number', centre or '', 'string', 'WAEC centre number (whole school)')
+    SchoolSettings.set(_b(board)['setting'], centre or '', 'string',
+                       f'{_b(board)["name"]} centre number (whole school)')
 
 
-def centre_for(branch):
+def centre_for(branch, board='waec'):
     """A branch's own centre, else the school-wide one."""
-    return (getattr(branch, 'waec_centre', None) or '').strip() or school_centre()
+    return (getattr(branch, _b(board)['branch_attr'], None) or '').strip() or school_centre(board)
+
+
+def _branch_map():
+    from models import Branch
+    return {b.id: b for b in Branch.query.all()}
 
 
 def _sort_key(st):
@@ -50,7 +72,7 @@ def _sort_key(st):
             (st.middle_name or '').strip().lower(), st.id)
 
 
-def plan(students, mode='fill'):
+def plan(students, mode='fill', board='waec'):
     """Group ``students`` by centre and propose numbers.
 
     Returns {'centres': [{'centre', 'label', 'rows': [...], 'issues': [...]}],
@@ -58,21 +80,30 @@ def plan(students, mode='fill'):
     Each row: {'student', 'current', 'proposed', 'status'} where status is
     'keep' (already has this number), 'new' (gets a number), 'change' (would
     replace a different number)."""
-    from models import Branch
-    branches = {b.id: b for b in Branch.query.all()}
-    default = Branch.get_default() if branches else None
+    cfg = _b(board)
+    field = cfg['field']
+    branches = _branch_map()
+    # No branches at all → everyone uses the school-wide number.
+    default = (next((b for b in branches.values() if b.is_default), None)
+               or (branches[min(branches)] if branches else None))
     groups, missing = {}, []
     for st in students:
         br = branches.get(st.branch_id) or default
-        c = centre_for(br) if br else school_centre()
+        c = centre_for(br, board) if br else school_centre(board)
         if not c:
             missing.append(st)
             continue
         g = groups.setdefault(c, {'centre': c, 'names': [], 'students': []})
-        name = br.name if br else 'Whole school'
+        name = br.name if (br and len(branches) > 1) else 'Whole school'
         if name not in g['names']:
             g['names'].append(name)
         g['students'].append(st)
+
+    def cur_of(st):
+        return (getattr(st, field, None) or '').strip()
+
+    def ours(cur, c):
+        return cur.startswith(c) and len(cur) == len(c) + 3 and cur[len(c):].isdigit()
 
     out, counts = [], {'keep': 0, 'new': 0, 'change': 0}
     for c, g in sorted(groups.items()):
@@ -81,19 +112,19 @@ def plan(students, mode='fill'):
         if mode == 'renumber':
             for i, st in enumerate(studs, 1):
                 prop = f'{c}{i:03d}'
-                cur = (st.waec_reg_number or '').strip()
+                cur = cur_of(st)
                 rows.append({'student': st, 'current': cur or None, 'proposed': prop,
                              'status': 'keep' if cur == prop else ('change' if cur else 'new')})
         else:
             used = set()
             for st in studs:
-                cur = (st.waec_reg_number or '').strip()
-                if cur.startswith(c) and len(cur) == 10 and cur[7:].isdigit():
-                    used.add(int(cur[7:]))
+                cur = cur_of(st)
+                if ours(cur, c):
+                    used.add(int(cur[len(c):]))
             nxt = max(used) + 1 if used else 1
             for st in studs:
-                cur = (st.waec_reg_number or '').strip()
-                if cur.startswith(c) and len(cur) == 10 and cur[7:].isdigit():
+                cur = cur_of(st)
+                if ours(cur, c):
                     rows.append({'student': st, 'current': cur, 'proposed': cur, 'status': 'keep'})
                     continue
                 while nxt in used:
@@ -110,24 +141,27 @@ def plan(students, mode='fill'):
         dups = [k for k, n in seen.items() if n > 1]
         if dups:
             issues.append(f'{len(dups)} number(s) are used twice at this centre — renumber to fix.')
-        if any(int(r['proposed'][7:]) > 999 for r in rows):
-            issues.append('More than 999 candidates at one centre — WAEC numbers only go to 999.')
+        if any(int(r['proposed'][len(c):]) > 999 for r in rows):
+            issues.append(f'More than 999 candidates at one centre — {cfg["name"]} numbers only go to 999.')
         for r in rows:
             counts[r['status']] += 1
+        for r in rows:
+            r['serial'] = r['proposed'][len(c):]
         out.append({'centre': c, 'label': ', '.join(sorted(g['names'])), 'rows': rows, 'issues': issues})
     return {'centres': out, 'missing': sorted(missing, key=_sort_key), 'counts': counts}
 
 
-def apply(the_plan):
+def apply(the_plan, board='waec'):
     """Save every proposed number that differs from the current one."""
     from models import db
+    field = _b(board)['field']
     n = 0
     for g in the_plan['centres']:
         if any('999' in i for i in g['issues']):
             continue
         for r in g['rows']:
             if r['status'] != 'keep':
-                r['student'].waec_reg_number = r['proposed']
+                setattr(r['student'], field, r['proposed'])
                 n += 1
     db.session.commit()
     return n

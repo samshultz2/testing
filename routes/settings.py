@@ -900,43 +900,47 @@ def _apply_sitting_to_students(year):
 @settings_bp.route('/waec-numbers', methods=['GET', 'POST'])
 @login_required
 def waec_numbers():
+    """WAEC / NECO candidate numbers (?board=waec|neco)."""
     from models import Branch
     from utils import waec_numbers as wn
     from utils.exam_subject_config import current_exam_year
     if not is_admin():
-        return _err('Only an admin can manage WAEC numbers.', url_for('settings.index'))
+        return _err('Only an admin can manage exam numbers.', url_for('settings.index'))
+    board = 'neco' if request.values.get('board') == 'neco' else 'waec'
+    cfg = wn.BOARDS[board]
     year = current_exam_year()
     mode = 'renumber' if request.values.get('mode') == 'renumber' else 'fill'
-    back = url_for('settings.waec_numbers', mode=mode)
+    back = url_for('settings.waec_numbers', board=board, mode=mode)
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'centres':
-            school, err = wn.clean_centre(request.form.get('school_centre'))
+            school, err = wn.clean_centre(request.form.get('school_centre'), board)
             if err:
                 return _err(err, back)
-            wn.set_school_centre(school)
+            wn.set_school_centre(school, board)
             for b in Branch.query.all():
                 key = f'centre_{b.id}'
                 if key in request.form:
-                    c, err = wn.clean_centre(request.form.get(key))
+                    c, err = wn.clean_centre(request.form.get(key), board)
                     if err:
                         return _err(f'{b.name}: {err}', back)
-                    b.waec_centre = c
+                    setattr(b, cfg['branch_attr'], c)
             db.session.commit()
-            log_action('waec.centres', 'Updated WAEC centre numbers')
-            return _ok('Centre numbers saved.', back)
+            log_action(f'{board}.centres', f'Updated {cfg["name"]} centre numbers')
+            return _ok(f'{cfg["name"]} centre numbers saved.', back)
         if action == 'generate':
-            p = wn.plan(_sitting_students(year) if year else [], mode)
-            n = wn.apply(p)
-            log_action('waec.numbers', f'{n} WAEC candidate numbers set ({mode})')
-            return _ok(f'Saved {n} WAEC number{"s" if n != 1 else ""}.', back)
+            p = wn.plan(_sitting_students(year) if year else [], mode, board)
+            n = wn.apply(p, board)
+            log_action(f'{board}.numbers', f'{n} {cfg["name"]} candidate numbers set ({mode})')
+            return _ok(f'Saved {n} {cfg["name"]} number{"s" if n != 1 else ""}.', back)
         return _err('Unknown action.', back)
 
     branches = Branch.query.filter_by(is_active=True).order_by(Branch.is_default.desc(), Branch.name).all()
     students = _sitting_students(year) if year else []
-    p = wn.plan(students, mode)
+    p = wn.plan(students, mode, board)
     return render_template('settings/waec_numbers.html', plan=p, mode=mode, branches=branches,
-                           school_centre=wn.school_centre() or '', year=year, total=len(students),
+                           board=board, bcfg=cfg, branch_attr=cfg['branch_attr'],
+                           school_centre=wn.school_centre(board) or '', year=year, total=len(students),
                            back_url=url_for('settings.index'))
 
 
@@ -966,7 +970,7 @@ def branches():
         'branches': [{
             'id': b.id, 'name': b.name, 'code': b.code, 'phone': b.phone,
             'address': b.address, 'is_active': b.is_active, 'is_default': b.is_default,
-            'waec_centre': b.waec_centre or '',
+            'waec_centre': b.waec_centre or '', 'neco_centre': b.neco_centre or '',
             'students': stu.get(b.id, 0), 'staff': usr.get(b.id, 0), 'classes': cls.get(b.id, 0),
             'edit_url': url_for('settings.edit_branch', branch_id=b.id),
         } for b in rows],
@@ -1013,12 +1017,14 @@ def add_branch():
     first = Branch.query.count() == 0
     from utils.waec_numbers import clean_centre
     centre, centre_err = clean_centre(request.form.get('waec_centre'))
-    if centre_err:
-        return _err(centre_err, url_for('settings.branches'))
+    neco, neco_err = clean_centre(request.form.get('neco_centre'), 'neco')
+    if centre_err or neco_err:
+        return _err(centre_err or neco_err, url_for('settings.branches'))
     db.session.add(Branch(
         name=name,
         code=code,
         waec_centre=centre,
+        neco_centre=neco,
         address=(request.form.get('address') or '').strip() or None,
         phone=(request.form.get('phone') or '').strip() or None,
         is_default=first))   # the very first branch is the default
@@ -1039,12 +1045,13 @@ def edit_branch(branch_id):
     if code and Branch.query.filter(Branch.code == code, Branch.id != branch_id).first():
         return _err(f'Branch code "{code}" is already used by another branch.',
                     url_for('settings.branches'))
-    if 'waec_centre' in request.form:
-        from utils.waec_numbers import clean_centre
-        centre, centre_err = clean_centre(request.form.get('waec_centre'))
-        if centre_err:
-            return _err(centre_err, url_for('settings.branches'))
-        b.waec_centre = centre
+    from utils.waec_numbers import clean_centre
+    for fld, board in (('waec_centre', 'waec'), ('neco_centre', 'neco')):
+        if fld in request.form:
+            centre, centre_err = clean_centre(request.form.get(fld), board)
+            if centre_err:
+                return _err(centre_err, url_for('settings.branches'))
+            setattr(b, fld, centre)
     b.name = (request.form.get('name') or b.name).strip()
     b.code = code
     b.address = (request.form.get('address') or '').strip() or None

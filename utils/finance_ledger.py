@@ -264,7 +264,7 @@ _ADDED_COLUMNS = {
     'staff_documents': {
         'version': 'INTEGER', 'replaces_id': 'INTEGER', 'is_current': 'BOOLEAN',
     },
-    'branches': {'waec_centre': 'VARCHAR(20)'},
+    'branches': {'waec_centre': 'VARCHAR(20)', 'neco_centre': 'VARCHAR(20)'},
     'students': {
         'house': 'VARCHAR(40)', 'boarding_status': 'VARCHAR(10)',
         'nin': 'VARCHAR(20)', 'jamb_reg_number': 'VARCHAR(30)', 'jamb_profile_code': 'VARCHAR(30)',

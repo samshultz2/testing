@@ -77,3 +77,73 @@ def test_page_saves_centres_and_numbers(app):
     with app.app_context():
         assert wn.school_centre() == '4250101'
         wn.set_school_centre('')
+
+
+def _stn(i, surname, first, neco=None, branch=None):
+    s = _st(i, surname, first, branch=branch)
+    s.neco_reg_number = neco
+    return s
+
+
+def test_school_without_branches_uses_the_school_number(app, monkeypatch):
+    """No branches at all: every candidate is numbered under the school-wide centre."""
+    from utils import waec_numbers as wn
+    monkeypatch.setattr(wn, '_branch_map', lambda: {})
+    with app.app_context():
+        wn.set_school_centre('4250101')
+        try:
+            p = wn.plan([_st(1, 'Musa', 'A'), _st(2, 'Ade', 'B')], 'fill')
+            assert len(p['centres']) == 1 and p['centres'][0]['label'] == 'Whole school'
+            assert [r['proposed'] for r in p['centres'][0]['rows']] == ['4250101001', '4250101002']
+            assert not p['missing']
+        finally:
+            wn.set_school_centre('')
+        # And with no number set, nobody can be numbered — they're listed instead.
+        p = wn.plan([_st(1, 'Musa', 'A')], 'fill')
+        assert p['centres'] == [] and len(p['missing']) == 1
+
+
+def test_single_branch_school_is_labelled_whole_school(app, monkeypatch):
+    from utils import waec_numbers as wn
+    only = SimpleNamespace(id=1, name='Main', is_default=True, waec_centre=None, neco_centre=None)
+    monkeypatch.setattr(wn, '_branch_map', lambda: {1: only})
+    with app.app_context():
+        wn.set_school_centre('4250101')
+        try:
+            p = wn.plan([_st(1, 'Musa', 'A', branch=1), _st(2, 'Ade', 'B', branch=None)], 'fill')
+            assert p['centres'][0]['label'] == 'Whole school' and len(p['centres'][0]['rows']) == 2
+        finally:
+            wn.set_school_centre('')
+
+
+def test_neco_numbers_are_separate_from_waec(app, monkeypatch):
+    from utils import waec_numbers as wn
+    monkeypatch.setattr(wn, '_branch_map', lambda: {})
+    assert wn.clean_centre('12', 'neco')[1] and wn.clean_centre('ab12cd', 'neco') == ('AB12CD', None)
+    with app.app_context():
+        wn.set_school_centre('4250101')
+        wn.set_school_centre('7712345', 'neco')
+        try:
+            studs = [_stn(1, 'Okafor', 'Ada'), _stn(2, 'Bello', 'Tunde', neco='7712345001')]
+            p = wn.plan(studs, 'fill', 'neco')
+            rows = {r['student'].id: r for r in p['centres'][0]['rows']}
+            assert rows[2]['status'] == 'keep' and rows[1]['proposed'] == '7712345002'
+            # WAEC numbering of the same students is independent.
+            pw = wn.plan(studs, 'fill', 'waec')
+            assert {r['proposed'] for r in pw['centres'][0]['rows']} == {'4250101001', '4250101002'}
+        finally:
+            wn.set_school_centre('')
+            wn.set_school_centre('', 'neco')
+
+
+def test_neco_tab_saves_its_own_centre(app):
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    page = c.get('/settings/waec-numbers?board=neco').get_data(as_text=True)
+    assert 'NECO candidate numbers' in page
+    c.post('/settings/waec-numbers', data={'_csrf_token': auth_csrf(c), 'action': 'centres', 'board': 'neco',
+                                          'school_centre': '7712345'})
+    from utils import waec_numbers as wn
+    with app.app_context():
+        assert wn.school_centre('neco') == '7712345' and wn.school_centre('waec') is None
+        wn.set_school_centre('', 'neco')
