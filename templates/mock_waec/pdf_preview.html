@@ -62,7 +62,7 @@
   .pv-sheet-bg.open{display:block;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1290}
   .pv{padding-bottom:84px}
   .pv-bar{display:flex;gap:.6rem;position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom));background:var(--bg-card);border-top:1px solid var(--border-color);box-shadow:0 -6px 18px rgba(0,0,0,.08)}
-  .pv-bar .rs-btn{flex:1;height:46px}
+  .pv-bar .rs-btn{flex:1;height:46px;padding:0 .5rem}
   .pv-head-a{display:none}
   .pv-wrap{min-height:0;max-height:none;padding:.6rem .4rem}
   .pv-sw{padding:.55rem 0}
@@ -201,6 +201,7 @@
   <div class="pv-sheet-bg" id="pvBg" data-close></div>
   <div class="pv-bar">
     <button type="button" class="rs-btn" id="pvOpen"><i class="fas fa-sliders" aria-hidden="true"></i> Options</button>
+    <a id="openTab3" href="#" target="_blank" rel="noopener" class="rs-btn" title="Open in a new tab — view without downloading"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open</a>
     <a id="dl2" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
   </div>
 </div>
@@ -294,7 +295,7 @@
     counts();
     var url = build(''), myFetch = ++fetchToken;
     dl.href = dl2.href = build('download=1');
-    openTab.href = url; if (openTab2) openTab2.href = url;
+    openTab.href = url; if (openTab2) openTab2.href = url; $('openTab3').href = url;
     fallback.style.display = 'none';
     canvasWrap.style.display = '';
     main.classList.add('loading');
