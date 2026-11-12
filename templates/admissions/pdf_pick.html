@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "components/_pdf_view.html" import pdf_view_css, pdf_view_js, pdf_view_markup with context %}
-{% block title %}Blank application form - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('admissions.dashboard') }}">Admissions</a> / <span>Blank application form</span>{% endblock %}
+{% block title %}{{ title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('admissions.dashboard') }}">Admissions</a> / {% if crumb %}<a href="{{ crumb[1] }}">{{ crumb[0] }}</a> / {% endif %}<span>{{ title }}</span>{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
@@ -49,8 +49,8 @@
 {% block content %}
 <div class="rs bf">
   <header class="rs-head">
-    <a href="{{ url_for('admissions.dashboard') }}" class="rs-icon-btn" aria-label="Back to admissions" title="Back" style="display:grid;place-items:center;text-decoration:none"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
-    <div class="rs-head-t"><h1>Blank application form</h1><p>A one-page form parents can fill on screen or print and complete by hand.</p></div>
+    <a href="{{ back_url }}" class="rs-icon-btn" aria-label="Back" title="Back" style="display:grid;place-items:center;text-decoration:none"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
+    <div class="rs-head-t"><h1>{{ title }}</h1><p>{{ subtitle }}</p></div>
   </header>
 
   <div class="bf-grid">
@@ -60,7 +60,7 @@
         <div class="bf-pick" role="radiogroup" aria-label="Version">
           <label class="bf-opt"><input type="radio" name="ver" value="0" checked><span class="ck"><i class="fas fa-check"></i></span>
             <span class="bf-sw col" aria-hidden="true"><i class="h"></i><i class="a"></i><i class="f"></i><i class="f"></i></span>
-            <b>Colour</b><small>School colours — for sharing, colour printing and filling on screen.</small></label>
+            <b>Colour</b><small>School colours — for sharing, colour printing{{ ' and filling on screen' if fillable }}.</small></label>
           <label class="bf-opt"><input type="radio" name="ver" value="1"><span class="ck"><i class="fas fa-check"></i></span>
             <span class="bf-sw bw" aria-hidden="true"><i class="h"></i><i class="a"></i><i class="f"></i><i class="f"></i></span>
             <b>Black &amp; white</b><small>Strong black lines, greyscale logo — for mono printers and photocopies.</small></label>
@@ -73,9 +73,8 @@
       <section class="rs-card bf-tips">
         <p class="bf-k">Good to know</p>
         <ul class="bf-notes">
-          <li><i class="fas fa-keyboard" aria-hidden="true"></i><span>Every box is fillable — parents can type into it in any PDF reader, then print or send it back.</span></li>
+          {% for icon, text in notes %}<li><i class="fas {{ icon }}" aria-hidden="true"></i><span>{{ text }}</span></li>{% endfor %}
           <li><i class="fas fa-school" aria-hidden="true"></i><span>Name, logo, address and motto come from <a href="{{ url_for('settings.school_settings') }}">Settings → School</a>.</span></li>
-          <li><i class="fas fa-stamp" aria-hidden="true"></i><span>The “For office use only” box is for your staff when the form comes back.</span></li>
         </ul>
       </section>
     </aside>
@@ -100,15 +99,17 @@
   var state = $('bfState');
   var v = PdfView($('bfView'), {
     onBusy: function (on) { if (on) state.textContent = 'Loading…'; },
-    onPages: function (n) { state.textContent = n + ' page' + (n === 1 ? '' : 's') + ' · fillable'; },
+    onPages: function (n) { state.textContent = n + ' page' + (n === 1 ? '' : 's') + {{ (' · fillable' if fillable else '')|tojson }}; },
     onError: function () { state.textContent = 'Preview not available — use Download'; }
   });
+  var TITLE = {{ title|tojson }}, VIEW = {{ (view_param or '')|tojson }};
+  function withQ(u, q) { return q ? u + (u.indexOf('?') < 0 ? '?' : '&') + q : u; }
   function pick(bw) {
-    var url = BASE + (bw ? '?bw=1' : '');
-    var sep = bw ? '&' : '?';
-    $('bfDl').href = $('bfDl2').href = url + sep + 'download=1';
+    var file = withQ(BASE, bw ? 'bw=1' : '');
+    var url = withQ(file, VIEW);
+    $('bfDl').href = $('bfDl2').href = withQ(file, 'download=1');
     $('bfOpen').href = url;
-    $('bfOpen2').href = VIEWER + '?src=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(bw ? 'Application form (black & white)' : 'Application form');
+    $('bfOpen2').href = VIEWER + '?src=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(TITLE + (bw ? ' (black & white)' : ''));
     $('bfName').textContent = bw ? 'Black & white version' : 'Colour version';
     v.load(url);
   }

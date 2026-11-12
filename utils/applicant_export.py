@@ -21,17 +21,28 @@ from utils.student_export import (NAVY, GOLD, INK, MUTED, LINE, PANEL,
                                   _FONT_REG, _FONT_BOLD, _FONT_ITAL)
 
 
-def applicant_pdf(record, school):
-    """A4-portrait applicant record sheet built with reportlab. Returns bytes."""
+def applicant_pdf(record, school, bw=False):
+    """A4 applicant record sheet (reportlab). Returns bytes.
+
+    Layout: school masthead, a title band, an ID card (photo, name, status
+    pill and the application facts), then each section as a two-column grid
+    of label-over-value cells (long values span the full width), notes in a
+    shaded box, and a confidential footer. One page for a typical record;
+    flows onto more pages when needed.
+
+    ``bw=True`` is the black-and-white print version: black ink, grey rules,
+    no colour fills and a greyscale logo / photo."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
-    from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Table,
-                                    TableStyle, Paragraph, Spacer, KeepTogether)
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.platypus import Paragraph
     from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.utils import ImageReader
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from xml.sax.saxutils import escape
 
     base, boldf, obl = 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique'
     try:
@@ -41,122 +52,250 @@ def applicant_pdf(record, school):
     except Exception:
         pass
 
+    school = school or {}
     PW, PH = A4
     margin = 14 * mm
-    mast_h = 40 * mm
     avail = PW - 2 * margin
+    if bw:
+        navy = ink = colors.black
+        gold = colors.HexColor('#222222'); muted = colors.HexColor('#333333')
+        line = colors.HexColor('#8a8a8a'); panel = colors.white
+        card_border = colors.HexColor('#222222')
+    else:
+        navy = colors.HexColor(NAVY); gold = colors.HexColor(GOLD)
+        ink = colors.HexColor(INK); muted = colors.HexColor(MUTED)
+        line = colors.HexColor(LINE); panel = colors.HexColor('#F5F7FB')
+        card_border = colors.HexColor(LINE)
+    STATUS = {  # status -> (fill, text) for the pill
+        'Inquiry': ('#EEF2F7', '#475569'), 'Applied': ('#E0ECFF', '#1D4ED8'),
+        'Screening': ('#FFF4D6', '#A16207'), 'Offered': ('#E3F6EA', '#15803D'),
+        'Accepted': ('#D8F3E3', '#166534'), 'Admitted': ('#1E2A4A', '#FFFFFF'),
+        'Rejected': ('#FDE7E7', '#B91C1C'), 'Withdrawn': ('#F1F1F1', '#555555'),
+    }
 
-    lab = ParagraphStyle('lab', fontName=boldf, fontSize=10, leading=13,
-                         textColor=colors.HexColor(MUTED))
-    val = ParagraphStyle('val', fontName=base, fontSize=11.5, leading=15,
-                         textColor=colors.HexColor(INK))
-    sec = ParagraphStyle('sec', fontName=boldf, fontSize=12.5, leading=16,
-                         textColor=colors.HexColor(NAVY))
+    def grey(reader_src):
+        """ImageReader for a path / bytes, greyscale in the B&W version."""
+        if not bw:
+            return ImageReader(reader_src)
+        try:
+            from PIL import Image
+            im = Image.open(reader_src if isinstance(reader_src, str) else reader_src)
+            if im.mode in ('RGBA', 'LA', 'P'):
+                im = im.convert('RGBA'); bg = Image.new('RGBA', im.size, (255, 255, 255, 255))
+                bg.alpha_composite(im); im = bg
+            out = io.BytesIO(); im.convert('L').save(out, format='PNG'); out.seek(0)
+            return ImageReader(out)
+        except Exception:
+            return ImageReader(reader_src)
 
-    def _draw_masthead(cv, doc):
-        from reportlab.pdfbase.pdfmetrics import stringWidth
-        cv.setStrokeColor(colors.HexColor(GOLD)); cv.setLineWidth(1.6)
-        cv.roundRect(margin * 0.5, margin * 0.5, PW - margin, PH - margin, 9, stroke=1, fill=0)
-        top = PH - margin - 3 * mm
-        x = margin + 4 * mm
-        logo = (school or {}).get('logo_path')
-        lx = x
-        if logo and os.path.exists(logo):
-            try:
-                from reportlab.lib.utils import ImageReader
-                ir = ImageReader(logo); iw, ih = ir.getSize()
-                h = 22 * mm; w = h * (iw / ih) if ih else 22 * mm
-                cv.drawImage(ir, x, top - h, width=min(w, 24 * mm), height=h,
-                             mask='auto', preserveAspectRatio=True)
-                lx = x + min(w, 24 * mm) + 5 * mm
-            except Exception:
-                lx = x
-        name = ((school or {}).get('name') or 'School').upper()
-        size = 21
-        while size > 12 and stringWidth(name, boldf, size) > (avail - (lx - x)):
-            size -= 1
-        cv.setFillColor(colors.HexColor(NAVY)); cv.setFont(boldf, size)
-        cv.drawString(lx, top - 7 * mm, name)
-        cv.setFillColor(colors.HexColor(INK)); cv.setFont(base, 9.5)
-        addr = (school or {}).get('address') or ''
-        if addr:
-            cv.drawString(lx, top - 12.5 * mm, addr[:110])
-        contact = '    '.join(p for p in [(school or {}).get('phone') or '',
-                                          (school or {}).get('email') or ''] if p)
-        if contact:
-            cv.drawString(lx, top - 17 * mm, contact[:110])
-        motto = (school or {}).get('motto') or ''
-        if motto:
-            cv.setFillColor(colors.HexColor(GOLD)); cv.setFont(obl, 10)
-            cv.drawString(lx, top - 22 * mm, ('—  ' + motto + '  —')[:110])
-        # passport photo (top-right corner of the first page)
-        pb = record.get('photo_bytes')
-        if pb and doc.page == 1:
-            try:
-                from reportlab.lib.utils import ImageReader
-                pw_, ph_ = 24 * mm, 30 * mm
-                px = PW - margin - 4 * mm - pw_
-                cv.drawImage(ImageReader(io.BytesIO(pb)), px, top - ph_, width=pw_, height=ph_,
-                             preserveAspectRatio=True, mask='auto')
-                cv.setStrokeColor(colors.HexColor(LINE)); cv.setLineWidth(0.6)
-                cv.rect(px, top - ph_, pw_, ph_, stroke=1, fill=0)
-            except Exception:
-                pass
-        # gold divider under the masthead
-        cv.setStrokeColor(colors.HexColor(GOLD)); cv.setLineWidth(1)
-        cv.line(margin, PH - margin - mast_h + 4 * mm, PW - margin, PH - margin - mast_h + 4 * mm)
-        # footer
-        cv.setStrokeColor(colors.HexColor(LINE)); cv.setLineWidth(0.6)
-        cv.line(margin, margin + 8 * mm, PW - margin, margin + 8 * mm)
-        cv.setFillColor(colors.HexColor(MUTED)); cv.setFont(obl, 8)
-        cv.drawString(margin, margin + 4 * mm, 'Generated %s · system-generated and confidential.'
-                      % timeutil.today().strftime('%d %b %Y'))
-        cv.drawRightString(PW - margin, margin + 4 * mm, 'Page %d' % doc.page)
-
-    story = []
-    # Title band + name + meta
-    title = record.get('title') or 'Applicant Record'
-    story.append(Paragraph('<font color="%s"><b>%s</b></font>' % (NAVY, title),
-                           ParagraphStyle('t', fontName=boldf, fontSize=16, leading=20)))
-    story.append(Paragraph('<font color="%s">%s</font>' % (INK, record.get('name') or ''),
-                           ParagraphStyle('n', fontName=base, fontSize=13, leading=17)))
-    meta = record.get('meta') or []
-    if meta:
-        cells = [[Paragraph('<font color="%s"><b>%s</b></font>&nbsp;&nbsp;%s'
-                            % (MUTED, k, v), val) for k, v in meta]]
-        mt = Table(cells, colWidths=[avail / max(1, len(meta))] * len(meta))
-        mt.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor(PANEL)),
-            ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor(LINE)),
-            ('INNERGRID', (0, 0), (-1, -1), 0.6, colors.HexColor(LINE)),
-            ('TOPPADDING', (0, 0), (-1, -1), 7), ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
-            ('LEFTPADDING', (0, 0), (-1, -1), 9), ('RIGHTPADDING', (0, 0), (-1, -1), 9),
-        ]))
-        story.append(Spacer(1, 5 * mm)); story.append(mt)
-
-    for heading, rows in record.get('sections') or []:
-        rows = [r for r in rows if r]
-        if not rows:
-            continue
-        block = [Spacer(1, 6 * mm), Paragraph(heading, sec), Spacer(1, 2 * mm)]
-        data = [[Paragraph(str(k), lab), Paragraph('' if v is None else str(v), val)] for k, v in rows]
-        t = Table(data, colWidths=[46 * mm, avail - 46 * mm])
-        t.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-            ('LINEBELOW', (0, 0), (-1, -2), 0.4, colors.HexColor(LINE)),
-        ]))
-        block.append(t)
-        story.append(KeepTogether(block))
+    lab_st = ParagraphStyle('l', fontName=boldf, fontSize=7.2, leading=9, textColor=muted)
+    val_st = ParagraphStyle('v', fontName=base, fontSize=10.5, leading=13.5, textColor=ink)
+    note_st = ParagraphStyle('n', fontName=base, fontSize=10, leading=14, textColor=ink)
 
     buf = io.BytesIO()
-    frame = Frame(margin, margin + 10 * mm, avail, PH - mast_h - margin - 12 * mm,
-                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    doc = BaseDocTemplate(buf, pagesize=A4, leftMargin=margin, rightMargin=margin,
-                          topMargin=margin, bottomMargin=margin)
-    doc.addPageTemplates([PageTemplate(id='main', frames=[frame], onPage=_draw_masthead)])
-    doc.build(story)
+    c = _canvas.Canvas(buf, pagesize=A4)
+    c.setTitle('%s — %s' % (record.get('title') or 'Applicant Record', record.get('name') or ''))
+    st = {'y': 0, 'page': 0}
+    stamp = timeutil.today().strftime('%d %b %Y')
+
+    def footer():
+        c.setStrokeColor(line); c.setLineWidth(0.5)
+        c.line(margin, margin + 6 * mm, PW - margin, margin + 6 * mm)
+        c.setFillColor(muted); c.setFont(obl, 7.5)
+        c.drawString(margin, margin + 2.6 * mm,
+                     'Confidential · generated %s · %s' % (stamp, school.get('name') or 'School'))
+        c.drawRightString(PW - margin, margin + 2.6 * mm, 'Page %d' % st['page'])
+
+    def new_page():
+        st['page'] += 1
+        c.setStrokeColor(gold); c.setLineWidth(1.4 if not bw else 1)
+        c.roundRect(margin * 0.5, margin * 0.5, PW - margin, PH - margin, 8, stroke=1, fill=0)
+        top = PH - margin - 2 * mm
+        if st['page'] == 1:
+            lx = margin
+            path = school.get('logo_path')
+            if path and os.path.exists(path):
+                try:
+                    ir = grey(path); iw, ih = ir.getSize()
+                    h = 20 * mm; w = min(h * (iw / ih) if ih else h, 23 * mm)
+                    c.drawImage(ir, margin, top - h, width=w, height=h, mask='auto', preserveAspectRatio=True)
+                    lx = margin + w + 5 * mm
+                except Exception:
+                    pass
+            name = (school.get('name') or 'School').upper()
+            size = 19
+            while size > 12 and stringWidth(name, boldf, size) > (PW - margin - lx):
+                size -= 1
+            c.setFillColor(navy); c.setFont(boldf, size); c.drawString(lx, top - 6 * mm, name)
+            c.setFillColor(ink); c.setFont(base, 8.8)
+            yy = top - 11 * mm
+            if school.get('address'):
+                c.drawString(lx, yy, school['address'][:115]); yy -= 4 * mm
+            contact = '   ·   '.join(p for p in [school.get('phone') or '', school.get('email') or ''] if p)
+            if contact:
+                c.drawString(lx, yy, contact[:115]); yy -= 4 * mm
+            if school.get('motto'):
+                c.setFillColor(gold); c.setFont(obl, 9); c.drawString(lx, yy - 0.5 * mm, school['motto'][:110])
+            ty = top - 27.5 * mm
+        else:
+            ty = top - 4 * mm
+        # title band
+        if bw:
+            c.setStrokeColor(colors.black); c.setLineWidth(1.2)
+            c.line(margin, ty - 2.5 * mm, PW - margin, ty - 2.5 * mm)
+            c.setFillColor(colors.black)
+        else:
+            c.setFillColor(navy); c.roundRect(margin, ty - 3 * mm, avail, 9.5 * mm, 2.5 * mm, stroke=0, fill=1)
+            c.setFillColor(colors.white)
+        pad = 0 if bw else 3.5 * mm
+        title = (record.get('title') or 'Applicant Record').upper()
+        c.setFont(boldf, 13.5); c.drawString(margin + pad, ty, title if st['page'] == 1 else title + ' (continued)')
+        c.setFont(obl, 8.3); c.drawRightString(PW - margin - pad, ty + 0.3 * mm, 'Generated %s' % stamp)
+        st['y'] = ty - 7 * mm
+        footer()
+
+    def ensure(h):
+        if st['y'] - h < margin + 9 * mm:
+            c.showPage(); new_page()
+
+    def para(text, style, w):
+        p = Paragraph(escape(str(text)).replace('\n', '<br/>'), style)
+        _, h = p.wrap(w, 1000)
+        return p, h
+
+    def heading(text, num):
+        ensure(16 * mm)
+        y = st['y'] - 4.2 * mm
+        c.setFillColor(colors.black if bw else gold)
+        c.circle(margin + 2.3 * mm, y + 1.2 * mm, 2.3 * mm, stroke=0, fill=1)
+        c.setFillColor(colors.white); c.setFont(boldf, 7.5)
+        c.drawCentredString(margin + 2.3 * mm, y + 0.25 * mm, str(num))
+        c.setFillColor(navy); c.setFont(boldf, 11); c.drawString(margin + 6.5 * mm, y, text)
+        c.setStrokeColor(line); c.setLineWidth(0.5)
+        c.line(margin + 6.5 * mm + stringWidth(text, boldf, 11) + 3 * mm, y + 1.2 * mm, PW - margin, y + 1.2 * mm)
+        st['y'] -= 7.5 * mm
+
+    def grid(rows, cols=2, x0=None, width=None):
+        """Label-over-value cells; long values / addresses take a full row."""
+        x0 = margin if x0 is None else x0
+        width = avail if width is None else width
+        gap = 6 * mm
+        cw = (width - gap * (cols - 1)) / cols
+        line_buf = []
+
+        def flush():
+            if not line_buf:
+                return
+            hs = []
+            for k, v, w in line_buf:
+                lp, lh = para(k.upper(), lab_st, w); vp, vh = para(v, val_st, w)
+                hs.append((lp, lh, vp, vh, w))
+            hmax = max(lh + vh + 1.2 * mm for _, lh, _, vh, _ in hs)
+            ensure(hmax + 2.6 * mm)
+            x = x0
+            for lp, lh, vp, vh, w in hs:
+                lp.drawOn(c, x, st['y'] - lh)
+                vp.drawOn(c, x, st['y'] - lh - 1.2 * mm - vh)
+                x += w + gap
+            st['y'] -= hmax + 1.1 * mm
+            c.setStrokeColor(line); c.setLineWidth(0.35)
+            c.line(x0, st['y'], x0 + width, st['y'])
+            st['y'] -= 2 * mm
+            line_buf.clear()
+
+        def is_wide(k, v):
+            return 'address' in k.lower() or len(v) * 5.6 > cw / mm * 2.6 or 'school' in k.lower()
+        norm = [(k, '—' if v in (None, '') else str(v)) for k, v in rows]
+        # Short facts first (packed into columns), then the full-width ones.
+        norm = [r for r in norm if not is_wide(*r)] + [r for r in norm if is_wide(*r)]
+        for k, v in norm:
+            wide = is_wide(k, v)
+            if wide:
+                flush(); line_buf.append((k, v, width)); flush()
+            else:
+                line_buf.append((k, v, cw))
+                if len(line_buf) == cols:
+                    flush()
+        flush()
+
+    new_page()
+
+    # ID card: photo, name, status pill, application facts.
+    sections = [(h, [r for r in rows if r]) for h, rows in (record.get('sections') or [])]
+    app_rows = next((rows for h, rows in sections if h == 'Application'), [])
+    facts = list(record.get('meta') or [])
+    status = next((v for k, v in facts if k == 'Status'), None)
+    facts = [(k, v) for k, v in facts if k != 'Status'] + list(app_rows)
+    card_h = 40 * mm
+    cy = st['y'] - card_h
+    c.setFillColor(panel); c.setStrokeColor(card_border); c.setLineWidth(0.8)
+    c.roundRect(margin, cy, avail, card_h, 3 * mm, stroke=1, fill=1)
+    ph_w, ph_h = 28 * mm, 34 * mm
+    px, py = margin + 3 * mm, cy + 3 * mm
+    pb = record.get('photo_bytes')
+    drawn = False
+    if pb:
+        try:
+            c.drawImage(grey(io.BytesIO(pb)), px, py, width=ph_w, height=ph_h, preserveAspectRatio=True, mask='auto', anchor='c')
+            drawn = True
+        except Exception:
+            drawn = False
+    c.setStrokeColor(line); c.setLineWidth(0.6)
+    if not drawn:
+        c.setFillColor(colors.white); c.rect(px, py, ph_w, ph_h, stroke=1, fill=1)
+        initials = ''.join(w[0] for w in (record.get('name') or '?').split()[:2]).upper()
+        c.setFillColor(muted); c.setFont(boldf, 20); c.drawCentredString(px + ph_w / 2, py + ph_h / 2 - 3 * mm, initials)
+        c.setFont(base, 6.5); c.drawCentredString(px + ph_w / 2, py + 3 * mm, 'NO PHOTO')
+    else:
+        c.rect(px, py, ph_w, ph_h, stroke=1, fill=0)
+    tx = px + ph_w + 6 * mm
+    tw = margin + avail - 4 * mm - tx
+    nm = record.get('name') or ''
+    ns = 17
+    while ns > 11 and stringWidth(nm, boldf, ns) > tw - 30 * mm:
+        ns -= 1
+    c.setFillColor(navy); c.setFont(boldf, ns); c.drawString(tx, cy + card_h - 9 * mm, nm)
+    if status:
+        fillc, txtc = STATUS.get(status, ('#EEF2F7', '#334155'))
+        sw = stringWidth(status, boldf, 8.5) + 7 * mm
+        sx = margin + avail - 4 * mm - sw
+        if bw:
+            c.setFillColor(colors.white); c.setStrokeColor(colors.black); c.setLineWidth(0.9)
+            c.roundRect(sx, cy + card_h - 10.6 * mm, sw, 6 * mm, 3 * mm, stroke=1, fill=1)
+            c.setFillColor(colors.black)
+        else:
+            c.setFillColor(colors.HexColor(fillc))
+            c.roundRect(sx, cy + card_h - 10.6 * mm, sw, 6 * mm, 3 * mm, stroke=0, fill=1)
+            c.setFillColor(colors.HexColor(txtc))
+        c.setFont(boldf, 8.5); c.drawCentredString(sx + sw / 2, cy + card_h - 8.6 * mm, status.upper())
+    st['y'] = cy + card_h - 14 * mm
+    grid(facts[:6], cols=3, x0=tx, width=tw)
+    st['y'] = cy - 4 * mm
+
+    num = 0
+    for h, rows in sections:
+        if not rows or h == 'Application':
+            continue
+        num += 1
+        if h == 'Notes':
+            text = '\n'.join(str(v) for _, v in rows if v)
+            heading('Notes', num)
+            p, ph = para(text, note_st, avail - 8 * mm)
+            ensure(ph + 8 * mm)
+            if not bw:
+                c.setFillColor(colors.HexColor('#FBF7EE')); c.setStrokeColor(colors.HexColor('#E8D9B5'))
+            else:
+                c.setFillColor(colors.white); c.setStrokeColor(colors.black)
+            c.setLineWidth(0.7)
+            c.roundRect(margin, st['y'] - ph - 6 * mm, avail, ph + 6 * mm, 2.5 * mm, stroke=1, fill=1)
+            p.drawOn(c, margin + 4 * mm, st['y'] - 3 * mm - ph)
+            st['y'] -= ph + 9 * mm
+            continue
+        heading(h, num)
+        grid(rows, cols=3)
+        st['y'] -= 1.5 * mm
+
+    c.showPage(); c.save()
     return buf.getvalue()
 
 

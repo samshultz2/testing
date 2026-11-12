@@ -602,7 +602,7 @@ _SUBSECTION_ENDPOINTS = {
         'create': {'add_applicant'},
         'edit': {'edit_applicant', 'set_status'},
         'convert': {'convert', 'copy_to_student', 'link_student'},
-        'download': {'blank_application_form', 'blank_form_page', 'export_applicant'},
+        'download': {'blank_application_form', 'blank_form_page', 'export_applicant', 'applicant_pdf_page'},
         'delete': {'delete_applicant'},
     },
     'attendance': {

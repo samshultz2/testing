@@ -112,3 +112,25 @@ def test_blank_form_has_new_fields_and_fits_one_page(app):
             assert s in text, s
         kinds = {w.field_type_string for w in doc[0].widgets()}
         assert {'Text', 'CheckBox'} <= kinds
+
+
+def test_applicant_record_colour_bw_and_picker(app):
+    import fitz
+    aid = _seed(app)
+    client = _admin(app)
+    html = client.get(f'/admissions/applicants/{aid}/pdf').get_data(as_text=True)
+    assert 'Applicant record' in html and 'Black &amp; white' in html
+    assert f'/admissions/applicants/{aid}/export?format=pdf' in html
+    col = client.get(f'/admissions/applicants/{aid}/export?format=pdf&view=1')
+    bw = client.get(f'/admissions/applicants/{aid}/export?format=pdf&bw=1')
+    assert 'inline' in col.headers['Content-Disposition']
+    assert 'attachment' in bw.headers['Content-Disposition'] and '_bw.pdf' in bw.headers['Content-Disposition']
+    assert col.data != bw.data
+    for data in (col.data, bw.data):
+        doc = fitz.open(stream=data, filetype='pdf')
+        text = doc[0].get_text()
+        assert doc.page_count == 1 and 'APPLICANT RECORD' in text and 'APP-TEST-01' in text
+        assert 'Aunt Ngozi' in text and 'APPLIED' in text.upper()
+    assert client.get(f'/mock-waec/viewer?src=/admissions/applicants/{aid}/export%3Fformat%3Dpdf%26view%3D1').status_code == 200
+    with app.app_context():
+        db.session.delete(db.session.get(Applicant, aid)); db.session.commit()

@@ -260,9 +260,10 @@ def pdf_viewer():
     from urllib.parse import urlsplit
     src = request.args.get('src', '')
     parts = urlsplit(src)
-    allowed = parts.path.startswith('/mock-waec/') or parts.path == '/admissions/applicants/blank-form.pdf'
-    if parts.scheme or parts.netloc or not allowed \
-            or not parts.path.endswith('.pdf') or '..' in parts.path:
+    allowed = ((parts.path.startswith('/mock-waec/') and parts.path.endswith('.pdf'))
+               or parts.path == '/admissions/applicants/blank-form.pdf'
+               or re.fullmatch(r'/admissions/applicants/\d+/export', parts.path))
+    if parts.scheme or parts.netloc or not allowed or '..' in parts.path:
         abort(400)
     title = (request.args.get('title') or 'Document')[:120]
     sep = '&' if parts.query else '?'

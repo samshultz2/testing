@@ -360,7 +360,7 @@ def applicant_detail(applicant_id):
                  'link': url_for('admissions.link_student', applicant_id=a.id),
                  'student_search': url_for('main.api_search_students'),
                  'delete': url_for('admissions.delete_applicant', applicant_id=a.id),
-                 'pdf': url_for('admissions.export_applicant', applicant_id=a.id, format='pdf'),
+                 'pdf': url_for('admissions.applicant_pdf_page', applicant_id=a.id),
                  'docx': url_for('admissions.export_applicant', applicant_id=a.id, format='docx')},
     })
 
@@ -386,10 +386,30 @@ def blank_application_form():
 def blank_form_page():
     """Pick the colour or black & white blank application form, preview it,
     then open, download or print it."""
-    from utils.school import school_profile
-    return render_template('admissions/blank_form.html', school=school_profile(),
-                           pdf_url=url_for('admissions.blank_application_form'),
-                           viewer_url=url_for('mock_waec.pdf_viewer'))
+    return render_template('admissions/pdf_pick.html', title='Blank application form',
+                           subtitle='A one-page form parents can fill on screen, or print and complete by hand.',
+                           crumb=None, back_url=url_for('admissions.dashboard'), fillable=True,
+                           pdf_url=url_for('admissions.blank_application_form'), view_param='',
+                           viewer_url=url_for('mock_waec.pdf_viewer'), notes=[
+                               ('fa-keyboard', 'Every box is fillable — parents can type into it in any PDF reader, then print or send it back.'),
+                               ('fa-stamp', 'The “For office use only” box is for your staff when the form comes back.')])
+
+
+@adm_bp.route('/applicants/<int:applicant_id>/pdf')
+@login_required
+def applicant_pdf_page(applicant_id):
+    """Pick the colour or black & white applicant record, preview it, then
+    download, print or view it full screen."""
+    a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
+    detail = url_for('admissions.applicant_detail', applicant_id=a.id)
+    return render_template('admissions/pdf_pick.html', title='Applicant record — %s' % a.full_name,
+                           subtitle='%s · %s' % (a.application_no or 'No application number', a.status or ''),
+                           crumb=('Applicants', url_for('admissions.applicants')), back_url=detail, fillable=False,
+                           pdf_url=url_for('admissions.export_applicant', applicant_id=a.id, format='pdf'),
+                           view_param='view=1', viewer_url=url_for('mock_waec.pdf_viewer'), notes=[
+                               ('fa-user-shield', 'Contains personal and health details — share it only with staff who need it.'),
+                               ('fa-file-word', 'Need to edit it? Use “Download Word” on the applicant page.')])
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/export')
@@ -447,8 +467,11 @@ def export_applicant(applicant_id):
     base = (a.application_no or 'applicant').replace('/', '-')
     if fmt == 'docx':
         return applicant_docx(record, school_profile(), filename='%s.docx' % base)
-    data = applicant_pdf(record, school_profile())
-    return pdf_response(io.BytesIO(data), '%s.pdf' % base, inline=False)
+    bw = request.args.get('bw') in ('1', 'true', 'yes')
+    data = applicant_pdf(record, school_profile(), bw=bw)
+    # ?view=1 previews in the browser; otherwise (and with ?download=1) it downloads.
+    inline = request.args.get('view') == '1' and request.args.get('download') != '1'
+    return pdf_response(io.BytesIO(data), '%s%s.pdf' % (base, '_bw' if bw else ''), inline=inline)
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/edit', methods=['GET', 'POST'])

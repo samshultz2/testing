@@ -269,7 +269,7 @@ function ApplicantDetail({ d, notify }) {
           {a.parent_email && <a href={'mailto:' + a.parent_email} className="ad-ca"><i className="fas fa-envelope" aria-hidden="true" /><span>Email</span></a>}
           <Menu label="More" items={[
             canEdit && { icon: 'fa-pen', label: 'Edit application', onClick: () => nav.go(d.urls.edit) },
-            canWrite(d, 'download') && { icon: 'fa-file-pdf', label: 'Download PDF', href: d.urls.pdf, native: true },
+            canWrite(d, 'download') && { icon: 'fa-file-pdf', label: 'PDF — colour or B&W', href: d.urls.pdf, native: true },
             canWrite(d, 'download') && { icon: 'fa-file-word', label: 'Download Word', href: d.urls.docx, native: true },
             canWrite(d, 'delete') && { icon: 'fa-trash', label: 'Delete', danger: true, onClick: del },
           ]} />

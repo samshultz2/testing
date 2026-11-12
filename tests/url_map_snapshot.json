@@ -295,6 +295,13 @@
 ]
 ],
 [
+"admissions.applicant_pdf_page",
+"/admissions/applicants/<int:applicant_id>/pdf",
+[
+"GET"
+]
+],
+[
 "admissions.applicant_photo",
 "/admissions/applicants/<int:applicant_id>/photo",
 [
