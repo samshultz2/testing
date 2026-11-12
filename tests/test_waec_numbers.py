@@ -117,21 +117,21 @@ def test_single_branch_school_is_labelled_whole_school(app, monkeypatch):
 
 
 def test_neco_numbers_are_checked_not_generated():
-    """NECO issues the whole number (year + centre + candidate + check letters)."""
+    """NECO issues the whole number: year + 8 digits + 1-2 letters. The first
+    five below were issued at ONE centre, so the centre isn't in the number."""
     from utils import waec_numbers as wn
     for n in ('2611532868CC', '2610261080IF', '2610261094E', '2611532696FD', '2611532622IB', '2410284334GH'):
-        ok, problem, parts = wn.check_neco_number(n)
-        assert ok and problem is None, n
-    ok, problem, parts = wn.check_neco_number('26 11532 868 cc')
-    assert ok and parts == {'year': '26', 'centre': '11532', 'serial': '868', 'letters': 'CC'}
+        ok, problem, parts = wn.check_neco_number(n, year=2026 if n.startswith('26') else 2024)
+        assert ok and problem is None, n                     # same centre, different digits: all fine
+    ok, problem, parts = wn.check_neco_number('26 11532868 cc')
+    assert ok and parts == {'year': '26', 'number': '11532868', 'letters': 'CC'}
     assert not wn.check_neco_number('2611532868')[0]            # letters missing
     assert not wn.check_neco_number('2611532868ABC')[0]         # too many letters
+    assert not wn.check_neco_number('261153286CC')[0]           # a digit short
+    ok, problem, _ = wn.check_neco_number('2410284334GH', year=2026)
+    assert ok and '2024' in problem                             # usable, but flagged
     ok, problem, _ = wn.check_neco_number('2610261080IF', centre='11532', year=2026)
-    assert ok and 'centre' in problem.lower()                   # usable, but flagged
-    ok, problem, _ = wn.check_neco_number('2410284334GH', centre='10284', year=2026)
-    assert ok and '2024' in problem
-    assert wn.clean_centre('11532', 'neco') == ('11532', None)
-    assert wn.clean_centre('7712345', 'neco')[1]                # 5 digits only
+    assert ok and problem is None                               # centre is never checked
 
 
 def test_neco_tab_saves_centre_and_refuses_bad_numbers(app, monkeypatch):
@@ -142,10 +142,10 @@ def test_neco_tab_saves_centre_and_refuses_bad_numbers(app, monkeypatch):
     page = c.get('/settings/waec-numbers?board=neco').get_data(as_text=True)
     assert 'NECO candidate numbers' in page and '2611532868CC' in page
     c.post('/settings/waec-numbers', data={'_csrf_token': auth_csrf(c), 'action': 'centres', 'board': 'neco',
-                                          'school_centre': '11532'})
+                                          'school_centre': 'NC1153'})
     from utils import waec_numbers as wn
     with app.app_context():
-        assert wn.school_centre('neco') == '11532' and wn.school_centre('waec') is None
+        assert wn.school_centre('neco') == 'NC1153' and wn.school_centre('waec') is None
         studs = Student.query.filter_by(is_active=True).limit(2).all()
         if len(studs) < 2:
             wn.set_school_centre('', 'neco')

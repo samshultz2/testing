@@ -982,7 +982,7 @@ def waec_numbers():
             br = by_id.get(st.branch_id) or default
             centre = wn.centre_for(br, 'neco') if br else wn.school_centre('neco')
             cur = st.neco_reg_number or ''
-            ok, problem, _ = wn.check_neco_number(cur, centre, year) if cur else (True, None, None)
+            ok, problem, _ = wn.check_neco_number(cur, year=year) if cur else (True, None, None)
             if cur:
                 seen.setdefault(cur, []).append(st.id)
             neco_rows.append({'student': st, 'current': cur, 'centre': centre, 'ok': ok, 'problem': problem})

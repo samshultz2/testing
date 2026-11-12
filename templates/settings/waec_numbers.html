@@ -69,7 +69,7 @@
 <div class="rs wn">
   <header class="rs-head">
     <span class="rs-head-ic"><i class="fas fa-hashtag" aria-hidden="true"></i></span>
-    <div class="rs-head-t"><h1>{{ bcfg.name }} candidate numbers</h1><p>Set each centre’s number once, then give every candidate their examination number in one go.</p></div>
+    <div class="rs-head-t"><h1>{{ bcfg.name }} candidate numbers</h1><p>{% if board == 'waec' %}Set each centre’s number once, then give every candidate their examination number in one go.{% else %}Record the registration numbers NECO issued and check them in one place.{% endif %}</p></div>
   </header>
 
   <nav class="wn-boards" aria-label="Exam board">
@@ -79,8 +79,8 @@
 
   {% if board == 'neco' %}<section class="rs-card wn-card">
     <div class="wn-how">
-      <div class="wn-num" aria-label="Example: 2611532868CC"><span class="c" style="background:color-mix(in srgb,var(--text-muted) 14%,transparent);color:var(--text-secondary)">{{ '%02d'|format((year or 2026) % 100) }}<small>Year</small></span><span class="c" style="margin-left:4px">{{ school_centre or (branches|selectattr(branch_attr)|map(attribute=branch_attr)|first) or '11532' }}<small>Centre</small></span><span class="s">868<small>Candidate</small></span><span class="s" style="background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)">CC<small>Letters</small></span></div>
-      <p>A NECO registration number is the <b>2-digit exam year</b>, the <b>5-digit centre number</b>, a <b>3-digit candidate number</b> and <b>1–2 letters</b> — e.g. <code>2611532868CC</code>. NECO issues the whole number (the letters differ for every candidate), so it can’t be worked out in advance: record what NECO gave each candidate and the page checks it.</p>
+      <div class="wn-num" aria-label="Example: 2611532868CC"><span class="c" style="background:color-mix(in srgb,var(--text-muted) 14%,transparent);color:var(--text-secondary)">{{ '%02d'|format((year or 2026) % 100) }}<small>Year</small></span><span class="s">11532868<small>Number from NECO</small></span><span class="s" style="background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)">CC<small>Letters</small></span></div>
+      <p>A NECO registration number is the <b>2-digit exam year</b>, an <b>8-digit number</b> and <b>1–2 letters</b> — e.g. <code>2611532868CC</code>. NECO issues the whole number: candidates at the same centre get unrelated numbers and letters, so it can’t be worked out in advance. Record what NECO gave each candidate and the page checks it.</p>
     </div>
   </section>{% else %}<section class="rs-card wn-card">
     <div class="wn-how">
@@ -92,14 +92,14 @@
 
   <form method="post" class="rs-card wn-card">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="centres">
-    <div class="wn-h"><h3><i class="fas fa-building" aria-hidden="true"></i> {{ bcfg.name }} centre numbers</h3><small>{{ '7 digits, as given by WAEC' if board == 'waec' else '5 digits — digits 3–7 of any NECO number from your school' }}</small></div>
+    <div class="wn-h"><h3><i class="fas fa-building" aria-hidden="true"></i> {{ bcfg.name }} centre numbers</h3><small>{{ '7 digits, as given by WAEC' if board == 'waec' else 'For your records — it isn’t part of NECO registration numbers' }}</small></div>
     <input type="hidden" name="board" value="{{ board }}">
     <div class="wn-centres">
       <label class="cm-f"><span>{{ 'Whole school (branches without their own)' if branches|length > 1 else 'School centre number' }}</span>
-        <input name="school_centre" value="{{ school_centre }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}inputmode="numeric" maxlength="5" pattern="\d{5}"{% endif %} placeholder="e.g. {{ bcfg.example }}"></label>
+        <input name="school_centre" value="{{ school_centre }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}maxlength="12"{% endif %} placeholder="{{ 'e.g. ' ~ bcfg.example if board == 'waec' else 'As NECO gave it' }}"></label>
       {% for b in branches if branches|length > 1 %}
       <label class="cm-f"><span>{{ b.name }}{% if b.is_default %} · default{% endif %}</span>
-        <input name="centre_{{ b.id }}" value="{{ b[branch_attr] or '' }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}inputmode="numeric" maxlength="5" pattern="\d{5}"{% endif %} placeholder="{{ 'Uses the whole-school number' if school_centre else 'e.g. ' ~ bcfg.example }}"></label>
+        <input name="centre_{{ b.id }}" value="{{ b[branch_attr] or '' }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}maxlength="12"{% endif %} placeholder="{{ 'Uses the whole-school number' if school_centre else ('e.g. ' ~ bcfg.example if board == 'waec' else 'As NECO gave it') }}"></label>
       {% endfor %}
     </div>
     <div class="wn-save"><button type="submit" class="rs-btn primary sm"><i class="fas fa-check" aria-hidden="true"></i> Save centre numbers</button></div>
@@ -127,10 +127,10 @@
     <div class="wn-h"><h3><i class="fas fa-id-card" aria-hidden="true"></i> NECO numbers</h3><small>Checked as you type</small></div>
     <div class="wn-row wn-hd wn-neco"><span></span><span>Candidate</span><span>NECO number</span><span></span></div>
     {% for r in neco_rows %}{% set st = r.student %}
-    <div class="wn-row wn-neco" data-name="{{ (st.surname ~ ' ' ~ st.first_name ~ ' ' ~ (st.middle_name or ''))|lower }}" data-centre="{{ r.centre or '' }}">
+    <div class="wn-row wn-neco" data-name="{{ (st.surname ~ ' ' ~ st.first_name ~ ' ' ~ (st.middle_name or ''))|lower }}">
       <span class="i">{{ loop.index }}</span>
       <span class="n"><b>{{ st.surname|upper }}</b> {{ st.first_name }} {{ st.middle_name or '' }}<small>{{ st.student_id or '' }}{% if st.stream %} · {{ st.stream }}{% endif %}</small></span>
-      <input name="neco_{{ st.id }}" value="{{ r.current }}" maxlength="16" spellcheck="false" autocomplete="off" aria-label="NECO number for {{ st.surname }} {{ st.first_name }}" placeholder="e.g. {{ '%02d'|format((year or 2026) % 100) }}{{ r.centre or '11532' }}…">
+      <input name="neco_{{ st.id }}" value="{{ r.current }}" maxlength="16" spellcheck="false" autocomplete="off" aria-label="NECO number for {{ st.surname }} {{ st.first_name }}" placeholder="e.g. {{ '%02d'|format((year or 2026) % 100) }}11532868CC">
       <span class="st">{% if r.current and not r.ok %}<span class="cm-pill bad">Fix</span>{% elif r.problem %}<span class="cm-pill mid" title="{{ r.problem }}">Check</span>{% elif r.current %}<span class="cm-pill good">OK</span>{% endif %}</span>
       <small class="wn-msg">{{ r.problem or '' }}</small>
     </div>
@@ -196,17 +196,16 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
   var YEAR = {{ ('%02d'|format(year % 100) if year else none)|tojson }};   // e.g. "26" (a string, like the regex match)
-  var RE = /^(\d{2})(\d{5})(\d{3})([A-Z]{1,2})$/;
+  var RE = /^(\d{2})(\d{8})([A-Z]{1,2})$/;
   function clean(v) { return (v || '').replace(/[\s\-\/]+/g, '').toUpperCase(); }
   function check(row) {
     var inp = row.querySelector('input'), msg = row.querySelector('.wn-msg'), pill = row.querySelector('.st');
-    var v = clean(inp.value), centre = row.getAttribute('data-centre');
+    var v = clean(inp.value);
     row.classList.remove('err', 'warn');
     var text = '', cls = '', tag = '';
     if (v) {
       var m = v.match(RE);
-      if (!m) { cls = 'err'; tag = '<span class="cm-pill bad">Fix</span>'; text = 'Should be year (2) + centre (5) + candidate (3) + 1–2 letters, e.g. 2611532868CC.'; }
-      else if (centre && m[2] !== centre) { cls = 'warn'; tag = '<span class="cm-pill mid">Check</span>'; text = 'Centre ' + m[2] + ' isn’t this school’s NECO centre (' + centre + ').'; }
+      if (!m) { cls = 'err'; tag = '<span class="cm-pill bad">Fix</span>'; text = 'Should be the year (2 digits), 8 digits, then 1–2 letters, e.g. 2611532868CC.'; }
       else if (YEAR && m[1] !== YEAR) { cls = 'warn'; tag = '<span class="cm-pill mid">Check</span>'; text = 'Year 20' + m[1] + ' — this sitting is 20' + YEAR + '.'; }
       else { tag = '<span class="cm-pill good">OK</span>'; }
     }
