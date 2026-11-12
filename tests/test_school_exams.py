@@ -1,3 +1,4 @@
+import json
 """JSS3 (State / NECO BECE) and Basic 6 (State Common Entrance / NCEE) exams:
 grading, level separation, entry flows (single, grid, paste), analytics and
 the per-level pages."""
@@ -276,14 +277,20 @@ def test_entered_students_are_hidden_from_add_and_grid(app):
     tok = auth_csrf(c)
     c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': done, 'exam_year': 2039,
            'subject[]': ['Mathematics'], 'score[]': ['60'], 'grade[]': ['']})
-    opt = lambda sid: f'<option value="{sid}"'
+    import re
+
+    def listed(html):
+        m = re.search(r'var STUDENTS = (\[.*?\]);', html)
+        return {r['id'] for r in json.loads(m.group(1))} if m else set()
     html = c.get('/jss3-exams/state/add?year=2039').get_data(as_text=True)
-    assert opt(todo) in html and opt(done) not in html and 'are not listed' in html
+    assert todo in listed(html) and done not in listed(html) and 'Already entered (1)' in html
     # Another exam body or year still lists them.
-    assert opt(done) in c.get('/jss3-exams/federal/add?year=2039').get_data(as_text=True)
-    assert opt(done) in c.get('/jss3-exams/state/add?year=2040').get_data(as_text=True)
-    # Opening them via Edit keeps them selectable.
-    assert opt(done) in c.get(f'/jss3-exams/state/add?year=2039&student_id={done}').get_data(as_text=True)
+    assert done in listed(c.get('/jss3-exams/federal/add?year=2039').get_data(as_text=True))
+    assert done in listed(c.get('/jss3-exams/state/add?year=2040').get_data(as_text=True))
+    # Opening them via Edit keeps them selectable, with their saved scores.
+    html = c.get(f'/jss3-exams/state/add?year=2039&student_id={done}').get_data(as_text=True)
+    assert done in listed(html)
+    assert 'EXISTING = {"Mathematics"' in html
     # Grid: hidden by default, back with ?show=all.
     grid = c.get('/jss3-exams/state/grid?year=2039').get_data(as_text=True)
     assert f'exam_number_{todo}' in grid and f'exam_number_{done}' not in grid and 'are hidden' in grid
@@ -333,14 +340,42 @@ def test_broadsheet_page_and_exports_like_waec(app):
             db.session.commit()
 
 
-def test_add_result_student_dropdown_is_searchable(app):
+def test_add_result_student_list_is_searchable(app):
     c = _admin(app)
     for path in ('/jss3-exams/federal/add', '/jss3-exams/state/add', '/basic6-exams/state/add',
                  '/basic6-exams/federal/add'):
         html = c.get(path).get_data(as_text=True)
-        if 'id="sxStudentSel"' not in html:          # no students on this roster yet
+        if 'id="aeForm"' not in html:                # no students on this roster yet
             continue
-        assert '.ss-wrap' in html and 'Search name or admission no.' in html, path
+        assert 'data-filter' in html and 'Search name or admission no.' in html, path
+        assert 'id="aeSheet"' in html and 'Save &amp; next' in html, path
+
+
+def test_add_result_save_and_next_and_empty_guard(app):
+    c = _admin(app)
+    a, _ = _student(app, 'Aanext')
+    b, _ = _student(app, 'Abnext')
+    for sid in (a, b):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    base = {'_csrf_token': tok, 'exam_year': 2051, 'subject[]': ['Mathematics', 'English Studies']}
+    # Nothing typed: not saved, back to the same student.
+    r = c.post('/jss3-exams/state/add', data=dict(base, student_id=a, **{'score[]': ['', ''], 'grade[]': ['', '']}))
+    assert r.status_code == 302 and f'student_id={a}' in r.headers['Location']
+    with app.app_context():
+        assert not SchoolExamResult.query.filter_by(student_id=a, exam_year=2051).count()
+    # Save & next goes to the next candidate still without results.
+    r = c.post('/jss3-exams/state/add', data=dict(base, student_id=a, next='1',
+               **{'score[]': ['71', ''], 'grade[]': ['', 'C']}))
+    assert r.status_code == 302 and '/jss3-exams/state/add' in r.headers['Location']
+    nxt = int(r.headers['Location'].split('student_id=')[1].split('&')[0])
+    assert nxt != a
+    with app.app_context():
+        got = {x.subject: x.grade for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=2051)}
+    assert got == {'Mathematics': 'A', 'English Studies': 'C'}      # grade-only rows are kept
+    # Plain Save still opens the student record.
+    r = c.post('/jss3-exams/state/add', data=dict(base, student_id=b, **{'score[]': ['55', '60'], 'grade[]': ['', '']}))
+    assert f'/student/{b}' in r.headers['Location']
 
 
 def test_exam_report_shows_bece_for_a_jss3_pupil(app):
@@ -418,7 +453,7 @@ def test_exam_report_offers_buttons_for_missing_results(app):
     assert f'/jss3-exams/federal/add?student_id={sid}' not in html
     # The button lands on the Add page with the student chosen.
     page = c.get(f'/jss3-exams/state/add?student_id={sid}&year={year}').get_data(as_text=True)
-    assert f'<option value="{sid}" selected>' in page
+    assert f'var PRESELECT = {sid}' in page
 
 
 def test_waec_and_jamb_add_dropdowns_are_searchable(app):

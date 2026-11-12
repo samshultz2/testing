@@ -21,11 +21,12 @@
 .sx-tabs a{padding:.42rem .8rem;border-radius:var(--radius-full,999px);font-size:.82rem;text-decoration:none;color:var(--text-secondary);border:1px solid transparent}
 .sx-tabs a:hover{background:var(--gray-50)}
 .sx-tabs a.active{background:var(--sx-accent);color:#fff}
+.sx-tabs a{white-space:nowrap}
 .sx-bar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .sx-body{display:inline-flex;border:1px solid var(--border-color);border-radius:var(--radius-full,999px);overflow:hidden}
 .sx-body a{padding:.4rem .95rem;font-size:.82rem;text-decoration:none;color:var(--text-secondary);background:var(--bg-card)}
 .sx-body a.active{background:var(--sx-accent);color:#fff;font-weight:600}
-.sx-year{display:flex;gap:.4rem;align-items:center}
+.sx-year{display:flex;gap:.4rem;align-items:center;white-space:nowrap}
 .sx-year select{max-width:120px}
 .sx-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;margin-bottom:1rem}
 @media(min-width:768px){.sx-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -85,6 +86,17 @@
 .sx-rank.r1{background:#f5c542;color:#3b2a00}.sx-rank.r2{background:#cfd6df;color:#1f2937}.sx-rank.r3{background:#e0a46b;color:#3b1f00}
 .sx-count{margin-left:auto;font-size:.76rem;font-weight:700;color:var(--text-secondary);white-space:nowrap}
 @media (max-width:640px){.sx-f,.sx-f.wide,.sx-f.sm{min-width:calc(50% - .5rem);max-width:none}.sx-views{display:flex}.sx-views a{flex:1;justify-content:center;padding:.45rem .5rem}}
+@media (max-width:760px){
+  .sx-hero{padding:.8rem .95rem;flex-wrap:nowrap}
+  .sx-hero h1{font-size:1.1rem}.sx-hero p{font-size:.76rem}.sx-hero p .sx-long{display:none}
+  .sx-hero .sx-hero-icon{font-size:1.4rem;margin-right:.55rem}
+  .sx-hero .btn{flex:none;padding:.35rem .6rem}.sx-hero .btn .sx-hl{display:none}
+  .sx-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:0 -16px .8rem;padding:0 16px .55rem}
+  .sx-tabs::-webkit-scrollbar{display:none}
+  .sx-bar{flex-wrap:wrap;justify-content:flex-end}.sx-body{flex:1 1 100%;display:flex}.sx-body a{flex:1;text-align:center;white-space:nowrap;padding:.45rem .6rem}.sx-body a .sx-muted{display:none}
+  .sx-tabs a,.sx-tabs a:hover{text-decoration:none}
+  .sx-year .form-label{display:none}.sx-year select{max-width:none;width:auto;min-width:8.5rem}
+}
 </style>
 {% block page_css %}{% endblock %}
 {% endblock %}
@@ -97,10 +109,10 @@
     <i class="fas {{ L.icon }} sx-hero-icon" aria-hidden="true"></i>
     <div>
       <h1>{{ L.name }}</h1>
-      <p>{{ L.long_name }}{% if body is defined %} · <strong>{{ body_meta.full }}</strong>{% endif %}</p>
+      <p><span class="sx-long">{{ L.long_name }}{% if body is defined %} · {% endif %}</span>{% if body is defined %}<strong>{{ body_meta.full }}</strong>{% endif %}</p>
     </div>
   </div>
-  <a href="{{ url_for('exam_levels.index') }}" class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4)"><i class="fas fa-layer-group"></i> Switch level</a>
+  <a href="{{ url_for('exam_levels.index') }}" class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4)"><i class="fas fa-layer-group"></i><span class="sx-hl"> Switch level</span></a>
 </div>
 
 {% set _b = body if body is defined else 'state' %}
@@ -187,6 +199,10 @@
     new Chart(cv, cfg);
   });
 })();
+</script>
+<script nonce="{{ csp_nonce }}">
+(function () { var a = document.querySelector('.sx-tabs a.active'), n = a && a.parentNode;
+  if (a && n.scrollWidth > n.clientWidth) n.scrollLeft = a.offsetLeft - (n.clientWidth - a.offsetWidth) / 2; })();
 </script>
 {% block page_js %}{% endblock %}
 {% endblock %}

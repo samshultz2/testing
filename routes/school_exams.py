@@ -233,6 +233,10 @@ def make_blueprint(level):
                             request.form.getlist('grade[]')))
             cand = {k: request.form.get(k) for k in
                     ('exam_number', 'centre', 'total_score', 'placement', 'admitted', 'remarks')}
+            if not any((sc or '').strip() or (gr or '').strip() for _s, sc, gr in rows) \
+                    and not any((v or '').strip() for v in cand.values()):
+                flash('Enter at least one score or grade before saving.', 'warning')
+                return redirect(url_for(f'{bp_name}.add_result', body=body, student_id=sid, year=year))
             try:
                 n = svc.save_student_results(scheme, sid, year, rows, candidate=cand, replace=True)
                 db.session.commit()
@@ -242,7 +246,15 @@ def make_blueprint(level):
                 return redirect(url_for(f'{bp_name}.add_result', body=body, student_id=sid))
             st = db.session.get(Student, sid)
             log_action(f'{bp_name}.save', detail=f'{scheme.exam_name} {year}: {n} subject(s)', target=st)
-            flash(f'Saved {n} {scheme.exam_name} result(s) for {st.full_name}.', 'success')
+            flash(f'Saved {n} {scheme.exam_name} result{"s" if n != 1 else ""} for {st.full_name}.', 'success')
+            # "Save & next": straight on to the next candidate still without results.
+            if request.form.get('next') == '1':
+                done = svc.entered_ids(level, body, year, allowed)
+                rest = [s for s in students if s.id not in done]
+                if rest:
+                    return redirect(url_for(f'{bp_name}.add_result', body=body, student_id=rest[0].id, year=year))
+                flash(f'Every {L["class_label"]} candidate now has {scheme.exam_name} {year} results.', 'success')
+                return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
             return redirect(url_for(f'{bp_name}.student', body=body, student_id=sid, year=year))
 
         sid = request.args.get('student_id', type=int)
@@ -258,10 +270,19 @@ def make_blueprint(level):
         # student opened via an Edit link stays so their results can be changed.
         done = svc.entered_ids(level, body, year, allowed)
         pick = [s for s in students if s.id not in done or s.id == sid]
+        arms = svc.student_arm_map(level, [s.id for s in students])
+        row = lambda s: {'id': s.id, 'name': s.full_name, 'sid': s.student_id or '', 'arm': arms.get(s.id) or ''}
+        done_rows = [dict(row(s), edit_url=url_for(f'{bp_name}.add_result', body=body, student_id=s.id, year=year))
+                     for s in students if s.id in done and s.id != sid]
+        cand_d = {k: getattr(cand, k) for k in ('exam_number', 'centre', 'total_score', 'placement',
+                                                 'admitted', 'remarks')} if cand else {}
         return render_template('school_exams/add_result.html', **_ctx(
-            level, bp_name, body, students=pick, student_id=sid, year=year,
+            level, bp_name, body, students=pick, student_id=sid if sid in allowed else None, year=year,
             existing=existing, cand=cand, subjects=subjects,
-            hidden_entered=len(done - {sid}), roster_total=len(students)))
+            hidden_entered=len(done - {sid}), roster_total=len(students),
+            student_rows=[row(s) for s in pick], done=done_rows,
+            existing_rows={k: {'score': r.score, 'grade': r.grade} for k, r in existing.items()},
+            cand_d=cand_d, years=sorted(set(svc.years_for(level, body)) | {_date.today().year, _date.today().year - 1})))
 
     # ------------------------------------------------------------------ #
     # Grid entry (whole class at once)
