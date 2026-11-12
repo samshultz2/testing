@@ -116,34 +116,64 @@ def test_single_branch_school_is_labelled_whole_school(app, monkeypatch):
             wn.set_school_centre('')
 
 
-def test_neco_numbers_are_separate_from_waec(app, monkeypatch):
+def test_neco_numbers_are_checked_not_generated():
+    """NECO issues the whole number (year + centre + candidate + check letters)."""
     from utils import waec_numbers as wn
-    monkeypatch.setattr(wn, '_branch_map', lambda: {})
-    assert wn.clean_centre('12', 'neco')[1] and wn.clean_centre('ab12cd', 'neco') == ('AB12CD', None)
-    with app.app_context():
-        wn.set_school_centre('4250101')
-        wn.set_school_centre('7712345', 'neco')
-        try:
-            studs = [_stn(1, 'Okafor', 'Ada'), _stn(2, 'Bello', 'Tunde', neco='7712345001')]
-            p = wn.plan(studs, 'fill', 'neco')
-            rows = {r['student'].id: r for r in p['centres'][0]['rows']}
-            assert rows[2]['status'] == 'keep' and rows[1]['proposed'] == '7712345002'
-            # WAEC numbering of the same students is independent.
-            pw = wn.plan(studs, 'fill', 'waec')
-            assert {r['proposed'] for r in pw['centres'][0]['rows']} == {'4250101001', '4250101002'}
-        finally:
-            wn.set_school_centre('')
-            wn.set_school_centre('', 'neco')
+    for n in ('2611532868CC', '2610261080IF', '2610261094E', '2611532696FD', '2611532622IB', '2410284334GH'):
+        ok, problem, parts = wn.check_neco_number(n)
+        assert ok and problem is None, n
+    ok, problem, parts = wn.check_neco_number('26 11532 868 cc')
+    assert ok and parts == {'year': '26', 'centre': '11532', 'serial': '868', 'letters': 'CC'}
+    assert not wn.check_neco_number('2611532868')[0]            # letters missing
+    assert not wn.check_neco_number('2611532868ABC')[0]         # too many letters
+    ok, problem, _ = wn.check_neco_number('2610261080IF', centre='11532', year=2026)
+    assert ok and 'centre' in problem.lower()                   # usable, but flagged
+    ok, problem, _ = wn.check_neco_number('2410284334GH', centre='10284', year=2026)
+    assert ok and '2024' in problem
+    assert wn.clean_centre('11532', 'neco') == ('11532', None)
+    assert wn.clean_centre('7712345', 'neco')[1]                # 5 digits only
 
 
-def test_neco_tab_saves_its_own_centre(app):
+def test_neco_tab_saves_centre_and_refuses_bad_numbers(app, monkeypatch):
+    import routes.settings as rs
+    from models import db, Student
     c = app.test_client()
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
     page = c.get('/settings/waec-numbers?board=neco').get_data(as_text=True)
-    assert 'NECO candidate numbers' in page
+    assert 'NECO candidate numbers' in page and '2611532868CC' in page
     c.post('/settings/waec-numbers', data={'_csrf_token': auth_csrf(c), 'action': 'centres', 'board': 'neco',
-                                          'school_centre': '7712345'})
+                                          'school_centre': '11532'})
     from utils import waec_numbers as wn
     with app.app_context():
-        assert wn.school_centre('neco') == '7712345' and wn.school_centre('waec') is None
-        wn.set_school_centre('', 'neco')
+        assert wn.school_centre('neco') == '11532' and wn.school_centre('waec') is None
+        studs = Student.query.filter_by(is_active=True).limit(2).all()
+        if len(studs) < 2:
+            wn.set_school_centre('', 'neco')
+            return
+        ids = [s.id for s in studs]
+        old = [s.neco_reg_number for s in studs]
+    monkeypatch.setattr(rs, '_sitting_students', lambda year: Student.query.filter(Student.id.in_(ids)).all())
+    try:
+        tok = auth_csrf(c)
+        # A malformed number blocks the whole save.
+        c.post('/settings/waec-numbers', data={'_csrf_token': tok, 'action': 'save_neco', 'board': 'neco',
+                                              f'neco_{ids[0]}': '2611532868', f'neco_{ids[1]}': '2611532696FD'})
+        with app.app_context():
+            assert db.session.get(Student, ids[1]).neco_reg_number == old[1]
+        # The same number twice is refused too.
+        c.post('/settings/waec-numbers', data={'_csrf_token': tok, 'action': 'save_neco', 'board': 'neco',
+                                              f'neco_{ids[0]}': '2611532868CC', f'neco_{ids[1]}': '2611532868cc'})
+        with app.app_context():
+            assert db.session.get(Student, ids[0]).neco_reg_number == old[0]
+        # Valid numbers save, cleaned up.
+        c.post('/settings/waec-numbers', data={'_csrf_token': tok, 'action': 'save_neco', 'board': 'neco',
+                                              f'neco_{ids[0]}': '26 11532 868 cc', f'neco_{ids[1]}': '2611532696FD'})
+        with app.app_context():
+            assert db.session.get(Student, ids[0]).neco_reg_number == '2611532868CC'
+            assert db.session.get(Student, ids[1]).neco_reg_number == '2611532696FD'
+    finally:
+        with app.app_context():
+            for i, o in zip(ids, old):
+                db.session.get(Student, i).neco_reg_number = o
+            db.session.commit()
+            wn.set_school_centre('', 'neco')

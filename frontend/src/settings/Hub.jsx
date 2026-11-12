@@ -106,9 +106,9 @@ function BranchSheet({ b, url, save, onClose, refresh }) {
         <Field label="WAEC centre number" hint="7 digits from WAEC — candidates here are numbered 001, 002… after it. Leave blank if this branch isn’t its own centre.">
           <input value={f.waec_centre} inputMode="numeric" maxLength={7} placeholder="e.g. 4250101"
                  onChange={(e) => setF({ ...f, waec_centre: e.target.value.replace(/\D/g, '').slice(0, 7) })} /></Field>
-        <Field label="NECO centre number" hint="As on your NECO slip. Leave blank if this branch isn’t its own NECO centre.">
-          <input value={f.neco_centre} maxLength={12} placeholder="NECO centre"
-                 onChange={(e) => setF({ ...f, neco_centre: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) })} /></Field>
+        <Field label="NECO centre number" hint="5 digits — digits 3–7 of a NECO number from this branch (11532 in 2611532868CC). Leave blank if it isn’t its own NECO centre.">
+          <input value={f.neco_centre} inputMode="numeric" maxLength={5} placeholder="e.g. 11532"
+                 onChange={(e) => setF({ ...f, neco_centre: e.target.value.replace(/\D/g, '').slice(0, 5) })} /></Field>
         {b && <Toggle title="Active" sub="Inactive branches are hidden from pickers" on={f.is_active} onChange={(v) => setF({ ...f, is_active: v })} disabled={b.is_default} />}
         {b && !b.is_default && <Toggle title="Make this the default branch" sub="Unassigned records belong here" on={f.make_default} onChange={(v) => setF({ ...f, make_default: v })} />}
         <button type="submit" className="rs-btn primary wide"><i className="fas fa-check" aria-hidden="true" /> {b ? 'Save changes' : 'Add branch'}</button>

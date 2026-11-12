@@ -928,6 +928,41 @@ def waec_numbers():
             db.session.commit()
             log_action(f'{board}.centres', f'Updated {cfg["name"]} centre numbers')
             return _ok(f'{cfg["name"]} centre numbers saved.', back)
+        if action == 'save_neco':
+            # NECO issues its own numbers (with check letters), so they're
+            # recorded and checked here, never generated.
+            studs = {st.id: st for st in (_sitting_students(year) if year else [])}
+            seen, bad, n = {}, [], 0
+            for sid, st in studs.items():
+                raw = request.form.get(f'neco_{sid}')
+                if raw is None:
+                    continue
+                num = wn.clean_neco_number(raw)
+                if not num:
+                    if st.neco_reg_number:
+                        st.neco_reg_number = None
+                        n += 1
+                    continue
+                ok, _problem, _parts = wn.check_neco_number(num)
+                if not ok:
+                    bad.append(f'{st.surname} {st.first_name}')
+                    continue
+                if num in seen:
+                    bad.append(f'{st.surname} {st.first_name} (same number as {seen[num]})')
+                    continue
+                seen[num] = f'{st.surname} {st.first_name}'
+                if num != (st.neco_reg_number or ''):
+                    st.neco_reg_number = num
+                    n += 1
+            if bad:
+                db.session.rollback()
+                return _err('Nothing saved — fix these numbers first: ' + '; '.join(bad[:6])
+                            + ('…' if len(bad) > 6 else ''), back)
+            db.session.commit()
+            log_action('neco.numbers', f'{n} NECO registration numbers recorded')
+            return _ok(f'Saved {n} NECO number{"s" if n != 1 else ""}.', back)
+        if action == 'generate' and board == 'neco':
+            return _err('NECO issues its own numbers — record them on this page instead.', back)
         if action == 'generate':
             p = wn.plan(_sitting_students(year) if year else [], mode, board)
             n = wn.apply(p, board)
@@ -937,9 +972,25 @@ def waec_numbers():
 
     branches = Branch.query.filter_by(is_active=True).order_by(Branch.is_default.desc(), Branch.name).all()
     students = _sitting_students(year) if year else []
-    p = wn.plan(students, mode, board)
+    p = wn.plan(students, mode, board) if board == 'waec' else {'centres': [], 'missing': [], 'counts': {'keep': 0, 'new': 0, 'change': 0}}
+    neco_rows = None
+    if board == 'neco':
+        by_id = {b.id: b for b in Branch.query.all()}
+        default = Branch.get_default() if by_id else None
+        neco_rows, seen = [], {}
+        for st in sorted(students, key=lambda x: ((x.surname or '').lower(), (x.first_name or '').lower())):
+            br = by_id.get(st.branch_id) or default
+            centre = wn.centre_for(br, 'neco') if br else wn.school_centre('neco')
+            cur = st.neco_reg_number or ''
+            ok, problem, _ = wn.check_neco_number(cur, centre, year) if cur else (True, None, None)
+            if cur:
+                seen.setdefault(cur, []).append(st.id)
+            neco_rows.append({'student': st, 'current': cur, 'centre': centre, 'ok': ok, 'problem': problem})
+        for r in neco_rows:
+            if r['current'] and len(seen.get(r['current'], [])) > 1:
+                r['ok'], r['problem'] = False, 'Same number as another candidate.'
     return render_template('settings/waec_numbers.html', plan=p, mode=mode, branches=branches,
-                           board=board, bcfg=cfg, branch_attr=cfg['branch_attr'],
+                           board=board, bcfg=cfg, branch_attr=cfg['branch_attr'], neco_rows=neco_rows,
                            school_centre=wn.school_centre(board) or '', year=year, total=len(students),
                            back_url=url_for('settings.index'))
 

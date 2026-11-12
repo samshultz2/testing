@@ -38,7 +38,21 @@
 .wn-boards a.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .wn-go{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;padding:1rem 1.1rem;margin:0 0 1rem}
 .wn-go .t{flex:1;min-width:0}.wn-go b{display:block}.wn-go small{color:var(--text-muted);font-size:.84rem}
+.wn-paste{padding:1rem;display:flex;flex-direction:column;gap:.6rem}
+.wn-paste textarea{width:100%;border:1.5px solid var(--border-color);border-radius:12px;padding:.7rem;font-family:ui-monospace,monospace;font-size:.84rem;background:var(--bg-card);color:var(--text-primary)}
+.wn-paste-a{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.wn-neco{grid-template-columns:44px minmax(0,1fr) 190px 70px}
+.wn-neco input{height:38px;border:1.5px solid var(--border-color);border-radius:10px;padding:0 .6rem;font-family:ui-monospace,monospace;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:var(--bg-card);color:var(--text-primary);width:100%}
+.wn-neco input:focus{outline:none;border-color:var(--primary)}
+.wn-neco input::placeholder{text-transform:none;letter-spacing:0;font-weight:500}
+.wn-neco.err input{border-color:var(--danger)}.wn-neco.warn input{border-color:var(--warning)}
+.wn-neco .wn-msg{grid-column:2/-1;font-size:.74rem;color:var(--warning);margin-top:-.2rem}
+.wn-neco.err .wn-msg{color:var(--danger)}
+.wn-neco .wn-msg:empty{display:none}
+.wn-neco.hit{background:color-mix(in srgb,var(--success) 8%,transparent)}
 @media (max-width:760px){
+  .wn-neco{grid-template-columns:28px minmax(0,1fr) auto}
+  .wn-neco input{grid-column:2/-1;grid-row:2}.wn-neco .st{grid-column:3;grid-row:1}.wn-neco .wn-msg{grid-row:3}
   .wn-how{grid-template-columns:1fr}.wn-num{font-size:1.15rem}
   .wn-hd{display:none}
   .wn-row{grid-template-columns:32px minmax(0,1fr) auto;row-gap:.2rem}
@@ -63,29 +77,70 @@
     <a href="{{ url_for('settings.waec_numbers', board='neco') }}" class="{{ 'on' if board == 'neco' }}">NECO</a>
   </nav>
 
-  <section class="rs-card wn-card">
+  {% if board == 'neco' %}<section class="rs-card wn-card">
+    <div class="wn-how">
+      <div class="wn-num" aria-label="Example: 2611532868CC"><span class="c" style="background:color-mix(in srgb,var(--text-muted) 14%,transparent);color:var(--text-secondary)">{{ '%02d'|format((year or 2026) % 100) }}<small>Year</small></span><span class="c" style="margin-left:4px">{{ school_centre or (branches|selectattr(branch_attr)|map(attribute=branch_attr)|first) or '11532' }}<small>Centre</small></span><span class="s">868<small>Candidate</small></span><span class="s" style="background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)">CC<small>Letters</small></span></div>
+      <p>A NECO registration number is the <b>2-digit exam year</b>, the <b>5-digit centre number</b>, a <b>3-digit candidate number</b> and <b>1–2 letters</b> — e.g. <code>2611532868CC</code>. NECO issues the whole number (the letters differ for every candidate), so it can’t be worked out in advance: record what NECO gave each candidate and the page checks it.</p>
+    </div>
+  </section>{% else %}<section class="rs-card wn-card">
     <div class="wn-how">
       <div class="wn-num" aria-label="Example: 4250101001"><span class="c">{{ (school_centre or (branches|selectattr(branch_attr)|map(attribute=branch_attr)|first) or bcfg.example) }}<small>Centre number</small></span><span class="s">001<small>Candidate</small></span></div>
       {% if board == 'waec' %}<p>A WAEC (WASSCE) examination number is <b>10 digits</b>: the school’s <b>7-digit centre number</b> from WAEC, then a <b>3-digit candidate number</b> — 001, 002, 003… given in alphabetical order of surname (then first name). Each branch that is its own WAEC centre has its own centre number and its own 001.</p>
       {% else %}<p>A NECO examination number here is the school’s <b>NECO centre number</b>, then a <b>3-digit candidate number</b> — 001, 002, 003… in alphabetical order of surname (then first name). Each branch that is its own NECO centre has its own centre number and its own 001. Check one against a real NECO slip before registering.</p>{% endif %}
     </div>
-  </section>
+  </section>{% endif %}
 
   <form method="post" class="rs-card wn-card">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="centres">
-    <div class="wn-h"><h3><i class="fas fa-building" aria-hidden="true"></i> {{ bcfg.name }} centre numbers</h3><small>{{ '7 digits, as given by WAEC' if board == 'waec' else 'As given by NECO' }}</small></div>
+    <div class="wn-h"><h3><i class="fas fa-building" aria-hidden="true"></i> {{ bcfg.name }} centre numbers</h3><small>{{ '7 digits, as given by WAEC' if board == 'waec' else '5 digits — digits 3–7 of any NECO number from your school' }}</small></div>
     <input type="hidden" name="board" value="{{ board }}">
     <div class="wn-centres">
       <label class="cm-f"><span>{{ 'Whole school (branches without their own)' if branches|length > 1 else 'School centre number' }}</span>
-        <input name="school_centre" value="{{ school_centre }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}maxlength="12"{% endif %} placeholder="e.g. {{ bcfg.example }}"></label>
+        <input name="school_centre" value="{{ school_centre }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}inputmode="numeric" maxlength="5" pattern="\d{5}"{% endif %} placeholder="e.g. {{ bcfg.example }}"></label>
       {% for b in branches if branches|length > 1 %}
       <label class="cm-f"><span>{{ b.name }}{% if b.is_default %} · default{% endif %}</span>
-        <input name="centre_{{ b.id }}" value="{{ b[branch_attr] or '' }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}maxlength="12"{% endif %} placeholder="{{ 'Uses the whole-school number' if school_centre else 'e.g. ' ~ bcfg.example }}"></label>
+        <input name="centre_{{ b.id }}" value="{{ b[branch_attr] or '' }}" {% if board == 'waec' %}inputmode="numeric" maxlength="7" pattern="\d{7}"{% else %}inputmode="numeric" maxlength="5" pattern="\d{5}"{% endif %} placeholder="{{ 'Uses the whole-school number' if school_centre else 'e.g. ' ~ bcfg.example }}"></label>
       {% endfor %}
     </div>
     <div class="wn-save"><button type="submit" class="rs-btn primary sm"><i class="fas fa-check" aria-hidden="true"></i> Save centre numbers</button></div>
   </form>
 
+{% if board == 'neco' %}
+  {% set rec = neco_rows|selectattr('current')|list %}
+  {% set probs = neco_rows|selectattr('problem')|list %}
+  <div class="rs-tiles">
+    <div class="rs-tile"><span class="l">Candidates · NECO {{ year or '' }}</span><span class="v">{{ total }}</span><span class="s">SSS3 students this session</span></div>
+    <div class="rs-tile{% if rec|length == total and total %} good{% endif %}"><span class="l">Number recorded</span><span class="v">{{ rec|length }}</span></div>
+    <div class="rs-tile{% if total - rec|length %} warn{% endif %}"><span class="l">Still to record</span><span class="v">{{ total - rec|length }}</span></div>
+    <div class="rs-tile{% if probs %} bad{% endif %}"><span class="l">Need checking</span><span class="v">{{ probs|length }}</span></div>
+  </div>
+  {% if total %}
+  <section class="rs-card wn-card">
+    <div class="wn-h"><h3><i class="fas fa-paste" aria-hidden="true"></i> Paste NECO’s list</h3><small>One candidate per line: name and number, in any order</small></div>
+    <div class="wn-paste">
+      <textarea id="necoPaste" rows="4" placeholder="OKAFOR ADA CHIOMA 2611532868CC&#10;2611532696FD  Bello Tunde"></textarea>
+      <div class="wn-paste-a"><button type="button" class="rs-btn sm primary" id="necoMatch"><i class="fas fa-link" aria-hidden="true"></i> Match to candidates</button><span id="necoMatchMsg" class="cm-mute"></span></div>
+    </div>
+  </section>
+  <form method="post" class="rs-card wn-card" id="necoForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save_neco"><input type="hidden" name="board" value="neco">
+    <div class="wn-h"><h3><i class="fas fa-id-card" aria-hidden="true"></i> NECO numbers</h3><small>Checked as you type</small></div>
+    <div class="wn-row wn-hd wn-neco"><span></span><span>Candidate</span><span>NECO number</span><span></span></div>
+    {% for r in neco_rows %}{% set st = r.student %}
+    <div class="wn-row wn-neco" data-name="{{ (st.surname ~ ' ' ~ st.first_name ~ ' ' ~ (st.middle_name or ''))|lower }}" data-centre="{{ r.centre or '' }}">
+      <span class="i">{{ loop.index }}</span>
+      <span class="n"><b>{{ st.surname|upper }}</b> {{ st.first_name }} {{ st.middle_name or '' }}<small>{{ st.student_id or '' }}{% if st.stream %} · {{ st.stream }}{% endif %}</small></span>
+      <input name="neco_{{ st.id }}" value="{{ r.current }}" maxlength="16" spellcheck="false" autocomplete="off" aria-label="NECO number for {{ st.surname }} {{ st.first_name }}" placeholder="e.g. {{ '%02d'|format((year or 2026) % 100) }}{{ r.centre or '11532' }}…">
+      <span class="st">{% if r.current and not r.ok %}<span class="cm-pill bad">Fix</span>{% elif r.problem %}<span class="cm-pill mid" title="{{ r.problem }}">Check</span>{% elif r.current %}<span class="cm-pill good">OK</span>{% endif %}</span>
+      <small class="wn-msg">{{ r.problem or '' }}</small>
+    </div>
+    {% endfor %}
+    <div class="wn-save" style="padding-top:1rem"><button type="submit" class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Save NECO numbers</button></div>
+  </form>
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-user-graduate" aria-hidden="true"></i></span><h3>No SSS3 candidates this session</h3><p>Candidates are the students enrolled in SSS3 this term.</p></div>
+  {% endif %}
+{% else %}
   <div class="rs-tiles">
     <div class="rs-tile"><span class="l">Candidates · {{ bcfg.name }} {{ year or '' }}</span><span class="v">{{ total }}</span><span class="s">SSS3 students this session</span></div>
     <div class="rs-tile"><span class="l">Already numbered</span><span class="v">{{ c.keep }}</span></div>
@@ -134,5 +189,57 @@
   {% else %}
   <div class="rs-blank"><span><i class="fas fa-user-graduate" aria-hidden="true"></i></span><h3>No SSS3 candidates this session</h3><p>Candidates are the students enrolled in SSS3 this term.</p></div>
   {% endif %}
+{% endif %}
 </div>
+
+{% if board == 'neco' %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var YEAR = {{ ('%02d'|format(year % 100) if year else none)|tojson }};   // e.g. "26" (a string, like the regex match)
+  var RE = /^(\d{2})(\d{5})(\d{3})([A-Z]{1,2})$/;
+  function clean(v) { return (v || '').replace(/[\s\-\/]+/g, '').toUpperCase(); }
+  function check(row) {
+    var inp = row.querySelector('input'), msg = row.querySelector('.wn-msg'), pill = row.querySelector('.st');
+    var v = clean(inp.value), centre = row.getAttribute('data-centre');
+    row.classList.remove('err', 'warn');
+    var text = '', cls = '', tag = '';
+    if (v) {
+      var m = v.match(RE);
+      if (!m) { cls = 'err'; tag = '<span class="cm-pill bad">Fix</span>'; text = 'Should be year (2) + centre (5) + candidate (3) + 1–2 letters, e.g. 2611532868CC.'; }
+      else if (centre && m[2] !== centre) { cls = 'warn'; tag = '<span class="cm-pill mid">Check</span>'; text = 'Centre ' + m[2] + ' isn’t this school’s NECO centre (' + centre + ').'; }
+      else if (YEAR && m[1] !== YEAR) { cls = 'warn'; tag = '<span class="cm-pill mid">Check</span>'; text = 'Year 20' + m[1] + ' — this sitting is 20' + YEAR + '.'; }
+      else { tag = '<span class="cm-pill good">OK</span>'; }
+    }
+    var dup = v && Array.prototype.some.call(document.querySelectorAll('.wn-neco input'), function (o) { return o !== inp && clean(o.value) === v; });
+    if (dup) { cls = 'err'; tag = '<span class="cm-pill bad">Fix</span>'; text = 'Same number as another candidate.'; }
+    if (cls) row.classList.add(cls);
+    msg.textContent = text; pill.innerHTML = tag;
+  }
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.wn-row.wn-neco[data-name]'));
+  rows.forEach(function (r) { r.querySelector('input').addEventListener('input', function () { rows.forEach(check); }); });
+  // Paste NECO's list: find the number on each line, match the rest to a candidate's names.
+  var btn = document.getElementById('necoMatch');
+  if (btn) btn.addEventListener('click', function () {
+    var lines = document.getElementById('necoPaste').value.split(/\n+/), hit = 0, miss = [];
+    lines.forEach(function (line) {
+      var t = line.trim(); if (!t) return;
+      var m = t.toUpperCase().replace(/[\-\/]/g, '').match(/\d{10}\s*[A-Z]{1,2}(?![A-Z])/);
+      if (!m) { miss.push(t); return; }
+      var num = clean(m[0]);
+      var words = t.replace(m[0], ' ').toLowerCase().replace(/[^a-z\s'-]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 1; });
+      var best = null, bestScore = 0, tie = false;
+      rows.forEach(function (r) {
+        var names = r.getAttribute('data-name').split(/\s+/).filter(Boolean);
+        var score = words.filter(function (w) { return names.indexOf(w) > -1; }).length;
+        if (score > bestScore) { best = r; bestScore = score; tie = false; } else if (score && score === bestScore) tie = true;
+      });
+      if (best && bestScore >= 2 && !tie) { best.querySelector('input').value = num; best.classList.add('hit'); hit++; }
+      else miss.push(t);
+    });
+    rows.forEach(check);
+    document.getElementById('necoMatchMsg').textContent = hit + ' matched' + (miss.length ? ' · ' + miss.length + ' not matched: ' + miss.slice(0, 3).join(' | ') + (miss.length > 3 ? '…' : '') : '') + '. Review, then Save.';
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
