@@ -2,148 +2,219 @@
 {% block title %}{{ title }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>{{ title }}</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.pv{max-width:1500px}
+.pv-grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:1rem;align-items:start}
+/* Options panel */
+.pv-side{position:sticky;top:76px;max-height:calc(100vh - 96px);display:flex;flex-direction:column;padding:0;overflow:hidden}
+.pv-side-h{display:none}
+.pv-scroll{overflow-y:auto;flex:1;padding:.2rem 0}
+.pv-sec{padding:.85rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.pv-sec:last-child{border-bottom:0}
+.pv-sec h4{margin:0 0 .6rem;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);display:flex;align-items:center;gap:.5rem}
+.pv-sec h4 .n{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:700;color:var(--text-secondary)}
+.pv-sec h4 button{border:0;background:none;color:var(--primary);font:inherit;font-size:.74rem;font-weight:700;text-transform:none;letter-spacing:0;cursor:pointer;padding:0}
+.pv-f{display:flex;flex-direction:column;gap:.3rem;margin:0 0 .65rem;font-size:.8rem;font-weight:700;color:var(--text-secondary)}
+.pv-f:last-child{margin-bottom:0}
+.pv-f select{height:40px;border:1.5px solid var(--border-color);border-radius:10px;padding:0 .6rem;font:inherit;font-weight:600;font-size:.86rem;background:var(--bg-card);color:var(--text-primary);width:100%}
+.pv-seg{display:flex;gap:3px;background:var(--gray-100,#eef2f7);border-radius:10px;padding:3px}
+.pv-seg button{flex:1;height:34px;border:0;border-radius:8px;background:none;font:inherit;font-size:.82rem;font-weight:700;color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
+.pv-seg button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.pv-chips{display:flex;flex-wrap:wrap;gap:.35rem}
+.pv-chip{display:inline-flex;align-items:center;gap:.35rem;min-height:32px;padding:.25rem .7rem;border-radius:999px;border:1.5px solid var(--border-color);font-size:.8rem;font-weight:600;color:var(--text-secondary);cursor:pointer;margin:0;user-select:none;line-height:1.2}
+.pv-chip input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.pv-chip i{display:none;font-size:.68rem}
+.pv-chip:has(input:checked){background:color-mix(in srgb,var(--primary) 11%,var(--bg-card));border-color:color-mix(in srgb,var(--primary) 50%,transparent);color:var(--primary)}
+.pv-chip:has(input:checked) i{display:inline}
+.pv-chip:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.pv-sw{display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:.42rem 0;font-size:.85rem;color:var(--text-primary);cursor:pointer;margin:0}
+.pv-sw input{position:absolute;opacity:0;width:1px;height:1px}
+.pv-sw .t{flex:none;width:36px;height:21px;border-radius:999px;background:var(--gray-300,#cbd5e1);position:relative;transition:background .15s}
+.pv-sw .t::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.pv-sw:has(input:checked) .t{background:var(--primary)}
+.pv-sw:has(input:checked) .t::after{transform:translateX(15px)}
+.pv-sw:has(input:focus-visible) .t{outline:2px solid var(--primary);outline-offset:2px}
+.pv-hint{font-size:.74rem;color:var(--text-muted);margin:.5rem 0 0}
+/* Preview */
+.pv-main{display:flex;flex-direction:column;overflow:hidden;padding:0}
+.pv-tool{display:flex;align-items:center;gap:.4rem;padding:.55rem .7rem;border-bottom:1px solid var(--border-color);background:var(--bg-card)}
+.pv-tool .pg{min-width:5.5rem;text-align:center;font-size:.84rem;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.pv-tool .sep{width:1px;height:22px;background:var(--border-color);margin:0 .2rem}
+.pv-tool .busy{margin-left:auto;font-size:.8rem;color:var(--text-muted);display:none;align-items:center;gap:.4rem}
+.pv-main.loading .pv-tool .busy{display:inline-flex}
+.pv-wrap{min-height:72vh;max-height:calc(100vh - 190px);background:var(--gray-200,#e5e9ef);overflow:auto;text-align:center;padding:1rem .75rem;position:relative}
+.pv-wrap canvas{box-shadow:0 2px 10px rgba(0,0,0,.18);background:#fff;border-radius:2px;transition:opacity .15s}
+.pv-main.loading canvas{opacity:.45}
+.pv-load{padding:3rem 1rem;color:var(--text-muted);font-size:.9rem}
+.pv-fail{padding:2rem 1rem;text-align:center;color:var(--text-muted);font-size:.9rem}
+.pv-bar{display:none}
+.pv-sheet-bg{display:none}
+@media (max-width:1000px){
+  .pv-grid{grid-template-columns:minmax(0,1fr)}
+  .pv-side{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:1300;max-height:84vh;border-radius:18px 18px 0 0;border-bottom:0;transform:translateY(105%);transition:transform .22s ease;box-shadow:0 -10px 30px rgba(0,0,0,.2)}
+  .pv-side.open{transform:none}
+  .pv-side-h{display:flex;align-items:center;justify-content:space-between;padding:.4rem 1rem .6rem;border-bottom:1px solid var(--border-color);flex-direction:column;gap:.45rem}
+  .pv-side-h .grab{width:40px;height:4px;border-radius:3px;background:var(--gray-300,#cbd5e1)}
+  .pv-side-h div{display:flex;width:100%;align-items:center;justify-content:space-between}
+  .pv-side-h b{font-size:1rem}
+  .pv-sheet-bg.open{display:block;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1290}
+  .pv{padding-bottom:84px}
+  .pv-bar{display:flex;gap:.6rem;position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom));background:var(--bg-card);border-top:1px solid var(--border-color);box-shadow:0 -6px 18px rgba(0,0,0,.08)}
+  .pv-bar .rs-btn{flex:1;height:46px}
+  .pv-head-a{display:none}
+  .pv-wrap{min-height:0;max-height:none;padding:.6rem .4rem}
+  .pv-sw{padding:.55rem 0}
+  .pv-chip{min-height:36px}
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <div><h1>{{ title }}</h1>
-        <p class="text-muted text-sm">{{ exam.display_name }}{% if exam.session %} · {{ exam.session.name }}{% endif %} — a server-generated PDF you can preview, download or print. School details come from Settings → School.</p></div>
-    <div class="page-header-actions">
-        <a id="openTab" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-up-right-from-square"></i> Open in new tab</a>
-        <a id="dl" href="#" class="btn btn-success btn-sm"><i class="fas fa-download"></i> Download</a>
-        <a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+{% set n_opts = (options or [1])|length %}
+<div class="rs pv">
+  <header class="rs-head">
+    <a href="{{ back_url }}" class="rs-icon-btn" aria-label="Back" title="Back" style="display:grid;place-items:center;text-decoration:none"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
+    <div class="rs-head-t"><h1>{{ title }}</h1>
+      <p>{{ exam.display_name }}{% if exam.session %} · {{ exam.session.name }}{% endif %} — changes show in the preview straight away. School details come from Settings → School.</p></div>
+    <div class="rs-head-a pv-head-a">
+      <a id="openTab" href="#" target="_blank" rel="noopener" class="rs-btn"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open in new tab</a>
+      <a id="dl" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download PDF</a>
     </div>
-</div>
+  </header>
 
-{% if show_names %}
-<div class="card mb-2"><div class="card-body">
-    <div style="font-weight:600;margin-bottom:.5rem;">Names to show</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center;">
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" class="pdf-name" value="surname" checked> Surname</label>
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" class="pdf-name" value="first" checked> First name</label>
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" class="pdf-name" value="middle"> Middle name</label>
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" id="pdfMidInit"> Middle name as initial (e.g. Okafor C. John)</label>
-    </div>
-</div></div>
-{% endif %}
-<div class="card mb-2"><div class="card-body">
-    <div style="font-weight:600;margin-bottom:.5rem;">Include in the PDF</div>
-    <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center;">
-        {% for param, label in (options or [('title', '“COMPETENCE RESULT” heading')]) %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">
-            <input type="checkbox" class="pdf-opt" data-param="{{ param }}" checked> {{ label }}
-        </label>
-        {% endfor %}
+  <div class="pv-grid">
+    <aside class="rs-card pv-side" id="pvSide" aria-label="PDF options">
+      <div class="pv-side-h"><span class="grab"></span><div><b>Options</b><button type="button" class="rs-btn primary sm" data-close>Done</button></div></div>
+      <div class="pv-scroll">
+        {% if show_orient or show_size or show_cols or show_layout_mode %}
+        <section class="pv-sec">
+          <h4><i class="fas fa-file" aria-hidden="true"></i> Paper</h4>
+          {% if show_orient %}
+          <div class="pv-f">Orientation
+            <select id="orientSel" hidden><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select>
+            <div class="pv-seg" data-for="orientSel" role="radiogroup" aria-label="Orientation">
+              <button type="button" data-v="landscape" class="on"><i class="fas fa-panorama" aria-hidden="true"></i> Landscape</button>
+              <button type="button" data-v="portrait"><i class="fas fa-file-lines" aria-hidden="true"></i> Portrait</button>
+            </div></div>
+          {% endif %}
+          {% if show_size %}
+          <label class="pv-f">Paper size
+            <select id="sizeSel">
+              <option value="A4">A4</option>
+              <option value="A3">A3 — fits more columns per sheet</option>
+              <option value="A2">A2 — fits more columns per sheet</option>
+              <option value="A1">A1 — large format</option>
+              <option value="A0">A0 — largest format</option>
+            </select></label>
+          {% endif %}
+          {% if show_cols %}
+          <div class="pv-f">Layout
+            <select id="colsSel" hidden><option value="">Split across sheets</option><option value="0">One wide page</option></select>
+            <div class="pv-seg" data-for="colsSel" role="radiogroup" aria-label="Layout">
+              <button type="button" data-v="" class="on">Split across sheets</button>
+              <button type="button" data-v="0">One wide page</button>
+            </div></div>
+          {% endif %}
+          {% if show_layout_mode %}
+          <label class="pv-f">Score &amp; grade
+            <select id="layoutModeSel">
+              <option value="combined">One column per subject</option>
+              <option value="separate">Separate Score &amp; Grade columns</option>
+            </select></label>
+          {% endif %}
+        </section>
+        {% endif %}
+
+        {% if subject_choices %}
+        <section class="pv-sec">
+          <h4><i class="fas fa-book" aria-hidden="true"></i> Subjects <span class="n" id="subjN"></span></h4>
+          <div style="display:flex;gap:.8rem;margin:-.2rem 0 .55rem"><h4 style="margin:0"><button type="button" id="subjAll">Select all</button></h4><h4 style="margin:0"><button type="button" id="subjNone">Clear all</button></h4></div>
+          <div class="pv-chips">
+            {% for c in subject_choices %}
+            <label class="pv-chip"><input type="checkbox" class="pdf-subj" value="{{ c.name }}" {% if c.checked %}checked{% endif %}><i class="fas fa-check" aria-hidden="true"></i>{{ c.name }}</label>
+            {% endfor %}
+          </div>
+          <p class="pv-hint">Only ticked subjects become columns. Ticked to start with: the subjects your SSS3 students registered for WAEC.</p>
+        </section>
+        {% endif %}
+
+        {% if show_names %}
+        <section class="pv-sec">
+          <h4><i class="fas fa-signature" aria-hidden="true"></i> Names to show</h4>
+          <div class="pv-chips">
+            <label class="pv-chip"><input type="checkbox" class="pdf-name" value="surname" checked><i class="fas fa-check" aria-hidden="true"></i>Surname</label>
+            <label class="pv-chip"><input type="checkbox" class="pdf-name" value="first" checked><i class="fas fa-check" aria-hidden="true"></i>First name</label>
+            <label class="pv-chip"><input type="checkbox" class="pdf-name" value="middle"><i class="fas fa-check" aria-hidden="true"></i>Middle name</label>
+          </div>
+          <label class="pv-sw" style="margin-top:.4rem"><span>Middle name as initial <small class="rs-muted" style="font-size:.74rem">(Okafor C. John)</small></span><input type="checkbox" id="pdfMidInit"><span class="t"></span></label>
+        </section>
+        {% endif %}
+
         {% if show_signers %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Signature:
-            <select id="signersSel" class="form-control" style="width:auto;">
-                <option value="both">Class teacher &amp; Principal</option>
-                <option value="principal">Principal only</option>
-                <option value="teacher">Class teacher only</option>
-                <option value="none">None</option>
-            </select>
-        </label>
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">
-            <input type="checkbox" id="bwOpt"> Black &amp; white (print-friendly)
-        </label>
+        <section class="pv-sec">
+          <h4><i class="fas fa-pen-nib" aria-hidden="true"></i> Signature &amp; colour</h4>
+          <label class="pv-f">Signature
+            <select id="signersSel">
+              <option value="both">Class teacher &amp; Principal</option>
+              <option value="principal">Principal only</option>
+              <option value="teacher">Class teacher only</option>
+              <option value="none">None</option>
+            </select></label>
+          <label class="pv-sw"><span>Black &amp; white (print-friendly)</span><input type="checkbox" id="bwOpt"><span class="t"></span></label>
+        </section>
         {% endif %}
-        {% if show_orient %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Orientation:
-            <select id="orientSel" class="form-control" style="width:auto;">
-                <option value="landscape">Landscape</option>
-                <option value="portrait">Portrait</option>
-            </select>
-        </label>
-        {% endif %}
-        {% if show_size %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Paper size:
-            <select id="sizeSel" class="form-control" style="width:auto;">
-                <option value="A4">A4</option>
-                <option value="A3">A3 — fits more columns per sheet</option>
-                <option value="A2">A2 — fits more columns per sheet</option>
-                <option value="A1">A1 — large format</option>
-                <option value="A0">A0 — largest format</option>
-            </select>
-        </label>
-        {% endif %}
-        {% if show_cols %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Layout:
-            <select id="colsSel" class="form-control" style="width:auto;">
-                <option value="">Split across sheets</option>
-                <option value="0">One wide page</option>
-            </select>
-        </label>
-        {% endif %}
-        {% if show_layout_mode %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Score/Grade:
-            <select id="layoutModeSel" class="form-control" style="width:auto;">
-                <option value="combined">One column per subject</option>
-                <option value="separate">Separate Score &amp; Grade columns</option>
-            </select>
-        </label>
-        {% endif %}
-    </div>
-</div></div>
 
-{% if subject_choices %}
-<div class="card mb-2"><div class="card-body">
-    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
-        <span style="font-weight:600;">Subjects to include</span>
-        <button type="button" id="subjAll" class="btn btn-secondary btn-sm">Select all</button>
-        <button type="button" id="subjNone" class="btn btn-secondary btn-sm">Clear all</button>
-        <span class="text-muted text-sm">Only checked subjects appear as columns. Defaults come from the cohort’s saved WAEC subjects.</span>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;">
-        {% for c in subject_choices %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">
-            <input type="checkbox" class="pdf-subj" value="{{ c.name }}" {% if c.checked %}checked{% endif %}> {{ c.name }}
-        </label>
-        {% endfor %}
-    </div>
-</div></div>
-{% endif %}
+        <section class="pv-sec">
+          <h4><i class="fas fa-list-check" aria-hidden="true"></i> Include in the PDF <span class="n" id="optN"></span></h4>
+          {% for param, label in (options or [('title', '“COMPETENCE RESULT” heading')]) %}
+          <label class="pv-sw"><span>{{ label }}</span><input type="checkbox" class="pdf-opt" data-param="{{ param }}" checked><span class="t"></span></label>
+          {% endfor %}
+        </section>
+      </div>
+    </aside>
 
-<div id="pdfHost" style="position:relative;">
-    <div id="pdfToolbar" style="display:none;align-items:center;gap:.6rem;padding:.5rem .25rem;flex-wrap:wrap;">
-        <button type="button" id="pdfPrev" class="btn btn-secondary btn-sm" title="Previous page"><i class="fas fa-chevron-left"></i></button>
-        <span id="pdfPageIndicator" class="text-sm text-muted" style="min-width:5.5rem;text-align:center;">Page 1</span>
-        <button type="button" id="pdfNext" class="btn btn-secondary btn-sm" title="Next page"><i class="fas fa-chevron-right"></i></button>
-        <span style="width:1px;height:1.4rem;background:var(--border-color);margin:0 .3rem;"></span>
-        <button type="button" id="pdfZoomOut" class="btn btn-secondary btn-sm" title="Zoom out"><i class="fas fa-magnifying-glass-minus"></i></button>
-        <button type="button" id="pdfZoomIn" class="btn btn-secondary btn-sm" title="Zoom in"><i class="fas fa-magnifying-glass-plus"></i></button>
-    </div>
-    <div id="pdfCanvasWrap" style="width:100%;min-height:76vh;border:1px solid var(--border-color);border-radius:var(--radius-md);background:#e9edf1;overflow:auto;text-align:center;padding:1rem 0;">
-        <canvas id="pdfCanvas" style="box-shadow:0 1px 4px rgba(0,0,0,.25);background:#fff;"></canvas>
-        <div id="pdfLoading" class="text-muted text-sm" style="padding:2rem;">Loading preview…</div>
-    </div>
-    <div id="pdfFallback" class="text-muted text-sm" style="display:none;padding:1rem;text-align:center;">
-        Preview couldn’t load inline. <a id="openTab2" href="#" target="_blank" rel="noopener"><strong>Open the PDF in a new tab</strong></a>,
-        or <strong>refresh this page</strong> if your session may have timed out.
-        <div id="pdfFallbackDetail" style="margin-top:.5rem;font-family:monospace;font-size:.75rem;opacity:.7;word-break:break-word;"></div>
-    </div>
+    <section class="rs-card pv-main" id="pvMain">
+      <div class="pv-tool" id="pdfToolbar">
+        <button type="button" id="pdfPrev" class="rs-icon-btn" title="Previous page" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+        <span id="pdfPageIndicator" class="pg">Page 1</span>
+        <button type="button" id="pdfNext" class="rs-icon-btn" title="Next page" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+        <span class="sep"></span>
+        <button type="button" id="pdfZoomOut" class="rs-icon-btn" title="Zoom out" aria-label="Zoom out"><i class="fas fa-magnifying-glass-minus" aria-hidden="true"></i></button>
+        <button type="button" id="pdfFit" class="rs-icon-btn" title="Fit to width" aria-label="Fit to width"><i class="fas fa-arrows-left-right-to-line" aria-hidden="true"></i></button>
+        <button type="button" id="pdfZoomIn" class="rs-icon-btn" title="Zoom in" aria-label="Zoom in"><i class="fas fa-magnifying-glass-plus" aria-hidden="true"></i></button>
+        <span class="busy"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Updating…</span>
+      </div>
+      <div id="pdfCanvasWrap" class="pv-wrap">
+        <canvas id="pdfCanvas" style="display:none"></canvas>
+        <div id="pdfLoading" class="pv-load"><i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Loading preview…</div>
+      </div>
+      <div id="pdfFallback" class="pv-fail" style="display:none">
+        <i class="fas fa-triangle-exclamation" aria-hidden="true" style="color:var(--warning);font-size:1.4rem"></i>
+        <p style="margin:.5rem 0">The preview couldn’t load here. <a id="openTab2" href="#" target="_blank" rel="noopener"><strong>Open the PDF in a new tab</strong></a>, or refresh this page if your session may have timed out.</p>
+        <div id="pdfFallbackDetail" style="font-family:monospace;font-size:.75rem;opacity:.7;word-break:break-word"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="pv-sheet-bg" id="pvBg" data-close></div>
+  <div class="pv-bar">
+    <button type="button" class="rs-btn" id="pvOpen"><i class="fas fa-sliders" aria-hidden="true"></i> Options</button>
+    <a id="dl2" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
+  </div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
 (function () {
   var base = "{{ pdf_url }}";
-  var dl = document.getElementById('dl');
-  var openTab = document.getElementById('openTab');
-  var openTab2 = document.getElementById('openTab2');
-  var fallback = document.getElementById('pdfFallback');
-  var fallbackDetail = document.getElementById('pdfFallbackDetail');
-  var canvasWrap = document.getElementById('pdfCanvasWrap');
-  var canvas = document.getElementById('pdfCanvas');
-  var loading = document.getElementById('pdfLoading');
-  var toolbar = document.getElementById('pdfToolbar');
-  var pageIndicator = document.getElementById('pdfPageIndicator');
-  var prevBtn = document.getElementById('pdfPrev');
-  var nextBtn = document.getElementById('pdfNext');
-  var zoomInBtn = document.getElementById('pdfZoomIn');
-  var zoomOutBtn = document.getElementById('pdfZoomOut');
-  var colsSel = document.getElementById('colsSel');
-  var orientSel = document.getElementById('orientSel');
-  var sizeSel = document.getElementById('sizeSel');
-  var layoutModeSel = document.getElementById('layoutModeSel');
-  var signersSel = document.getElementById('signersSel');
-  var bwOpt = document.getElementById('bwOpt');
+  var $ = function (id) { return document.getElementById(id); };
+  var dl = $('dl'), dl2 = $('dl2'), openTab = $('openTab'), openTab2 = $('openTab2');
+  var fallback = $('pdfFallback'), fallbackDetail = $('pdfFallbackDetail'), main = $('pvMain');
+  var canvasWrap = $('pdfCanvasWrap'), canvas = $('pdfCanvas'), loading = $('pdfLoading'), toolbar = $('pdfToolbar');
+  var pageIndicator = $('pdfPageIndicator'), prevBtn = $('pdfPrev'), nextBtn = $('pdfNext');
+  var colsSel = $('colsSel'), orientSel = $('orientSel'), sizeSel = $('sizeSel'), layoutModeSel = $('layoutModeSel');
+  var signersSel = $('signersSel'), bwOpt = $('bwOpt');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
   var subjBoxes = Array.prototype.slice.call(document.querySelectorAll('.pdf-subj'));
 
@@ -151,9 +222,8 @@
     var p = [];
     opts.forEach(function (o) { if (!o.checked) p.push(o.dataset.param + '=0'); });
     if (subjBoxes.length) {
-      var chosen = subjBoxes.filter(function (b) { return b.checked; })
-                            .map(function (b) { return encodeURIComponent(b.value); });
-      p.push('subjects=' + chosen.join(','));
+      p.push('subjects=' + subjBoxes.filter(function (b) { return b.checked; })
+        .map(function (b) { return encodeURIComponent(b.value); }).join(','));
     }
     if (orientSel) p.push('orient=' + orientSel.value);
     if (sizeSel) p.push('size=' + sizeSel.value);
@@ -165,132 +235,121 @@
     if (nameBoxes.length) {
       var parts = nameBoxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
       if (parts.length) p.push('names=' + parts.join(','));
-      var mi = document.getElementById('pdfMidInit');
+      var mi = $('pdfMidInit');
       if (mi && mi.checked) p.push('mid_init=1');
     }
     if (extra) p.push(extra);
     return base + (p.length ? ('?' + p.join('&')) : '');
   }
 
-  // Rendered with PDF.js onto a <canvas> instead of framing the PDF URL in an
-  // <iframe> and relying on the browser's own built-in PDF viewer. Confirmed
-  // via a real device network capture that the server response was always
-  // correct (200, application/pdf, clean single headers, full body
-  // delivered) — the failure was Chrome's native viewer silently refusing to
-  // render a PDF loaded into a *subframe* on some devices (a top-level
-  // navigation to the identical URL, e.g. "Open in new tab", always worked).
-  // Rendering the bytes ourselves sidesteps that entirely and behaves the
-  // same in every browser.
+  // Rendered with PDF.js onto a <canvas> rather than an <iframe>: Chrome's own
+  // PDF viewer silently refuses PDFs loaded into a subframe on some devices,
+  // while rendering the bytes ourselves behaves the same in every browser.
   var pdfjsLibPromise = import('/static/vendor/pdfjs/pdf.min.mjs').then(function (mod) {
     mod.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
     return mod;
   });
-
-  var pdfDoc = null, pageNum = 1, scale = 1, naturalWidth = 0, renderToken = 0;
+  var pdfDoc = null, pageNum = 1, scale = 1, fit = true, naturalWidth = 0, renderToken = 0, fetchToken = 0;
 
   function showFallback(err) {
+    if (err && err.stale) return;
+    main.classList.remove('loading');
     canvasWrap.style.display = 'none';
-    toolbar.style.display = 'none';
     fallback.style.display = '';
-    if (fallbackDetail) {
-      fallbackDetail.textContent = err ? ('Detail: ' + (err.message || err)) : '';
-    }
+    if (fallbackDetail) fallbackDetail.textContent = err ? ('Detail: ' + (err.message || err)) : '';
   }
-
   function fitScale() {
-    var wrapWidth = canvasWrap.clientWidth - 24;   // minus padding
-    return naturalWidth ? Math.max(0.3, wrapWidth / naturalWidth) : 1;
+    var w = canvasWrap.clientWidth - 24;
+    return naturalWidth ? Math.max(0.25, w / naturalWidth) : 1;
   }
-
   function renderPage() {
     if (!pdfDoc) return;
     var myToken = ++renderToken;
     pdfDoc.getPage(pageNum).then(function (page) {
-      if (myToken !== renderToken) return;          // a newer render superseded this one
-      var unscaled = page.getViewport({ scale: 1 });
-      naturalWidth = unscaled.width;
+      if (myToken !== renderToken) return;
+      naturalWidth = page.getViewport({ scale: 1 }).width;
+      if (fit) scale = fitScale();
       var viewport = page.getViewport({ scale: scale });
-      // Render at the device's actual pixel density, not just CSS pixels —
-      // otherwise a canvas sized for a 1x screen gets upscaled by the
-      // browser on a 2x/3x phone display and text comes out visibly blurry.
-      // The canvas's CSS size stays at the logical (1x) viewport size; only
-      // the backing bitmap and the drawing transform are scaled up, per
-      // PDF.js's own recommended pattern.
-      var outputScale = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * outputScale);
-      canvas.height = Math.floor(viewport.height * outputScale);
+      // Draw at the screen's real pixel density so text stays sharp on phones.
+      var ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * ratio);
+      canvas.height = Math.floor(viewport.height * ratio);
       canvas.style.width = Math.floor(viewport.width) + 'px';
       canvas.style.height = Math.floor(viewport.height) + 'px';
-      var ctx = canvas.getContext('2d');
-      var transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
-      return page.render({ canvasContext: ctx, transform: transform, viewport: viewport }).promise.then(function () {
+      return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport,
+        transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null }).promise.then(function () {
         if (myToken !== renderToken) return;
-        pageIndicator.textContent = 'Page ' + pageNum + ' / ' + pdfDoc.numPages;
+        pageIndicator.textContent = 'Page ' + pageNum + ' of ' + pdfDoc.numPages;
         prevBtn.disabled = pageNum <= 1;
         nextBtn.disabled = pageNum >= pdfDoc.numPages;
       });
     }).catch(showFallback);
   }
-
+  function counts() {
+    var sn = $('subjN'), on = $('optN');
+    if (sn) sn.textContent = subjBoxes.filter(function (b) { return b.checked; }).length + ' of ' + subjBoxes.length;
+    if (on) on.textContent = opts.filter(function (b) { return b.checked; }).length + ' of ' + opts.length + ' on';
+  }
   function refresh() {
-    var url = build('');
-    dl.href = build('download=1');
-    openTab.href = url;
-    if (openTab2) openTab2.href = url;
-
-    loading.style.display = '';
-    canvas.style.display = 'none';
-    toolbar.style.display = 'none';
+    counts();
+    var url = build(''), myFetch = ++fetchToken;
+    dl.href = dl2.href = build('download=1');
+    openTab.href = url; if (openTab2) openTab2.href = url;
     fallback.style.display = 'none';
     canvasWrap.style.display = '';
-
-    // X-Requested-With flags this as a background fetch: an expired session
-    // then returns 401 instead of a login-page redirect that would otherwise
-    // be fetched as 200 HTML and (mis)treated as a PDF.
+    main.classList.add('loading');
+    // X-Requested-With: an expired session then answers 401, not a login page.
     fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
       .then(function (r) {
         var ct = r.headers.get('Content-Type') || '';
         if (!r.ok || ct.indexOf('application/pdf') === -1) throw new Error('not a pdf (http ' + r.status + ')');
         return r.arrayBuffer();
       })
-      .then(function (buf) {
-        return pdfjsLibPromise.then(function (pdfjsLib) {
-          return pdfjsLib.getDocument({ data: buf }).promise;
-        });
-      })
+      .then(function (buf) { return pdfjsLibPromise.then(function (lib) { return lib.getDocument({ data: buf }).promise; }); })
       .then(function (doc) {
-        pdfDoc = doc;
-        pageNum = 1;
-        return doc.getPage(1);
-      })
-      .then(function (page) {
-        naturalWidth = page.getViewport({ scale: 1 }).width;
-        scale = fitScale();
+        if (myFetch !== fetchToken) throw { stale: true };
+        var keep = pdfDoc ? Math.min(pageNum, doc.numPages) : 1;
+        pdfDoc = doc; pageNum = keep;
         loading.style.display = 'none';
         canvas.style.display = '';
-        toolbar.style.display = 'flex';
+        main.classList.remove('loading');
         renderPage();
       })
       .catch(showFallback);
   }
+  var timer = null;
+  function soon() { clearTimeout(timer); timer = setTimeout(refresh, 300); }
 
   prevBtn.addEventListener('click', function () { if (pageNum > 1) { pageNum -= 1; renderPage(); } });
   nextBtn.addEventListener('click', function () { if (pdfDoc && pageNum < pdfDoc.numPages) { pageNum += 1; renderPage(); } });
-  zoomInBtn.addEventListener('click', function () { scale = Math.min(scale * 1.25, 4); renderPage(); });
-  zoomOutBtn.addEventListener('click', function () { scale = Math.max(scale / 1.25, 0.3); renderPage(); });
+  $('pdfZoomIn').addEventListener('click', function () { fit = false; scale = Math.min(scale * 1.25, 4); renderPage(); });
+  $('pdfZoomOut').addEventListener('click', function () { fit = false; scale = Math.max(scale / 1.25, 0.25); renderPage(); });
+  $('pdfFit').addEventListener('click', function () { fit = true; renderPage(); });
+  var rz = null;
+  window.addEventListener('resize', function () { if (!fit) return; clearTimeout(rz); rz = setTimeout(renderPage, 150); });
 
-  opts.forEach(function (o) { o.addEventListener('change', refresh); });
-  subjBoxes.forEach(function (b) { b.addEventListener('change', refresh); });
-  var subjAll = document.getElementById('subjAll'), subjNone = document.getElementById('subjNone');
-  if (subjAll) subjAll.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = true; }); refresh(); });
-  if (subjNone) subjNone.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = false; }); refresh(); });
-  if (colsSel) colsSel.addEventListener('change', refresh);
-  if (orientSel) orientSel.addEventListener('change', refresh);
-  if (sizeSel) sizeSel.addEventListener('change', refresh);
-  if (layoutModeSel) layoutModeSel.addEventListener('change', refresh);
-  if (bwOpt) bwOpt.addEventListener('change', refresh);
-  if (signersSel) signersSel.addEventListener('change', refresh);
-  document.querySelectorAll('.pdf-name, #pdfMidInit').forEach(function (b) { b.addEventListener('change', refresh); });
+  // Segmented buttons drive the (hidden) selects the URL builder reads.
+  document.querySelectorAll('.pv-seg').forEach(function (seg) {
+    var sel = $(seg.getAttribute('data-for'));
+    seg.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b || !sel) return;
+      sel.value = b.getAttribute('data-v');
+      seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      soon();
+    });
+  });
+  document.querySelectorAll('.pdf-opt, .pdf-subj, .pdf-name, #pdfMidInit, #bwOpt').forEach(function (b) { b.addEventListener('change', soon); });
+  [sizeSel, layoutModeSel, signersSel].forEach(function (s) { if (s) s.addEventListener('change', soon); });
+  var subjAll = $('subjAll'), subjNone = $('subjNone');
+  if (subjAll) subjAll.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = true; }); soon(); });
+  if (subjNone) subjNone.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = false; }); soon(); });
+
+  // Phone: options live in a bottom sheet.
+  var side = $('pvSide'), bg = $('pvBg');
+  function sheet(open) { side.classList.toggle('open', open); bg.classList.toggle('open', open); }
+  $('pvOpen').addEventListener('click', function () { sheet(true); });
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { sheet(false); }); });
+
   refresh();
 })();
 </script>
