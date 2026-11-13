@@ -1198,7 +1198,7 @@ def apply_stream_waec():
     """Fill WAEC subjects from each student's stream where not already set."""
     from utils.exam_subject_config import stream_waec_subjects, student_exam_year
     updated = 0
-    for student in Student.query.filter_by(is_active=True).all():
+    for student in Student.current_query().all():
         defaults = stream_waec_subjects(student.stream, student_exam_year(student)) if student.stream else []
         if defaults and not student.waec_subject_list:
             student.waec_subjects = ', '.join(defaults)

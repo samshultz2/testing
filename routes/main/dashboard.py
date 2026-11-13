@@ -135,7 +135,7 @@ def api_dashboard_stats():
 
     active_term = get_active_term()
 
-    base = _viewer_student_scope(Student.query.filter_by(is_active=True))
+    base = _viewer_student_scope(Student.current_query())
     stats = {
         'total_students': base.count(),
         'male_students': base.filter(Student.gender == 'Male').count(),

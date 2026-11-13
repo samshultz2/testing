@@ -281,7 +281,7 @@ def contacts():
                        ClassArmAssignment.class_id == class_id).all())]
         base = Student.query.filter(Student.id.in_(ids or [-1]))
     else:
-        base = Student.query.filter_by(is_active=True)
+        base = Student.current_query()
     from utils.branch_scope import scope_query
     from utils.access_control import teacher_form_student_ids
     base = scope_query(base, Student)

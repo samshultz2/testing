@@ -376,7 +376,7 @@ def get_sss3_students():
     # setup where SSS3 or the active term hasn't been created at all.
     if get_sss3_class() is not None and get_active_term() is not None:
         return []
-    return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
+    return scope_query(Student.current_query(), Student).order_by(Student.surname).all()
 
 
 def is_third_term(term):

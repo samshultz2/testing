@@ -1551,7 +1551,7 @@ def _password_roster(class_id, arm_id, term):
             q = q.filter(ClassArmAssignment.arm_id == arm_id)
         ids = [e.student_id for e in q.all()]
         return scope_query(Student.query.filter(Student.id.in_(ids or [-1])), Student).order_by(Student.surname, Student.first_name).all()
-    return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).limit(300).all()
+    return scope_query(Student.current_query(), Student).order_by(Student.surname).limit(300).all()
 
 
 def _roster_label(class_id, arm_id, classes, arms):

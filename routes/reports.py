@@ -55,7 +55,7 @@ def index():
 @login_required
 def export_students():
     """Export all students to Excel"""
-    students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
+    students = scope_query(Student.current_query(), Student).order_by(Student.surname).all()
     from utils.audit import log_action
     log_action('data.export_students', detail=f'{len(students)} students')
 
@@ -535,7 +535,7 @@ def summary_report():
 
 def _sum_students(term):
     from models import ClassArmAssignment, StudentEnrollment, SchoolClass
-    base = scope_query(Student.query.filter_by(is_active=True), Student)
+    base = scope_query(Student.current_query(), Student)
     total = base.count()
     male = base.filter(Student.gender == 'Male').count()
     female = base.filter(Student.gender == 'Female').count()

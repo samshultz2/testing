@@ -320,10 +320,10 @@ def dispatch_due_scheduled():
 
 def coverage_stats():
     """How many active students have at least one parent phone number."""
-    total = Student.query.filter_by(is_active=True).count()
+    total = Student.current_query().count()
     with_contact = (db.session.query(ParentContact.student_id)
                     .join(Student, Student.id == ParentContact.student_id)
-                    .filter(Student.is_active == True,
+                    .filter(Student.is_active == True, Student.not_graduated(),
                             ParentContact.phone_number != None,
                             ParentContact.phone_number != '')
                     .distinct().count())
@@ -343,7 +343,7 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
     from utils.branch_scope import scope_query
 
     if audience == 'all':
-        students = scope_query(Student.query.filter_by(is_active=True),
+        students = scope_query(Student.current_query(),
                                Student).order_by(Student.surname).all()
 
     elif audience in ('class', 'arm'):

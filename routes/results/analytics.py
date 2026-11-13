@@ -61,7 +61,7 @@ def subject_enrolment():
     if only_sss3:
         students = get_sss3_students()
     else:
-        students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
+        students = scope_query(Student.current_query(), Student).order_by(Student.surname).all()
 
     waec_counts = {}
     jamb_counts = {}
@@ -1091,7 +1091,7 @@ def subject_enrolment_detail(exam, subject):
     if only_sss3:
         students = get_sss3_students()
     else:
-        students = scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
+        students = scope_query(Student.current_query(), Student).order_by(Student.surname).all()
 
     matched = []
     for s in students:

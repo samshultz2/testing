@@ -120,6 +120,18 @@ class Student(db.Model):
     scholarships = db.relationship('StudentScholarship', backref='student',
                                    lazy='dynamic', cascade='all, delete-orphan')
 
+    @classmethod
+    def not_graduated(cls):
+        """SQL clause: not marked as graduated (NULL counts as not graduated)."""
+        return db.or_(cls.is_graduated.is_(False), cls.is_graduated.is_(None))
+
+    @classmethod
+    def current_query(cls):
+        """Current students: active and not graduated. Graduates keep
+        ``is_active`` (the graduate pages need them) but have left the school,
+        so counts, lists and bulk actions about "students" use this."""
+        return cls.query.filter(cls.is_active == True, cls.not_graduated())  # noqa: E712
+
     @property
     def target_university_name(self):
         u = self.target_university
