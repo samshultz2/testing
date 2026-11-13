@@ -449,7 +449,7 @@ document.addEventListener('input', function(e){
 function renderHead(){
     el('pSchool').textContent = el('school').value || '';
     var ttl = el('title').value || layout().title || 'Timetable';
-    if(isTimeline()){
+    if(isTimeline() || isGazette()){
         var w=ttl.trim().split(/\s+/), last=w.pop();
         el('pTitle').innerHTML = (w.length?esc(w.join(' '))+' ':'')+'<span class="tl-gold">'+esc(last||'')+'</span>';
     } else el('pTitle').textContent = ttl;
@@ -954,7 +954,7 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return (isTimeline() || isTickets()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets() || isGazette()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function tlModel(){
@@ -1142,12 +1142,95 @@ function renderTicketsSheet(){
         + '<div class="tk-foot"><div class="tk-key">'+keyHtml+'</div><div class="tk-p">×2 = double period<br>Printed '+tlPrinted()+'</div></div></div>';
 }
 
+// ---------- "Gazette" theme ----------
+// A school-newspaper front page: the coming date is the lead story (a large
+// table for every class/stream), every other date is a short "article" with
+// its own small table, lesson-free Saturdays get a one-line piece, and a
+// subject → teacher directory fills the lead column. Black ink + one red accent.
+function isGazette(){ return el('theme').value==='gazette'; }
+var GZ_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function gzDate(d){ var p=parseDateAny(d.date); return p ? (p.d+' '+GZ_MONTHS[p.m-1]) : (d.label||d.day||''); }
+function renderGazetteSheet(){
+    var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order, teach=md.teach;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var groups = md.anyGroup ? md.groupsAll : [''];
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var table=function(d, big){
+        if(!(d.groups||[]).length && d.banners.length){
+            return '<div class="gz-event">'+d.banners.map(function(b){ return '<b>'+esc(b.subject||'')+'</b>'
+                + ((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':''); }).join('')+'</div>';
+        }
+        var gs = md.anyGroup ? groups.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
+        if(!gs.length) gs=[''];
+        var head='<tr><th></th>'+gs.map(function(g){ return '<th>'+esc(g||'Lesson')+'</th>'; }).join('')+'</tr>';
+        var body='';
+        periods.forEach(function(pd, i){
+            if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
+                body+='<tr class="gz-br"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'">— Break —</td></tr>';
+            var cells='';
+            gs.forEach(function(g){
+                var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
+                var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
+                if(sg && sg===prev){ cells+='<td class="gz-cont">″</td>'; return; }
+                var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
+                cells+='<td>'+(arr.length?arr.map(function(r){
+                    return '<b>'+esc(r.subject||'—')+'</b>'+(n>1?' <i>('+(n===2?'double':n+' periods')+')</i>':'')
+                         + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join('<br>'):'<span class="gz-free">Free</span>')+'</td>';
+            });
+            body+='<tr><td class="gz-t">'+esc(fmtT(pd.start))+'</td>'+cells+'</tr>';
+        });
+        d.banners.forEach(function(b){
+            body+='<tr class="gz-ban"><td colspan="'+(gs.length+1)+'"><b>'+esc(b.subject||'')+'</b>'
+                + ((b.teacher||'').trim()?' <small>'+esc(b.teacher)+'</small>':'')+'</td></tr>';
+        });
+        return '<table class="gz-tt'+(big?' big':'')+'"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
+    };
+    var real=order.filter(function(k){ return !dmap[k].off; });
+    var leadKey = md.next || real[0];
+    var weekOf=function(d){ var m=(d.label||'').match(/^Week\s+(\d+)/i); return m?('Week '+m[1]):(d.date?d.day:''); };
+    var lead=dmap[leadKey];
+    var leadHtml='<section class="gz-lead"><div class="gz-kick">'+(md.next?'Next class':'First class')+(weekOf(lead)?' · '+esc(weekOf(lead)):'')+'</div>'
+        + '<h2>'+esc(lead.date?(dayFromDate(lead.date)+', '+gzDate(lead)):gzDate(lead))+'</h2>'
+        + table(lead, true);
+    var dirKeys=Object.keys(teach).filter(function(sj){ return teach[sj].length; });
+    if(dirKeys.length){
+        leadHtml+='<div class="gz-box"><h4>Teachers</h4><ul>'+dirKeys.map(function(sj){
+            return '<li><b>'+esc(sj)+'</b><span>'+esc(teach[sj].join(', '))+'</span></li>'; }).join('')+'</ul></div>';
+    }
+    leadHtml+='</section>';
+    var arts='';
+    order.forEach(function(k){
+        if(k===leadKey) return;
+        var d=dmap[k];
+        if(d.off){
+            arts+='<article class="gz-off"><h3><span>—</span>'+esc(gzDate(d))+'</h3><p>No class this Saturday.</p></article>';
+            return;
+        }
+        arts+='<article><h3>'+(weekOf(d)?'<span>'+esc(weekOf(d))+'</span>':'')+esc(gzDate(d))+'</h3>'+table(d,false)+'</article>';
+    });
+    var dates=real.map(function(k){ return dmap[k]; }).filter(function(d){ return d.date; });
+    var range = dates.length ? (gzDate(dates[0]).replace(/(\d+) (\w{3})\w*/,'$1 $2')+' – '+gzDate(dates[dates.length-1]).replace(/(\d+) (\w{3})\w*/,'$1 $2')) : '';
+    var unit = isSaturdayLayout() ? 'Saturday' : 'day';
+    var strip='<div class="gz-dl"><span>'+real.length+' '+unit+(real.length===1?'':'s')+(range?' · '+esc(range):'')+'</span>'
+        + (md.next?'<b>Next class: '+esc(gzDate(dmap[md.next]))+'</b>':'<span></span>')
+        + '<span>Printed '+tlPrinted()+'</span></div>';
+    var marks=[];
+    if(/″/.test(arts+leadHtml)) marks.push('″ = continues from the period above');
+    if(/\(double\)/.test(arts+leadHtml)) marks.push('(double) = two periods');
+    el('pBody').innerHTML='<div class="tl gz">'+strip+'<div class="gz-body">'+leadHtml
+        + '<div class="tl-list gz-cols">'+arts+'</div></div>'
+        + '<div class="gz-foot"><span>'+esc(marks.join(' · '))+'</span><span>'+esc(el('school').value||'')+'</span></div></div>';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : renderTimelineSheet());
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
