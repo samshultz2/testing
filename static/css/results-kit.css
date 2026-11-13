@@ -572,6 +572,8 @@
 .sl-sub a.on{background:var(--text-primary,#1e293b);border-color:var(--text-primary,#1e293b);color:var(--bg-card,#fff)}
 /* Section tabs + entry-mode chips share one wrapper on many pages: keep them apart. */
 .sl-nav + .sl-sub{margin-top:.55rem}
+/* Desktop: centre the entry-mode chips under the tabs (auto margins keep it scroll-safe). */
+@media (min-width:760px){.sl-sub > a:first-child{margin-left:auto}.sl-sub > a:last-child{margin-right:auto}}
 .rs-card-h.pad{padding:.85rem 1.1rem 0;margin-bottom:.4rem}
 .sl b.good,.sl .good>b,.sl small.good{color:var(--success)}
 .sl b.bad,.sl small.bad,.sl span.bad{color:var(--danger)}
