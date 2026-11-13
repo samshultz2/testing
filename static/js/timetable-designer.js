@@ -448,7 +448,11 @@ document.addEventListener('input', function(e){
 // ---------- printable sheet ----------
 function renderHead(){
     el('pSchool').textContent = el('school').value || '';
-    el('pTitle').textContent = el('title').value || layout().title || 'Timetable';
+    var ttl = el('title').value || layout().title || 'Timetable';
+    if(isTimeline()){
+        var w=ttl.trim().split(/\s+/), last=w.pop();
+        el('pTitle').innerHTML = (w.length?esc(w.join(' '))+' ':'')+'<span class="tl-gold">'+esc(last||'')+'</span>';
+    } else el('pTitle').textContent = ttl;
     var sub=el('subtitle').value; el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
 }
 
@@ -939,11 +943,139 @@ function deleteDesign(id){
       }).catch(function(){ alert('Network error while deleting.'); });
 }
 
+// ---------- "Timeline" theme ----------
+// A dated, editorial layout for the Saturday / Holiday grids: a timeline of
+// dates down the left, period times across the top (with any gap between two
+// periods shown as a break), one line per Class/Stream, subjects as cards with
+// a colour edge per subject, a "Next" marker on the coming date and a subject
+// key at the foot. Other layouts keep their tables, restyled by the theme CSS.
+var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#f08c00','#7048e8',
+                  '#37b24d','#d6336c','#495057','#1c7ed6','#a16207','#099268','#c2255c','#74b816'];
+var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function isTimeline(){ return el('theme').value==='timeline'; }
+function tlUsesTimeline(){
+    return isTimeline() && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+}
+function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function renderTimelineSheet(){
+    var pmap={}, periods=[];
+    rows.forEach(function(r){ if(r.time && !isAll(r.group)){ var k=periodKey(r);
+        if(!pmap[k]){ pmap[k]={k:k,start:r.time,end:r.dur?addMinutes(r.time,r.dur):''}; periods.push(pmap[k]); } } });
+    periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
+    // subject colours, in first-seen order; teachers per subject for the key
+    var colour={}, teach={}, ci=0;
+    rows.forEach(function(r){ var sj=(r.subject||'').trim(); if(!sj || isAll(r.group)) return;
+        if(!(sj in colour)){ colour[sj]=TL_COLOURS[ci++ % TL_COLOURS.length]; teach[sj]=[]; }
+        var t=(r.teacher||'').trim(); if(t && teach[sj].indexOf(t)<0) teach[sj].push(t); });
+    var anyGroup = rows.some(function(r){ return (r.group||'').trim() && !isAll(r.group); });
+    var dmap={}, order=[];
+    rows.forEach(function(r){
+        var date=r.date||'', day=(date?dayFromDate(date):'') || (r.day||'').trim() || '—', key=date||day;
+        if(!dmap[key]){ dmap[key]={day:day,date:date,label:r.daylabel||'',
+            sort:(parseDateAny(date)?parseDateAny(date).iso:('zz'+('0'+dayRank(day)).slice(-2))),
+            groups:[],gset:{},cells:{},banners:[]}; order.push(key); }
+        var d=dmap[key];
+        if(isAll(r.group)){ if(r.subject||r.teacher) d.banners.push(r); return; }
+        var g=(r.group||'').trim(); if(!(g in d.gset)){ d.gset[g]=1; d.groups.push(g); }
+        if(r.time){ var ck=g+'§'+periodKey(r); (d.cells[ck]=d.cells[ck]||[]).push(r); }
+    });
+    // Saturday plan: lesson-free Saturdays inside the term show as "No class".
+    if(isSaturdayLayout()){
+        var info=computeSaturdayDates(), lastIso='';
+        order.forEach(function(k){ if(dmap[k].sort>lastIso && dmap[k].sort.indexOf('zz')) lastIso=dmap[k].sort; });
+        info.saturdays.forEach(function(sv){ if(sv.free && lastIso && sv.iso<lastIso && !dmap[sv.iso]){
+            dmap[sv.iso]={off:true,date:sv.iso,sort:sv.iso,groups:[],cells:{},banners:[]}; order.push(sv.iso); } });
+    }
+    order.sort(function(a,b){ return String(dmap[a].sort).localeCompare(String(dmap[b].sort)); });
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    // Column tracks: a period is 1fr; a gap before the next period is a thin break track.
+    var tracks=[], pcol={}, col=(anyGroup?2:1), heads='';
+    periods.forEach(function(pd, i){
+        if(i>0 && periods[i-1].end && periods[i-1].end < pd.start){
+            tracks.push('1.1em');
+            heads+='<div class="tl-br" style="grid-column:'+col+'"><span>Break</span></div>';
+            pd.brk=col; col++;
+        }
+        tracks.push('minmax(0,1fr)'); pcol[pd.k]=col;
+        heads+='<div class="tl-ph" style="grid-column:'+col+'"><b>'+esc(clock12(pd.start,true))+'</b>'
+             + (pd.end?'<small>to '+esc(clock12(pd.end,true))+'</small>':'')+'</div>';
+        col++;
+    });
+    var tmpl=(anyGroup?'3.4em ':'')+tracks.join(' ');
+    var lastCol=col;
+    var breaks=periods.filter(function(pd){ return pd.brk; }).map(function(pd){ return pd.brk; });
+    var today=tlTodayISO(), next='';
+    order.forEach(function(k){ var d=dmap[k]; if(!next && !d.off && d.date && toISO(d.date)>=today) next=k; });
+    var card=function(r, span, n){
+        var sj=(r.subject||'').trim(), c=colour[sj]||'#a8a29e';
+        var note=[(r.teacher||'').trim(), n>1?(n+' periods'):''].filter(Boolean).join(' · ');
+        return '<div class="tl-c" style="--a:'+c+';grid-column:'+span+'">'
+             + '<b>'+esc(sj||'—')+'</b>'
+             + (note?'<small>'+esc(note)+'</small>':'')+'</div>';
+    };
+    var html='', n=0;
+    order.forEach(function(key){
+        var d=dmap[key], p=parseDateAny(d.date);
+        var big=p?('0'+p.d).slice(-2):esc((d.day||'').slice(0,3));
+        var mon=p?TL_MON[p.m-1]:'';
+        if(d.off){
+            html+='<div class="tl-wk off"><div class="tl-dt"><b>'+big+'</b><span>'+mon+'</span></div><div class="tl-rail"><i></i></div>'
+                + '<div class="tl-off">No class this Saturday</div></div>';
+            return;
+        }
+        n++;
+        var sub = d.label || (p ? d.day.slice(0,3) : '');
+        var isNext = key===next;
+        var lines='';
+        (anyGroup ? d.groups : ['']).forEach(function(g){
+            var l='', gi=0;
+            if(anyGroup) l+='<span class="tl-g" style="grid-column:1">'+esc(g||'—')+'</span>';
+            breaks.forEach(function(b){ l+='<span class="tl-bk" style="grid-column:'+b+'"></span>'; });
+            for(var i=0;i<periods.length;){
+                var arr=d.cells[g+'§'+periods[i].k]||[], sig=arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§');
+                var j=i+1;
+                // merge a run of identical consecutive periods (no break between them)
+                while(sig && j<periods.length && !periods[j].brk &&
+                      (d.cells[g+'§'+periods[j].k]||[]).map(function(r){ return r.subject+'|'+r.teacher; }).join('§')===sig) j++;
+                var from=pcol[periods[i].k], to=pcol[periods[j-1].k]+1;
+                if(!arr.length) l+='<div class="tl-c empty" style="grid-column:'+from+' / '+to+'"></div>';
+                else if(arr.length===1) l+=card(arr[0], from+' / '+to, j-i);
+                else l+='<div class="tl-multi" style="grid-column:'+from+' / '+to+'">'+arr.map(function(r){ return card(r,'auto'); }).join('')+'</div>';
+                i=j;
+            }
+            lines+='<div class="tl-ln" style="grid-template-columns:'+tmpl+'">'+l+'</div>';
+        });
+        d.banners.forEach(function(b){
+            lines+='<div class="tl-ln" style="grid-template-columns:'+tmpl+'"><div class="tl-ban" style="grid-column:1 / '+lastCol+'"><b>'
+                 + esc(b.subject||'')+'</b>'+((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':'')+'</div></div>';
+        });
+        html+='<div class="tl-wk'+(isNext?' nxt':'')+'"><div class="tl-dt"><b>'+big+'</b>'
+            + (mon?'<span>'+mon+'</span>':'')
+            + (isNext?'<em class="nx">NEXT</em>':(sub?'<em>'+esc(sub.replace(/^Week /,'Wk '))+'</em>':''))
+            + '</div><div class="tl-rail"><i></i></div><div class="tl-body">'+lines+'</div></div>';
+    });
+    var keyHtml=Object.keys(colour).map(function(sj){
+        return '<span style="--a:'+colour[sj]+'"><i></i><b>'+esc(sj)+'</b><em>'+esc(teach[sj].join(', '))+'</em></span>'; }).join('');
+    var groupsAll=[]; rows.forEach(function(r){ var g=(r.group||'').trim(); if(g && !isAll(r.group) && groupsAll.indexOf(g)<0) groupsAll.push(g); });
+    var now=new Date();
+    el('pBody').innerHTML='<div class="tl">'
+        + '<div class="tl-hd"><span></span><span></span><div class="tl-ln" style="grid-template-columns:'+tmpl+'">'+heads+'</div></div>'
+        + '<div class="tl-list">'+html+'</div>'
+        + (keyHtml?'<div class="tl-key">'+keyHtml+'</div>':'')
+        + '<div class="tl-foot"><span>'+(groupsAll.length?esc(groupsAll.join(' · ')):'')+'</span><span>Printed '
+        + now.getDate()+' '+TL_MON[now.getMonth()].charAt(0)+TL_MON[now.getMonth()].slice(1).toLowerCase()+' '+now.getFullYear()+'</span></div>'
+        + '</div>';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
+    else if(tlUsesTimeline()) renderTimelineSheet();
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
@@ -1065,7 +1197,19 @@ function exportName(){
 // own content needs, so this only ever stretches a short table to fill the
 // page — it never compresses a long one (that still just fits-to-page in the
 // PDF placement below, as before).
+function sizeTimelineForExport(sheet){
+    var list = document.querySelector('#pBody .tl-list');
+    if(!list) return false;
+    var cs = getComputedStyle(sheet);
+    var padTop = parseFloat(cs.paddingTop) || 0, padBottom = parseFloat(cs.paddingBottom) || 0;
+    var canvasW = sheet.offsetWidth;
+    var canvasH = _exportOrientation === 'portrait' ? canvasW * (297 / 210) : canvasW * (210 / 297);
+    var extra = canvasH - sheet.offsetHeight;
+    if(extra > 0) list.style.minHeight = (list.offsetHeight + extra) + 'px';
+    return true;
+}
 function sizeTableForExport(sheet){
+    if(sizeTimelineForExport(sheet)) return;
     var table = document.querySelector('#pBody table');
     if(!table || !table.rows.length) return;
     var cs = getComputedStyle(sheet);
@@ -1079,6 +1223,7 @@ function sizeTableForExport(sheet){
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = perRow + 'px';
 }
 function clearTableExportSizing(){
+    var list = document.querySelector('#pBody .tl-list'); if(list) list.style.minHeight = '';
     var table = document.querySelector('#pBody table');
     if(!table) return;
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = '';
@@ -1087,7 +1232,7 @@ function clearTableExportSizing(){
 // exported table so it wins over every theme/layout's own font-size rule
 // (all of which use em/% units on descendants, so they scale with it too).
 function applyExportFontSize(){
-    var table = document.querySelector('#pBody table');
+    var table = document.querySelector('#pBody table') || document.querySelector('#pBody .tl');
     if(!table) return;
     var size = parseInt(el('exportFontSize').value, 10);
     if(!size || isNaN(size)) return;
@@ -1095,7 +1240,7 @@ function applyExportFontSize(){
     table.style.fontSize = size + 'px';
 }
 function clearExportFontSize(){
-    var table = document.querySelector('#pBody table');
+    var table = document.querySelector('#pBody table') || document.querySelector('#pBody .tl');
     if(table) table.style.fontSize = '';
 }
 function captureExport(){

@@ -155,6 +155,81 @@
 .tt-sheet table.grid-tt.roster{font-size:26px}
 
 /* themes */
+/* timeline — cream paper, ink rules, gold accents. Saturday/Holiday grids use
+   the dedicated dated-timeline layout (renderTimelineSheet); the exam list,
+   rosters and custom grids get the same paper, type and rules. */
+.tt-sheet[data-theme="timeline"]{font-family:'DM Sans','Inter',system-ui,sans-serif;background:#fffdf8;color:#1d1b16;position:relative;overflow:hidden}
+.tt-sheet[data-theme="timeline"]:before{content:'';position:absolute;right:-9em;top:-9em;width:22em;height:22em;border-radius:50%;background:radial-gradient(circle,#ffe8b0 0,rgba(255,253,248,0) 70%);pointer-events:none}
+.tt-sheet[data-theme="timeline"] .tt-head{position:relative;text-align:left;margin-bottom:0;padding-bottom:.7em;border-bottom:3px solid #1d1b16}
+.tt-sheet[data-theme="timeline"] .tt-headinner{display:flex;align-items:flex-end;gap:1em;width:100%}
+.tt-sheet[data-theme="timeline"] .tt-headinner .tt-logo{order:2;margin-left:auto}
+.tt-sheet[data-theme="timeline"] .tt-school{order:-1;font:700 .62em 'Space Grotesk',sans-serif;letter-spacing:.24em;text-transform:uppercase;color:#a16207}
+.tt-sheet[data-theme="timeline"] .tt-headtext{display:flex;flex-direction:column}
+.tt-sheet[data-theme="timeline"] .tt-title{font:800 2.1em/1 'Space Grotesk',sans-serif;letter-spacing:-.03em;margin-top:.15em}
+.tt-sheet[data-theme="timeline"] .tl-gold{color:#a16207}
+.tt-sheet[data-theme="timeline"] .tt-sub{color:#57534e;font-size:.8em;margin-top:.35em}
+.tt-sheet[data-theme="timeline"] .tt-logo{max-height:3.4em}
+.tt-sheet[data-theme="timeline"] .tl{display:flex;flex-direction:column;font-size:1em}
+.tt-sheet[data-theme="timeline"] .tl-hd,.tt-sheet[data-theme="timeline"] .tl-wk{display:grid;grid-template-columns:3.6em 1.3em minmax(0,1fr);gap:.4em}
+.tt-sheet[data-theme="timeline"] .tl-hd{padding:.8em 0 .35em}
+.tt-sheet[data-theme="timeline"] .tl-ln{display:grid;gap:.4em;align-items:stretch}
+.tt-sheet[data-theme="timeline"] .tl-ln>*{grid-row:1}
+.tt-sheet[data-theme="timeline"] .tl-ph{text-align:center;border-top:2px solid #1d1b16;padding-top:.3em;line-height:1.2}
+.tt-sheet[data-theme="timeline"] .tl-ph b{display:block;font:700 .72em 'Space Grotesk',sans-serif}
+.tt-sheet[data-theme="timeline"] .tl-ph small{font-size:.55em;color:#78716c}
+.tt-sheet[data-theme="timeline"] .tl-br{border-top:2px dotted #a8a29e}
+.tt-sheet[data-theme="timeline"] .tl-br span{display:none}
+.tt-sheet[data-theme="timeline"] .tl-list{display:flex;flex-direction:column}
+.tt-sheet[data-theme="timeline"] .tl-wk{flex:1 1 auto;min-height:0}
+.tt-sheet[data-theme="timeline"] .tl-dt{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;line-height:1}
+.tt-sheet[data-theme="timeline"] .tl-dt b{font:800 1.55em 'Space Grotesk',sans-serif;letter-spacing:-.04em}
+.tt-sheet[data-theme="timeline"] .tl-dt span{font:700 .55em 'Space Grotesk',sans-serif;letter-spacing:.2em;color:#a16207;margin-top:.15em}
+.tt-sheet[data-theme="timeline"] .tl-dt em{font-style:normal;font-size:.5em;color:#a8a29e;margin-top:.3em;white-space:nowrap}
+.tt-sheet[data-theme="timeline"] .tl-dt em.nx{background:#1d1b16;color:#facc15;font:700 .45em 'Space Grotesk',sans-serif;letter-spacing:.16em;padding:.3em .6em;border-radius:999px}
+.tt-sheet[data-theme="timeline"] .tl-rail{position:relative}
+.tt-sheet[data-theme="timeline"] .tl-rail:before{content:'';position:absolute;left:50%;top:0;bottom:0;border-left:2px solid #e7e2d6;transform:translateX(-1px)}
+.tt-sheet[data-theme="timeline"] .tl-rail i{position:absolute;left:50%;top:50%;width:.65em;height:.65em;border-radius:50%;background:#fffdf8;border:.17em solid #1d1b16;transform:translate(-50%,-50%)}
+.tt-sheet[data-theme="timeline"] .tl-body{display:flex;flex-direction:column;justify-content:center;gap:.25em;padding:.3em 0}
+.tt-sheet[data-theme="timeline"] .tl-g{align-self:center;font:700 .45em 'Space Grotesk',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#a8a29e;overflow:hidden;text-overflow:ellipsis}
+.tt-sheet[data-theme="timeline"] .tl-bk{border-left:2px dotted #d6d3d1;width:0;margin:.1em auto}
+.tt-sheet[data-theme="timeline"] .tl-c{background:#fff;border:1px solid #ece7db;border-left:.22em solid var(--a);border-radius:.4em;padding:.25em .45em;display:flex;flex-direction:column;justify-content:center;min-width:0;line-height:1.2}
+.tt-sheet[data-theme="timeline"] .tl-c b{font-size:.6em;font-weight:700;color:#1d1b16;overflow:hidden;text-overflow:ellipsis}
+.tt-sheet[data-theme="timeline"] .tl-c small{font-size:.5em;color:#78716c;overflow:hidden;text-overflow:ellipsis}
+.tt-sheet[data-theme="timeline"] .tl-c.empty{background:transparent;border:1px dashed #ece7db}
+.tt-sheet[data-theme="timeline"] .tl-multi{display:flex;flex-direction:column;gap:.2em;min-width:0}
+.tt-sheet[data-theme="timeline"] .tl-ban{background:repeating-linear-gradient(135deg,#fbf6e9 0 .45em,#fffdf8 .45em .9em);border:1.5px solid #e7d9b0;border-radius:.4em;padding:.35em;text-align:center}
+.tt-sheet[data-theme="timeline"] .tl-ban b{display:block;font:700 .62em 'Space Grotesk',sans-serif;letter-spacing:.16em;text-transform:uppercase}
+.tt-sheet[data-theme="timeline"] .tl-ban small{font-size:.5em;color:#78716c}
+.tt-sheet[data-theme="timeline"] .tl-wk.nxt .tl-rail i{background:#facc15;width:.85em;height:.85em}
+.tt-sheet[data-theme="timeline"] .tl-wk.nxt .tl-body{background:#fff7d6;border-radius:.6em;margin:.1em -.4em;padding:.4em}
+.tt-sheet[data-theme="timeline"] .tl-wk.nxt .tl-dt b{color:#a16207}
+.tt-sheet[data-theme="timeline"] .tl-wk.off .tl-dt b,.tt-sheet[data-theme="timeline"] .tl-wk.off .tl-dt span{color:#d6d3d1}
+.tt-sheet[data-theme="timeline"] .tl-wk.off .tl-rail i{border-color:#d6d3d1;border-style:dashed}
+.tt-sheet[data-theme="timeline"] .tl-off{align-self:center;font-size:.58em;font-style:italic;color:#a8a29e;border:1.5px dashed #e7e2d6;border-radius:.5em;padding:.4em .8em}
+.tt-sheet[data-theme="timeline"] .tl-key{margin-top:.7em;padding-top:.6em;border-top:3px solid #1d1b16;display:grid;grid-template-columns:repeat(auto-fill,minmax(17em,1fr));gap:.3em 1.4em;font-size:.52em}
+.tt-sheet[data-theme="timeline"] .tl-key span{display:flex;align-items:center;gap:.45em;min-width:0}
+.tt-sheet[data-theme="timeline"] .tl-key i{width:.3em;height:1.1em;border-radius:.15em;background:var(--a);flex:none}
+.tt-sheet[data-theme="timeline"] .tl-key b{white-space:nowrap}
+.tt-sheet[data-theme="timeline"] .tl-key em{font-style:normal;color:#78716c;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tt-sheet[data-theme="timeline"] .tl-foot{display:flex;justify-content:space-between;margin-top:.6em;font-size:.45em;color:#a8a29e;letter-spacing:.05em}
+/* timeline — tables (exam list, rosters, custom grids, days-as-columns) */
+.tt-sheet[data-theme="timeline"] table{margin-top:.9em}
+.tt-sheet[data-theme="timeline"] th,.tt-sheet[data-theme="timeline"] td{border:0;border-bottom:1px solid #e7e2d6}
+.tt-sheet[data-theme="timeline"] thead th{border-top:0;border-bottom:2px solid #1d1b16;font:700 .78em 'Space Grotesk',sans-serif;letter-spacing:.08em;text-transform:uppercase;background:transparent}
+.tt-sheet[data-theme="timeline"] tbody th{font-family:'Space Grotesk',sans-serif;color:#a16207}
+.tt-sheet[data-theme="timeline"] tbody tr:nth-child(even) td{background:#fbf8f0}
+.tt-sheet[data-theme="timeline"] td.roster-cell{background:#fff}
+.tt-sheet[data-theme="timeline"] table.grid-tt.blankgrid th.col-sep,
+.tt-sheet[data-theme="timeline"] table.grid-tt.blankgrid td.col-sep,
+.tt-sheet[data-theme="timeline"] table.grid-tt.cols th.day-col,
+.tt-sheet[data-theme="timeline"] table.grid-tt.cols td.day-col{border-left:1px solid #e7e2d6}
+.tt-sheet[data-theme="timeline"] table tbody tr:last-child td,.tt-sheet[data-theme="timeline"] table tbody tr:last-child th{border-bottom:3px solid #1d1b16}
+.tt-sheet.exporting[data-theme="timeline"]{border:none}
+.tt-sheet[data-theme="timeline"] table td,.tt-sheet[data-theme="timeline"] table tbody th{vertical-align:middle}
+.tt-sheet[data-theme="timeline"] table thead th{vertical-align:bottom}
+.tt-sheet[data-theme="timeline"] table:not(.grid-tt) td:first-child{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#a16207}
+.tt-sheet[data-theme="timeline"] table:not(.grid-tt) td:nth-child(3){font-weight:700}
+
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
 .tt-sheet[data-theme="classic"] th,.tt-sheet[data-theme="classic"] td{border:1px solid #222}
 .tt-sheet[data-theme="classic"] th{background:#f0f0f0;text-transform:uppercase;font-size:.82rem;letter-spacing:.5px}
@@ -694,8 +769,9 @@ body.tb-lock{overflow:hidden}
           {% if school_logo_url %}<label class="rs-check td-logo"><input type="checkbox" id="showLogo" checked> Show school logo</label>{% endif %}
         </div>
         <div class="td-sub-h">Theme <small id="tdThemeName"></small></div>
-        <div class="td-sws"><button type="button" class="td-sw" data-theme-pick="classic" aria-pressed="false" title="Classic"><i style="--a:#f0f0f0;--b:#222"><em></em></i><span>Classic</span></button><button type="button" class="td-sw" data-theme-pick="print" aria-pressed="false" title="Print"><i style="--a:#e8e8e8;--b:#000"><em></em></i><span>Print</span></button><button type="button" class="td-sw" data-theme-pick="modern" aria-pressed="false" title="Modern"><i style="--a:#0f766e;--b:#fff"><em></em></i><span>Modern</span></button><button type="button" class="td-sw" data-theme-pick="colour" aria-pressed="false" title="Colourful"><i style="--a:#4338ca;--b:#fff"><em></em></i><span>Colourful</span></button><button type="button" class="td-sw" data-theme-pick="minimal" aria-pressed="false" title="Minimal"><i style="--a:#ffffff;--b:#111"><em></em></i><span>Minimal</span></button><button type="button" class="td-sw" data-theme-pick="elegant" aria-pressed="false" title="Elegant"><i style="--a:#111827;--b:#fbbf24"><em></em></i><span>Elegant</span></button><button type="button" class="td-sw" data-theme-pick="corporate" aria-pressed="false" title="Corporate"><i style="--a:#1e3a8a;--b:#fff"><em></em></i><span>Corporate</span></button><button type="button" class="td-sw" data-theme-pick="chalkboard" aria-pressed="false" title="Chalkboard"><i style="--a:#1b3a2b;--b:#fde68a"><em></em></i><span>Chalkboard</span></button><button type="button" class="td-sw" data-theme-pick="sunset" aria-pressed="false" title="Sunset"><i style="--a:#fb923c;--b:#7c2d12"><em></em></i><span>Sunset</span></button><button type="button" class="td-sw" data-theme-pick="ocean" aria-pressed="false" title="Ocean"><i style="--a:#0e7490;--b:#fff"><em></em></i><span>Ocean</span></button><button type="button" class="td-sw" data-theme-pick="rose" aria-pressed="false" title="Rose"><i style="--a:#9f1239;--b:#fff"><em></em></i><span>Rose</span></button><button type="button" class="td-sw" data-theme-pick="mono" aria-pressed="false" title="Mono"><i style="--a:#000;--b:#fff"><em></em></i><span>Mono</span></button><button type="button" class="td-sw" data-theme-pick="plain" aria-pressed="false" title="Plain"><i style="--a:#fff;--b:#000"><em></em></i><span>Plain</span></button><button type="button" class="td-sw" data-theme-pick="forest" aria-pressed="false" title="Forest"><i style="--a:#166534;--b:#fff"><em></em></i><span>Forest</span></button><button type="button" class="td-sw" data-theme-pick="royal" aria-pressed="false" title="Royal"><i style="--a:#5b21b6;--b:#fff"><em></em></i><span>Royal</span></button><button type="button" class="td-sw" data-theme-pick="slate" aria-pressed="false" title="Slate"><i style="--a:#475569;--b:#fff"><em></em></i><span>Slate</span></button><button type="button" class="td-sw" data-theme-pick="midnight" aria-pressed="false" title="Midnight"><i style="--a:#0f172a;--b:#93c5fd"><em></em></i><span>Midnight</span></button><button type="button" class="td-sw" data-theme-pick="coral" aria-pressed="false" title="Coral"><i style="--a:#f43f5e;--b:#fff"><em></em></i><span>Coral</span></button><button type="button" class="td-sw" data-theme-pick="emerald" aria-pressed="false" title="Emerald"><i style="--a:#047857;--b:#fff"><em></em></i><span>Emerald</span></button><button type="button" class="td-sw" data-theme-pick="burgundy" aria-pressed="false" title="Burgundy"><i style="--a:#7f1d1d;--b:#fde68a"><em></em></i><span>Burgundy</span></button><button type="button" class="td-sw" data-theme-pick="sky" aria-pressed="false" title="Sky"><i style="--a:#0ea5e9;--b:#fff"><em></em></i><span>Sky</span></button><button type="button" class="td-sw" data-theme-pick="amber" aria-pressed="false" title="Amber"><i style="--a:#d97706;--b:#fff"><em></em></i><span>Amber</span></button><button type="button" class="td-sw" data-theme-pick="plum" aria-pressed="false" title="Plum"><i style="--a:#7e22ce;--b:#fff"><em></em></i><span>Plum</span></button><button type="button" class="td-sw" data-theme-pick="graphite" aria-pressed="false" title="Graphite"><i style="--a:#1f2937;--b:#fff"><em></em></i><span>Graphite</span></button></div>
+        <div class="td-sws"><button type="button" class="td-sw" data-theme-pick="timeline" aria-pressed="false" title="Timeline"><i style="--a:#fffdf8;--b:#a16207"><em></em></i><span>Timeline</span></button><button type="button" class="td-sw" data-theme-pick="classic" aria-pressed="false" title="Classic"><i style="--a:#f0f0f0;--b:#222"><em></em></i><span>Classic</span></button><button type="button" class="td-sw" data-theme-pick="print" aria-pressed="false" title="Print"><i style="--a:#e8e8e8;--b:#000"><em></em></i><span>Print</span></button><button type="button" class="td-sw" data-theme-pick="modern" aria-pressed="false" title="Modern"><i style="--a:#0f766e;--b:#fff"><em></em></i><span>Modern</span></button><button type="button" class="td-sw" data-theme-pick="colour" aria-pressed="false" title="Colourful"><i style="--a:#4338ca;--b:#fff"><em></em></i><span>Colourful</span></button><button type="button" class="td-sw" data-theme-pick="minimal" aria-pressed="false" title="Minimal"><i style="--a:#ffffff;--b:#111"><em></em></i><span>Minimal</span></button><button type="button" class="td-sw" data-theme-pick="elegant" aria-pressed="false" title="Elegant"><i style="--a:#111827;--b:#fbbf24"><em></em></i><span>Elegant</span></button><button type="button" class="td-sw" data-theme-pick="corporate" aria-pressed="false" title="Corporate"><i style="--a:#1e3a8a;--b:#fff"><em></em></i><span>Corporate</span></button><button type="button" class="td-sw" data-theme-pick="chalkboard" aria-pressed="false" title="Chalkboard"><i style="--a:#1b3a2b;--b:#fde68a"><em></em></i><span>Chalkboard</span></button><button type="button" class="td-sw" data-theme-pick="sunset" aria-pressed="false" title="Sunset"><i style="--a:#fb923c;--b:#7c2d12"><em></em></i><span>Sunset</span></button><button type="button" class="td-sw" data-theme-pick="ocean" aria-pressed="false" title="Ocean"><i style="--a:#0e7490;--b:#fff"><em></em></i><span>Ocean</span></button><button type="button" class="td-sw" data-theme-pick="rose" aria-pressed="false" title="Rose"><i style="--a:#9f1239;--b:#fff"><em></em></i><span>Rose</span></button><button type="button" class="td-sw" data-theme-pick="mono" aria-pressed="false" title="Mono"><i style="--a:#000;--b:#fff"><em></em></i><span>Mono</span></button><button type="button" class="td-sw" data-theme-pick="plain" aria-pressed="false" title="Plain"><i style="--a:#fff;--b:#000"><em></em></i><span>Plain</span></button><button type="button" class="td-sw" data-theme-pick="forest" aria-pressed="false" title="Forest"><i style="--a:#166534;--b:#fff"><em></em></i><span>Forest</span></button><button type="button" class="td-sw" data-theme-pick="royal" aria-pressed="false" title="Royal"><i style="--a:#5b21b6;--b:#fff"><em></em></i><span>Royal</span></button><button type="button" class="td-sw" data-theme-pick="slate" aria-pressed="false" title="Slate"><i style="--a:#475569;--b:#fff"><em></em></i><span>Slate</span></button><button type="button" class="td-sw" data-theme-pick="midnight" aria-pressed="false" title="Midnight"><i style="--a:#0f172a;--b:#93c5fd"><em></em></i><span>Midnight</span></button><button type="button" class="td-sw" data-theme-pick="coral" aria-pressed="false" title="Coral"><i style="--a:#f43f5e;--b:#fff"><em></em></i><span>Coral</span></button><button type="button" class="td-sw" data-theme-pick="emerald" aria-pressed="false" title="Emerald"><i style="--a:#047857;--b:#fff"><em></em></i><span>Emerald</span></button><button type="button" class="td-sw" data-theme-pick="burgundy" aria-pressed="false" title="Burgundy"><i style="--a:#7f1d1d;--b:#fde68a"><em></em></i><span>Burgundy</span></button><button type="button" class="td-sw" data-theme-pick="sky" aria-pressed="false" title="Sky"><i style="--a:#0ea5e9;--b:#fff"><em></em></i><span>Sky</span></button><button type="button" class="td-sw" data-theme-pick="amber" aria-pressed="false" title="Amber"><i style="--a:#d97706;--b:#fff"><em></em></i><span>Amber</span></button><button type="button" class="td-sw" data-theme-pick="plum" aria-pressed="false" title="Plum"><i style="--a:#7e22ce;--b:#fff"><em></em></i><span>Plum</span></button><button type="button" class="td-sw" data-theme-pick="graphite" aria-pressed="false" title="Graphite"><i style="--a:#1f2937;--b:#fff"><em></em></i><span>Graphite</span></button></div>
         <div class="td-hide">                <select id="theme" class="form-control">
+                    <option value="timeline">Timeline (cream &amp; gold, dated)</option>
                     <option value="classic">Classic (bordered, serif)</option>
                     <option value="print">Print (bold sans, grey header, striped)</option>
                     <option value="modern" selected>Modern (teal header)</option>
