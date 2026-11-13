@@ -449,7 +449,7 @@ document.addEventListener('input', function(e){
 function renderHead(){
     el('pSchool').textContent = el('school').value || '';
     var ttl = el('title').value || layout().title || 'Timetable';
-    if(isTimeline() || isGazette()){
+    if(isTimeline() || isGazette() || isSwiss()){
         var w=ttl.trim().split(/\s+/), last=w.pop();
         el('pTitle').innerHTML = (w.length?esc(w.join(' '))+' ':'')+'<span class="tl-gold">'+esc(last||'')+'</span>';
     } else el('pTitle').textContent = ttl;
@@ -954,7 +954,7 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return (isTimeline() || isTickets() || isGazette()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets() || isGazette() || isSwiss()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function tlModel(){
@@ -1245,12 +1245,91 @@ function renderGazetteSheet(){
         + '<div class="gz-foot"><span>'+esc(marks.join(' · '))+'</span><span>'+esc(el('school').value||'')+'</span></div></div>';
 }
 
+// ---------- "Swiss" theme ----------
+// International-typographic poster: huge title, an 8-segment progress bar
+// (done / next / to go), each date a ruled block with a big date, an outlined
+// week numeral behind it and a precise per-stream table; one red-orange accent.
+function isSwiss(){ return el('theme').value==='swiss'; }
+function renderSwissSheet(){
+    var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order, teach=md.teach;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var real=order.filter(function(k){ return !dmap[k].off; });
+    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var pad=function(n){ return ('0'+n).slice(-2); };
+    var prog=real.map(function(k,i){ return '<i class="'+(nextIdx<0?'':(i<nextIdx?'d':(i===nextIdx?'n':'')))+'"><span>'+pad(i+1)+'</span></i>'; }).join('');
+    var done=nextIdx<0?0:nextIdx;
+    var sum = nextIdx<0 ? real.length+' '+(isSaturdayLayout()?'Saturdays':'days')
+            : '<b>'+done+'</b> done · <b class="sw-a">'+(isSaturdayLayout()?'week ':'day ')+pad(nextIdx+1)+'</b> next · <b>'+(real.length-nextIdx-1)+'</b> to go';
+    var table=function(d){
+        if(!(d.groups||[]).length && d.banners.length){
+            return '<div class="sw-ev">'+d.banners.map(function(b){ return '<b>'+esc(b.subject||'')+'</b>'+((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':''); }).join('')+'</div>';
+        }
+        var gs = md.anyGroup ? md.groupsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
+        if(!gs.length) gs=[''];
+        var w=Math.floor(85/gs.length);
+        var cols='<colgroup><col style="width:15%">'+gs.map(function(){ return '<col style="width:'+w+'%">'; }).join('')+'</colgroup>';
+        var head='<tr><th></th>'+gs.map(function(g){ return '<th>'+esc(g||'Lesson')+'</th>'; }).join('')+'</tr>';
+        var body='';
+        periods.forEach(function(pd,i){
+            if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
+                body+='<tr class="sw-brk"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'"><span>break</span></td></tr>';
+            var cells='';
+            gs.forEach(function(g){
+                var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
+                var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
+                if(sg && sg===prev){ cells+='<td class="sw-cont">↓</td>'; return; }
+                var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
+                cells+='<td>'+(arr.length?arr.map(function(r){ return '<b>'+esc(r.subject||'—')+'</b>'+(n>1?'<sup>'+n+'×</sup>':'')
+                    + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join(''):'<span class="sw-free">—</span>')+'</td>';
+            });
+            body+='<tr><td class="sw-t">'+esc(fmtT(pd.start))+'</td>'+cells+'</tr>';
+        });
+        d.banners.forEach(function(b){ body+='<tr class="sw-ban"><td colspan="'+(gs.length+1)+'"><b>'+esc(b.subject||'')+'</b></td></tr>'; });
+        return '<table>'+cols+'<thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
+    };
+    var html='', offPending=[], offAll=[], idx=0;
+    order.forEach(function(k){
+        var d=dmap[k], p=parseDateAny(d.date);
+        var dd=p?gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2'):'';
+        if(d.off){ offPending.push(dd||gzDate(d)); offAll.push(dd||gzDate(d)); return; }
+        idx++;
+        var i=real.indexOf(k);
+        var cls='sw-wk'+(k===md.next?' nx':'')+(nextIdx>=0 && i<nextIdx?' past':'');
+        var note=offPending.length?'<div class="sw-gap">No class '+(isSaturdayLayout()?'Sat ':'')+esc(offPending.join(', '))+'</div>':'';
+        offPending=[];
+        var big=p?pad(p.d):esc((d.day||'').slice(0,3));
+        var mon=p?TL_MON[p.m-1]:'';
+        var day=(p?d.day:'').toUpperCase();
+        html+='<section class="'+cls+'"><div class="sw-num">'+pad(idx)+'</div><header><span class="sw-d">'+big+'</span><span class="sw-m">'+mon
+            + (day?'<br><i>'+esc(day)+'</i>':'')+'</span>'+(k===md.next?'<span class="sw-flag">Next class →</span>':'')+'</header>'+note+table(d)+'</section>';
+    });
+    if(offPending.length && html){
+        var at=html.lastIndexOf('</header>')+9;
+        html=html.slice(0,at)+'<div class="sw-gap">No class '+esc(offPending.join(', '))+' (after this)</div>'+html.slice(at);
+    }
+    var key=Object.keys(teach).filter(function(sj){ return teach[sj].length; }).map(function(sj){
+        return '<span><b>'+esc(sj)+'</b>'+esc(teach[sj].join(', '))+'</span>'; }).join('');
+    var marks=[];
+    if(/<sup>/.test(html)) marks.push('2× double period');
+    if(/sw-cont/.test(html)) marks.push('↓ continues');
+    if(offAll.length) marks.push('no class '+offAll.join(', '));
+    el('pBody').innerHTML='<div class="tl sw">'
+        + '<div class="sw-prog">'+prog+'</div>'
+        + '<div class="sw-leg"><span>'+sum+'</span><span>'+esc(marks.join(' · '))+'</span></div>'
+        + '<div class="tl-list sw-grid">'+html+'</div>'
+        + '<div class="sw-foot"><div class="sw-key">'+key+'</div><div class="sw-p">Printed<br>'+tlPrinted()+'</div></div></div>';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : renderTimelineSheet());
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
@@ -1415,7 +1494,7 @@ function clearTableExportSizing(){
 // exported table so it wins over every theme/layout's own font-size rule
 // (all of which use em/% units on descendants, so they scale with it too).
 function applyExportFontSize(){
-    var table = document.querySelector('#pBody table') || document.querySelector('#pBody .tl');
+    var table = document.querySelector('#pBody .tl') || document.querySelector('#pBody table');
     if(!table) return;
     var size = parseInt(el('exportFontSize').value, 10);
     if(!size || isNaN(size)) return;
@@ -1423,7 +1502,7 @@ function applyExportFontSize(){
     table.style.fontSize = size + 'px';
 }
 function clearExportFontSize(){
-    var table = document.querySelector('#pBody table') || document.querySelector('#pBody .tl');
+    var table = document.querySelector('#pBody .tl') || document.querySelector('#pBody table');
     if(table) table.style.fontSize = '';
 }
 function captureExport(){
