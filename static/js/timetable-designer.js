@@ -1103,17 +1103,15 @@ function renderTicketsSheet(){
         return '<li style="--c:'+c+'"><time>'+esc(time)+'</time><i></i><b>'+esc(sj||'—')
              + (n>1?'<em>×'+n+'</em>':'')+'</b>'+((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':'')+'</li>';
     };
-    var n=0, html='';
+    var n=0, html='', offPending=[], offAll=[];
     order.forEach(function(key){
         var d=dmap[key], p=parseDateAny(d.date);
         var big=p?('0'+p.d).slice(-2):esc((d.day||'').slice(0,3));
         var mon=p?TL_MON[p.m-1]:'';
         var wkNo=(d.label||'').match(/^Week\s+(\d+)/i);
-        if(d.off){
-            html+='<article class="tk off"><div class="tk-stub"><small>NO CLASS</small><div class="tk-dd"><b>'+big+'</b><span>'+mon+'</span></div></div>'
-                + '<div class="tk-perf"></div><div class="tk-main"><p class="tk-offm">No class this Saturday</p></div></article>';
-            return;
-        }
+        // A lesson-free Saturday is not a whole ticket: it becomes a small note
+        // on the next ticket (or the previous one, if it falls at the end).
+        if(d.off){ offPending.push(p ? (p.d+' '+mon.charAt(0)+mon.slice(1).toLowerCase()) : big); offAll.push(offPending[offPending.length-1]); return; }
         n++;
         var isNext = key===md.next;
         var stubTop = wkNo ? '<small>WEEK</small><span class="tk-wn">'+('0'+wkNo[1]).slice(-2)+'</span>'
@@ -1139,15 +1137,21 @@ function renderTicketsSheet(){
         });
         var bans=d.banners.map(function(b){ return '<div class="tk-ban"><b>'+esc(b.subject||'')+'</b>'
             + ((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':'')+'</div>'; }).join('');
+        var note = offPending.length ? '<div class="tk-note">No class on Sat '+esc(offPending.join(', '))+' · classes resume here</div>' : '';
+        offPending=[];
         html+='<article class="tk'+(isNext?' nxt':'')+'"><div class="tk-stub">'+stubTop
             + '<div class="tk-dd"><b>'+big+'</b>'+(mon?'<span>'+mon+'</span>':'')+'</div>'
             + (p && wkNo ? '<small class="tk-day">'+esc(d.day.toUpperCase())+'</small>' : '')
             + (isNext?'<span class="tk-next">NEXT CLASS</span>':'')+'</div><div class="tk-perf"></div>'
-            + '<div class="tk-main">'+(lanes?'<div class="tk-lanes">'+lanes+'</div>':'')+bans+'</div></article>';
+            + '<div class="tk-main">'+note+(lanes?'<div class="tk-lanes">'+lanes+'</div>':'')+bans+'</div></article>';
     });
+    if(offPending.length && html){   // lesson-free Saturdays after the last class
+        var i=html.lastIndexOf('<div class="tk-main">')+'<div class="tk-main">'.length;
+        html=html.slice(0,i)+'<div class="tk-note">No class on Sat '+esc(offPending.join(', '))+' (after this one)</div>'+html.slice(i);
+    }
     var keyHtml=Object.keys(colour).map(function(sj){ return '<span style="--c:'+colour[sj]+'"><i></i>'+esc(sj)+'</span>'; }).join('');
     el('pBody').innerHTML='<div class="tl tkx"><div class="tl-list tk-grid">'+html+'</div>'
-        + '<div class="tk-foot"><div class="tk-key">'+keyHtml+'</div><div class="tk-p">×2 = double period<br>Printed '+tlPrinted()+'</div></div></div>';
+        + '<div class="tk-foot"><div class="tk-key">'+keyHtml+'</div><div class="tk-p">'+(offAll.length?'No class: Sat '+esc(offAll.join(', '))+'<br>':'')+'×2 = double period<br>Printed '+tlPrinted()+'</div></div></div>';
 }
 
 // ---------- "Gazette" theme ----------
@@ -1209,20 +1213,28 @@ function renderGazetteSheet(){
             return '<li><b>'+esc(sj)+'</b><span>'+esc(teach[sj].join(', '))+'</span></li>'; }).join('')+'</ul></div>';
     }
     leadHtml+='</section>';
-    var arts='';
+    // Lesson-free Saturdays are a one-line note on the next class (not a whole
+    // article), plus a mention in the dateline strip.
+    var arts='', offPending=[], offAll=[], leadNote='';
+    var noteOf=function(list, after){ return '<p class="gz-note">No class on Saturday '+esc(list.join(', '))+(after?' (after this class)':'')+'</p>'; };
     order.forEach(function(k){
-        if(k===leadKey) return;
         var d=dmap[k];
-        if(d.off){
-            arts+='<article class="gz-off"><h3><span>—</span>'+esc(gzDate(d))+'</h3><p>No class this Saturday.</p></article>';
-            return;
-        }
-        arts+='<article><h3>'+(weekOf(d)?'<span>'+esc(weekOf(d))+'</span>':'')+esc(gzDate(d))+'</h3>'+table(d,false)+'</article>';
+        if(d.off){ offPending.push(gzDate(d)); offAll.push(gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2')); return; }
+        var note = offPending.length ? noteOf(offPending) : '';
+        offPending=[];
+        if(k===leadKey){ leadNote=note; return; }
+        arts+='<article><h3>'+(weekOf(d)?'<span>'+esc(weekOf(d))+'</span>':'')+esc(gzDate(d))+'</h3>'+note+table(d,false)+'</article>';
     });
+    if(offPending.length){
+        var at=arts.lastIndexOf('</h3>');
+        if(at>=0) arts=arts.slice(0,at+5)+noteOf(offPending,true)+arts.slice(at+5); else leadNote+=noteOf(offPending,true);
+    }
+    if(leadNote) leadHtml=leadHtml.replace('</h2>','</h2>'+leadNote);
     var dates=real.map(function(k){ return dmap[k]; }).filter(function(d){ return d.date; });
     var range = dates.length ? (gzDate(dates[0]).replace(/(\d+) (\w{3})\w*/,'$1 $2')+' – '+gzDate(dates[dates.length-1]).replace(/(\d+) (\w{3})\w*/,'$1 $2')) : '';
     var unit = isSaturdayLayout() ? 'Saturday' : 'day';
-    var strip='<div class="gz-dl"><span>'+real.length+' '+unit+(real.length===1?'':'s')+(range?' · '+esc(range):'')+'</span>'
+    var strip='<div class="gz-dl"><span>'+real.length+' '+unit+(real.length===1?'':'s')+(range?' · '+esc(range):'')
+        + (offAll.length?' · no class '+esc(offAll.join(', ')):'')+'</span>'
         + (md.next?'<b>Next class: '+esc(gzDate(dmap[md.next]))+'</b>':'<span></span>')
         + '<span>Printed '+tlPrinted()+'</span></div>';
     var marks=[];
