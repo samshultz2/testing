@@ -88,6 +88,10 @@ def set_view_session():
     from models import AcademicSession
     sid = request.form.get('session_id', type=int)
     live = AcademicSession.query.filter_by(is_active=True).first()
+    if request.form.get('back'):
+        # "Back to current" shares the form with the session picker, whose own
+        # session_id (the past one) would otherwise win.
+        sid = live.id if live else None
     if not sid or (live and sid == live.id):
         session.pop('view_session_id', None)
         flash('Viewing the current session.', 'success')

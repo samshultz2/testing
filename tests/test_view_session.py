@@ -22,18 +22,24 @@ def test_admin_can_view_past_session(app):
         liveid, pastid = live.id, past.id
 
     c = _admin(app)
-    assert 'time-travel-bar' in c.get('/students').get_data(as_text=True)
+    assert 'class="tt-bar"' in c.get('/students').get_data(as_text=True)
     tok = auth_csrf(c)
 
     c.post('/view-session', data={'_csrf_token': tok, 'session_id': pastid}, follow_redirects=True)
     page = c.get('/students').get_data(as_text=True)
-    assert 'VS PAST 24/25' in page and 'read-only' in page
+    assert 'VS PAST 24/25' in page and 'Read-only' in page and 'tt-bar on' in page
     with app.app_context():
         # The live session is untouched in the DB.
         assert AcademicSession.query.filter_by(is_active=True).first().id == liveid
 
     c.post('/view-session', data={'_csrf_token': tok, 'session_id': liveid}, follow_redirects=True)
-    assert 'read-only' not in c.get('/students').get_data(as_text=True)
+    assert 'Read-only' not in c.get('/students').get_data(as_text=True)
+
+    # "Back to current" shares the form with the picker (whose value is still the
+    # past session) — it must return to the current session.
+    c.post('/view-session', data={'_csrf_token': tok, 'session_id': pastid}, follow_redirects=True)
+    c.post('/view-session', data={'_csrf_token': tok, 'session_id': pastid, 'back': '1'}, follow_redirects=True)
+    assert 'Read-only' not in c.get('/students').get_data(as_text=True)
 
 
 def test_non_admin_cannot_set_view_session(app):

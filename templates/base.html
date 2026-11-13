@@ -939,20 +939,24 @@
 
             {% set tt = time_travel() %}
             {% if tt.sessions and tt.sessions|length > 1 %}
-            <div class="time-travel-bar{% if tt.viewing %} active{% endif %}">
-                <form method="post" action="{{ url_for('main.set_view_session') }}" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:0;">
+            {% set tt_cur = tt.live.name if tt.live else 'current' %}
+            <div class="tt-bar{% if tt.viewing %} on{% endif %}">
+                <form method="post" action="{{ url_for('main.set_view_session') }}" class="tt-in">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     {% if tt.viewing %}
-                    <span><i class="fas fa-clock-rotate-left"></i> Viewing <strong>{{ tt.viewing.name }}</strong> (read-only) — not the current session.</span>
-                    {% else %}
-                    <span class="text-muted"><i class="fas fa-clock-rotate-left"></i> View a past session:</span>
+                    <span class="tt-ic" aria-hidden="true"><i class="fas fa-clock-rotate-left"></i></span>
+                    <span class="tt-t"><b>Viewing {{ tt.viewing.name }}</b><small><i class="fas fa-lock" aria-hidden="true"></i> Read-only — you can look but not change anything</small></span>
                     {% endif %}
-                    <select name="session_id" class="form-control" style="width:auto;" data-autosubmit>
-                        {% for s in tt.sessions %}
-                        <option value="{{ s.id }}" {% if (tt.viewing and tt.viewing.id == s.id) or (not tt.viewing and tt.live and tt.live.id == s.id) %}selected{% endif %}>{{ s.name }}{% if tt.live and tt.live.id == s.id %} (current){% endif %}</option>
-                        {% endfor %}
-                    </select>
-                    {% if tt.viewing %}<button type="submit" name="session_id" value="{{ tt.live.id if tt.live else 0 }}" class="btn btn-sm btn-light">Return to current</button>{% endif %}
+                    <label class="tt-pick" title="Switch session">
+                        {% if not tt.viewing %}<i class="fas fa-clock-rotate-left" aria-hidden="true"></i><span class="tt-k">Session</span>{% endif %}
+                        <select name="session_id" data-autosubmit aria-label="Academic session">
+                            {% for s in tt.sessions %}
+                            <option value="{{ s.id }}" {% if (tt.viewing and tt.viewing.id == s.id) or (not tt.viewing and tt.live and tt.live.id == s.id) %}selected{% endif %}>{{ s.name }}{% if tt.live and tt.live.id == s.id %} · current{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <i class="fas fa-chevron-down tt-chev" aria-hidden="true"></i>
+                    </label>
+                    {% if tt.viewing %}<button type="submit" name="back" value="1" class="tt-back"><i class="fas fa-arrow-rotate-left" aria-hidden="true"></i> Back to {{ tt_cur }}</button>{% endif %}
                 </form>
             </div>
             {% endif %}
@@ -1395,10 +1399,38 @@
         .bottom-nav .bn-item i{font-size:1.25rem;}
         .bottom-nav .bn-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
         .bottom-nav .bn-item.active{color:var(--primary);}
-        .time-travel-bar{padding:.5rem .9rem;font-size:.85rem;border-bottom:1px solid var(--border-color);background:var(--bg-card);}
-        .time-travel-bar.active{background:#fff6e5;color:#92400e;border-bottom:2px solid #f59e0b;}
-        [data-theme="dark"] .time-travel-bar.active{background:#3a2e12;color:#fcd34d;}
         .page-content{padding-bottom:4.6rem !important;}
+    }
+    /* Session switcher: a quiet pill normally, an amber banner when viewing a past session */
+    .tt-bar{display:flex;justify-content:flex-end;padding:.45rem 1rem 0}
+    .tt-in{display:flex;align-items:center;gap:.6rem;margin:0;min-width:0}
+    .tt-pick{position:relative;display:inline-flex;align-items:center;gap:.4rem;height:34px;padding:0 1.9rem 0 .75rem;border:1px solid var(--border-color);border-radius:999px;background:var(--bg-card);color:var(--text-secondary);font-size:.8rem;font-weight:600;margin:0;cursor:pointer;max-width:100%}
+    .tt-pick:hover{border-color:var(--primary);color:var(--primary)}
+    .tt-pick .tt-k{color:var(--text-muted);font-weight:600}
+    .tt-pick select{appearance:none;-webkit-appearance:none;border:0;background:none;font:inherit;font-weight:700;color:var(--text-primary);cursor:pointer;padding:0;min-width:0;max-width:100%;text-overflow:ellipsis}
+    .tt-pick select:focus{outline:none}
+    .tt-pick:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 15%,transparent)}
+    .tt-chev{position:absolute;right:.7rem;font-size:.6rem;color:var(--text-muted);pointer-events:none}
+    .tt-bar.on{padding:.6rem 1rem 0;justify-content:stretch}
+    .tt-bar.on .tt-in{flex:1;padding:.6rem .7rem .6rem .6rem;border-radius:14px;background:#fff7e8;border:1px solid #f5d38f;box-shadow:0 1px 2px rgba(146,64,14,.06)}
+    .tt-ic{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:#f59e0b;color:#fff;font-size:.95rem}
+    .tt-t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+    .tt-t b{color:#7c2d12;font-size:.92rem}
+    .tt-t small{color:#9a5b13;font-size:.76rem}
+    .tt-t small i{font-size:.65rem;margin-right:.2rem}
+    .tt-bar.on .tt-pick{background:#fff;border-color:#f0c97a}
+    .tt-back{flex:none;height:34px;padding:0 .9rem;border:0;border-radius:999px;background:#7c2d12;color:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+    .tt-back:hover{background:#9a3412}
+    [data-theme="dark"] .tt-bar.on .tt-in{background:#3a2e12;border-color:#7a5a1c}
+    [data-theme="dark"] .tt-t b{color:#fde68a}[data-theme="dark"] .tt-t small{color:#fcd34d}
+    [data-theme="dark"] .tt-bar.on .tt-pick{background:var(--bg-card);border-color:#7a5a1c}
+    [data-theme="dark"] .tt-back{background:#f59e0b;color:#1f1300}
+    @media (max-width:640px){
+      .tt-bar{padding:.4rem .75rem 0}
+      .tt-bar.on .tt-in{flex-wrap:wrap;row-gap:.55rem}
+      .tt-bar.on .tt-t{flex-basis:calc(100% - 50px)}
+      .tt-bar.on .tt-pick{flex:1}
+      .tt-bar.on .tt-back{flex:1;justify-content:center}
     }
     </style>
     <script nonce="{{ csp_nonce }}">
