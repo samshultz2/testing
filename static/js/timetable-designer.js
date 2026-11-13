@@ -452,7 +452,8 @@ function renderHead(){
     if(isTimeline() || isGazette() || isSwiss()){
         var w=ttl.trim().split(/\s+/), last=w.pop();
         el('pTitle').innerHTML = (w.length?esc(w.join(' '))+' ':'')+'<span class="tl-gold">'+esc(last||'')+'</span>';
-    } else el('pTitle').textContent = ttl;
+    } else if(isNotebook()) el('pTitle').innerHTML='<span class="nb-big">'+esc(ttl)+'</span>';
+    else el('pTitle').textContent = ttl;
     var sub=el('subtitle').value; el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
 }
 
@@ -954,7 +955,7 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return (isTimeline() || isTickets() || isGazette() || isSwiss()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 function tlModel(){
@@ -1324,12 +1325,86 @@ function renderSwissSheet(){
         + '<div class="sw-foot"><div class="sw-key">'+key+'</div><div class="sw-p">Printed<br>'+tlPrinted()+'</div></div></div>';
 }
 
+// ---------- "Exercise Book" theme ----------
+// A page from a pupil's exercise book: ruled paper, red margin, punched holes,
+// a filled-in cover label (the heading), coloured index tabs (one per date),
+// each date a "Week N" entry written on the lines; finished weeks faded with a
+// tick, the next class circled in marker with a sticky note.
+var NB_TABS=['#e03131','#f08c00','#2f9e44','#1971c2','#7048e8','#c2255c','#0c8599','#5c940d','#e8590c','#495057'];
+function isNotebook(){ return el('theme').value==='notebook'; }
+function renderNotebookSheet(){
+    var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var real=order.filter(function(k){ return !dmap[k].off; });
+    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var block=function(d){
+        if(!(d.groups||[]).length && d.banners.length){
+            return '<div class="nb-ev">'+d.banners.map(function(b){ return '<b>'+esc(b.subject||'')+'</b>'+((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':''); }).join('')+'</div>';
+        }
+        var gs = md.anyGroup ? md.groupsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
+        if(!gs.length) gs=[''];
+        var tmpl='grid-template-columns:3.3em repeat('+gs.length+',minmax(0,1fr))';
+        var out='<div class="nb-r nb-h" style="'+tmpl+'"><span></span>'+gs.map(function(g){ return '<span>'+esc(g||'Lesson')+'</span>'; }).join('')+'</div>';
+        periods.forEach(function(pd,i){
+            if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
+                out+='<div class="nb-r nb-brk" style="'+tmpl+'"><span>'+esc(fmtT(periods[i-1].end))+'</span><em style="grid-column:2 / -1">break</em></div>';
+            var cells='';
+            gs.forEach(function(g){
+                var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
+                var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
+                if(sg && sg===prev){ cells+='<div class="nb-c nb-cont">〃</div>'; return; }
+                var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
+                cells+='<div class="nb-c">'+(arr.length?arr.map(function(r){ return '<b>'+esc(r.subject||'—')+'</b>'+(n>1?'<u>'+(n===2?'double':n+' periods')+'</u>':'')
+                    + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join(''):'<span class="nb-free">—</span>')+'</div>';
+            });
+            out+='<div class="nb-r" style="'+tmpl+'"><span class="nb-t">'+esc(fmtT(pd.start))+'</span>'+cells+'</div>';
+        });
+        d.banners.forEach(function(b){ out+='<div class="nb-r nb-ban"><b>'+esc(b.subject||'')+'</b></div>'; });
+        return out;
+    };
+    var html='', offPending=[], offAll=[], idx=0;
+    order.forEach(function(k){
+        var d=dmap[k];
+        if(d.off){ offPending.push(gzDate(d)); offAll.push(gzDate(d)); return; }
+        var i=real.indexOf(k), col=NB_TABS[i % NB_TABS.length];
+        idx++;
+        var wk=(d.label||'').match(/^Week\s+(\d+)/i);
+        var pill=wk?('Week '+wk[1]):(isSaturdayLayout()?('Week '+idx):('Day '+idx));
+        var title=d.date?(dayFromDate(d.date)+', '+gzDate(d)):gzDate(d);
+        var past=nextIdx>=0 && i<nextIdx, nx=k===md.next;
+        var note=offPending.length?'<div class="nb-note">No class on '+esc(offPending.join(', '))+'</div>':'';
+        offPending=[];
+        html+='<section class="nb-wk'+(past?' past':'')+(nx?' nx':'')+'" style="--tab:'+col+'">'
+            + (nx?'<div class="nb-postit">Next class!<br><b>'+esc(d.date?gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2'):title)+'</b></div>':'')
+            + '<h3><span class="nb-pill">'+esc(pill)+'</span>'+esc(title)+(past?'<span class="nb-tick">✓</span>':'')+'</h3>'+note+block(d)+'</section>';
+    });
+    if(offPending.length && html){
+        var at=html.lastIndexOf('</h3>')+5;
+        html=html.slice(0,at)+'<div class="nb-note">No class on '+esc(offPending.join(', '))+' (after this)</div>'+html.slice(at);
+    }
+    var n=real.length||1;
+    var tabs=real.map(function(k,i){
+        return '<i class="'+(k===md.next?'on':'')+'" style="--tab:'+NB_TABS[i % NB_TABS.length]+';top:calc(14% + '+i+' * (80% / '+n+'));height:calc(80% / '+n+' - .35em)">'+(i+1)+'</i>'; }).join('');
+    var marks=[];
+    if(/nb-cont/.test(html)) marks.push('〃 continues from the period above');
+    if(/<u>/.test(html)) marks.push('double = two periods');
+    if(/nb-tick/.test(html)) marks.push('✓ done');
+    var holes=''; for(var h=0;h<9;h++) holes+='<i style="top:'+(4+h*11.5)+'%"></i>';
+    el('pBody').innerHTML='<div class="nb-holes">'+holes+'</div><div class="nb-tabs">'+tabs+'</div><div class="tl nb">'
+        + '<div class="tl-list nb-grid">'+html+'</div>'
+        + '<div class="nb-foot"><span>'+esc(marks.join(' · '))+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : renderTimelineSheet());
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
