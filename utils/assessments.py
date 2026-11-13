@@ -81,14 +81,36 @@ def term_maxes(term_id):
 def effective_max(subject, at, overrides=None, term=None, term_settings=None):
     """Effective max score for a subject + assessment type in a term.
 
-    Precedence (highest first): a per-term setting for that term → the subject's
-    own override → the global default. When no term is given (or the term has no
-    settings) this behaves exactly as before, so existing terms are unaffected."""
+    The Midterm / Practical (P/ME) and Theory columns follow the subject's own
+    "Midterm / practical" setting, whatever override rows exist (they could be
+    missing or stale, e.g. for subjects created by the setup wizard):
+
+      * with a mid-term / practical: P/ME at its normal max, Theory 40;
+      * without: no P/ME column (0), Theory 50.
+
+    A per-term setting for the column still wins (an admin's explicit choice for
+    a peculiar term); for a subject without a practical the term's P/ME is
+    folded into its Theory so the subject still totals the same. Other columns:
+    per-term setting → the subject's own override → the global default."""
     from models import SubjectAssessmentOverride
     term_id = term.id if hasattr(term, 'id') else term
+    if term_id and term_settings is None:
+        term_settings = term_maxes(term_id)
+    term_settings = term_settings or {}
+    has_prac = bool(getattr(subject, 'has_practical', True))
+    if is_midterm(at):
+        if not has_prac:
+            return 0
+        return term_settings.get(at.id, at.max_score)
+    if is_theory(at):
+        if at.id in term_settings:
+            if has_prac:
+                return term_settings[at.id]
+            from models import AssessmentType
+            mid = next((t for t in AssessmentType.query.filter_by(is_active=True).all() if is_midterm(t)), None)
+            return term_settings[at.id] + (term_settings.get(mid.id, mid.max_score) if mid else 0)
+        return THEORY_WITH_PRACTICAL if has_prac else THEORY_WITHOUT_PRACTICAL
     if term_id:
-        if term_settings is None:
-            term_settings = term_maxes(term_id)
         if at.id in term_settings:
             return term_settings[at.id]
     if overrides is None:

@@ -132,7 +132,9 @@ def persist_scores(term_id, assignment_id, class_subject_id, subject_id, items,
             continue
         # Reject out-of-range values (negative, or above the assessment maximum)
         # rather than silently clamping — a stored clamp would misrepresent the mark.
-        if val < 0 or (max_score and val > max_score):
+        # A max of 0 means the column isn't used for this subject (e.g. P/ME for a
+        # subject without a mid-term / practical) — nothing may be entered there.
+        if val < 0 or (max_score is not None and val > max_score):
             counts['rejected'] += 1
             continue
         if existing:

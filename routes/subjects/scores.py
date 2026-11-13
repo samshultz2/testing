@@ -108,11 +108,23 @@ def scores_entry():
                 'score': existing.get(enrollment.student_id),
             })
 
-    # Max score: per-term setting > subject override > global default.
+    # Max score: the subject's Midterm / practical rule, per-term setting,
+    # subject override, global default (see utils.assessments.effective_max).
     max_score = selected_assessment.max_score if selected_assessment else 0
     if selected_class_subject and selected_assessment:
         from utils.assessments import effective_max
         max_score = effective_max(selected_class_subject.subject, selected_assessment, term=term_id)
+    # Only the columns this subject uses (no P/ME for a subject without a
+    # mid-term / practical), each with the subject's own maximum.
+    if selected_class_subject:
+        from utils.assessments import subject_columns
+        at_choices = [{'id': at.id, 'name': at.name, 'max_score': mx}
+                      for at, mx in subject_columns(selected_class_subject.subject, term=term_id)]
+    else:
+        at_choices = [{'id': at.id, 'name': at.name, 'max_score': at.max_score} for at in assessment_types]
+    if selected_assessment and selected_class_subject and not max_score:
+        # A column the subject doesn't use (e.g. a stale link to P/ME).
+        selected_assessment, assessment_type_id, students_data = None, None, []
 
     # Roster for the "by student" entry mode: every student in the selected
     # class arm, so the UI can offer a live-filterable single-student picker
@@ -128,7 +140,7 @@ def scores_entry():
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'class_subjects': [{'id': cs.id, 'subject_name': cs.subject.name} for cs in class_subjects],
-        'assessment_types': [{'id': at.id, 'name': at.name, 'max_score': at.max_score} for at in assessment_types],
+        'assessment_types': at_choices,
         'selected_subject': selected_class_subject.subject.name if selected_class_subject else '',
         'selected_assessment': selected_assessment.name if selected_assessment else '',
         'max_score': max_score,
@@ -352,10 +364,12 @@ def bulk_entry():
 
     if request.method == 'POST' and selected and class_subjects and enrollments:
         total = {'saved': 0, 'rejected': 0, 'blocked': 0}
+        from utils.assessments import subject_columns
         for cs in class_subjects:
+            # Only the columns this subject uses, each with its own maximum.
             items = [(e.student_id, at.id,
-                      request.form.get(f's_{e.student_id}_{cs.id}_{at.id}'), at.max_score)
-                     for e in enrollments for at in assessment_types]
+                      request.form.get(f's_{e.student_id}_{cs.id}_{at.id}'), mx)
+                     for e in enrollments for at, mx in subject_columns(cs.subject, term=term_id)]
             counts = persist_scores(term_id, assignment_id, cs.id, cs.subject_id, items)
             if counts is None:
                 return _err('Results for this term are published — ask an admin to '
@@ -395,7 +409,10 @@ def bulk_entry():
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'has_grid': bool(selected and class_subjects and enrollments),
-        'class_subjects': [{'id': cs.id, 'subject_name': cs.subject.name} for cs in class_subjects],
+        'class_subjects': [{'id': cs.id, 'subject_name': cs.subject.name,
+                            'cols': [{'id': at.id, 'name': at.name, 'short_name': at.short_name or at.name,
+                                      'max_score': mx} for at, mx in _subject_cols(cs.subject, term_id)]}
+                           for cs in class_subjects],
         'assessment_types': [{'id': at.id, 'name': at.name, 'short_name': at.short_name or at.name,
                               'max_score': at.max_score} for at in assessment_types],
         'students': [{'id': s.id, 'full_name': s.full_name} for s in students],
@@ -403,6 +420,11 @@ def bulk_entry():
         'self_url': url_for('subjects.bulk_entry'), 'submit_url': url_for('subjects.bulk_entry'),
         'broadsheet_url': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
     })
+
+
+def _subject_cols(subject, term_id):
+    from utils.assessments import subject_columns
+    return subject_columns(subject, term=term_id)
 
 
 @subjects_bp.route('/api/student-subject-scores')
@@ -429,10 +451,9 @@ def api_student_subject_scores():
     ats = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
     existing = {s.assessment_type_id: s.score for s in StudentScore.query.filter_by(
         student_id=student_id, class_subject_id=class_subject_id).all()}
-    rows = [{'assessment_type_id': at.id, 'name': at.name,
-             'max_score': effective_max(cs.subject, at, term=term_id),
+    rows = [{'assessment_type_id': at.id, 'name': at.name, 'max_score': mx,
              'score': existing.get(at.id) if existing.get(at.id) is not None else ''}
-            for at in ats]
+            for at in ats for mx in [effective_max(cs.subject, at, term=term_id)] if mx > 0]
     return jsonify({'subject': cs.subject.name, 'student': student.full_name, 'rows': rows})
 
 
@@ -546,7 +567,8 @@ def import_scores():
             
             # Get assessment types
             assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
-            
+            from utils.assessments import effective_max
+
             # Expected columns: Student ID, then assessment type names
             errors = []
             items = []            # (student_id, at_id, raw, max_score)
@@ -565,7 +587,8 @@ def import_scores():
                 # Import each assessment score
                 for col_idx, at in enumerate(assessment_types, 1):
                     if col_idx < len(row) and row[col_idx] is not None:
-                        items.append((student.id, at.id, row[col_idx], at.max_score))
+                        mx = effective_max(cs.subject, at, term=term_id) if cs else at.max_score
+                        items.append((student.id, at.id, row[col_idx], mx))
 
             counts = persist_scores(term_id, assignment_id, class_subject_id,
                                     cs.subject_id if cs else None, items,

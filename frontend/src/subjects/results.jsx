@@ -683,10 +683,13 @@ export function BulkEntry({ d, notify }) {
   useUnsavedGuard(changed > 0);
   const atMax = (at) => Number(at.max_score) || 100;
   const bad = (v, at) => v !== '' && v != null && (Number(v) < 0 || Number(v) > atMax(at) || !Number.isFinite(Number(v)));
+  // Each subject's own columns (no P/ME for a subject without a mid-term /
+  // practical; Theory out of 40 or 50) — falls back to every assessment.
+  const colsOf = (cs) => cs.cols || d.assessment_types;
   const save = async (e) => {
     e.preventDefault(); setBusy(true);
     const fields = { term_id: d.term_id, assignment_id: d.assignment_id };
-    d.students.forEach((st) => d.class_subjects.forEach((cs) => d.assessment_types.forEach((at) => {
+    d.students.forEach((st) => d.class_subjects.forEach((cs) => colsOf(cs).forEach((at) => {
       fields['s_' + key(st.id, cs.id, at.id)] = cells[key(st.id, cs.id, at.id)] ?? '';
     })));
     const r = await submitJson(d.submit_url, fields);
@@ -694,8 +697,8 @@ export function BulkEntry({ d, notify }) {
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not save.');
   };
   const shown = only ? d.class_subjects.filter((cs) => String(cs.id) === String(only)) : d.class_subjects;
-  const filled = (cs) => d.students.reduce((a, st) => a + d.assessment_types.filter((at) => (cells[key(st.id, cs.id, at.id)] ?? '') !== '').length, 0);
-  const per = d.students.length * d.assessment_types.length;
+  const filled = (cs) => d.students.reduce((a, st) => a + colsOf(cs).filter((at) => (cells[key(st.id, cs.id, at.id)] ?? '') !== '').length, 0);
+  const per = (cs) => d.students.length * colsOf(cs).length;
   return (
     <div className={'rs' + (phone ? ' has-bar' : '')}>
       <Head icon="fa-table-cells" title="Whole-class grid" sub={subLine(d) || 'Every subject for a class on one screen'}>
@@ -706,13 +709,13 @@ export function BulkEntry({ d, notify }) {
       {d.has_grid ? (
         <form onSubmit={save}>
           <Chips label="Subjects shown" value={only} onChange={setOnly}
-                 items={[...(phone ? [] : [{ value: '', label: 'All subjects' }]), ...d.class_subjects.map((cs) => ({ value: String(cs.id), label: cs.subject_name, sub: `${pct(filled(cs), per)}%` }))]} />
+                 items={[...(phone ? [] : [{ value: '', label: 'All subjects' }]), ...d.class_subjects.map((cs) => ({ value: String(cs.id), label: cs.subject_name, sub: `${pct(filled(cs), per(cs))}%` }))]} />
           <div className="rs-card flush rs-grid-wrap">
             <table className="rs-grid">
               <thead>
                 <tr><th className="nm" rowSpan={2}>Student</th>
-                  {shown.map((cs) => <th className="subj" colSpan={d.assessment_types.length + 1} key={cs.id}>{cs.subject_name}</th>)}</tr>
-                <tr>{shown.map((cs) => [...d.assessment_types.map((at, i) => (
+                  {shown.map((cs) => <th className="subj" colSpan={colsOf(cs).length + 1} key={cs.id}>{cs.subject_name}</th>)}</tr>
+                <tr>{shown.map((cs) => [...colsOf(cs).map((at, i) => (
                   <th key={cs.id + '_' + at.id} className={i === 0 ? 'first' : ''} title={`${at.name} (out of ${at.max_score})`}>{at.short_name}<small>/{at.max_score}</small></th>)),
                   <th key={cs.id + '_t'} className="tot">Total</th>])}</tr>
               </thead>
@@ -720,7 +723,7 @@ export function BulkEntry({ d, notify }) {
                 <tr key={st.id}><td className="nm">{st.full_name}</td>
                   {shown.map((cs) => {
                     let t = 0; let any = false;
-                    const tds = d.assessment_types.map((at, i) => {
+                    const tds = colsOf(cs).map((at, i) => {
                       const k = key(st.id, cs.id, at.id); const v = cells[k] ?? '';
                       if (v !== '' && Number.isFinite(Number(v))) { t += Number(v); any = true; }
                       return <td key={k} className={i === 0 ? 'first' : ''}>

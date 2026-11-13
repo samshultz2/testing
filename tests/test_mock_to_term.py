@@ -63,7 +63,8 @@ def test_send_mock_scores_to_term_results(app):
         prac = Subject(name='Mathematics ' + tag, short_name='M' + tag, has_practical=True)
         # Literature: no mid-term / practical, sheet Theory 50 -> out of 80.
         nopr = Subject(name='Literature ' + tag, short_name='L' + tag, has_practical=False)
-        # Chemistry: no practical by its setting, but the sheet only allows Theory 40 -> flagged.
+        # Chemistry: no practical by its setting, with a stale override still saying
+        # Theory 40 — the score sheet now follows the setting too, so it's out of 80.
         small = Subject(name='Chemistry ' + tag, short_name='C' + tag, has_practical=False)
         db.session.add_all([prac, nopr, small]); db.session.flush()
         th_at = _exam_columns(prac, term_id)[-1][0]
@@ -89,7 +90,7 @@ def test_send_mock_scores_to_term_results(app):
     total_p = sum(mx for _, mx in cols[prac_id]); total_n = sum(mx for _, mx in cols[nopr_id])
     cbt_max = cols[prac_id][0][1]
     assert total_p == cbt_max + 40 and total_n == cbt_max + 50   # 70 vs 80 with CBT 30
-    assert 'Score sheet column too small' in html and 'Chemistry ' + tag in html
+    assert 'Score sheet column too small' not in html
     assert f'out of {total_p}' in html and f'out of {total_n}' in html
 
     tok = auth_csrf(c)
@@ -112,7 +113,8 @@ def test_send_mock_scores_to_term_results(app):
         got = stored(sub_id)
         assert [got[at_id] for at_id, _ in cols[sub_id]] == parts
         assert sum(parts) == want_total and all(float(p).is_integer() for p in parts)
-    assert stored(small_id) == {}                       # flagged, nothing written
+    small_total, small_parts = split(64, [cbt_max, 50])
+    assert sorted(stored(small_id).values()) == sorted(float(x) for x in small_parts)   # 51 / 80
 
     # Change the mock score: without "replace" existing scores are kept, with it they're updated.
     with app.app_context():
