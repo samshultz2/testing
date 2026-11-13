@@ -954,10 +954,10 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return isTimeline() && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
-function renderTimelineSheet(){
+function tlModel(){
     var pmap={}, periods=[];
     rows.forEach(function(r){ if(r.time && !isAll(r.group)){ var k=periodKey(r);
         if(!pmap[k]){ pmap[k]={k:k,start:r.time,end:r.dur?addMinutes(r.time,r.dur):''}; periods.push(pmap[k]); } } });
@@ -987,6 +987,16 @@ function renderTimelineSheet(){
             dmap[sv.iso]={off:true,date:sv.iso,sort:sv.iso,groups:[],cells:{},banners:[]}; order.push(sv.iso); } });
     }
     order.sort(function(a,b){ return String(dmap[a].sort).localeCompare(String(dmap[b].sort)); });
+    var today=tlTodayISO(), next='';
+    order.forEach(function(k){ var d=dmap[k]; if(!next && !d.off && d.date && toISO(d.date)>=today) next=k; });
+    var groupsAll=[]; rows.forEach(function(r){ var g=(r.group||'').trim(); if(g && !isAll(r.group) && groupsAll.indexOf(g)<0) groupsAll.push(g); });
+    return {periods:periods, colour:colour, teach:teach, anyGroup:anyGroup, dmap:dmap, order:order, next:next, groupsAll:groupsAll};
+}
+function tlPrinted(){ var now=new Date(); var m=TL_MON[now.getMonth()];
+    return now.getDate()+' '+m.charAt(0)+m.slice(1).toLowerCase()+' '+now.getFullYear(); }
+function renderTimelineSheet(){
+    var md=tlModel(), periods=md.periods, colour=md.colour, teach=md.teach, anyGroup=md.anyGroup,
+        dmap=md.dmap, order=md.order, groupsAll=md.groupsAll;
     if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
         el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
         return;
@@ -1007,8 +1017,7 @@ function renderTimelineSheet(){
     var tmpl=(anyGroup?'3.4em ':'')+tracks.join(' ');
     var lastCol=col;
     var breaks=periods.filter(function(pd){ return pd.brk; }).map(function(pd){ return pd.brk; });
-    var today=tlTodayISO(), next='';
-    order.forEach(function(k){ var d=dmap[k]; if(!next && !d.off && d.date && toISO(d.date)>=today) next=k; });
+    var next=md.next;
     var card=function(r, span, n){
         var sj=(r.subject||'').trim(), c=colour[sj]||'#a8a29e';
         var note=[(r.teacher||'').trim(), n>1?(n+' periods'):''].filter(Boolean).join(' · ');
@@ -1059,15 +1068,78 @@ function renderTimelineSheet(){
     });
     var keyHtml=Object.keys(colour).map(function(sj){
         return '<span style="--a:'+colour[sj]+'"><i></i><b>'+esc(sj)+'</b><em>'+esc(teach[sj].join(', '))+'</em></span>'; }).join('');
-    var groupsAll=[]; rows.forEach(function(r){ var g=(r.group||'').trim(); if(g && !isAll(r.group) && groupsAll.indexOf(g)<0) groupsAll.push(g); });
-    var now=new Date();
     el('pBody').innerHTML='<div class="tl">'
         + '<div class="tl-hd"><span></span><span></span><div class="tl-ln" style="grid-template-columns:'+tmpl+'">'+heads+'</div></div>'
         + '<div class="tl-list">'+html+'</div>'
         + (keyHtml?'<div class="tl-key">'+keyHtml+'</div>':'')
         + '<div class="tl-foot"><span>'+(groupsAll.length?esc(groupsAll.join(' · ')):'')+'</span><span>Printed '
-        + now.getDate()+' '+TL_MON[now.getMonth()].charAt(0)+TL_MON[now.getMonth()].slice(1).toLowerCase()+' '+now.getFullYear()+'</span></div>'
+        + tlPrinted()+'</span></div>'
         + '</div>';
+}
+
+// ---------- "Tickets" theme ----------
+// Each date is a cut-out ticket: a stub with the week / date on the left, a
+// perforated tear line, then one column per Class/Stream listing every lesson
+// as time · coloured dot · subject · teacher, with breaks in place, double
+// periods marked ×2, the coming date in gold and lesson-free Saturdays greyed.
+function isTickets(){ return el('theme').value==='tickets'; }
+function renderTicketsSheet(){
+    var md=tlModel(), periods=md.periods, colour=md.colour, dmap=md.dmap, order=md.order;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var line=function(time, r, n){
+        var sj=(r.subject||'').trim(), c=colour[sj]||'#8d99ae';
+        return '<li style="--c:'+c+'"><time>'+esc(time)+'</time><i></i><b>'+esc(sj||'—')
+             + (n>1?'<em>×'+n+'</em>':'')+'</b>'+((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':'')+'</li>';
+    };
+    var n=0, html='';
+    order.forEach(function(key){
+        var d=dmap[key], p=parseDateAny(d.date);
+        var big=p?('0'+p.d).slice(-2):esc((d.day||'').slice(0,3));
+        var mon=p?TL_MON[p.m-1]:'';
+        var wkNo=(d.label||'').match(/^Week\s+(\d+)/i);
+        if(d.off){
+            html+='<article class="tk off"><div class="tk-stub"><small>NO CLASS</small><div class="tk-dd"><b>'+big+'</b><span>'+mon+'</span></div></div>'
+                + '<div class="tk-perf"></div><div class="tk-main"><p class="tk-offm">No class this Saturday</p></div></article>';
+            return;
+        }
+        n++;
+        var isNext = key===md.next;
+        var stubTop = wkNo ? '<small>WEEK</small><span class="tk-wn">'+('0'+wkNo[1]).slice(-2)+'</span>'
+                           : (p ? '<small>'+esc(d.day.toUpperCase())+'</small>' : '');
+        var lanes='';
+        (md.anyGroup ? d.groups : ['']).forEach(function(g){
+            var items='';
+            for(var i=0;i<periods.length;){
+                var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr), j=i+1;
+                while(sg && j<periods.length && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
+                if(i>0 && periods[i].brk===undefined && periods[i-1].end && periods[i-1].end<periods[i].start){
+                    var mins=(function(a,b){ var x=a.split(':'),y=b.split(':'); return (+y[0]*60+ +y[1])-(+x[0]*60+ +x[1]); })(periods[i-1].end, periods[i].start);
+                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>Break · '+mins+' min</span></li>';
+                }
+                if(arr.length) arr.forEach(function(r){ items+=line(fmtT(periods[i].start), r, j-i); });
+                else items+='<li class="tk-free"><time>'+esc(fmtT(periods[i].start))+'</time><span>Free</span></li>';
+                // a break that falls inside a merged run is still shown after it
+                for(var q=i+1;q<j;q++){ if(periods[q-1].end && periods[q-1].end<periods[q].start){
+                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[q-1].end))+'</time><span>Break</span></li>'; } }
+                i=j;
+            }
+            lanes+='<div class="tk-lane">'+(md.anyGroup?'<h4>'+esc(g||'—')+'</h4>':'')+'<ol>'+items+'</ol></div>';
+        });
+        var bans=d.banners.map(function(b){ return '<div class="tk-ban"><b>'+esc(b.subject||'')+'</b>'
+            + ((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':'')+'</div>'; }).join('');
+        html+='<article class="tk'+(isNext?' nxt':'')+'"><div class="tk-stub">'+stubTop
+            + '<div class="tk-dd"><b>'+big+'</b>'+(mon?'<span>'+mon+'</span>':'')+'</div>'
+            + (p && wkNo ? '<small class="tk-day">'+esc(d.day.toUpperCase())+'</small>' : '')
+            + (isNext?'<span class="tk-next">NEXT CLASS</span>':'')+'</div><div class="tk-perf"></div>'
+            + '<div class="tk-main">'+(lanes?'<div class="tk-lanes">'+lanes+'</div>':'')+bans+'</div></article>';
+    });
+    var keyHtml=Object.keys(colour).map(function(sj){ return '<span style="--c:'+colour[sj]+'"><i></i>'+esc(sj)+'</span>'; }).join('');
+    el('pBody').innerHTML='<div class="tl tkx"><div class="tl-list tk-grid">'+html+'</div>'
+        + '<div class="tk-foot"><div class="tk-key">'+keyHtml+'</div><div class="tk-p">×2 = double period<br>Printed '+tlPrinted()+'</div></div></div>';
 }
 
 function renderSheet(){
@@ -1075,7 +1147,7 @@ function renderSheet(){
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) renderTimelineSheet();
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
@@ -1256,7 +1328,10 @@ function captureExport(){
     sizeTableForExport(sheet);                    // ...and now the content height too
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
-                        windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight})
+                        // The capture re-lays the page out in a frame this wide; keep it at
+                        // desktop width so the designer's tablet/phone rules (which hide the
+                        // preview) never apply to the copy — portrait sheets are only 1046px.
+                        windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: sheet.scrollHeight})
         .then(function(canvas){
             sheet.classList.remove('exporting', 'portrait');
             clearTableExportSizing();
