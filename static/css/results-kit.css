@@ -184,7 +184,30 @@
 .rs-roster{display:flex;flex-direction:column;gap:.6rem;padding:.8rem}
 .rs-roster-list{display:flex;flex-direction:column;max-height:60vh;overflow-y:auto}
 .rs-roster-list button{display:flex;align-items:center;gap:.6rem;padding:.5rem .55rem;border:0;background:none;border-radius:10px;font:inherit;font-size:.9rem;cursor:pointer;text-align:left;color:var(--text-primary)}
-.rs-roster-list button span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rs-roster-list button>span:not(.rs-ro-av):not(.rs-av){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* one-student roster */
+.rs-ro-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem}
+.rs-ro-h b{display:block;font-size:.95rem}.rs-ro-h small{color:var(--text-muted);font-size:.78rem}
+.rs-ro-bar{display:block;height:6px;border-radius:4px;background:var(--gray-100);overflow:hidden}
+.rs-ro-bar i{display:block;height:100%;background:var(--success);border-radius:4px;transition:width .3s}
+.rs-ro-seg{display:flex;gap:3px;background:var(--gray-100);border-radius:11px;padding:3px}
+.rs-ro-seg button{flex:1;height:34px;border:0;border-radius:9px;background:none;font:inherit;font-size:.82rem;font-weight:700;color:var(--text-secondary);cursor:pointer}
+.rs-ro-seg button small{font-size:.7rem;color:var(--text-muted);margin-left:.15rem}
+.rs-ro-seg button.on{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.rs-roster-list button.rs-ro{gap:.75rem;padding:.6rem .55rem;border-bottom:1px solid var(--border-light,var(--border-color));border-radius:0}
+.rs-roster-list button.rs-ro:last-child{border-bottom:0}
+.rs-roster-list button.rs-ro.on{border-radius:12px}
+.rs-ro-av{position:relative;flex:none;display:inline-flex}
+.rs-ro-av .rs-av{width:38px;height:38px;flex:none}
+.rs-ro-dot{position:absolute;right:-2px;bottom:-2px;width:13px;height:13px;border-radius:50%;border:2px solid var(--bg-card);background:var(--gray-300,#cbd5e1)}
+.rs-ro-dot.part{background:var(--warning)}.rs-ro-dot.done{background:var(--success)}
+.rs-ro-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:.1rem}
+.rs-ro-t b{font-size:.9rem;font-weight:700;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+.rs-ro-t small{font-size:.75rem;color:var(--text-muted);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-ro.done .rs-ro-t small{color:var(--success)}.rs-ro.part .rs-ro-t small{color:color-mix(in srgb,var(--warning) 75%,#000)}
+.rs-ro-go{color:var(--text-muted);font-size:.7rem;flex:none}
+.rs-ro-empty{padding:1rem .5rem;text-align:center}
+@media (max-width:760px){.rs-roster-list{max-height:none}.rs-roster-list button.rs-ro{padding:.7rem .4rem}.rs-ro-av .rs-av{width:42px;height:42px}}
 .rs-roster-list button>i{color:var(--text-muted);font-size:.7rem}
 .rs-roster-list button:hover{background:var(--gray-100)}
 .rs-roster-list button.on{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary);font-weight:700}

@@ -130,7 +130,21 @@ def scores_entry():
     # class arm, so the UI can offer a live-filterable single-student picker
     # without an extra round-trip.
     roster = [{'id': e.student.id, 'full_name': e.student.full_name,
-              'gender': e.student.gender or ''} for e in class_roster]
+              'gender': e.student.gender or '', 'student_id': e.student.student_id or ''}
+              for e in class_roster]
+    # Per-student progress for the selected subject (powers the one-student
+    # list: "5 of 7 · 42", done / part-done / not started).
+    if selected_class_subject and roster:
+        from utils.assessments import subject_columns
+        col_ids = {at.id for at, _mx in subject_columns(selected_class_subject.subject, term=term_id)}
+        got = {}
+        for sc in StudentScore.query.filter(StudentScore.class_subject_id == selected_class_subject.id,
+                                            StudentScore.assessment_type_id.in_(col_ids or [-1])).all():
+            g = got.setdefault(sc.student_id, [0, 0.0])
+            g[0] += 1; g[1] += sc.score or 0
+        for r in roster:
+            f, t = got.get(r['id'], [0, 0.0])
+            r.update({'filled': f, 'cols': len(col_ids), 'total': round(t, 1)})
 
     return _render({
         'page': 'scores', 'nav': _nav_urls(),

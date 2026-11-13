@@ -419,10 +419,24 @@ function StudentEntry({ d, notify }) {
   const [vals, setVals] = useState({});
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState('all');
+  // Live progress per student for this subject (seeded by the server, updated on save).
+  const [prog, setProg] = useState({});
+  useEffect(() => {
+    const m = {}; roster.forEach((s) => { m[s.id] = { filled: s.filled || 0, cols: s.cols || 0, total: s.total || 0 }; }); setProg(m);
+  }, [roster]);
+  const stateOf = (s) => { const p = prog[s.id]; if (!p || !p.cols || !p.filled) return 'none'; return p.filled >= p.cols ? 'done' : 'part'; };
+  const counts = useMemo(() => {
+    const c = { all: roster.length, todo: 0, done: 0 };
+    roster.forEach((s) => { if (stateOf(s) === 'done') c.done += 1; else c.todo += 1; });
+    return c;
+  }, [roster, prog]); // eslint-disable-line
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return t ? roster.filter((s) => s.full_name.toLowerCase().includes(t)) : roster;
-  }, [q, roster]);
+    return roster.filter((s) => (!t || (s.full_name + ' ' + (s.student_id || '')).toLowerCase().includes(t))
+      && (show === 'all' || (show === 'done' ? stateOf(s) === 'done' : stateOf(s) !== 'done')));
+  }, [q, roster, show, prog]); // eslint-disable-line
+  const nextTodo = roster.find((s) => stateOf(s) !== 'done');
   const load = React.useCallback(async (sid) => {
     if (!sid || !d.class_subject_id) { setRows(null); return; }
     setLoading(true);
@@ -446,6 +460,9 @@ function StudentEntry({ d, notify }) {
     setBusy(false);
     if (r.ok) {
       notify('success', r.message);
+      const filledNow = rows.filter((x) => (vals[x.assessment_type_id] ?? '') !== '').length;
+      const totalNow = rows.reduce((a, x) => a + (Number(vals[x.assessment_type_id]) || 0), 0);
+      setProg((m) => ({ ...m, [studentId]: { filled: filledNow, cols: rows.length, total: Math.round(totalNow * 10) / 10 } }));
       if (advance && idx >= 0 && idx < roster.length - 1) pick(roster[idx + 1].id); else load(studentId);
     } else notify('error', r.error || 'Could not save.');
   };
@@ -460,14 +477,30 @@ function StudentEntry({ d, notify }) {
     <div className="rs-two">
       {!(phone && picked) && (
         <section className="rs-card rs-roster">
+          <div className="rs-ro-h">
+            <div><b>{d.selected_subject || 'Students'}</b><small>{counts.done} of {counts.all} done</small></div>
+            {nextTodo && <button type="button" className="rs-btn sm primary" onClick={() => pick(nextTodo.id)}><i className="fas fa-forward" aria-hidden="true" /> Next to enter</button>}
+          </div>
+          <span className="rs-ro-bar" aria-hidden="true"><i style={{ width: (counts.all ? Math.round(100 * counts.done / counts.all) : 0) + '%' }} /></span>
           <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
             <input type="search" placeholder="Find a student" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a student" /></label>
+          <div className="rs-ro-seg" role="tablist" aria-label="Show">
+            {[['all', 'All', counts.all], ['todo', 'To do', counts.todo], ['done', 'Done', counts.done]].map(([k, l, n]) => (
+              <button type="button" key={k} role="tab" aria-selected={show === k} className={show === k ? 'on' : ''} onClick={() => setShow(k)}>{l} <small>{n}</small></button>))}
+          </div>
           <div className="rs-roster-list">
-            {filtered.map((s) => (
-              <button type="button" key={s.id} onClick={() => pick(s.id)} className={String(s.id) === String(studentId) ? 'on' : ''}>
-                <Avatar name={s.full_name} gender={s.gender} /><span>{s.full_name}</span><i className="fas fa-chevron-right" aria-hidden="true" /></button>
-            ))}
-            {!filtered.length && <p className="rs-muted">No students match.</p>}
+            {filtered.map((s) => {
+              const p = prog[s.id] || {}; const st = stateOf(s);
+              return (
+                <button type="button" key={s.id} onClick={() => pick(s.id)} className={'rs-ro ' + st + (String(s.id) === String(studentId) ? ' on' : '')}>
+                  <span className="rs-ro-av"><Avatar name={s.full_name} gender={s.gender} /><i className={'rs-ro-dot ' + st} aria-hidden="true" /></span>
+                  <span className="rs-ro-t"><b>{s.full_name}</b>
+                    <small>{st === 'done' ? <><i className="fas fa-circle-check" aria-hidden="true" /> Done · total {fmtNum(p.total)}</>
+                      : st === 'part' ? `${p.filled} of ${p.cols} entered · ${fmtNum(p.total)} so far`
+                      : (p.cols ? 'Not started' : (s.student_id || ''))}</small></span>
+                  <i className="fas fa-chevron-right rs-ro-go" aria-hidden="true" /></button>);
+            })}
+            {!filtered.length && <p className="rs-muted rs-ro-empty">{q ? 'No students match.' : show === 'done' ? 'Nobody finished yet.' : 'Everyone is done 🎉'}</p>}
           </div>
         </section>
       )}
