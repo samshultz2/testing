@@ -2684,13 +2684,60 @@ def _trash_payload():
     if tids is not None:
         q = q.filter(Student.id.in_(tids or [-1]))
     students = q.order_by(Student.surname, Student.first_name).all()
+    ids = [s.id for s in students] or [-1]
+    # Last class each student was in (latest term they were enrolled in).
+    last_class = {}
+    try:
+        from models import Term
+        rows = (db.session.query(StudentEnrollment.student_id, ClassArmAssignment, Term)
+                .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .join(Term, ClassArmAssignment.term_id == Term.id)
+                .filter(StudentEnrollment.student_id.in_(ids))
+                .all())
+        rows.sort(key=lambda r: (r[2].start_date or date.min, r[2].id))
+        for sid, caa, term in rows:      # later terms overwrite earlier ones
+            last_class[sid] = (caa.display_name, (term.session.name if term.session else ''))
+    except Exception:
+        db.session.rollback()
+    # Who deleted each one (newest delete entry in the audit log, when recorded).
+    deleted_by = {}
+    try:
+        from models import AuditLog
+        for a in (AuditLog.query.filter(AuditLog.action == 'delete_student', AuditLog.target_type == 'student',
+                                        AuditLog.target_id.in_(ids))
+                  .order_by(AuditLog.created_at.asc()).all()):
+            deleted_by[a.target_id] = (a.user or '', a.created_at)
+    except Exception:
+        db.session.rollback()
+    photo_ids = set()
+    try:
+        from models import StudentPhoto
+        photo_ids = {pid for (pid,) in db.session.query(StudentPhoto.student_id)
+                     .filter(StudentPhoto.student_id.in_(ids)).all()}
+    except Exception:
+        db.session.rollback()
+
+    def _when(s):
+        by = deleted_by.get(s.id)
+        dt = (by[1] if by and by[1] else None) or s.updated_at
+        return dt.strftime('%Y-%m-%d') if dt else ''
+
     return {
         'students': [{
             'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+            'surname': s.surname or '', 'first_name': s.first_name or '',
             'gender': s.gender, 'stream': s.stream,
+            'is_graduated': bool(s.is_graduated),
+            'last_class': (last_class.get(s.id) or ('', ''))[0],
+            'last_session': (last_class.get(s.id) or ('', ''))[1],
+            'deleted_on': _when(s),
+            'deleted_by': (deleted_by.get(s.id) or ('', None))[0],
+            'photo_url': url_for('main.student_photo', student_id=s.id) if s.id in photo_ids else '',
+            'view_url': url_for('main.view_student', student_id=s.id),
             'restore_url': url_for('main.restore_student', student_id=s.id),
             'purge_url': url_for('main.purge_student', student_id=s.id),
         } for s in students],
+        'today': timeutil.today().isoformat(),
         'can_manage': page_can_write(),
         # Trash-view access (students.trash) is separate from restore/purge
         # (students.restore / students.purge) -- canWrite(d,'restore'|'purge')

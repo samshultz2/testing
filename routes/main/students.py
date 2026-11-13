@@ -900,7 +900,7 @@ def delete_student(student_id):
         db.session.commit()
         from utils import query_cache
         query_cache.bump('dash')          # active student count changed
-        log_action('delete_student', f'{student.full_name} ({student.student_id})')
+        log_action('delete_student', f'{student.full_name} ({student.student_id})', target=student)
         from utils.notify import notify_student_change, actor_label
         notify_student_change('delete', detail=f'{student.full_name} ({student.student_id})',
                               actor=actor_label())
@@ -1285,6 +1285,7 @@ def bulk_delete_students():
         return jsonify({'error': 'Invalid student ids'}), 400
     ids = _manageable_student_ids(ids)
 
+    victims = Student.query.filter(Student.id.in_(ids), Student.is_active == True).all()  # noqa: E712
     deleted = Student.query.filter(
         Student.id.in_(ids), Student.is_active == True
     ).update({Student.is_active: False}, synchronize_session=False)
@@ -1292,6 +1293,10 @@ def bulk_delete_students():
     from utils import query_cache
     query_cache.bump('dash')              # active student count changed
     log_action('bulk_delete_students', f'{deleted} students soft-deleted')
+    # One entry per student too, so the Deleted Students page can say who
+    # removed each one.
+    for st in victims:
+        log_action('delete_student', f'{st.full_name} ({st.student_id}) — bulk', target=st)
     return jsonify({'deleted': deleted})
 
 
