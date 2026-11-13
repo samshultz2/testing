@@ -966,7 +966,10 @@ function tlModel(){
     var colour={}, teach={}, ci=0;
     rows.forEach(function(r){ var sj=(r.subject||'').trim(); if(!sj || isAll(r.group)) return;
         if(!(sj in colour)){ colour[sj]=TL_COLOURS[ci++ % TL_COLOURS.length]; teach[sj]=[]; }
-        var t=(r.teacher||'').trim(); if(t && teach[sj].indexOf(t)<0) teach[sj].push(t); });
+        // "Miss Gertrude" and "Miss. Gertrude" are the same person: compare
+        // without dots, extra spaces or case so the key lists them once.
+        var t=(r.teacher||'').trim(), nk=function(x){ return x.toLowerCase().replace(/[.\s]+/g,' ').trim(); };
+        if(t && !teach[sj].some(function(x){ return nk(x)===nk(t); })) teach[sj].push(t); });
     var anyGroup = rows.some(function(r){ return (r.group||'').trim() && !isAll(r.group); });
     var dmap={}, order=[];
     rows.forEach(function(r){
@@ -1014,7 +1017,7 @@ function renderTimelineSheet(){
              + (pd.end?'<small>to '+esc(clock12(pd.end,true))+'</small>':'')+'</div>';
         col++;
     });
-    var tmpl=(anyGroup?'3.4em ':'')+tracks.join(' ');
+    var tmpl=(anyGroup?'var(--tl-gw,3.4em) ':'')+tracks.join(' ');
     var lastCol=col;
     var breaks=periods.filter(function(pd){ return pd.brk; }).map(function(pd){ return pd.brk; });
     var next=md.next;
@@ -1025,13 +1028,13 @@ function renderTimelineSheet(){
              + '<b>'+esc(sj||'—')+'</b>'
              + (note?'<small>'+esc(note)+'</small>':'')+'</div>';
     };
-    var html='', n=0;
+    var parts=[], n=0;
     order.forEach(function(key){
         var d=dmap[key], p=parseDateAny(d.date);
         var big=p?('0'+p.d).slice(-2):esc((d.day||'').slice(0,3));
         var mon=p?TL_MON[p.m-1]:'';
         if(d.off){
-            html+='<div class="tl-wk off"><div class="tl-dt"><b>'+big+'</b><span>'+mon+'</span></div><div class="tl-rail"><i></i></div>'
+            parts[parts.length]='<div class="tl-wk off"><div class="tl-dt"><b>'+big+'</b><span>'+mon+'</span></div><div class="tl-rail"><i></i></div>'
                 + '<div class="tl-off">No class this Saturday</div></div>';
             return;
         }
@@ -1061,16 +1064,21 @@ function renderTimelineSheet(){
             lines+='<div class="tl-ln" style="grid-template-columns:'+tmpl+'"><div class="tl-ban" style="grid-column:1 / '+lastCol+'"><b>'
                  + esc(b.subject||'')+'</b>'+((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':'')+'</div></div>';
         });
-        html+='<div class="tl-wk'+(isNext?' nxt':'')+'"><div class="tl-dt"><b>'+big+'</b>'
+        parts[parts.length]='<div class="tl-wk'+(isNext?' nxt':'')+'"><div class="tl-dt"><b>'+big+'</b>'
             + (mon?'<span>'+mon+'</span>':'')
             + (isNext?'<em class="nx">NEXT</em>':(sub?'<em>'+esc(sub.replace(/^Week /,'Wk '))+'</em>':''))
             + '</div><div class="tl-rail"><i></i></div><div class="tl-body">'+lines+'</div></div>';
     });
     var keyHtml=Object.keys(colour).map(function(sj){
         return '<span style="--a:'+colour[sj]+'"><i></i><b>'+esc(sj)+'</b><em>'+esc(teach[sj].join(', '))+'</em></span>'; }).join('');
+    // Two halves, each with its own time row: stacked on portrait (the second
+    // time row hidden), side by side on a landscape page — so 8+ dates fit
+    // an A4 landscape sheet without shrinking.
+    var hd='<div class="tl-hd"><span></span><span></span><div class="tl-ln" style="grid-template-columns:'+tmpl+'">'+heads+'</div></div>';
+    var cut=Math.ceil(parts.length/2);
     el('pBody').innerHTML='<div class="tl">'
-        + '<div class="tl-hd"><span></span><span></span><div class="tl-ln" style="grid-template-columns:'+tmpl+'">'+heads+'</div></div>'
-        + '<div class="tl-list">'+html+'</div>'
+        + '<div class="tl-split"><div class="tl-half">'+hd+'<div class="tl-list">'+parts.slice(0,cut).join('')+'</div></div>'
+        + (parts.length>cut?'<div class="tl-half">'+hd+'<div class="tl-list">'+parts.slice(cut).join('')+'</div></div>':'')+'</div>'
         + (keyHtml?'<div class="tl-key">'+keyHtml+'</div>':'')
         + '<div class="tl-foot"><span>'+(groupsAll.length?esc(groupsAll.join(' · ')):'')+'</span><span>Printed '
         + tlPrinted()+'</span></div>'
@@ -1353,14 +1361,22 @@ function exportName(){
 // page — it never compresses a long one (that still just fits-to-page in the
 // PDF placement below, as before).
 function sizeTimelineForExport(sheet){
-    var list = document.querySelector('#pBody .tl-list');
-    if(!list) return false;
+    var lists = document.querySelectorAll('#pBody .tl-list');
+    if(!lists.length) return false;
+    var list = lists[0];
     var cs = getComputedStyle(sheet);
     var padTop = parseFloat(cs.paddingTop) || 0, padBottom = parseFloat(cs.paddingBottom) || 0;
     var canvasW = sheet.offsetWidth;
     var canvasH = _exportOrientation === 'portrait' ? canvasW * (297 / 210) : canvasW * (210 / 297);
     var extra = canvasH - sheet.offsetHeight;
-    if(extra > 0) list.style.minHeight = (list.offsetHeight + extra) + 'px';
+    if(extra > 0){
+        // Side-by-side lists each get all of the spare height; stacked ones share it.
+        var stacked = lists.length > 1 && lists[1].getBoundingClientRect().top > list.getBoundingClientRect().bottom - 1;
+        var each = stacked ? extra / lists.length : extra;
+        var hs = Array.prototype.map.call(lists, function(l){ return l.offsetHeight; });
+        if(!stacked){ var mx = Math.max.apply(null, hs); hs = hs.map(function(){ return mx; }); }
+        Array.prototype.forEach.call(lists, function(l, i){ l.style.minHeight = (hs[i] + each) + 'px'; });
+    }
     return true;
 }
 function sizeTableForExport(sheet){
@@ -1378,7 +1394,7 @@ function sizeTableForExport(sheet){
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = perRow + 'px';
 }
 function clearTableExportSizing(){
-    var list = document.querySelector('#pBody .tl-list'); if(list) list.style.minHeight = '';
+    Array.prototype.forEach.call(document.querySelectorAll('#pBody .tl-list'), function(l){ l.style.minHeight = ''; });
     var table = document.querySelector('#pBody table');
     if(!table) return;
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = '';

@@ -174,15 +174,16 @@
 .tt-sheet[data-theme="gazette"] .gz-lead h2{margin:.15em 0 .35em;font-family:Georgia,'Bitstream Charter','Charter',serif;font-weight:700;font-size:1.45em;line-height:1.05;letter-spacing:-.01em}
 .tt-sheet[data-theme="gazette"] .gz-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr}
 .tt-sheet.exporting:not(.portrait)[data-theme="gazette"] .gz-cols{grid-template-columns:repeat(3,minmax(0,1fr))}
+.tt-sheet.exporting:not(.portrait)[data-theme="gazette"] .gz-body{font-size:.94em}
 .tt-sheet.exporting:not(.portrait)[data-theme="gazette"] .gz-body{grid-template-columns:minmax(0,1fr) minmax(0,2.6fr)}
 .tt-sheet[data-theme="gazette"] .gz-cols article{padding:0 .55em .45em;border-bottom:1px solid #bbb;margin-bottom:.45em;border-right:1px solid #111;min-width:0}
 .tt-sheet[data-theme="gazette"] .gz-cols article h3{margin:0 0 .25em;font-family:Georgia,'Bitstream Charter','Charter',serif;font-weight:700;font-size:.95em;display:flex;align-items:baseline;gap:.35em;flex-wrap:wrap}
 .tt-sheet[data-theme="gazette"] .gz-cols article h3 span{font:800 .55em 'Inter',system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#b3261e}
 .tt-sheet[data-theme="gazette"] .gz-off p{margin:.2em 0 0;font-size:.68em;font-style:italic;color:#555}
-.tt-sheet[data-theme="gazette"] table.gz-tt{width:100%;border-collapse:collapse;margin:0;font-size:.66em;border:0}
+.tt-sheet[data-theme="gazette"] table.gz-tt{width:100%;border-collapse:collapse;margin:0;font-size:.7em;border:0}
 .tt-sheet[data-theme="gazette"] table.gz-tt th{font:700 .72em 'Inter',system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;text-align:left;border:0;border-bottom:1.5px solid #111;padding:.2em .25em;background:none;color:#111}
 .tt-sheet[data-theme="gazette"] table.gz-tt td{padding:.25em .25em;border:0;border-bottom:1px dotted #aaa;vertical-align:top;line-height:1.15;text-align:left;background:none}
-.tt-sheet[data-theme="gazette"] table.gz-tt td.gz-t{font:600 .82em 'Inter',system-ui,sans-serif;color:#555;width:2.6em;white-space:nowrap}
+.tt-sheet[data-theme="gazette"] table.gz-tt td.gz-t{font:600 .82em 'Inter',system-ui,sans-serif;color:#555;white-space:nowrap;padding-right:.6em}
 .tt-sheet[data-theme="gazette"] table.gz-tt td b{font-weight:700}
 .tt-sheet[data-theme="gazette"] table.gz-tt td i{font-size:.8em;color:#b3261e}
 .tt-sheet[data-theme="gazette"] table.gz-tt td small{display:block;font-size:.82em;font-style:italic;color:#555}
@@ -191,9 +192,9 @@
 .tt-sheet[data-theme="gazette"] table.gz-tt tr.gz-br td{font-style:italic;color:#888;font-size:.85em;text-align:center}
 .tt-sheet[data-theme="gazette"] table.gz-tt tr.gz-br td:first-child{text-align:left;font:600 .82em 'Inter',system-ui,sans-serif;color:#aaa}
 .tt-sheet[data-theme="gazette"] table.gz-tt tr.gz-ban td{text-align:center;font-size:1.05em;letter-spacing:.06em;text-transform:uppercase;padding:.45em .25em;border-bottom:1.5px solid #111}
-.tt-sheet[data-theme="gazette"] table.gz-tt.big{font-size:.74em}
+.tt-sheet[data-theme="gazette"] table.gz-tt.big{font-size:.8em}
 .tt-sheet[data-theme="gazette"] table.gz-tt.big th{padding:.35em .3em}
-.tt-sheet[data-theme="gazette"] table.gz-tt.big td{padding:.5em .3em}
+.tt-sheet[data-theme="gazette"] table.gz-tt.big td{padding:.4em .3em}
 .tt-sheet[data-theme="gazette"] .gz-box{margin-top:.8em;border:1.5px solid #111;padding:.5em .65em}
 .tt-sheet[data-theme="gazette"] .gz-box h4{margin:0 0 .3em;font:800 .48em 'Inter',system-ui,sans-serif;letter-spacing:.18em;text-transform:uppercase}
 .tt-sheet[data-theme="gazette"] .gz-box ul{list-style:none;margin:0;padding:0;font-size:.62em;line-height:1.5;columns:1}
@@ -210,6 +211,26 @@
 .tt-sheet[data-theme="gazette"] table.grid-tt.blankgrid th.col-sep,.tt-sheet[data-theme="gazette"] table.grid-tt.blankgrid td.col-sep,.tt-sheet[data-theme="gazette"] table.grid-tt.cols th.day-col,.tt-sheet[data-theme="gazette"] table.grid-tt.cols td.day-col{border-left:1px solid #111}
 .tt-sheet[data-theme="gazette"] table:not(.gz-tt) tbody tr:last-child td,.tt-sheet[data-theme="gazette"] table:not(.gz-tt) tbody tr:last-child th{border-bottom:4px double #111}
 .tt-sheet.exporting[data-theme="gazette"]{border:none}
+/* Narrow on-screen previews (phone, split screen): the sheet adapts to its
+   own width. Exports render at a fixed 1046/1480px, so they are unaffected. */
+.tt-sheet{container-type:inline-size}
+@container (max-width:760px){
+  .tt-sheet[data-theme="gazette"] .gz-body{grid-template-columns:minmax(0,1fr)}
+  .tt-sheet[data-theme="gazette"] .gz-lead{padding-right:0;border-right:0;border-bottom:1px solid #111;padding-bottom:.6em;margin-bottom:.6em}
+  .tt-sheet[data-theme="gazette"] .gz-cols article{border-right:0}
+  .tt-sheet[data-theme="gazette"] .gz-cols article:nth-child(odd){border-right:1px solid #111}
+  .tt-sheet[data-theme="tickets"] .tl.tkx .tk-grid{grid-template-columns:minmax(0,1fr)}
+}
+@container (max-width:520px){
+  .tt-sheet[data-theme="gazette"] .gz-cols{grid-template-columns:minmax(0,1fr)}
+  .tt-sheet[data-theme="gazette"] .gz-cols article:nth-child(odd){border-right:0}
+  .tt-sheet[data-theme="gazette"] .gz-dl{flex-wrap:wrap}
+  .tt-sheet[data-theme="timeline"] .tl-g{font-size:.4em}
+  .tt-sheet[data-theme="timeline"] .tl .tl-c{padding:.1em .25em .1em .3em}
+  .tt-sheet[data-theme="timeline"] .tl .tl-c b{font-size:.5em;overflow:hidden;text-overflow:ellipsis}
+  .tt-sheet[data-theme="timeline"] .tl .tl-c small{font-size:.48em;white-space:normal;overflow:visible}
+}
+
 .tt-sheet[data-theme="gazette"] .gz-cols article:nth-child(2n){border-right:0}
 .tt-sheet.exporting:not(.portrait)[data-theme="gazette"] .gz-cols article:nth-child(2n){border-right:1px solid #111}
 .tt-sheet.exporting:not(.portrait)[data-theme="gazette"] .gz-cols article:nth-child(3n){border-right:0}
@@ -217,9 +238,11 @@
 .tt-sheet[data-theme="gazette"] .gz-event{border-top:1.5px solid #111;border-bottom:4px double #111;padding:.8em .4em;text-align:center}
 .tt-sheet[data-theme="gazette"] .gz-event b{display:block;font-size:.85em;letter-spacing:.12em;text-transform:uppercase}
 .tt-sheet[data-theme="gazette"] .gz-event small{display:block;font-size:.6em;font-style:italic;color:#555;margin-top:.2em}
-.tt-sheet[data-theme="gazette"] table.gz-tt th:first-child{width:3.1em}
+.tt-sheet[data-theme="gazette"] table.gz-tt th:first-child{width:3.5em}
 .tt-sheet[data-theme="gazette"] table.gz-tt.big th{font-size:.6em;letter-spacing:.1em;overflow-wrap:break-word}
-.tt-sheet[data-theme="gazette"] table.gz-tt.big th:first-child{width:4em}
+.tt-sheet[data-theme="gazette"] table.gz-tt.big th:first-child{width:4.3em}
+.tt-sheet[data-theme="gazette"] table.gz-tt.big td.gz-t{padding-right:.8em}
+.tt-sheet[data-theme="gazette"] table.gz-tt td.gz-t{padding-right:.6em}
 
 /* tickets — each date a perforated ticket (renderTicketsSheet); tables keep
    the same navy / gold look. */
@@ -357,6 +380,19 @@
 .tt-sheet[data-theme="timeline"] table.grid-tt.cols td.day-col{border-left:1px solid #e7e2d6}
 .tt-sheet[data-theme="timeline"] table tbody tr:last-child td,.tt-sheet[data-theme="timeline"] table tbody tr:last-child th{border-bottom:3px solid #1d1b16}
 .tt-sheet.exporting[data-theme="timeline"]{border:none}
+.tt-sheet[data-theme="timeline"] .tl-split{display:flex;flex-direction:column}
+.tt-sheet[data-theme="timeline"] .tl-half{display:flex;flex-direction:column;min-width:0}
+.tt-sheet[data-theme="timeline"] .tl-half .tl-list{flex:1 1 auto}
+.tt-sheet[data-theme="timeline"] .tl-half+.tl-half .tl-hd{display:none}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-split{flex-direction:row;gap:1.2em;font-size:.84em;--tl-gw:2.5em}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-hd,.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-wk{grid-template-columns:3em 1.1em minmax(0,1fr);gap:.3em}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-ln{gap:.3em}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-c{padding:.1em .3em .1em .35em}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-g{font-size:.44em;letter-spacing:.04em}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-half{flex:1 1 0}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-half+.tl-half .tl-hd{display:grid}
+.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-key{grid-template-columns:repeat(auto-fill,minmax(14em,1fr))}
+.tt-sheet.exporting:not(.portrait)[data-theme="tickets"] .tk-grid{font-size:.9em}
 .tt-sheet[data-theme="timeline"] table td,.tt-sheet[data-theme="timeline"] table tbody th{vertical-align:middle}
 .tt-sheet[data-theme="timeline"] table thead th{vertical-align:bottom}
 .tt-sheet[data-theme="timeline"] table:not(.grid-tt) td:first-child{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#a16207}
