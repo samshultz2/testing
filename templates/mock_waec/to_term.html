@@ -128,7 +128,7 @@
       {% if c.get('no_subject') %}<li><b>{{ c.no_subject }}</b> are subjects that aren’t set up for the student’s class in {{ term.name }} — add them under <a href="{{ url_for('subjects.class_subjects_list', term_id=term.id) }}">Class subjects</a>.</li>{% endif %}
       {% if c.get('no_columns') %}<li><b>{{ c.no_columns }}</b> are subjects with no CBT or Theory column this term (check Settings → Assessments).</li>{% endif %}
       {% if c.get('sheet_small') %}{% set small = plan.rows|selectattr('status', 'equalto', 'sheet_small')|map(attribute='subject')|unique|list %}
-      <li><b>{{ c.sheet_small }}</b> are in {{ small|join(', ') }}: the subject has no mid-term / practical, so Theory needs to be out of 50, but this term’s score sheet only allows {{ (plan.rows|selectattr('status', 'equalto', 'sheet_small')|first).columns|map(attribute='sheet_max')|join(' / ') }}. Check the subject’s <b>Midterm / practical</b> setting on <a href="{{ url_for('subjects.subjects_list') }}">Subjects</a> (open it and save) or the term’s settings under Settings → Assessments.</li>{% endif %}
+      <li><b>{{ c.sheet_small }}</b> are in {{ small|join(', ') }}: the subject has no mid-term / practical, so Theory needs to be out of 50, but this term’s score sheet only allows {% for col in (plan.rows|selectattr('status', 'equalto', 'sheet_small')|first).columns if col.max > col.sheet_max %}{{ col.label }} out of {{ col.sheet_max }}{{ ', ' if not loop.last }}{% endfor %}. Check the subject’s <b>Midterm / practical</b> setting on <a href="{{ url_for('subjects.subjects_list') }}">Subjects</a> (open it and save) or the term’s settings under Settings → Assessments.</li>{% endif %}
     </ul>
   </section>
   {% endif %}
