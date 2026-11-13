@@ -1719,7 +1719,22 @@ PROFILE_FILTERS = {
     'no_waec_subjects': 'No WAEC subjects chosen',
     'no_jamb_subjects': 'No JAMB subjects chosen',
     'no_health': 'No blood group or genotype',
+    # Medical — offered only to staff allowed to see medical details.
+    'has_medical': 'Any medical condition or allergy',
+    'has_condition': 'Has an existing condition',
+    'has_allergy': 'Has an allergy',
+    'on_medication': 'On regular medication',
+    'has_disability': 'Has a disability',
+    'genotype_ss': 'Genotype SS / SC (sickle cell)',
+    'cond_asthma': 'Asthma',
+    'cond_epilepsy': 'Epilepsy',
+    'cond_diabetes': 'Diabetes',
+    'cond_heart': 'Heart condition',
 }
+MEDICAL_PROFILE_KEYS = ('has_medical', 'has_condition', 'has_allergy', 'on_medication', 'has_disability',
+                        'genotype_ss', 'cond_asthma', 'cond_epilepsy', 'cond_diabetes', 'cond_heart')
+_COND_TERMS = {'cond_asthma': ('asthma',), 'cond_epilepsy': ('epilep', 'seizure'),
+               'cond_diabetes': ('diabet',), 'cond_heart': ('heart', 'cardiac')}
 PROFILE_GROUPS = [
     ('Profile completeness', ['incomplete', 'no_dob', 'no_contact', 'no_email', 'no_photo', 'no_address']),
     ('NIN', ['has_nin', 'no_nin']),
@@ -1727,6 +1742,7 @@ PROFILE_GROUPS = [
     ('Portal access', ['no_portal', 'has_portal']),
     ('Exam details', ['no_jamb_reg', 'no_waec_reg', 'no_neco_reg', 'no_waec_subjects', 'no_jamb_subjects']),
     ('Health', ['no_health']),
+    ('Medical', list(MEDICAL_PROFILE_KEYS)),
 ]
 
 
@@ -1776,6 +1792,26 @@ def _apply_profile_filter(query, key, active_term):
         return query.filter(_blank(col))
     if key == 'no_health':
         return query.filter(db.or_(_blank(Student.blood_group), _blank(Student.genotype)))
+    if key in MEDICAL_PROFILE_KEYS:
+        if not _can_medical():
+            return query.filter(db.false())
+        _none = ('none', 'nil', 'n/a', 'na', 'no', '-')
+
+        def _filled(col):
+            return db.and_(~_blank(col), ~db.func.lower(db.func.trim(col)).in_(_none))
+        if key == 'has_medical':
+            return query.filter(db.or_(_filled(Student.medical_conditions), _filled(Student.allergies),
+                                       _filled(Student.medications), _filled(Student.disabilities),
+                                       db.func.upper(db.func.trim(Student.genotype)).in_(('SS', 'SC'))))
+        col = {'has_condition': Student.medical_conditions, 'has_allergy': Student.allergies,
+               'on_medication': Student.medications, 'has_disability': Student.disabilities}.get(key)
+        if col is not None:
+            return query.filter(_filled(col))
+        if key == 'genotype_ss':
+            return query.filter(db.func.upper(db.func.trim(Student.genotype)).in_(('SS', 'SC')))
+        terms = _COND_TERMS.get(key, ())
+        return query.filter(db.or_(*[db.func.lower(Student.medical_conditions).like('%' + t + '%')
+                                     for t in terms]))
     return query
 
 
@@ -1966,7 +2002,13 @@ def _students_payload():
     perms = current_section_perms()
     can_add = perms['subs'].get('create', {}).get('write', False)
     can_edit_student = perms['subs'].get('edit', {}).get('write', False)
+    can_medical = _can_medical()
+    med_map = {}
+    if can_medical:
+        from utils.medical import medical_map
+        med_map = medical_map(pg.items)
     students = [{
+        'medical': med_map.get(s.id) or None,
         'id': s.id,
         'student_id': s.student_id,
         'name': s.full_name,
@@ -2040,13 +2082,14 @@ def _students_payload():
             'subjects': list(WAEC_SUBJECTS),
             'houses': houses,
             'profile': [{'group': g, 'options': [{'value': k, 'label': PROFILE_FILTERS[k]} for k in keys]}
-                        for g, keys in PROFILE_GROUPS],
+                        for g, keys in PROFILE_GROUPS if g != 'Medical' or _can_medical()],
         },
         # Generic per-sub-section {level, write} block (utils.spa) so the React
         # app can gate each button (Add/Edit/Delete/Trash/Restore/Purge) on its
         # OWN specific grant via canWrite(d, sub) -- can_manage/can_add above
         # stay as a coarser fallback other parts of this payload still use.
         'perms': perms,
+        'can_medical': can_medical,
         'can_manage': can_manage,
         'can_add': can_add,
         'can_admin': is_admin(),   # admin-only bulk tools (add subject / delete)
@@ -2383,7 +2426,7 @@ def _student_view_payload(student):
                      'allergies': student.allergies, 'medical_conditions': student.medical_conditions,
                      'disabilities': student.disabilities, 'medications': student.medications,
                      'medical_notes': student.medical_notes, 'emergency_medical': student.emergency_medical}
-                    if student.has_medical else None),
+                    if student.has_medical and _can_medical() else None),
         'contacts': [{'name': c.name, 'is_primary': bool(c.is_primary),
                       'phone_number': c.phone_number, 'relationship': c.relationship} for c in contacts],
         'enrollments': [{'term': e.class_arm_assignment.term.name,
@@ -2467,6 +2510,15 @@ _OPTIONAL_STUDENT_FIELDS = (
 )
 
 
+MEDICAL_FIELDS = ('blood_group', 'genotype', 'allergies', 'medical_conditions', 'disabilities',
+                  'medications', 'medical_notes', 'emergency_medical')
+
+
+def _can_medical():
+    from utils.access_control import can_view_medical
+    return can_view_medical()
+
+
 def _apply_optional_student_fields(student, form, has=None):
     """Copy the optional identity/medical/pastoral fields from a form onto a
     student. ``has(key)`` decides whether a given field is present in this POST
@@ -2474,7 +2526,12 @@ def _apply_optional_student_fields(student, form, has=None):
     from utils.security import strip_tags
     if has is None:
         has = lambda k: True   # noqa: E731
+    medical_ok = _can_medical()
     for f in _OPTIONAL_STUDENT_FIELDS:
+        # Staff without the medical permission never see these fields, so a
+        # save from them must leave whatever is recorded untouched.
+        if f in MEDICAL_FIELDS and not medical_ok:
+            continue
         if has(f):
             val = (form.get(f) or '').strip()
             setattr(student, f, strip_tags(val) or None)

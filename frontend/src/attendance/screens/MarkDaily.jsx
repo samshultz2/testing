@@ -349,7 +349,7 @@ export default function MarkDaily() {
                         <button type="button" className="md-who" onClick={() => flipBoth(s.enrollment_id)}
                                 aria-label={`${s.name}: ${st === 'out' ? 'absent' : st === 'half' ? 'half day' : 'present'}. Tap to toggle the whole day.`}>
                           <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
-                          <span className="md-name">{s.name}<small>{s.student_id}{st === 'out' ? ' · absent' : st === 'half' ? ' · half day' : ''}</small></span>
+                          <span className="md-name"><span>{s.name}{s.medical && <i role="img" aria-label={'Medical: ' + s.medical} className="fas fa-heart-pulse md-med" title={s.medical} />}</span><small>{s.student_id}{st === 'out' ? ' · absent' : st === 'half' ? ' · half day' : ''}</small></span>
                         </button>
                         <button type="button" className={'md-tg' + (v.am ? ' on' : '')} aria-pressed={v.am}
                                 onClick={() => toggle(s.enrollment_id, 'am')} aria-label={`${s.name} present morning`}>

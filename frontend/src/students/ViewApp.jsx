@@ -520,7 +520,7 @@ export default function ViewApp({ initial }) {
                     {d.medical.blood_group && <Info label="Blood Group"><span className="badge badge-danger">{d.medical.blood_group}</span></Info>}
                     {d.medical.genotype && <Info label="Genotype"><span className="badge badge-warning">{d.medical.genotype}</span></Info>}
                     {d.medical.allergies && <Info label="Allergies">{d.medical.allergies}</Info>}
-                    {d.medical.medical_conditions && <Info label="Conditions">{d.medical.medical_conditions}</Info>}
+                    {d.medical.medical_conditions && <Info label="Conditions">{d.medical.medical_conditions.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).map((c) => <span key={c} className="badge badge-danger" style={{ marginRight: '.3rem', marginBottom: '.2rem', display: 'inline-block' }}>{c}</span>)}</Info>}
                     {d.medical.disabilities && <Info label="Disabilities">{d.medical.disabilities}</Info>}
                     {d.medical.medications && <Info label="Medications">{d.medical.medications}</Info>}
                     {d.medical.medical_notes && <Info label="Notes">{d.medical.medical_notes}</Info>}

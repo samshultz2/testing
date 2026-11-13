@@ -111,6 +111,7 @@ MODULE_SUBSECTIONS = {
         'purge': 'Delete Forever',
         'idcards': 'ID Cards & Export',
         'welfare': 'Discipline & Sick Bay',
+        'medical': 'View Medical Details (conditions, allergies, medication)',
     },
     'admissions': {
         'view': 'View Admissions',
@@ -538,7 +539,8 @@ CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
                           'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
                           'hr.self_leave', 'hr.self_loans', 'hr.self_documents',
                           'library.self_loans', 'sales.self_sales',
-                          'settings.ocr_manage', 'settings.payments_manage'}
+                          'settings.ocr_manage', 'settings.payments_manage',
+                          'students.medical'}
 
 # Self-scope capabilities: an explicit grant that lets a user act on their OWN
 # record only (never other people's) — the finest permission tier. They ride on
@@ -1264,6 +1266,18 @@ def can_generate_result_cards():
     if is_admin() and is_central():
         return True
     return has_capability('results.cards')
+
+
+def can_view_medical():
+    """Medical details (conditions, allergies, medication, notes) are private:
+    any admin sees them; other staff only with an explicit 'students.medical'
+    grant (e.g. the school nurse or a class teacher)."""
+    try:
+        if is_admin():
+            return True
+        return has_capability('students.medical')
+    except Exception:
+        return False
 
 
 def can_manage_ocr_settings():

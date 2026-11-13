@@ -123,11 +123,17 @@ def api_roster():
     existing = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
         Attendance.date == target).all()}
+    from utils.access_control import can_view_medical
+    med_map = {}
+    if can_view_medical():
+        from utils.medical import medical_map
+        med_map = medical_map([e.student for e in enrollments])
     students = [{
         'enrollment_id': e.id,
         'student_id': e.student.student_id,
         'name': e.student.full_name,
         'gender': e.student.gender,
+        'medical': med_map.get(e.student.id),
         'morning_present': existing[e.id].morning_present if e.id in existing else True,
         'afternoon_present': existing[e.id].afternoon_present if e.id in existing else True,
     } for e in enrollments]

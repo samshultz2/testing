@@ -673,7 +673,7 @@ export default function App({ initial }) {
                   <a href={selectMode ? undefined : s.url} className="sl-row-main" onClick={selectMode ? (e) => { e.preventDefault(); toggleSel(s.id); } : undefined}>
                     <StudentAvatar name={s.name} photo={s.photo_url} size={42} tint />
                     <span className="sl-row-text">
-                      <b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b>
+                      <b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}{s.medical && <i role="img" aria-label={'Medical: ' + s.medical} className="fas fa-heart-pulse sl-med" title={s.medical} />}</b>
                       <small>
                         <span className={'sl-g ' + (s.gender === 'Male' ? 'm' : s.gender === 'Female' ? 'f' : '')} title={s.gender || ''} />
                         {s.current_class || 'No class'}<span className="sl-sep">·</span>{s.student_id}
@@ -701,7 +701,7 @@ export default function App({ initial }) {
                 <tr key={s.id} className={selected.has(s.id) ? 'is-sel' : ''}>
                   <td className="sl-check"><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} /></td>
                   <td><a href={s.url} className="sl-who"><StudentAvatar name={s.name} photo={s.photo_url} size={34} tint />
-                    <span><b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b><small>{s.student_id}</small></span></a></td>
+                    <span><b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}{s.medical && <i aria-hidden="true" className="fas fa-heart-pulse sl-med" />}</b><small>{s.student_id}</small>{s.medical && <small className="sl-medtx" title={s.medical}><span className="sr-only">Medical: </span>{s.medical}</small>}</span></a></td>
                   <td>{s.current_class || <span className="text-muted">—</span>}</td>
                   <td>{s.stream ? <span className="sl-tag">{s.stream}</span> : <span className="text-muted">—</span>}</td>
                   <td>{s.gender ? <span className={'sl-gender ' + (s.gender === 'Male' ? 'm' : 'f')}><i className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} aria-hidden="true" /> {s.gender}</span> : <span className="text-muted">—</span>}</td>
@@ -730,7 +730,7 @@ export default function App({ initial }) {
         document.body)}
 
       {showExport && (
-        <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url}
+        <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url} medical={!!d.can_medical}
                      filterText={exportFilterText(query, filters)}
                      applied={{ ...query, page: undefined }} onClose={() => setShowExport(false)} />
       )}

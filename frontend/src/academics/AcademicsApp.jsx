@@ -366,7 +366,7 @@ function ViewAssignment({ d, notify }) {
                       <span className={'ac-pav ' + (e.gender === 'Male' ? 'b' : e.gender === 'Female' ? 'g' : '')} aria-hidden="true">
                         {((e.surname || e.full_name || '?')[0] + ((e.first_name || '')[0] || '')).toUpperCase()}</span>
                       <a href={e.view_url} className="ac-pname" onClick={(ev) => { if (selMode) { ev.preventDefault(); toggleMove(e.student_id); } }}>
-                        <span className="ac-nm">{fmtName(e)}</span>
+                        <span className="ac-nm">{fmtName(e)}{e.medical && <i role="img" aria-label={'Medical: ' + e.medical} className="fas fa-heart-pulse ac-med" title={e.medical} />}</span>
                         <small>{e.student_no}{order !== 'gender' && e.gender ? ` · ${e.gender}` : ''}</small>
                       </a>
                       {canRemove && !selMode && (

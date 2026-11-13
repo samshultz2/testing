@@ -315,6 +315,7 @@ def add_student():
         'mode': 'add',
         'student': {'gender': '', 'waec_subjects': [], 'jamb_subjects': []},
         'contacts': [_blank_contact()],
+        'can_medical': _can_medical(),
         'options': _student_form_options(with_enrolment=True),
         'urls': {'submit': url_for('main.add_student'),
                  'cancel': url_for('main.students_list')},
@@ -869,6 +870,7 @@ def edit_student(student_id):
             'scholarships': [sc.as_dict() for sc in student.scholarships.all()],
         },
         'contacts': contacts or [_blank_contact()],
+        'can_medical': _can_medical(),
         'options': _student_form_options(exam_year=_exam_year_for(student)),
         'return_to': return_to,
         'urls': {'submit': url_for('main.edit_student', student_id=student.id),
@@ -876,6 +878,9 @@ def edit_student(student_id):
                  'list': url_for('main.students_list'),
                  'recommend': url_for('main.api_recommend_courses', student_id=student.id)},
     }
+    if not payload['can_medical']:
+        for k in MEDICAL_FIELDS:
+            payload['student'].pop(k, None)
     return render_template('students/edit.html', form_json=payload,
                            student_name=student.full_name, student_sid=student.student_id)
 
@@ -1426,16 +1431,22 @@ EXPORT_COLUMNS = {
     'jamb_reg_number': ('JAMB reg.', 'exam'), 'waec_reg_number': ('WAEC reg.', 'exam'),
     'serial_number': ('WAEC serial', 'exam'), 'waec_epin': ('WAEC e-PIN', 'exam'),
     'neco_reg_number': ('NECO reg.', 'exam'), 'neco_epin': ('NECO token', 'exam'),
+    # Medical — only exported for staff allowed to see medical details.
+    'medical_conditions': ('Conditions', 'wrap'), 'allergies': ('Allergies', 'wrap'),
+    'medications': ('Medications', 'wrap'), 'disabilities': ('Disabilities', 'wrap'),
+    'blood_group': ('Blood group', 'text'), 'genotype': ('Genotype', 'text'),
+    'emergency_medical': ('Emergency instructions', 'wrap'),
 }
 # Spreadsheets / CSV keep the full, import-friendly column names.
 EXPORT_DATA_LABELS = {
+    'medical_conditions': 'Medical Conditions', 'emergency_medical': 'Emergency Medical Instructions',
     'first_name': 'First Name', 'middle_name': 'Middle Name', 'date_of_birth': 'Date of Birth',
     'home_address': 'Home Address', 'parent_phone': 'Parent Phone', 'jamb_profile_code': 'JAMB Profile Code',
     'jamb_reg_number': 'JAMB Reg Number', 'waec_reg_number': 'WAEC Reg Number', 'neco_reg_number': 'NECO Reg Number',
     'serial_number': 'WAEC Serial Number', 'waec_epin': 'WAEC e-PIN', 'neco_epin': 'NECO Token / e-PIN',
 }
 EXPORT_DOC_TAGS = {'class': 'Student list', 'contact': 'Contact list', 'exam': 'Exam numbers',
-                   'all': 'Student records'}
+                   'all': 'Student records', 'medical': 'Medical list'}
 
 
 def _natural_key(s):
@@ -1447,7 +1458,10 @@ def _export_fields(raw):
     """Ordered, de-duplicated export fields. Old clients send surname +
     first_name (+ middle_name): fold those into one Name column."""
     fields = []
+    medical_ok = _can_medical()
     for f in raw or []:
+        if f in MEDICAL_FIELDS and not medical_ok:
+            continue
         if f in EXPORT_COLUMNS and f not in fields:
             fields.append(f)
     if 'name' not in fields and 'surname' in fields and 'first_name' in fields:
@@ -1473,7 +1487,7 @@ def _export_auto_heading(preset, n_classes):
         arm = a.name if a else None
     who = ' '.join(x for x in (cls, arm) if x)
     base = {'class': 'Class List', 'contact': 'Contact List', 'exam': 'Exam Registration',
-            'all': 'Student Records'}.get(preset, 'Class List' if who else 'Student List')
+            'all': 'Student Records', 'medical': 'Medical List'}.get(preset, 'Class List' if who else 'Student List')
     title = ('%s %s' % (who, base)).strip() if who else ('Student List' if base == 'Class List' else base)
     bits = []
     sess = get_active_session()

@@ -13,6 +13,9 @@ const LABELS = {
   nin: 'NIN', jamb_reg_number: 'JAMB reg.', jamb_profile_code: 'JAMB profile',
   waec_reg_number: 'WAEC reg.', serial_number: 'WAEC serial', waec_epin: 'WAEC e-PIN',
   neco_reg_number: 'NECO reg.', neco_epin: 'NECO token',
+  medical_conditions: 'Conditions', allergies: 'Allergies', medications: 'Medications',
+  disabilities: 'Disabilities', blood_group: 'Blood group', genotype: 'Genotype',
+  emergency_medical: 'Emergency instructions',
 };
 const GROUPS = [
   ['Identity', ['student_id', 'name', 'middle_name', 'photo']],
@@ -22,6 +25,11 @@ const GROUPS = [
                     'neco_reg_number', 'neco_epin']],
 ];
 const ALL = GROUPS.flatMap(([, ks]) => ks);
+// Only offered to staff allowed to see medical details (server checks too).
+const MED_GROUP = ['Medical', ['medical_conditions', 'allergies', 'medications', 'disabilities', 'blood_group',
+                               'genotype', 'emergency_medical']];
+const MED_PRESET = ['medical', 'Medical list', 'fa-notes-medical',
+  ['name', 'current_class', 'medical_conditions', 'allergies', 'medications', 'parent_phone']];
 const PRESETS = [
   ['class', 'Class list', 'fa-list-ul', ['student_id', 'name', 'gender', 'current_class', 'parent_phone']],
   ['contact', 'Contact list', 'fa-phone', ['name', 'current_class', 'parent_phone', 'home_address']],
@@ -59,7 +67,9 @@ function Toggle({ on, onChange, children }) {
   );
 }
 
-export default function ExportModal({ total, selectedIds, exportUrl, applied, filterText, onClose }) {
+export default function ExportModal({ total, selectedIds, exportUrl, applied, filterText, onClose, medical }) {
+  const groups = medical ? [...GROUPS, MED_GROUP] : GROUPS;
+  const presets = medical ? [...PRESETS, MED_PRESET] : PRESETS;
   const [scope, setScope] = useState(selectedIds.length ? 'selected' : 'all');
   const [fields, setFields] = useState(PRESETS[0][3]);
   const [preset, setPreset] = useState('class');
@@ -239,7 +249,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, fi
             <div className="sx-st"><span className="sx-n">2</span><b>Columns</b>
               <span className="sx-hint sx-r">{fields.length} selected · {TOUCH ? 'use ‹ › to reorder' : 'drag to reorder'}</span></div>
             <div className="sx-presets" role="group" aria-label="Column presets">
-              {PRESETS.map(([k, l, ic, f]) => (
+              {presets.map(([k, l, ic, f]) => (
                 <button key={k} type="button" className={'sx-preset' + (preset === k ? ' on' : '')} aria-pressed={preset === k}
                         onClick={() => choosePreset(k, f, k === 'exam' ? 'auto' : null)}><i className={'fas ' + ic} aria-hidden="true" /> {l}</button>
               ))}
@@ -262,7 +272,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, fi
               )}
             </div>
             <div className="sx-groups">
-              {GROUPS.map(([g, keys]) => (
+              {groups.map(([g, keys]) => (
                 <div className="sx-grp" key={g}>
                   <div className="sx-gl">{g}</div>
                   <div className="sx-pills">

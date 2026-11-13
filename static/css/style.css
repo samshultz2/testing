@@ -4458,3 +4458,15 @@ body .bill-line span:last-child, body .pl-row span:last-child { font-variant-num
   .sf2-another span { display: none; }
 }
 .sf2-ebr { font-size: .72rem; font-weight: 600; color: var(--text-muted); }
+
+/* Student form — common-condition chips (Medical section) */
+.sf-cond-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .15rem 0 .55rem; }
+.sf-cond-chip { display: inline-flex; align-items: center; gap: .35rem; min-height: 36px; padding: 0 .75rem;
+  border-radius: 999px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);
+  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
+.sf-cond-chip i { font-size: .72rem; opacity: .6; }
+.sf-cond-chip:hover { border-color: var(--primary-color, #2563eb); }
+.sf-cond-chip.on { background: color-mix(in srgb, var(--danger, #dc2626) 12%, var(--bg-card)); border-color: color-mix(in srgb, var(--danger, #dc2626) 55%, transparent);
+  color: var(--danger, #dc2626); }
+.sf-cond-chip.on i { opacity: 1; }
+.sf-cond-note { display: block; margin-top: .35rem; color: var(--text-muted); font-size: .78rem; }

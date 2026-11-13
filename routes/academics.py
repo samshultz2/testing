@@ -1722,6 +1722,11 @@ def view_assignment(assignment_id):
     # Keep the list to this class's branch when the assignment is branch-bound.
     if assignment.branch_id is not None:
         q = q.filter(Student.branch_id == assignment.branch_id)
+    from utils.access_control import can_view_medical
+    med_map = {}
+    if can_view_medical():
+        from utils.medical import medical_map
+        med_map = medical_map([e.student for e in enrollments])
     available_students = q.order_by(Student.surname, Student.first_name).all()
 
     # For the "Add students" session filter: the class each available student
@@ -1754,6 +1759,7 @@ def view_assignment(assignment_id):
                        'edit_teacher_url': url_for('academics.edit_assignment_teacher', assignment_id=assignment.id),
                        'session_id': assignment.term.session_id if assignment.term else None},
         'enrollments': [{'id': e.id, 'student_id': e.student_id, 'full_name': e.student.full_name,
+                         'medical': med_map.get(e.student_id),
                          'surname': e.student.surname or '', 'first_name': e.student.first_name or '',
                          'middle_name': e.student.middle_name or '',
                          'student_no': e.student.student_id, 'gender': e.student.gender or '',

@@ -63,7 +63,7 @@ def _a_student(app, sid='GRN001'):
 def test_subsections_registered():
     assert set(MODULE_SUBSECTIONS['students']) == {
         'roster', 'create', 'edit', 'bulk', 'delete', 'trash', 'restore',
-        'purge', 'idcards', 'welfare'}
+        'purge', 'idcards', 'welfare', 'medical'}
     assert set(MODULE_SUBSECTIONS['attendance']) == {
         'mark', 'reports', 'interventions', 'notify'}
     # endpoints resolve, including the welfare blueprint spanning students

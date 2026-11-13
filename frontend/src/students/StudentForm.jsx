@@ -164,9 +164,46 @@ function useMedia(query) {
   return m;
 }
 
+// Conditions a school most often needs to know about, as one-tap chips. They
+// write into the same comma-separated "Existing conditions" text, so anything
+// not listed can still be typed in.
+const COMMON_CONDITIONS = ['Asthma', 'Sickle cell', 'Epilepsy', 'Diabetes', 'Hypertension', 'Heart condition',
+  'Eczema', 'Visual impairment', 'Hearing impairment', 'ADHD', 'Ulcer', 'Migraine'];
+
+function splitList(v) {
+  return (v || '').split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+}
+
+function ConditionPicker({ value, onChange }) {
+  const items = splitList(value);
+  const has = (c) => items.some((x) => x.toLowerCase() === c.toLowerCase());
+  const toggle = (c) => {
+    const next = has(c) ? items.filter((x) => x.toLowerCase() !== c.toLowerCase()) : [...items, c];
+    onChange(next.join(', '));
+  };
+  const others = items.filter((x) => !COMMON_CONDITIONS.some((c) => c.toLowerCase() === x.toLowerCase()));
+  return (
+    <div className="form-group sf-cond">
+      <span className="form-label">Existing conditions</span>
+      <div className="sf-cond-chips" role="group" aria-label="Common conditions">
+        {COMMON_CONDITIONS.map((c) => (
+          <button key={c} type="button" className={'sf-cond-chip' + (has(c) ? ' on' : '')} aria-pressed={has(c)}
+                  onClick={() => toggle(c)}>
+            <i aria-hidden="true" className={'fas ' + (has(c) ? 'fa-check' : 'fa-plus')} /> {c}
+          </button>
+        ))}
+      </div>
+      <input className="form-control" value={value} onChange={(e) => onChange(e.target.value)}
+             placeholder="Tap above, or type others separated by commas" aria-label="Existing conditions" />
+      {others.length > 0 && <small className="sf-cond-note">Also recorded: {others.join(', ')}</small>}
+    </div>
+  );
+}
+
 export default function StudentForm({ data }) {
   const isEdit = data.mode === 'edit';
   const opt = data.options || {};
+  const canMedical = data.can_medical !== false;
   const stu = data.student || {};
   const enrolment = opt.enrolment || null;
 
@@ -448,9 +485,11 @@ export default function StudentForm({ data }) {
       nin: f.nin, jamb_reg_number: f.jamb_reg_number, jamb_profile_code: f.jamb_profile_code,
       waec_reg_number: f.waec_reg_number, serial_number: f.serial_number, waec_epin: f.waec_epin,
       neco_reg_number: f.neco_reg_number, neco_epin: f.neco_epin, photo: f.photo,
-      blood_group: f.blood_group, genotype: f.genotype, allergies: f.allergies,
-      medical_conditions: f.medical_conditions, disabilities: f.disabilities,
-      medications: f.medications, medical_notes: f.medical_notes, emergency_medical: f.emergency_medical,
+      ...(canMedical ? {
+        blood_group: f.blood_group, genotype: f.genotype, allergies: f.allergies,
+        medical_conditions: f.medical_conditions, disabilities: f.disabilities,
+        medications: f.medications, medical_notes: f.medical_notes, emergency_medical: f.emergency_medical,
+      } : {}),
       'contact_name[]': send.map((c) => c.name.trim()),
       'phone_number[]': send.map((c) => c.phone_number.trim()),
       'email[]': send.map((c) => (c.email || '').trim()),
@@ -523,7 +562,7 @@ export default function StudentForm({ data }) {
     { key: 'identity', label: 'Identity', icon: 'fa-id-card', note: 'Photo, NIN, house and exam numbers',
       count: filledOf(ID_TABS.flatMap((t) => t.fields)) || null,
       status: filledOf(ID_TABS.flatMap((t) => t.fields)) ? 'done' : 'opt' },
-    { key: 'medical', label: 'Medical', icon: 'fa-notes-medical', note: 'Confidential — encrypted at rest',
+    canMedical && { key: 'medical', label: 'Medical', icon: 'fa-notes-medical', note: 'Confidential — encrypted at rest',
       status: filledOf(['blood_group', 'genotype', 'allergies', 'medical_conditions', 'disabilities', 'medications', 'medical_notes', 'emergency_medical']) ? 'done' : 'opt' },
     { key: 'subjects', label: 'Exam subjects', icon: 'fa-file-signature', note: 'WAEC and JAMB registration subjects',
       frac: `${waec.size + jamb.size}/${WAEC_SUBJECTS_MAX + JAMB_SUBJECTS_MAX}`,
@@ -895,7 +934,7 @@ export default function StudentForm({ data }) {
           </div>
         )}
               </section>
-              <section className="sf2-panel" hidden={sec !== 'medical'}>
+              {canMedical && <section className="sf2-panel" hidden={sec !== 'medical'}>
         <div className="sf-row">
           <SelectField label="Blood group" value={f.blood_group} onChange={(v) => set('blood_group', v)}
                        placeholder="—" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} />
@@ -903,12 +942,12 @@ export default function StudentForm({ data }) {
                        placeholder="—" options={['AA', 'AS', 'SS', 'AC', 'SC']} />
         </div>
         <TextField label="Allergies" value={f.allergies} onChange={(v) => set('allergies', v)} placeholder="e.g. Penicillin, peanuts" />
-        <TextField label="Existing conditions" value={f.medical_conditions} onChange={(v) => set('medical_conditions', v)} placeholder="e.g. Asthma" />
+        <ConditionPicker value={f.medical_conditions} onChange={(v) => set('medical_conditions', v)} />
         <TextField label="Disabilities" value={f.disabilities} onChange={(v) => set('disabilities', v)} placeholder="Any disabilities to note" />
         <TextField label="Current medications" value={f.medications} onChange={(v) => set('medications', v)} placeholder="Regular medications" />
         <TextAreaField label="Medical notes" value={f.medical_notes} onChange={(v) => set('medical_notes', v)} placeholder="Confidential notes (encrypted at rest)" />
         <TextAreaField label="Emergency medical instructions" value={f.emergency_medical} onChange={(v) => set('emergency_medical', v)} placeholder="What to do in an emergency" />
-              </section>
+              </section>}
               <section className="sf2-panel" hidden={sec !== 'subjects'}>
         <p className="text-muted text-sm mb-3">
           Select the subjects this student is registered for. These pre-fill the WAEC and JAMB
