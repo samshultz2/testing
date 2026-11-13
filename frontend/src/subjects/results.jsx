@@ -178,8 +178,24 @@ export function Flow({ d, current }) {
 // Save bar: sticky under the content on laptops, fixed at the bottom on phones.
 export function Bar({ children }) {
   const phone = usePhone();
-  const bar = <div className={'rs-bar' + (phone ? ' fixed' : '')}>{children}</div>;
-  return phone ? createPortal(bar, document.body) : bar;
+  const anchor = useRef(null);
+  // On phones the bar is portalled to <body> so it can stay fixed — which
+  // takes its buttons out of the <form>, and a type="submit" button outside a
+  // form does nothing. Re-route those clicks to the form the bar belongs to
+  // (requestSubmit keeps native validation and the form's onSubmit handler).
+  const onClickCapture = (e) => {
+    const b = e.target.closest && e.target.closest('button');
+    if (!b || b.disabled || b.form || (b.getAttribute('type') || 'submit') !== 'submit') return;
+    const form = anchor.current && anchor.current.closest('form');
+    if (!form) return;
+    e.preventDefault();
+    if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  };
+  if (!phone) return <div className="rs-bar">{children}</div>;
+  return <>
+    <span ref={anchor} hidden />
+    {createPortal(<div className="rs-bar fixed" onClickCapture={onClickCapture}>{children}</div>, document.body)}
+  </>;
 }
 
 export function Tiles({ items }) {
