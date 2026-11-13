@@ -79,11 +79,11 @@
 {% set c = plan.counts %}
 {% set n_new = c.get('new', 0) %}{% set n_rep = c.get('replace', 0) + c.get('partial', 0) %}
 {% set n_same = c.get('same', 0) %}
-{% set n_bad = c.get('no_class', 0) + c.get('no_subject', 0) + c.get('no_columns', 0) %}
+{% set n_bad = c.get('no_class', 0) + c.get('no_subject', 0) + c.get('no_columns', 0) + c.get('sheet_small', 0) %}
 {% set n_skip = c.get('absent', 0) + c.get('no_score', 0) %}
 {% set STATUS = {'new': ('new', 'Ready'), 'replace': ('replace', 'Has scores — kept'), 'partial': ('partial', 'Some filled — rest kept'),
   'same': ('same', 'Already recorded'), 'absent': ('muted', 'Absent in mock'), 'no_score': ('muted', 'No score'),
-  'no_class': ('bad', 'Not in a class this term'), 'no_subject': ('bad', 'Subject not set for class'), 'no_columns': ('bad', 'No CBT / Theory columns')} %}
+  'no_class': ('bad', 'Not in a class this term'), 'no_subject': ('bad', 'Subject not set for class'), 'no_columns': ('bad', 'No CBT / Theory columns'), 'sheet_small': ('bad', 'Score sheet column too small')} %}
 <div class="rs tt">
   <header class="rs-head">
     <span class="rs-head-ic"><i class="fas fa-share-from-square" aria-hidden="true"></i></span>
@@ -127,6 +127,8 @@
       {% if c.get('no_class') %}<li><b>{{ c.no_class }}</b> belong to students who aren’t enrolled in a class in {{ term.name }} — enrol them, or pick the right term above.</li>{% endif %}
       {% if c.get('no_subject') %}<li><b>{{ c.no_subject }}</b> are subjects that aren’t set up for the student’s class in {{ term.name }} — add them under <a href="{{ url_for('subjects.class_subjects_list', term_id=term.id) }}">Class subjects</a>.</li>{% endif %}
       {% if c.get('no_columns') %}<li><b>{{ c.no_columns }}</b> are subjects with no CBT or Theory column this term (check Settings → Assessments).</li>{% endif %}
+      {% if c.get('sheet_small') %}{% set small = plan.rows|selectattr('status', 'equalto', 'sheet_small')|map(attribute='subject')|unique|list %}
+      <li><b>{{ c.sheet_small }}</b> are in {{ small|join(', ') }}: the subject has no mid-term / practical, so Theory needs to be out of 50, but this term’s score sheet only allows {{ (plan.rows|selectattr('status', 'equalto', 'sheet_small')|first).columns|map(attribute='sheet_max')|join(' / ') }}. Check the subject’s <b>Midterm / practical</b> setting on <a href="{{ url_for('subjects.subjects_list') }}">Subjects</a> (open it and save) or the term’s settings under Settings → Assessments.</li>{% endif %}
     </ul>
   </section>
   {% endif %}
@@ -137,7 +139,7 @@
   {% for r in rows %}{% if r.status == 'new' %}{% set sc.new = sc.new + 1 %}{% elif r.status in ('replace', 'partial') %}{% set sc.rep = sc.rep + 1 %}{% elif r.status == 'same' %}{% set sc.same = sc.same + 1 %}{% elif STATUS[r.status][0] == 'bad' %}{% set sc.bad = sc.bad + 1 %}{% endif %}{% endfor %}
   <details class="tt-sub" {% if loop.first %}open{% endif %}>
     <summary>
-      <h3>{{ subj }}<small>{% if ref %}{% for col in ref.columns %}{{ col.label }} {{ col.max }}{{ ' + ' if not loop.last }}{% endfor %} = out of {{ ref.target }}{% else %}not matched to a class subject{% endif %} · {{ rows|length }} student{{ 's' if rows|length != 1 }}</small></h3>
+      <h3>{{ subj }}<small>{% if ref %}{{ 'Has mid-term / practical' if ref.practical else 'No mid-term / practical' }} · {% for col in ref.columns %}{{ col.label }} {{ col.max }}{{ ' + ' if not loop.last }}{% endfor %} = out of {{ ref.target }}{% else %}not matched to a class subject{% endif %} · {{ rows|length }} student{{ 's' if rows|length != 1 }}</small></h3>
       <span class="tt-pills">
         {% if sc.new %}<span class="tt-p new">{{ sc.new }} ready</span>{% endif %}
         {% if sc.rep %}<span class="tt-p replace">{{ sc.rep }} have scores</span>{% endif %}

@@ -110,11 +110,16 @@ def seed_classes():
 @setup_bp.route('/seed-subjects', methods=['POST'])
 @admin_required
 def seed_subjects():
+    from utils.assessments import apply_practical
     added = 0
     for name, short, category, practical in _CORE_SUBJECTS:
         if not Subject.query.filter(db.func.lower(Subject.name) == name.lower()).first():
-            db.session.add(Subject(name=name, short_name=short, category=category,
-                                   has_practical=practical, is_active=True))
+            subject = Subject(name=name, short_name=short, category=category,
+                              has_practical=practical, is_active=True)
+            db.session.add(subject); db.session.flush()
+            # Same as saving it on the Subjects page: Midterm / Theory columns
+            # follow the practical setting (Theory 40 with, 50 without).
+            apply_practical(db, subject)
             added += 1
     db.session.commit()
     log_action('setup.seed_subjects', f'{added} subjects')

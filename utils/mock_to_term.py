@@ -3,8 +3,10 @@
 A Mock WAEC paper is marked out of 100. In the school's term results the same
 paper stands for the exam part of the subject: CBT + Theory, which is 70 for a
 subject that also has a mid-term / practical (CBT 30 + Theory 40) and 80 for one
-without (CBT 30 + Theory 50). Those maxima are read from the subject's real
-assessment columns for the chosen term, so per-term settings are honoured.
+without (CBT 30 + Theory 50). Which one applies comes from the subject's own
+"Midterm / practical" setting on the Subjects page; CBT's maximum is read from
+the score sheet. If the score sheet's Theory column is smaller than the rule
+needs, that subject is flagged instead of written (the sheet would reject it).
 
     mock 64/100 in a subject worth CBT 30 + Theory 40 → 45/70 → CBT 19 + Theory 26
 
@@ -80,12 +82,30 @@ def _enrolments(term_id, student_ids):
 
 
 def _exam_columns(subject, term_id):
-    """[(assessment_type, max)] of the CBT and Theory columns for a subject in a term."""
-    from utils.assessments import subject_columns, is_cbt, is_theory
+    """[(assessment_type, rule_max, sheet_max)] for the CBT and Theory columns.
+
+    rule_max follows the subject's Midterm / practical setting: Theory is worth
+    40 with a mid-term / practical (CBT 30 + 40 = 70) and 50 without (= 80).
+    sheet_max is what the term's score sheet allows for that column."""
+    from models import AssessmentType
+    from utils.assessments import (subject_columns, effective_max, is_cbt, is_theory,
+                                   THEORY_WITH_PRACTICAL, THEORY_WITHOUT_PRACTICAL)
     cols = subject_columns(subject, term=term_id)
     cbt = next(((at, mx) for at, mx in cols if is_cbt(at)), None)
     theory = next(((at, mx) for at, mx in cols if is_theory(at)), None)
-    return [c for c in (cbt, theory) if c]
+    if theory is None:
+        # The sheet may have dropped Theory (max 0) — still identify the type.
+        at = next((t for t in AssessmentType.query.filter_by(is_active=True)
+                   .order_by(AssessmentType.order, AssessmentType.id).all() if is_theory(t)), None)
+        if at is not None:
+            theory = (at, effective_max(subject, at, term=term_id))
+    rule_theory = THEORY_WITH_PRACTICAL if getattr(subject, 'has_practical', True) else THEORY_WITHOUT_PRACTICAL
+    out = []
+    if cbt:
+        out.append((cbt[0], cbt[1], cbt[1]))
+    if theory:
+        out.append((theory[0], rule_theory, theory[1]))
+    return out
 
 
 def plan(exam, term_id):
@@ -94,7 +114,8 @@ def plan(exam, term_id):
     rows: [{student, subject, mock, class_subject, assignment, columns:
             [{at, max, new, old}], target, scaled, status}]
     status is one of: new, replace, same, partial (some columns already
-    filled), absent, no_score, no_class, no_subject, no_columns.
+    filled), absent, no_score, no_class, no_subject, no_columns, sheet_small
+    (the score sheet's column is smaller than the 70 / 80 rule needs).
     """
     from models import MockWAECResult, ClassSubject, StudentScore, Student
     from utils.assessments import is_cbt
@@ -148,11 +169,14 @@ def plan(exam, term_id):
         cols = col_cache[cs.subject_id]
         if not cols:
             row['status'] = 'no_columns'; continue
-        scaled, parts = split(r.score, [mx for _, mx in cols])
-        row['target'] = sum(mx for _, mx in cols)
+        scaled, parts = split(r.score, [mx for _, mx, _ in cols])
+        row['target'] = sum(mx for _, mx, _ in cols)
         row['scaled'] = scaled
-        row['columns'] = [{'at': at, 'label': 'CBT' if is_cbt(at) else 'Theory', 'max': mx, 'new': p, 'old': None}
-                          for (at, mx), p in zip(cols, parts)]
+        row['practical'] = bool(getattr(cs.subject, 'has_practical', True))
+        row['columns'] = [{'at': at, 'label': 'CBT' if is_cbt(at) else 'Theory', 'max': mx, 'sheet_max': sm,
+                           'new': p, 'old': None} for (at, mx, sm), p in zip(cols, parts)]
+        if any(c['max'] > c['sheet_max'] for c in row['columns']):
+            row['status'] = 'sheet_small'
 
     # Existing CBT / Theory scores, one query.
     if cs_ids:
@@ -163,6 +187,8 @@ def plan(exam, term_id):
                 continue
             for c in row['columns']:
                 c['old'] = existing.get((row['student'].id, row['class_subject'].id, c['at'].id))
+            if row['status'] == 'sheet_small':
+                continue
             olds = [c['old'] for c in row['columns']]
             if all(o is None for o in olds):
                 row['status'] = 'new'

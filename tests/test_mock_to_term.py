@@ -58,24 +58,28 @@ def test_send_mock_scores_to_term_results(app):
         db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=asg.id, is_active=True))
         db.session.commit()
         term_id, session_id, third_id = t1.id, sess.id, t3.id
-        prac = Subject(name='Physics ' + tag, short_name='P' + tag)
-        nopr = Subject(name='Literature ' + tag, short_name='L' + tag)
-        db.session.add_all([prac, nopr]); db.session.flush()
-        # Physics keeps the mid-term column; Literature drops it and Theory is worth 10 more.
+        # Mathematics: has a mid-term / practical, but its score sheet still lets
+        # Theory go to 50 (e.g. created by the setup wizard) -> must be out of 70.
+        prac = Subject(name='Mathematics ' + tag, short_name='M' + tag, has_practical=True)
+        # Literature: no mid-term / practical, sheet Theory 50 -> out of 80.
+        nopr = Subject(name='Literature ' + tag, short_name='L' + tag, has_practical=False)
+        # Chemistry: no practical by its setting, but the sheet only allows Theory 40 -> flagged.
+        small = Subject(name='Chemistry ' + tag, short_name='C' + tag, has_practical=False)
+        db.session.add_all([prac, nopr, small]); db.session.flush()
+        th_at = _exam_columns(prac, term_id)[-1][0]
+        for sub, th in ((prac, 50), (nopr, 50), (small, 40)):
+            db.session.add(SubjectAssessmentOverride(subject_id=sub.id, assessment_type_id=th_at.id, max_score=th))
         db.session.add(SubjectAssessmentOverride(subject_id=nopr.id, assessment_type_id=mid.id, max_score=0))
-        # Whatever Theory column the feature picks, Literature's is worth 10 more.
-        th_at, th_p = _exam_columns(prac, term_id)[-1]
-        db.session.add(SubjectAssessmentOverride(subject_id=nopr.id, assessment_type_id=th_at.id, max_score=th_p + 10))
-        for sub in (prac, nopr):
+        for sub in (prac, nopr, small):
             db.session.add(ClassSubject(subject_id=sub.id, class_id=asg.class_id, term_id=term_id, is_active=True))
         ex = MockWAECExam(name='Mock T', exam_number=77, session_id=session_id, exam_date=date(2026, 2, 1))
         db.session.add(ex); db.session.flush()
-        for subj, sc in ((prac.name, 64), (nopr.name, 64), ('Geography ' + tag, 50)):
+        for subj, sc in ((prac.name, 64), (nopr.name, 64), (small.name, 64), ('Geography ' + tag, 50)):
             db.session.add(MockWAECResult(student_id=sid, mock_exam_id=ex.id, subject=subj, score=sc,
                                           grade=waec_grade_from_score(sc)))
         db.session.commit()
-        ex_id, prac_id, nopr_id = ex.id, prac.id, nopr.id
-        cols = {sub_id: [(at.id, mx) for at, mx in _exam_columns(db.session.get(Subject, sub_id), term_id)]
+        ex_id, prac_id, nopr_id, small_id = ex.id, prac.id, nopr.id, small.id
+        cols = {sub_id: [(at.id, mx) for at, mx, _sheet in _exam_columns(db.session.get(Subject, sub_id), term_id)]
                 for sub_id in (prac_id, nopr_id)}
 
     c = app.test_client()
@@ -83,7 +87,9 @@ def test_send_mock_scores_to_term_results(app):
     html = c.get(f'/mock-waec/exam/{ex_id}/to-term-results?term_id={term_id}').get_data(as_text=True)
     assert 'Send to term results' in html and 'Subject not set for class' in html
     total_p = sum(mx for _, mx in cols[prac_id]); total_n = sum(mx for _, mx in cols[nopr_id])
-    assert total_n == total_p + 10                      # e.g. 70 vs 80
+    cbt_max = cols[prac_id][0][1]
+    assert total_p == cbt_max + 40 and total_n == cbt_max + 50   # 70 vs 80 with CBT 30
+    assert 'Score sheet column too small' in html and 'Chemistry ' + tag in html
     assert f'out of {total_p}' in html and f'out of {total_n}' in html
 
     tok = auth_csrf(c)
@@ -106,6 +112,7 @@ def test_send_mock_scores_to_term_results(app):
         got = stored(sub_id)
         assert [got[at_id] for at_id, _ in cols[sub_id]] == parts
         assert sum(parts) == want_total and all(float(p).is_integer() for p in parts)
+    assert stored(small_id) == {}                       # flagged, nothing written
 
     # Change the mock score: without "replace" existing scores are kept, with it they're updated.
     with app.app_context():
