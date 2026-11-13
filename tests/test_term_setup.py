@@ -218,3 +218,29 @@ def test_users_index_payload_has_security_signals(app):
     assert d['page'] == 'index' and d['users']
     u = d['users'][0]
     assert {'mfa', 'last_days', 'created_days', 'is_admin', 'group', 'branch', 'toggle_url'} <= set(u)
+
+
+def test_graduates_are_not_counted_as_unplaced(app):
+    """Graduates stay is_active (for the graduate pages) but have left — they
+    must never show up as 'students not in any class this term'."""
+    from models import (db, AcademicSession, Term, SchoolClass, ClassArm, ClassArmAssignment, Student)
+    with app.app_context():
+        s = AcademicSession(name='GRD 2030/2031'); db.session.add(s); db.session.flush()
+        t = Term(session_id=s.id, term_number=1, name='First Term'); db.session.add(t); db.session.flush()
+        c = SchoolClass(name='GRDX', level=87); db.session.add(c); db.session.flush()
+        arm = ClassArm.query.filter_by(name='GrdArm').first() or ClassArm(name='GrdArm'); db.session.add(arm); db.session.flush()
+        db.session.add(ClassArmAssignment(class_id=c.id, arm_id=arm.id, term_id=t.id))
+        db.session.commit()
+        tid = t.id
+    c_ = _admin(app)
+
+    def unplaced():
+        d = c_.get(f'/academics/assignments?term_id={tid}', headers={'X-Requested-With': 'fetch'}).get_json()
+        return d.get('data', d)['unplaced']
+    base = unplaced()
+    with app.app_context():
+        grad = Student(student_id='GRD1', surname='Grad', first_name='Uate', gender='Male',
+                       is_active=True, is_graduated=True, graduate_status='Graduated')
+        cur = Student(student_id='GRD2', surname='Cur', first_name='Rent', gender='Female', is_active=True)
+        db.session.add_all([grad, cur]); db.session.commit()
+    assert unplaced() == base + 1               # only the current student counts

@@ -537,8 +537,9 @@ def term_setup():
         enrolled = StudentEnrollment.query.filter(
             StudentEnrollment.class_arm_assignment_id.in_(aids),
             StudentEnrollment.is_active == True).count()
-        active_students = Student.query.filter_by(is_active=True).count() \
-            if hasattr(Student, 'is_active') else Student.query.count()
+        # Current students only — graduates stay is_active but have left.
+        active_students = Student.query.filter_by(is_active=True).filter(
+            db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None))).count()
         empty_classes = [a.display_name for a in asg
                          if a.enrollments.filter_by(is_active=True).count() == 0]
         class_ids = {a.class_id for a in asg}
@@ -1484,11 +1485,15 @@ def assignments_list():
         placed = {sid for (sid,) in db.session.query(StudentEnrollment.student_id)
                   .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
                   .filter(ClassArmAssignment.term_id == selected_term.id, StudentEnrollment.is_active == True).all()}
+        # Current students only: graduates keep is_active (for the alumni /
+        # graduate pages) but have left, so they're never "not placed".
+        current = Student.query.filter_by(is_active=True).filter(
+            db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None)))
         try:
             from utils.branch_scope import scope_query as _sq
-            act_ids = {s.id for s in _sq(Student.query.filter_by(is_active=True), Student).all()}
+            act_ids = {s.id for s in _sq(current, Student).with_entities(Student.id).all()}
         except Exception:
-            act_ids = {s.id for s in Student.query.filter_by(is_active=True).all()}
+            act_ids = {sid for (sid,) in current.with_entities(Student.id).all()}
         unplaced = len(act_ids - placed)
         chrono = sorted(terms, key=lambda t: (t.session.name if t.session else '', t.term_number))
         if selected_term in chrono:
@@ -1528,7 +1533,11 @@ def assignments_list():
         'unplaced': unplaced, 'prev_term': prev_term,
         'urls': {'classes': url_for('academics.classes_list'), 'arms': url_for('academics.arms_list'),
                  'assignments': url_for('academics.assignments_list'),
-                 'copy': url_for('academics.copy_term_setup'), 'students': url_for('main.students_list'),
+                 'copy': url_for('academics.copy_term_setup'),
+                 # The list's "not in a class" filter works on the active term.
+                 'students': (url_for('main.students_list', profile='no_class')
+                              if selected_term and (get_active_term() or selected_term).id == selected_term.id
+                              else url_for('main.students_list')),
                  'setup': url_for('academics.term_setup', term_id=term_id) if term_id else url_for('academics.term_setup')},
         'self_url': url_for('academics.assignments_list'),
         'add_url': url_for('academics.add_assignment'),
