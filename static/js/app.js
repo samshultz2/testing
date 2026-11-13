@@ -582,6 +582,74 @@ function hideWriteControls() {
 }
 
 // =============================================================================
+// ACTIVE MENU ITEM
+// =============================================================================
+// Highlight the menu item for the page you're on — including pages you reach by
+// drilling down from it (a student profile from All Students, a student's exam
+// report from Exam Analytics…). Order:
+//   1. an item the server already marked active (its own rules);
+//   2. an item whose link is exactly this page;
+//   3. the item whose link this page sits under, by whole path segments
+//      (/students/94/edit → /students), longest first;
+//   4. otherwise the item you came from (remembered per tab), when you got here
+//      by following a link inside the app.
+var NAV_KEY = 'navActiveHref';
+function navPath(a) {
+    try { var u = new URL(a.href, window.location.origin); return u.origin === window.location.origin ? u.pathname.replace(/\/+$/, '') || '/' : null; }
+    catch (e) { return null; }
+}
+function markActiveNav(list) {
+    list = list || document.querySelector('.sidebar-nav > ul');
+    if (!list) return null;
+    var links = Array.prototype.filter.call(list.querySelectorAll('a.nav-link[href]'), function (a) {
+        var h = a.getAttribute('href'); return h && h !== '#' && h.indexOf('javascript:') !== 0;
+    });
+    links.forEach(function (a) { if (a.dataset.autoActive) { a.classList.remove('active'); a.removeAttribute('aria-current'); delete a.dataset.autoActive; } });
+    var pick = links.filter(function (a) { return a.classList.contains('active') && !a.closest('.has-submenu > .nav-link'); })[0] || null;
+    var path = window.location.pathname.replace(/\/+$/, '') || '/';
+    if (!pick) pick = links.filter(function (a) { return navPath(a) === path; })[0] || null;
+    if (!pick) {
+        var bestLen = -1;
+        links.forEach(function (a) {
+            var p = navPath(a);
+            if (!p || p === '/') return;
+            if (path.indexOf(p + '/') === 0 && p.length > bestLen) { pick = a; bestLen = p.length; }
+        });
+    }
+    if (!pick) {
+        var remembered = null;
+        try { remembered = sessionStorage.getItem(NAV_KEY); } catch (e) {}
+        var cameFromApp = document.referrer && document.referrer.indexOf(window.location.origin) === 0;
+        if (remembered && (cameFromApp || window.history.length > 1)) {
+            pick = links.filter(function (a) { return a.getAttribute('href') === remembered; })[0] || null;
+        }
+    }
+    if (pick) {
+        if (!pick.classList.contains('active')) { pick.classList.add('active'); pick.dataset.autoActive = '1'; }
+        pick.setAttribute('aria-current', 'page');
+        try { sessionStorage.setItem(NAV_KEY, pick.getAttribute('href')); } catch (e) {}
+    }
+    return pick;
+}
+// Clicking a menu item makes it the remembered one straight away.
+document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('.sidebar-nav a.nav-link[href]');
+    if (!a) return;
+    var h = a.getAttribute('href');
+    if (h && h !== '#') { try { sessionStorage.setItem(NAV_KEY, h); } catch (err) {} }
+}, true);
+// Sections that change the address without a reload (their own routers).
+(function () {
+    function again() { setTimeout(function () { try { markActiveNav(); } catch (e) {} }, 0); }
+    ['pushState', 'replaceState'].forEach(function (m) {
+        var orig = window.history[m];
+        if (typeof orig !== 'function') return;
+        window.history[m] = function () { var r = orig.apply(this, arguments); again(); return r; };
+    });
+    window.addEventListener('popstate', again);
+})();
+
+// =============================================================================
 // SIDEBAR ACCORDION + BOTTOM NAV
 // =============================================================================
 // Groups the sidebar into collapsible sections; on mobile only the section for
@@ -604,16 +672,7 @@ function initSidebarNav() {
     });
     if (current.header || current.items.length) groups.push(current);
 
-    // Active link = the longest nav href that prefixes the current path.
-    var path = window.location.pathname, bestLink = null, bestLen = -1;
-    list.querySelectorAll('a.nav-link[href]').forEach(function (a) {
-        var p;
-        try { p = new URL(a.href).pathname; } catch (e) { return; }
-        if (p === '/') { if (path === '/' && bestLen < 0) { bestLink = a; bestLen = 0; } return; }
-        if (path === p || path.indexOf(p + '/') === 0 || path.indexOf(p) === 0) {
-            if (p.length > bestLen) { bestLink = a; bestLen = p.length; }
-        }
-    });
+    var bestLink = markActiveNav(list);
     var activeLi = bestLink ? bestLink.closest('li') : null;
     var activeGroup = null;
     groups.forEach(function (g) { if (activeLi && g.items.indexOf(activeLi) >= 0) activeGroup = g; });
@@ -735,15 +794,7 @@ function refreshBottomNav() {
     });
     if (current.header || current.items.length) groups.push(current);
 
-    var path = window.location.pathname, bestLink = null, bestLen = -1;
-    list.querySelectorAll('a.nav-link[href]').forEach(function (a) {
-        var p;
-        try { p = new URL(a.href).pathname; } catch (e) { return; }
-        if (p === '/') { if (path === '/' && bestLen < 0) { bestLink = a; bestLen = 0; } return; }
-        if (path === p || path.indexOf(p + '/') === 0 || path.indexOf(p) === 0) {
-            if (p.length > bestLen) { bestLink = a; bestLen = p.length; }
-        }
-    });
+    var bestLink = markActiveNav(list);
     var activeLi = bestLink ? bestLink.closest('li') : null;
     var activeGroup = null;
     groups.forEach(function (g) { if (activeLi && g.items.indexOf(activeLi) >= 0) activeGroup = g; });
