@@ -103,7 +103,7 @@ def test_staff_with_grant_sees_medical(app):
     c = _user(app, 'md_nurse', {'students': 'view', 'students.medical': 'view'})
     prof = c.get(f'/api/students/{a}').get_json()
     assert prof['medical']['allergies'] == 'Penicillin'
-    assert _names(c, tag, 'has_medical')[0] == ['Ast']
+    assert _names(c, tag, 'has_medical')[0] == ['Ast', 'Sic']
 
 
 def test_export_drops_medical_columns_without_grant(app):
