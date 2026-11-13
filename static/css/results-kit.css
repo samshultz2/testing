@@ -570,6 +570,8 @@
 .sl-sub{display:flex;gap:.4rem;overflow-x:auto;scrollbar-width:none;margin-top:-.35rem}
 .sl-sub a{padding:.4rem .85rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);text-decoration:none;font-weight:600;font-size:.82rem;white-space:nowrap}
 .sl-sub a.on{background:var(--text-primary,#1e293b);border-color:var(--text-primary,#1e293b);color:var(--bg-card,#fff)}
+/* Section tabs + entry-mode chips share one wrapper on many pages: keep them apart. */
+.sl-nav + .sl-sub{margin-top:.55rem}
 .rs-card-h.pad{padding:.85rem 1.1rem 0;margin-bottom:.4rem}
 .sl b.good,.sl .good>b,.sl small.good{color:var(--success)}
 .sl b.bad,.sl small.bad,.sl span.bad{color:var(--danger)}
@@ -767,6 +769,10 @@
   .sl-nav a.on span{display:inline}
   .sl-sub{margin:-.35rem -1rem 0;padding:0 1rem}
   .sl-sub .sl-long{display:none}
+  /* Phone: entry modes as an even segmented row (icon over label) instead of a clipped chip strip. */
+  .sl-sub a{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.2rem;min-width:72px;padding:.45rem .5rem;border-radius:12px;font-size:.74rem;line-height:1.15;text-align:center}
+  .sl-sub a i{font-size:.95rem}
+  .rs-head-t p{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .sl-alerts{grid-template-columns:minmax(0,1fr)}
   .sl-quick{grid-template-columns:repeat(3,1fr)}
   .sl-trend{height:120px}

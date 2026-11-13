@@ -34,6 +34,11 @@
 .ae-who .t{flex:1;min-width:0}.ae-who b{font-size:1.05rem;display:block}.ae-who small{color:var(--text-muted);font-size:.8rem}
 .ae-pick{display:none}
 .ae-rows{display:flex;flex-direction:column}
+.ae-hrow{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 34px;gap:.7rem;padding:.55rem 1.1rem .4rem;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border-light,var(--border-color));background:var(--gray-50,#f8fafc)}
+.ae-hrow span:nth-child(2),.ae-hrow span:nth-child(3){text-align:center}
+.ae-pp{display:none}
+.ae-score::placeholder{color:var(--text-muted);opacity:.45;font-weight:600;font-size:.9rem}
+.ae-grade select:not(.cr):not(.ps):not(.fl){border-style:dashed;background:transparent;font-weight:600}
 .ae-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 34px;gap:.7rem;align-items:center;padding:.55rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
 .ae-row:focus-within{background:color-mix(in srgb,var(--primary) 5%,transparent)}
 .ae-subj{font-weight:700;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -68,12 +73,18 @@
 @media (max-width:1000px){
   .ae-grid{grid-template-columns:minmax(0,1fr)}
   .ae-side{display:none}
-  .ae-pick{display:flex;align-items:center;gap:.4rem;margin-left:auto;height:38px;padding:0 .8rem;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-card);font:inherit;font-weight:700;font-size:.84rem;color:var(--primary);cursor:pointer}
+  .ae-pp{display:flex;align-items:center;gap:.6rem;padding:.55rem 1rem;border-bottom:1px solid var(--border-light,var(--border-color));background:var(--gray-50,#f8fafc)}
+  .ae-pp .ae-prog{flex:1}.ae-pp small{font-size:.74rem;color:var(--text-muted);font-weight:600;white-space:nowrap}
+  .ae-pick{display:flex;align-items:center;gap:.4rem;margin-left:auto;flex:none;height:38px;padding:0 .8rem;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-card);font:inherit;font-weight:700;font-size:.84rem;color:var(--primary);cursor:pointer}
 }
 @media (max-width:760px){
   .ae{padding-bottom:90px}
   .ae-who{padding:.85rem 1rem}
-  .ae-row{grid-template-columns:minmax(0,1fr) 92px 70px 30px;gap:.5rem;padding:.55rem .9rem}
+  .ae-row,.ae-hrow{grid-template-columns:minmax(0,1fr) 84px 64px 32px;gap:.45rem;padding:.5rem .9rem}
+  .ae-hrow{padding:.45rem .9rem .35rem;font-size:.64rem}
+  .ae-who b{font-size:.98rem;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ae-pick{padding:0 .7rem}
+  .ae-x{width:32px;height:40px;font-size:.85rem}
   .ae-subj{font-size:.9rem;white-space:normal;line-height:1.25}
   .ae-score,.ae-grade select{height:50px}
   .ae-bar{position:fixed;left:0;right:0;bottom:0;z-index:1100;padding:.7rem 1rem calc(.7rem + env(safe-area-inset-bottom));box-shadow:0 -6px 18px rgba(0,0,0,.08);background:var(--bg-card)}
@@ -90,7 +101,7 @@
 <div class="rs ae">
   <header class="rs-head">
     <span class="rs-head-ic"><i class="fas fa-pen-to-square" aria-hidden="true"></i></span>
-    <div class="rs-head-t"><h1>Enter results — {{ exam.display_name }}</h1><p>One student at a time: type each score, the grade fills itself in.</p></div>
+    <div class="rs-head-t"><h1>Enter results — {{ exam.display_name }}</h1><p>One student at a time — type a score and the grade fills in.</p></div>
   </header>
   <div class="no-print">{{ mw_exam_nav(exam, 'add') }}</div>
 
@@ -117,8 +128,9 @@
       <div class="ae-who">
         <span class="ae-av" id="aeAv">?</span>
         <div class="t"><b id="aeName">Choose a student</b><small id="aeMeta">Pick from the list to start.</small></div>
-        <button type="button" class="ae-pick" id="aePick"><i class="fas fa-user-group" aria-hidden="true"></i> Change</button>
+        <button type="button" class="ae-pick" id="aePick" aria-label="Change student"><i class="fas fa-user-group" aria-hidden="true"></i><span>Change</span></button>
       </div>
+      <div class="ae-pp" aria-label="Class progress"><span class="ae-prog"><i style="width:{{ (100 * done|length / total)|round|int if total else 0 }}%"></i></span><small>{{ done|length }} of {{ total }} entered · {{ students|length }} left</small></div>
       <div class="ae-rows" id="aeRows"><div class="ae-empty"><i class="fas fa-hand-pointer" aria-hidden="true"></i> Choose a student to start entering scores.</div></div>
       <div class="ae-add" id="aeAdd" hidden>
         <select id="aeAddSel" aria-label="Add a subject"><option value="">+ Add a subject…</option>{% for subj in subjects %}<option value="{{ subj }}">{{ subj }}</option>{% endfor %}</select>
@@ -209,9 +221,9 @@
   function rowHtml(subj) {
     var opts = '<option value="">—</option>' + GRADES.map(function (g) { return '<option value="' + g + '">' + g + '</option>'; }).join('');
     return '<div class="ae-row"><span class="ae-subj">' + esc(subj) + '<input type="hidden" name="subject[]" value="' + esc(subj) + '"></span>'
-      + '<input class="ae-score" name="score[]" inputmode="numeric" pattern="[0-9]*" maxlength="3" enterkeyhint="next" placeholder="Score" aria-label="' + esc(subj) + ' score">'
+      + '<input class="ae-score" name="score[]" inputmode="numeric" pattern="[0-9]*" maxlength="3" enterkeyhint="next" placeholder="0–100" aria-label=""' + esc(subj) + ' score">'
       + '<span class="ae-grade"><select name="grade[]" aria-label="' + esc(subj) + ' grade">' + opts + '</select><span class="man" title="Changed by hand">✎</span></span>'
-      + '<button type="button" class="ae-x" aria-label="Remove ' + esc(subj) + '" title="Not taking this subject"><i class="fas fa-xmark"></i></button></div>';
+      + '<button type="button" class="ae-x" aria-label="Remove ' + esc(subj) + '" title="Not taking this subject"><i class="fas fa-trash-can" aria-hidden="true"></i></button></div>';
   }
   function dirty() { return Array.prototype.some.call(rowsEl.querySelectorAll('.ae-score'), function (i) { return i.value.trim() !== ''; }); }
   function choose(id) {
@@ -224,7 +236,8 @@
     document.getElementById('aeName').textContent = current.name;
     var sub = subjectsFor(id);
     document.getElementById('aeMeta').innerHTML = esc([current.sid, current.stream].filter(Boolean).join(' · ')) + '<span class="ae-src"> — ' + sub.list.length + ' subjects from ' + esc(sub.from) + '</span>';
-    rowsEl.innerHTML = sub.list.map(rowHtml).join('');
+    rowsEl.innerHTML = '<div class="ae-hrow" aria-hidden="true"><span>Subject</span><span>Score /100</span><span>Grade</span><span></span></div>'
+      + sub.list.map(rowHtml).join('');
     addBox.hidden = false; sum.hidden = false;
     renderLists(); update();
     var first = rowsEl.querySelector('.ae-score'); if (first) first.focus({ preventScroll: true });
