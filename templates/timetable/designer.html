@@ -45,6 +45,11 @@
 .sat-chip.free .s-wk{color:var(--danger,#dc2626)}
 
 /* ---- the printable sheet ---- */
+/* Chrome on Android enlarges text by itself ("font boosting" / the phone's
+   text-scaling setting). The export measures the sheet to plan its pages, and
+   the image is drawn without that boost, so a boosted sheet planned one date
+   per page with tiny text. Keep the sheet's text at the size it is set. */
+.tt-sheet,.tt-sheet *{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto;font-size:17px}
 .tt-sheet .tt-head{text-align:center;margin-bottom:14px}
 .tt-sheet .tt-headinner{display:inline-flex;align-items:center;gap:14px}
@@ -164,7 +169,7 @@
 .tt-sheet.exporting[data-theme="timeline"] .tl-ph small{display:none}
 /* Timeline: lesson names are the main text of an export; set them at the
    theme's base size so the date and label columns don't balloon around them. */
-.tt-sheet.exporting[data-theme="timeline"] .tl-c b{font-size:1em}
+.tt-sheet.exporting[data-theme="timeline"] .tl-c b{font-size:1em;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.05}
 .tt-sheet.exporting[data-theme="timeline"] .tl-c{padding:.08em .35em}
 .tt-sheet.exporting[data-theme="timeline"] .tl-dt b{font-size:1.5em}
 .tt-sheet.exporting[data-theme="timeline"] .tl-ph b{font-size:.9em}

@@ -1059,7 +1059,7 @@ function renderTimelineSheet(){
         var sj=(r.subject||'').trim(), c=colour[sj]||'#a8a29e';
         var note=[(r.teacher||'').trim(), n>1?(n+' periods'):''].filter(Boolean).join(' · ');
         return '<div class="tl-c" style="--a:'+c+';grid-column:'+span+'">'
-             + '<b>'+esc(sj||'—')+'</b>'
+             + '<b>'+tlSubj(sj)+'</b>'
              + (note?'<small>'+esc(note)+'</small>':'')+'</div>';
     };
     var parts=[], n=0;
@@ -2064,19 +2064,19 @@ function planPages(sheet){
     var all = canPaginate() ? tlModel().order.slice() : [];
     _allFirst = all[0] || null; _allLast = all[all.length-1] || null;
     var H = pageHeight(sheet) + 1;
-    // How well this theme can do at all: the fewest broken words per date
-    // over a few sample dates in any layout (some themes always break one).
-    var tol = 0;
-    if(all.length){
-        var sample = all.slice(0, Math.min(3, all.length));
-        tol = Math.min.apply(null, tryLayouts(sample, sheet).map(function(r){ return r.bad; })) / sample.length;
-    }
+    // How well each date can read at all, alone, in its best layout (some
+    // always break a word, e.g. the highlighted next date). A page is fine if
+    // it breaks no more than its dates do on their own.
+    var base={};
+    all.forEach(function(k){ base[k]=Math.min.apply(null, tryLayouts([k], sheet).map(function(r){ return r.bad; })); });
+    var allow=function(a,b){ var t=0; for(var q=a;q<b;q++) t+=base[all[q]]; return t; };
+    var tol = all.length ? allow(0, all.length)/all.length : 0;
     var whole = pickLayout(tryLayouts(null, sheet), H, tol, Math.max(1, all.length));
     if(all.length < 2 || (whole.h <= H && whole.bad <= tol*all.length)) return [{keys:null, cand:whole.cand}];
     _pageLabel = 'Page 9 of 9';   // same width as the real label
     var memo={};
     var fits=function(a,b){ var k=a+':'+b;
-        if(!(k in memo)){ var r=pickLayout(tryLayouts(all.slice(a,b), sheet), H, tol, b-a); memo[k]={ok:r.h<=H && r.bad<=tol*(b-a)+1e-9, cand:r.cand}; }
+        if(!(k in memo)){ var lim=allow(a,b); var r=pickLayout(tryLayouts(all.slice(a,b), sheet), H, lim/(b-a), b-a); memo[k]={ok:r.h<=H && r.bad<=lim+1e-9, cand:r.cand}; }
         return memo[k]; };
     // Each page takes the most dates that fit. (Not "stop at the first that
     // doesn't": a different column layout may fit one more date.)
@@ -2087,9 +2087,24 @@ function planPages(sheet){
         spans.push([i,j]); i=j;
     }
     // Even the pages out (3+2 rather than 4+1) where that still fits.
-    var P=spans.length, base=Math.floor(all.length/P), extra=all.length%P, even=[], s0=0;
-    for(var q=0;q<P;q++){ var len=base+(q<extra?1:0); even.push([s0,s0+len]); s0+=len; }
+    var P=spans.length, per=Math.floor(all.length/P), extra=all.length%P, even=[], s0=0;
+    for(var q=0;q<P;q++){ var len=per+(q<extra?1:0); even.push([s0,s0+len]); s0+=len; }
     if(even.every(function(p){ return fits(p[0],p[1]).ok; })) spans=even;
+    else {
+        // Pages differ in room (header on the first, footer on the last), so
+        // instead shift dates one at a time onto the following page while
+        // that page is 2+ dates shorter and both pages still fit.
+        for(var pass=0; pass<all.length; pass++){
+            var moved=false;
+            for(var q=spans.length-1; q>0; q--){
+                var A=spans[q-1], B=spans[q];
+                if((A[1]-A[0]) - (B[1]-B[0]) >= 2 && fits(A[0],A[1]-1).ok && fits(B[0]-1,B[1]).ok){
+                    A[1]--; B[0]--; moved=true;
+                }
+            }
+            if(!moved) break;
+        }
+    }
     return spans.map(function(p){ return {keys:all.slice(p[0],p[1]), cand:fits(p[0],p[1]).cand}; });
 }
 function sizeTimelineForExport(sheet){
@@ -2109,12 +2124,15 @@ function sizeTimelineForExport(sheet){
         extra = canvasH - sheet.offsetHeight;
     }
     if(extra > 0){
+        // Spread spare height over the rows, but only up to half their own
+        // height again: a short last page keeps its space at the bottom
+        // instead of stretching one date into big gaps.
         // Side-by-side lists each get all of the spare height; stacked ones share it.
         var stacked = lists.length > 1 && lists[1].getBoundingClientRect().top > list.getBoundingClientRect().bottom - 1;
         var each = stacked ? extra / lists.length : extra;
         var hs = Array.prototype.map.call(lists, function(l){ return l.offsetHeight; });
         if(!stacked){ var mx = Math.max.apply(null, hs); hs = hs.map(function(){ return mx; }); }
-        Array.prototype.forEach.call(lists, function(l, i){ l.style.minHeight = (hs[i] + each) + 'px'; });
+        Array.prototype.forEach.call(lists, function(l, i){ l.style.minHeight = (hs[i] + Math.min(each, hs[i]*0.5)) + 'px'; });
     }
     return true;
 }
@@ -2177,7 +2195,7 @@ function captureExport(){
         _capBusy = false;
     };
     var pages, out = [];
-    try { pages = planPages(sheet); } catch(e){ pages = [{keys:null, cand:null}]; }
+    var plan = function(){ try { pages = planPages(sheet); } catch(e){ pages = [{keys:null, cand:null}]; } };
     var step = function(i){
         if(_capAgain || el('exportModal').style.display === 'none') return Promise.resolve('stale');
         if(i >= pages.length) return Promise.resolve('done');
@@ -2199,7 +2217,9 @@ function captureExport(){
                 return step(i+1);
             });
     };
-    step(0).then(function(res){
+    // Measure only once the web fonts are in: a fallback font measures differently.
+    var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+    fontsReady.then(function(){ plan(); return step(0); }).then(function(res){
         cleanup();
         if(res === 'stale'){
             if(_capAgain){ _capAgain = false; captureExport(); }
