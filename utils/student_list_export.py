@@ -344,12 +344,23 @@ def numbered_canvas(spec, PW, PH, margin, head_h, title,
 
     def small_header(cv):
         y = PH - 28
+        name = school.get('name') or 'School'
         cv.setFillColor(colors.HexColor(INK))
         cv.setFont(F['BodyBold'], 8.5)
-        cv.drawString(margin, y, school.get('name') or 'School')
+        cv.drawString(margin, y, name)
+        # The title (and the subtitle only if it fits) on the right, never
+        # running back over the school name: shortened with an ellipsis.
+        room = PW - 2 * margin - stringWidth(name, F['BodyBold'], 8.5) - 24
+        text = title
+        if spec.get('subtitle') and stringWidth(title + ' · ' + spec['subtitle'], F['Body'], 8.5) <= room:
+            text = title + ' · ' + spec['subtitle']
+        if stringWidth(text, F['Body'], 8.5) > room:
+            while text and stringWidth(text + '…', F['Body'], 8.5) > room:
+                text = text[:-1]
+            text = text.rstrip(' ·') + '…'
         cv.setFillColor(colors.HexColor(MUTED))
         cv.setFont(F['Body'], 8.5)
-        cv.drawRightString(PW - margin, y, title + (' · ' + spec['subtitle'] if spec.get('subtitle') else ''))
+        cv.drawRightString(PW - margin, y, text)
         cv.setFillColor(colors.HexColor(C['primary']))
         cv.rect(margin, y - 9, PW - 2 * margin, 1.6, stroke=0, fill=1)
 

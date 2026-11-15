@@ -94,3 +94,27 @@ def test_all_caps_heading_is_set_in_title_case():
     assert d('WAEC CANDIDATES') == 'WAEC Candidates'
     assert d('Science merit list') == 'Science merit list'      # typed in mixed case: kept
     assert d('') == ''
+
+
+def test_running_header_never_overlaps_school_name():
+    """Pages 2+ carry a small header: school name left, title right. A long
+    subtitle must not run back over the school name."""
+    import fitz
+    from utils import student_list_export as SLE
+    rows = [{'name': ('Surname%d' % i, 'Other'), 'average': 60} for i in range(90)]
+    spec = {'title': 'Subject Combination',
+            'subtitle': 'Biology + Chemistry + Physics · First Term - 2026/2027 · SSS1 Daisy, SSS1 Iris, '
+                        'SSS1 Lily, SSS1 Rose · Where Combined average ≥ 65; All-subject average ≥ 50',
+            'columns': [{'key': 'name', 'label': 'Student', 'kind': 'name'},
+                        {'key': 'average', 'label': 'Average', 'kind': 'score'}],
+            'groups': [{'name': None, 'rows': rows}], 'stats': [], 'pass_mark': 50,
+            'school': {'name': 'PIONEER EDUCATION CENTER'}, 'colors': SLE.colors_for(None)}
+    doc = fitz.open(stream=SLE.render_pdf(spec), filetype='pdf')
+    assert doc.page_count >= 2
+    page = doc[1]
+    top = [b for b in page.get_text('dict')['blocks'] if b.get('lines') and b['bbox'][1] < 40]
+    spans = [s for b in top for l in b['lines'] for s in l['spans'] if s['text'].strip()]
+    name = next(s for s in spans if 'PIONEER' in s['text'])
+    others = [s for s in spans if s is not name]
+    assert others and all(s['bbox'][0] > name['bbox'][2] for s in others)
+    assert all(s['bbox'][0] >= 0 for s in spans)
