@@ -676,7 +676,9 @@ export default function App({ initial }) {
                       <b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}{s.medical && <i role="img" aria-label={'Medical: ' + s.medical} className="fas fa-heart-pulse sl-med" title={s.medical} />}</b>
                       <small>
                         <span className={'sl-g ' + (s.gender === 'Male' ? 'm' : s.gender === 'Female' ? 'f' : '')} title={s.gender || ''} />
-                        {s.current_class || 'No class'}<span className="sl-sep">·</span>{s.student_id}
+                        {s.current_class || 'No class'}
+                        {s.age != null && s.age !== '' && <><span className="sl-sep">·</span><span className="sl-age">{s.age} yrs</span></>}
+                        <span className="sl-sep">·</span>{s.student_id}
                       </small>
                     </span>
                   </a>
