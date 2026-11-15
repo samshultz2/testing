@@ -268,6 +268,8 @@ def _explore_dataset(term_id, scope_ids):
             avg = round(total / len(asg_cs), 2) if asg_cs else 0
             rows.append({
                 'student': e.student.full_name,
+                'student_id': e.student_id,
+                'gender': e.student.gender or '',
                 'assignment_id': a.id,
                 'class_name': a.school_class.name if a.school_class else '',
                 'arm_name': a.arm.name if a.arm else '',
