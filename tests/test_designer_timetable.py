@@ -277,3 +277,13 @@ def test_export_offers_a3_and_one_long_image(auth_client):
     assert "format: _exportPaper" in DESIGNER_JS
     assert "pdf.addPage(_exportPaper, _exportOrientation)" in DESIGNER_JS
     assert "_exportOrientation = 'portrait';" in DESIGNER_JS   # long image is phone-shaped
+
+
+def test_multipage_header_first_page_footer_last_page(auth_client):
+    """Multi-page exports: the title/header only on page 1, keys and the
+    footer only on the last page."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    assert '.tt-sheet.exporting.pg-nohead .tt-head' in html
+    assert '.tt-sheet.exporting.pg-nofoot .tl-key' in html
+    assert "sheet.classList.toggle('pg-nohead'" in DESIGNER_JS
+    assert "sheet.classList.toggle('pg-nofoot'" in DESIGNER_JS

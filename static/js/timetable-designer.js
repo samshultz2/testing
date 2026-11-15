@@ -1884,7 +1884,7 @@ var EXPORT_MIN_RATIO = 0.72;   // no text (teachers, labels, footers) below this
 var _pageKeys = null;           // dates on the page being rendered (null = all)
 var _pageLabel = '';
 var _laterPage = false;          // rendering page 2+ of a multi-page export
-var _allFirst = null;            // 'Page 2 of 3' in the subtitle while exporting several pages
+var _allFirst = null, _allLast = null;   // first/last date of a multi-page export            // 'Page 2 of 3' in the subtitle while exporting several pages
 var _exportPages = [];          // [{url, w, h}] of the last finished render
 var _floored = [];
 function exportSize(){ var r=document.querySelector('input[name="exportSize"]:checked'); return r ? r.value : 'm'; }
@@ -2027,6 +2027,9 @@ function layoutPage(keys, sheet, cand){
     _pageKeys = keys ? keys.reduce(function(o,k){ o[k]=1; return o; }, {}) : null;
     _forceCols = (cand && cand.pre) || 0;
     _laterPage = !!(keys && _allFirst && keys[0] !== _allFirst);
+    // Title/header only on the first page, keys and footer only on the last.
+    sheet.classList.toggle('pg-nohead', !!(keys && _allFirst && keys[0] !== _allFirst));
+    sheet.classList.toggle('pg-nofoot', !!(keys && _allLast && keys[keys.length-1] !== _allLast));
     clearTableExportSizing(); clearFloor();
     renderSheet();
     var px=exportTextPx();
@@ -2059,7 +2062,7 @@ function canPaginate(){
 function planPages(sheet){
     _pageKeys=null; _forceCols=0; _pageLabel=''; renderSheet();
     var all = canPaginate() ? tlModel().order.slice() : [];
-    _allFirst = all[0] || null;
+    _allFirst = all[0] || null; _allLast = all[all.length-1] || null;
     var H = pageHeight(sheet) + 1;
     // How well this theme can do at all: the fewest broken words per date
     // over a few sample dates in any layout (some themes always break one).
@@ -2166,7 +2169,7 @@ function captureExport(){
     // A3 is √2 wider than A4 at the same text size: same printed size, twice the room.
     sheet.classList.toggle('a3', _exportPaper === 'a3');
     var cleanup = function(){
-        _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = null; clearFloor(); clearTableExportSizing();
+        _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = _allLast = null; sheet.classList.remove('pg-nohead','pg-nofoot'); clearFloor(); clearTableExportSizing();
         sheet.style.fontSize = '';
         sheet.classList.remove('exporting', 'portrait', 'a3');
         if(wrap) wrap.classList.remove('td-exporting');
@@ -2246,7 +2249,7 @@ function downloadImage(){
     if(wrap) wrap.classList.add('td-exporting');
     sheet.classList.add('exporting', 'portrait');
     var done = function(){
-        _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = null;
+        _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = _allLast = null; sheet.classList.remove('pg-nohead','pg-nofoot');
         clearFloor(); clearTableExportSizing(); sheet.style.fontSize = '';
         sheet.classList.remove('exporting', 'portrait', 'a3');
         if(wrap) wrap.classList.remove('td-exporting');

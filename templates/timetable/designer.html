@@ -734,6 +734,7 @@
 .tt-sheet[data-theme="timeline"] .tl-half .tl-list{flex:1 1 auto}
 .tt-sheet[data-theme="timeline"] .tl-half+.tl-half .tl-hd{display:none}
 .tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-split{flex-direction:row;gap:1.2em;font-size:.84em;--tl-gw:2.5em}
+.tt-sheet.exporting[data-theme="timeline"] .tl,.tt-sheet.exporting[data-theme="timeline"] .tl .tl-split{--tl-gw:4.6em}
 .tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-hd,.tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-wk{grid-template-columns:3em 1.1em minmax(0,1fr);gap:.3em}
 .tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-ln{gap:.3em}
 .tt-sheet.exporting:not(.portrait)[data-theme="timeline"] .tl-c{padding:.1em .3em .1em .35em}
@@ -808,6 +809,15 @@
 .export-pg{font-size:.75rem;font-weight:700;color:var(--text-muted);align-self:flex-start}
 .td-exp-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
 .export-actions .btn small{font-weight:500;opacity:.85}
+/* Multi-page exports: the title/header only on the first page, the keys and
+   footer only on the last; the pages between hold just the timetable
+   (column headings stay on every page so each one still reads on its own). */
+.tt-sheet.exporting.pg-nohead .tt-head,.tt-sheet.exporting.pg-nohead .bd-top,.tt-sheet.exporting.pg-nohead .gz-dl,
+.tt-sheet.exporting.pg-nohead .il-top,.tt-sheet.exporting.pg-nohead .qt-next,.tt-sheet.exporting.pg-nohead .sw-prog,
+.tt-sheet.exporting.pg-nohead .sw-leg{display:none!important}
+.tt-sheet.exporting.pg-nofoot .bd-ft,.tt-sheet.exporting.pg-nofoot .gz-foot,.tt-sheet.exporting.pg-nofoot .il-ft,
+.tt-sheet.exporting.pg-nofoot .nb-foot,.tt-sheet.exporting.pg-nofoot .qt-ft,.tt-sheet.exporting.pg-nofoot .sw-foot,
+.tt-sheet.exporting.pg-nofoot .tk-foot,.tt-sheet.exporting.pg-nofoot .tl-foot,.tt-sheet.exporting.pg-nofoot .tl-key{display:none!important}
 .tt-sheet.exporting.a3{width:2093px}
 .tt-sheet.exporting.a3.portrait{width:1479px}
 .td-size{display:inline-flex;background:var(--gray-50,#f8f9fa);border:1px solid var(--border-color,#ddd);border-radius:10px;padding:3px;gap:2px}
