@@ -1428,7 +1428,7 @@ function renderNotebookSheet(){
         var gs = md.anyGroup ? md.groupsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
         if(!gs.length) gs=[''];
         // Exports lift small text (the times) to a readable size: give it room.
-        var tmpl='grid-template-columns:'+(el('sheet').classList.contains('exporting')?'4.8em':'3.3em')+' repeat('+gs.length+',minmax(0,1fr))';
+        var tmpl='grid-template-columns:'+(el('sheet').classList.contains('exporting')?'3.5em':'3.3em')+' repeat('+gs.length+',minmax(0,1fr))';
         var runs=tlRuns(d,gs,periods), skip={};
         var out='<div class="nb-r nb-h" style="'+tmpl+'"><span></span>'+gs.map(function(g){ return '<span>'+esc(g||'Lesson')+'</span>'; }).join('')+'</div>';
         periods.forEach(function(pd,i){
@@ -1484,7 +1484,7 @@ function renderNotebookSheet(){
     if(/<u>/.test(html)) marks.push('double = two periods');
     if(/nb-tick/.test(html)) marks.push('✓ done');
     var holes=''; for(var h=0;h<9;h++) holes+='<i style="top:'+(4+h*11.5)+'%"></i>';
-    el('pBody').innerHTML='<div class="nb-holes">'+holes+'</div><div class="nb-tabs">'+tabs+'</div><div class="tl nb">'
+    el('pBody').innerHTML='<div class="nb-holes">'+holes+'</div><div class="nb-tabs" aria-hidden="true">'+tabs+'</div><div class="tl nb">'
         + '<div class="tl-list nb-grid">'+html+'</div>'
         + '<div class="nb-foot"><span>'+esc(marks.join(' · '))+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
 }
@@ -1941,11 +1941,35 @@ function clearFloor(){ _floored.forEach(function(e){ e.style.fontSize=''; }); _f
 // columns = wider cells (no word ever breaks mid-word at the bigger sizes);
 // more = more dates per page. Each page uses whichever fits the most.
 var _forceCols = 0;   // Quiet/Inline split their dates into columns in JS
+// A grid of dates whose last row is short (3 dates in 2 columns) leaves an
+// empty hole; let the last date stretch across the rest of that row.
+function fillLastRow(g, n){
+    var items=Array.prototype.filter.call(g.children, function(c){ return getComputedStyle(c).display!=='none'; });
+    items.forEach(function(c){ c.style.gridColumn=''; });
+    var r=items.length % n;
+    if(n>1 && r) items[items.length-1].style.gridColumn='span '+(n-r+1);
+}
+// Size a theme's time column to the widest time actually shown (rows are
+// separate grids, so they all get the same width and stay aligned).
+function fitTimeColumn(rowSel){
+    var rows=Array.prototype.filter.call(document.querySelectorAll('#pBody '+rowSel), function(r){ return /grid-template-columns/.test(r.getAttribute('style')||''); });
+    if(!rows.length) return;
+    var w=0, rg=document.createRange();
+    Array.prototype.forEach.call(rows, function(r){ var t=r.firstElementChild; if(!t || !t.textContent.trim()) return;
+        rg.selectNodeContents(t); w=Math.max(w, rg.getBoundingClientRect().width); });
+    if(!w) return;
+    Array.prototype.forEach.call(rows, function(r){
+        var cols=r.style.gridTemplateColumns || getComputedStyle(r).gridTemplateColumns;
+        r.style.gridTemplateColumns=cols.replace(/^\S+/, Math.ceil(w+2)+'px');
+    });
+}
 function columnChoices(){
     if(!tlUsesTimeline()) return [null];
     var land = _exportOrientation !== 'portrait';
     var grid = function(sel, ns){ return ns.map(function(n){ return {n:n, post:function(){
-        var g=document.querySelector('#pBody '+sel); if(g) g.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))'; }}; }); };
+        var g=document.querySelector('#pBody '+sel); if(!g) return;
+        g.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))';
+        fillLastRow(g, n); }}; }); };
     if(isQuiet() || isInline()) return (land ? [1,2,3] : [1,2]).map(function(n){ return {n:n, pre:n}; });
     if(isTimeline()) return [1,2].map(function(n){ return {n:n, post:function(){
         var sp=document.querySelector('#pBody .tl-split'); if(!sp) return;
@@ -1955,11 +1979,11 @@ function columnChoices(){
     if(isBoard()) return grid('.bd-grid', land ? [1,2,3,4] : [1,2,3]);
     if(isTickets()) return grid('.tk-grid', land ? [1,2,3,4] : [1,2,3]);
     if(isSwiss()) return grid('.sw-grid', land ? [1,2,3,4] : [1,2,3]);
-    if(isNotebook()) return grid('.nb-grid', land ? [1,2,3,4] : [1,2,3]);
+    if(isNotebook()) return grid('.nb-grid', land ? [1,2,3,4] : [1,2,3]).map(function(c){ var g=c.post; c.post=function(){ g(); fitTimeColumn('.nb-r'); }; return c; });
     // Gazette: the lead date sits above the date columns (side by side, the
     // lead column leaves too little room at readable sizes).
     if(isGazette()) return [1,2,3].map(function(n){ return {n:n, post:function(){
-        var c=document.querySelector('#pBody .gz-cols'); if(c) c.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))';
+        var c=document.querySelector('#pBody .gz-cols'); if(c){ c.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))'; fillLastRow(c, n); }
         var b=document.querySelector('#pBody .gz-body'); if(b){ b.style.gridTemplateColumns='minmax(0,1fr)'; b.classList.add('gz-stack'); }
     }}; });
     return [null];
@@ -1976,9 +2000,14 @@ function badTextNodes(scope){
         Array.prototype.forEach.call(rg.getClientRects(), function(r){ if(r.width>0){ var k=Math.round(r.top/3); if(!tops[k]){ tops[k]=1; lines++; } } });
         var p=n.parentElement, cs=p && getComputedStyle(p);
         // ...or spilling out of its cell/column over the next one
-        var box=p; while(box && box!==scope && getComputedStyle(box).display.indexOf('inline')===0) box=box.parentElement;
-        var tr=rg.getBoundingClientRect(), br=box && box.getBoundingClientRect();
-        var spill = br && br.width>0 && (tr.right>br.right+3 || tr.left<br.left-3);
+        // (checked against the next few boxes out: a box can itself overflow its cell)
+        var tr=rg.getBoundingClientRect(), spill=false, box=p;
+        if(tr.width===0 && tr.height===0) continue;   // not shown (display:none)
+        for(var up=0; up<4 && box && box!==scope && !spill; up++, box=box.parentElement){
+            if(getComputedStyle(box).display.indexOf('inline')===0) { up--; continue; }
+            var br=box.getBoundingClientRect();
+            if(br.width>0 && (tr.right>br.right+3 || tr.left<br.left-3)) spill=true;
+        }
         if(lines>words || spill || (cs && cs.overflow!=='visible' && p.scrollWidth>p.clientWidth+2)) bad.push(n);
         else Array.prototype.forEach.call(rg.getClientRects(), function(r){ if(r.width>1 && r.height>1) rects.push({n:n, r:r}); });
     }
