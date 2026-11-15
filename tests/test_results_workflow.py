@@ -56,11 +56,12 @@ def test_bulk_entry_saves_and_autocomputes(app):
     assert c.get(f'/subjects/bulk-entry?term_id={ids["term"]}&assignment_id={ids["asg"]}').status_code == 200
     c.post('/subjects/bulk-entry', data={
         'term_id': ids['term'], 'assignment_id': ids['asg'], '_csrf_token': _pt(c),
-        f's_{ids["a"]}_{ids["cs"]}_{ids["at"]}': '90',
-        f's_{ids["b"]}_{ids["cs"]}_{ids["at"]}': '40',
+        # The 'WF-Exam' column counts as Theory, which is capped at 40 marks.
+        f's_{ids["a"]}_{ids["cs"]}_{ids["at"]}': '38',
+        f's_{ids["b"]}_{ids["cs"]}_{ids["at"]}': '16',
     }, follow_redirects=True)
     with app.app_context():
-        assert StudentScore.query.filter_by(student_id=ids['a'], class_subject_id=ids['cs']).first().score == 90
+        assert StudentScore.query.filter_by(student_id=ids['a'], class_subject_id=ids['cs']).first().score == 38
         # positions auto-computed on save
         ta = TermSummary.query.filter_by(student_id=ids['a'], term_id=ids['term']).first()
         tb = TermSummary.query.filter_by(student_id=ids['b'], term_id=ids['term']).first()
