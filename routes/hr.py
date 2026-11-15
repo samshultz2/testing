@@ -957,9 +957,11 @@ def departments():
         'page': 'departments', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'departments': [{'id': d.id, 'name': d.name, 'is_active': bool(d.is_active),
                          'count': counts.get(d.id, 0),
+                         'staff_url': url_for('hr.staff_list', department_id=d.id),
                          'edit_url': url_for('hr.edit_department', dept_id=d.id),
                          'delete_url': url_for('hr.delete_department', dept_id=d.id)} for d in depts],
         'add_url': url_for('hr.add_department'),
+        'unassigned': counts.get(None, 0),
     })
 
 
@@ -980,7 +982,11 @@ def add_department():
 @login_required
 def edit_department(dept_id):
     d = db.get_or_404(Department, dept_id)
-    d.name = (request.form.get('name') or d.name).strip()
+    name = (request.form.get('name') or d.name).strip()
+    clash = Department.query.filter(func.lower(Department.name) == name.lower(), Department.id != d.id).first()
+    if clash:
+        return _err(f'Department "{name}" already exists.', url_for('hr.departments'))
+    d.name = name
     d.is_active = bool(request.form.get('is_active'))
     db.session.commit()
     return _ok('Department updated.', url_for('hr.departments'))
@@ -1383,8 +1389,38 @@ def checkin():
         'geo': {'enabled': bool(s['geo_enabled']), 'radius': s['geo_radius']},
         'prefill_code': request.args.get('c') or '',
         'settings': {'late_time': s['late_time']},
+        'week': _week_att(staff.id) if staff else [],
+        'can_show_qr': _can_show_qr(),
         'urls': {'self': url_for('hr.checkin_self'), 'qr': url_for('hr.checkin_qr')},
     })
+
+
+def _can_show_qr():
+    """Only people who may open the QR display page get a link to it (it
+    used to be offered to every staff member, who were then refused)."""
+    try:
+        from utils.access_control import is_admin, subsection_level
+        return bool(is_admin() or subsection_level('hr', 'attendance_qr'))
+    except Exception:
+        return False
+
+
+def _week_att(staff_id):
+    """This week's days (Mon–today) with the staff member's attendance."""
+    from datetime import timedelta
+    today = timeutil.today()
+    start = today - timedelta(days=today.weekday())
+    recs = {a.date: a for a in StaffAttendance.query.filter(
+        StaffAttendance.staff_id == staff_id, StaffAttendance.date >= start,
+        StaffAttendance.date <= today).all()}
+    out = []
+    d = start
+    while d <= today:
+        a = recs.get(d)
+        out.append({'day': d.strftime('%a'), 'date': d.strftime('%d %b'), 'today': d == today,
+                    'status': a.status if a else '', 'clock_in': (a.clock_in or '') if a else ''})
+        d += timedelta(days=1)
+    return out
 
 
 @hr_bp.route('/checkin/self', methods=['POST'])
@@ -1420,6 +1456,12 @@ def checkin_self():
                         url_for('hr.checkin'))
     else:
         return _err('Unknown check-in method.', url_for('hr.checkin'))
+    # Checking in again used to overwrite the first clock-in time — an on-time
+    # arrival who tapped again (or re-opened the QR link) became "Late", with a
+    # lateness deduction. The first check-in of the day now stands.
+    existing = StaffAttendance.query.filter_by(staff_id=staff.id, date=timeutil.today()).first()
+    if existing and existing.clock_in:
+        return _err(f'You already checked in today at {existing.clock_in}.', url_for('hr.checkin'))
     rec, status = hr.mark_attendance_now(staff.id, method=method)
     db.session.commit()
     from utils.audit import log_action
@@ -1799,6 +1841,8 @@ def _vacancy_row(v, dept_map):
             'applicants': sum(counts.values()), 'hired': counts.get('Hired', 0),
             'shortlisted': counts.get('Shortlisted', 0) + counts.get('Interview', 0),
             'closing': v.closing_date.strftime('%d %b %Y') if v.closing_date else '',
+            'days_left': (v.closing_date - timeutil.today()).days if v.closing_date else None,
+            'pipeline': {k: counts.get(k, 0) for k in JobApplication_.STATUSES},
             'url': url_for('hr.vacancy_detail', vac_id=v.id)}
 
 
@@ -1890,7 +1934,8 @@ def vacancy_detail(vac_id):
                     'description': v.description or '', 'requirements': v.requirements or '',
                     'status': v.status, 'posted': v.posted_date.strftime('%d %b %Y') if v.posted_date else '',
                     'closing_date': v.closing_date.isoformat() if v.closing_date else '',
-                    'hired': sum(1 for a in apps if a.status == 'Hired')},
+                    'hired': sum(1 for a in apps if a.status == 'Hired'),
+                    'days_left': (v.closing_date - timeutil.today()).days if v.closing_date else None},
         'applications': [_application_row(a) for a in apps],
         'app_statuses': JobApplication_.STATUSES, 'interview_modes': Interview_.MODES,
         'interview_outcomes': Interview_.OUTCOMES,
@@ -1908,6 +1953,8 @@ def vacancy_detail(vac_id):
 def vacancy_edit(vac_id):
     v = db.get_or_404(JobVacancy_, vac_id)
     require_branch_access(v.branch_id)
+    if not (request.form.get('title') or '').strip():
+        return _err('Enter a job title.', url_for('hr.vacancy_detail', vac_id=v.id))
     _read_vacancy(v)
     db.session.commit()
     return _ok('Vacancy updated.', url_for('hr.vacancy_detail', vac_id=v.id))

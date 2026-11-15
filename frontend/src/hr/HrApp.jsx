@@ -1143,74 +1143,6 @@ function LeaveSection({ d, act }) {
   );
 }
 
-// ---- Departments -----------------------------------------------------------
-function Departments({ d, notify }) {
-  const nav = useNav();
-  const [name, setName] = useState('');
-  const [editing, setEditing] = useState(null);
-  const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    const r = await submitJson(url, fields || {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
-  };
-  const add = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) { notify('error', 'Enter a department name.'); return; }
-    const r = await submitJson(d.add_url, { name });
-    if (r.ok) { setName(''); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
-  };
-  return (
-    <>
-      <Head icon="fa-sitemap" title="Departments" sub={`${d.departments.length} departments · ${d.departments.reduce((t, x) => t + (x.count || 0), 0)} staff`} />
-      <Tabs d={d} />
-      {canWrite(d, 'departments_create') && (
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add Department</h3></div>
-          <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
-            <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g., Sports" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
-          </form></div></div>
-      )}
-      <div className="card"><div className="card-header"><h3>Departments ({d.departments.length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>Name</th><th className="text-right">Staff</th><th>Status</th>{(canWrite(d, 'departments_edit') || canWrite(d, 'departments_delete')) && <th />}</tr></thead>
-          <tbody>{d.departments.map((dep) => (
-            <React.Fragment key={dep.id}>
-              <tr>
-                <td data-label="Name"><strong>{dep.name}</strong></td>
-                <td data-label="Staff" className="text-right">{dep.count}</td>
-                <td data-label="Status">{dep.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-secondary">Inactive</span>}</td>
-                {(canWrite(d, 'departments_edit') || canWrite(d, 'departments_delete')) && <td className="actions"><div className="d-flex gap-1 justify-end">
-                  {canWrite(d, 'departments_edit') && <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dep.id ? null : dep.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
-                  {canWrite(d, 'departments_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(dep.delete_url, {}, `Delete ${dep.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                </div></td>}
-              </tr>
-              {canWrite(d, 'departments_edit') && editing === dep.id && (
-                <tr><td colSpan={4} className="stack-full" style={{ background: 'var(--gray-50)' }}>
-                  <DeptEdit dep={dep} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
-                </td></tr>)}
-            </React.Fragment>))}</tbody>
-        </table></div></div></div>
-    </>
-  );
-}
-
-function DeptEdit({ dep, notify, onDone }) {
-  const [name, setName] = useState(dep.name);
-  const [active, setActive] = useState(dep.is_active);
-  const submit = async (e) => {
-    e.preventDefault();
-    const r = await submitJson(dep.edit_url, { name, is_active: active ? 'on' : '' });
-    if (r.ok) onDone(); else notify('error', r.error || 'Could not update.');
-  };
-  return (
-    <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap">
-      <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">Name</label><input type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} /></div>
-      <label className="form-check mb-0"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active</label>
-      <button className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-save" /> Update</button>
-    </form>
-  );
-}
-
 // ---- Leave calendar (month grid of who is off) -----------------------------
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
   'August', 'September', 'October', 'November', 'December'];
@@ -1637,11 +1569,123 @@ function Reports({ d }) {
   );
 }
 
+// ---- Small form bits shared by the sheets below -----------------------------
+function F({ label, hint, children }) {
+  return <label className="hrf"><span className="hrf-l">{label}</span>{children}{hint && <small className="hrf-h">{hint}</small>}</label>;
+}
+function Toggle({ on, onChange, label, sub }) {
+  return (
+    <label className={'hrf-sw' + (on ? ' on' : '')}>
+      <span><b>{label}</b>{sub && <small>{sub}</small>}</span>
+      <input type="checkbox" role="switch" checked={!!on} onChange={(e) => onChange(e.target.checked)} /><i aria-hidden="true" />
+    </label>
+  );
+}
+
+// ---- Departments -----------------------------------------------------------
+function Departments({ d, notify }) {
+  const nav = useNav();
+  const [edit, setEdit] = useState(null);         // department object, or {} for new
+  const [q, setQ] = useState('');
+  const [showOff, setShowOff] = useState(false);
+  const total = d.departments.reduce((t, x) => t + (x.count || 0), 0) + (d.unassigned || 0);
+  const match = (x) => !q || x.name.toLowerCase().includes(q.toLowerCase());
+  const active = d.departments.filter((x) => x.is_active && match(x));
+  const off = d.departments.filter((x) => !x.is_active && match(x));
+  const max = Math.max(1, ...d.departments.map((x) => x.count || 0));
+  const canAdd = canWrite(d, 'departments_create');
+  const canEdit = canWrite(d, 'departments_edit') || canWrite(d, 'departments_delete');
+  const card = (dep) => (
+    <div key={dep.id} className={'hrd-card' + (dep.is_active ? '' : ' off')}>
+      <div className="hrd-top">
+        <span className="hrd-ic"><i className="fas fa-sitemap" aria-hidden="true" /></span>
+        <div className="hrd-t"><b>{dep.name}</b><small>{dep.is_active ? 'Active' : 'Inactive'}</small></div>
+        {canEdit && <button type="button" className="rs-btn ghost sm" onClick={() => setEdit(dep)} aria-label={'Edit ' + dep.name}><i className="fas fa-pen" aria-hidden="true" /></button>}
+      </div>
+      <div className="hrd-n"><b>{dep.count}</b><span>staff{total ? ` · ${Math.round((dep.count / total) * 100)}%` : ''}</span></div>
+      <span className="hrd-bar"><i style={{ width: `${((dep.count || 0) / max) * 100}%` }} /></span>
+      <a className="hrd-link" href={dep.staff_url}>View staff <i className="fas fa-arrow-right" aria-hidden="true" /></a>
+    </div>
+  );
+  return (
+    <>
+      <Head icon="fa-sitemap" title="Departments" sub={`${d.departments.filter((x) => x.is_active).length} active · ${total} staff`}>
+        {canAdd && <button type="button" className="rs-btn primary" onClick={() => setEdit({})}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">New department</span></button>}
+      </Head>
+      <Tabs d={d} />
+      {d.departments.length > 6 && (
+        <label className="hrr-search hrd-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a department" aria-label="Find a department" /></label>
+      )}
+      {d.unassigned > 0 && (
+        <a className="hrd-note" href={d.nav && d.nav.staff}><i className="fas fa-circle-info" aria-hidden="true" />
+          <span><b>{d.unassigned} staff</b> have no department yet — open their profiles to assign one.</span></a>
+      )}
+      {!d.departments.length ? (
+        <Blank icon="fa-sitemap" title="No departments yet"><p>Group staff into departments like Sciences, Languages or Administration.</p>
+          {canAdd && <button type="button" className="rs-btn primary" onClick={() => setEdit({})}>Add the first one</button>}</Blank>
+      ) : (
+        <div className="hrd-grid">{active.map(card)}
+          {canAdd && <button type="button" className="hrd-add" onClick={() => setEdit({})}><i className="fas fa-plus" aria-hidden="true" />New department</button>}
+        </div>
+      )}
+      {off.length > 0 && (
+        <div className="hrd-off">
+          <button type="button" className="rs-btn ghost sm" onClick={() => setShowOff((v) => !v)} aria-expanded={showOff}>
+            <i className={'fas fa-chevron-' + (showOff ? 'up' : 'down')} aria-hidden="true" />Inactive ({off.length})</button>
+          {showOff && <div className="hrd-grid">{off.map(card)}</div>}
+        </div>
+      )}
+      {edit && <DeptSheet d={d} dep={edit} notify={notify} onClose={() => setEdit(null)} onDone={() => { setEdit(null); nav.refresh(); }} />}
+    </>
+  );
+}
+
+function DeptSheet({ d, dep, notify, onClose, onDone }) {
+  const isNew = !dep.id;
+  const [name, setName] = useState(dep.name || '');
+  const [active, setActive] = useState(isNew ? true : dep.is_active);
+  const [busy, setBusy] = useState(false);
+  const save = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) { notify('error', 'Enter a department name.'); return; }
+    setBusy(true);
+    const r = isNew ? await submitJson(d.add_url, { name }) : await submitJson(dep.edit_url, { name, is_active: active ? 'on' : '' });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); onDone(); } else notify('error', r.error || 'Could not save.');
+  };
+  const del = async () => {
+    const msg = dep.count ? `${dep.name} has ${dep.count} staff, so it will be made inactive instead of deleted.` : `Delete ${dep.name}?`;
+    if (!await confirm({ title: dep.count ? 'Deactivate department?' : 'Delete department?', message: msg, confirmText: dep.count ? 'Deactivate' : 'Delete', tone: 'danger' })) return;
+    const r = await submitJson(dep.delete_url, {});
+    if (r.ok) { notify('success', r.message); onDone(); } else notify('error', r.error || 'Could not delete.');
+  };
+  return (
+    <Sheet title={isNew ? 'New department' : 'Edit department'} onClose={onClose}>
+      <form className="hrf-form" onSubmit={save}>
+        <F label="Name"><input autoFocus value={name} maxLength={100} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sciences" /></F>
+        {!isNew && <Toggle on={active} onChange={setActive} label="Active" sub={active ? 'Shown when adding or editing staff' : 'Hidden from staff forms'} />}
+        <button className="rs-btn primary wide" disabled={busy}><i className="fas fa-check" aria-hidden="true" />{busy ? 'Saving…' : isNew ? 'Add department' : 'Save'}</button>
+        {!isNew && canWrite(d, 'departments_delete') && (
+          <button type="button" className="rs-btn ghost wide hrf-danger" onClick={del}><i className="fas fa-trash-can" aria-hidden="true" />{dep.count ? 'Deactivate department' : 'Delete department'}</button>)}
+      </form>
+    </Sheet>
+  );
+}
+
 // ---- Self-service check-in (QR / GPS) --------------------------------------
+function useClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+  return now;
+}
+const lateText = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`);
+const ATT_TONE = { Present: 'good', Late: 'mid', Absent: 'bad', Excused: 'info' };
+
 function CheckIn({ d, notify }) {
   const nav = useNav();
+  const now = useClock();
   const [busy, setBusy] = useState(false);
-  const [today, setToday] = useState(d.today);
   const post = async (fields) => {
     setBusy(true);
     const r = await submitJson(d.urls.self, fields);
@@ -1651,7 +1695,7 @@ function CheckIn({ d, notify }) {
   };
   // Auto-submit a scanned QR code once, on mount.
   useEffect(() => {
-    if (d.prefill_code && d.staff && !d.today) post({ method: 'qr', code: d.prefill_code });
+    if (d.prefill_code && d.staff && !(d.today && d.today.clock_in)) post({ method: 'qr', code: d.prefill_code });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const gpsCheckin = () => {
@@ -1662,119 +1706,197 @@ function CheckIn({ d, notify }) {
       () => { setBusy(false); notify('error', 'Could not read your location. Allow location access and retry.'); },
       { enableHighAccuracy: true, timeout: 10000 });
   };
-  const statusChip = (s) => 'badge ' + (s === 'Present' ? 'badge-success' : s === 'Late' ? 'badge-warning' : 'badge-secondary');
+  const hr = now.getHours();
+  const hello = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+  const first = d.staff ? (d.staff.name || '').split(' ').slice(-1)[0] : '';
+  const done = d.today && d.today.clock_in;
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return (
     <>
-      <Head icon="fa-fingerprint" title="Check in" sub={d.today_label} />
+      <Head icon="fa-fingerprint" title="Check in" sub={d.today_label}>
+        {d.can_show_qr && <a href={d.urls.qr} className="rs-btn"><i className="fas fa-qrcode" aria-hidden="true" /><span className="rs-hide-sm">Show today’s QR</span></a>}
+      </Head>
       <Tabs d={d} />
       {!d.staff ? (
-        <div className="card"><div className="card-body">
-          <Empty icon="fa-id-badge" title="No staff record linked"><p>Your login isn’t linked to a staff profile. Ask an administrator to link it before you can check in.</p></Empty>
-        </div></div>
+        <Blank icon="fa-id-badge" title="No staff record linked"><p>Your login isn’t linked to a staff profile. Ask an administrator to link it before you can check in.</p></Blank>
       ) : (
-        <div className="card" style={{ maxWidth: 520 }}><div className="card-body text-center">
-          <div className="avatar" style={{ margin: '0 auto .75rem' }}>{(d.staff.name || '').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div>
-          <h2 style={{ margin: '0 0 .25rem' }}>{d.staff.name}</h2>
-          <div className="text-muted mb-2">{d.staff.staff_id} · {d.today_label}</div>
-          {d.today ? (
-            <div className="mb-3"><span className={statusChip(d.today.status)}>{d.today.status}</span>
-              {d.today.clock_in && <span className="text-muted"> at {d.today.clock_in}</span>}
-              <div className="text-muted text-sm mt-1">You’ve already checked in today.</div></div>
-          ) : (
-            <p className="text-muted">Resumption time is {d.settings.late_time}. Check in below.</p>
-          )}
-          <div className="d-flex gap-2 justify-center flex-wrap">
-            {/* Plain one-tap clock-in with the current time — the default when the
-                school hasn't enabled GPS. Hidden once already checked in today. */}
-            {!d.geo.enabled && !d.today && <button className="btn btn-primary" disabled={busy} onClick={() => post({ method: 'manual' })}><i aria-hidden="true" className="fas fa-fingerprint" /> Clock in now</button>}
-            {d.geo.enabled && <button className="btn btn-primary" disabled={busy} onClick={gpsCheckin}><i aria-hidden="true" className="fas fa-location-crosshairs" /> Check in with location</button>}
-            <a href={d.urls.qr} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-qrcode" /> Scan QR instead</a>
+        <div className="hrc">
+          <section className={'hrc-hero' + (done ? ' done' : '')}>
+            <div className="hrc-who"><Face name={d.staff.name} size={48} /><div><b>{hello}{first ? `, ${first}` : ''}</b><small>{d.staff.staff_id}</small></div></div>
+            <div className="hrc-clock" aria-live="off">{time}</div>
+            {done ? (
+              <div className="hrc-done">
+                <span className="hrc-tick"><i className="fas fa-check" aria-hidden="true" /></span>
+                <div><b>Checked in at {d.today.clock_in}</b>
+                  <small><Pill tone={ATT_TONE[d.today.status] || ''}>{d.today.status}</Pill>
+                    {d.today.minutes_late ? ` ${lateText(d.today.minutes_late)} after ${d.settings.late_time}` : ''}</small></div>
+              </div>
+            ) : (
+              <>
+                <p className="hrc-hint">{d.today && d.today.status ? `Marked ${d.today.status} so far. ` : ''}Resumption time is <b>{d.settings.late_time}</b>.</p>
+                {d.prefill_code ? (
+                  <button className="rs-btn primary hrc-go" disabled={busy} onClick={() => post({ method: 'qr', code: d.prefill_code })}>
+                    <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-qrcode')} aria-hidden="true" />{busy ? 'Checking in…' : 'Confirm QR check-in'}</button>
+                ) : d.geo.enabled ? (
+                  <button className="rs-btn primary hrc-go" disabled={busy} onClick={gpsCheckin}>
+                    <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-location-crosshairs')} aria-hidden="true" />{busy ? 'Finding you…' : 'Check in with my location'}</button>
+                ) : (
+                  <button className="rs-btn primary hrc-go" disabled={busy} onClick={() => post({ method: 'manual' })}>
+                    <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-fingerprint')} aria-hidden="true" />{busy ? 'Checking in…' : 'Check in now'}</button>
+                )}
+              </>
+            )}
+          </section>
+          <div className="hrc-side">
+            {d.week && d.week.length > 0 && (
+              <section className="rs-card">
+                <div className="rs-card-h"><h3><i className="fas fa-calendar-week" aria-hidden="true" />This week</h3></div>
+                <div className="hrc-week" style={{ gridTemplateColumns: `repeat(${d.week.length}, minmax(0, 1fr))` }}>{d.week.map((w) => (
+                  <div key={w.date} className={'hrc-day' + (w.today ? ' now' : '')}>
+                    <span>{w.day}</span>
+                    <i className={'hrc-dot ' + (ATT_TONE[w.status] || 'none')} title={w.status || 'Not marked'} />
+                    <small>{w.clock_in || (w.status ? w.status : '—')}</small>
+                  </div>))}</div>
+              </section>
+            )}
+            <section className="rs-card hrc-how">
+              <div className="rs-card-h"><h3><i className="fas fa-circle-question" aria-hidden="true" />Other ways to check in</h3></div>
+              <p><i className="fas fa-qrcode" aria-hidden="true" />Scan the QR code shown at the gate or staff room with your phone camera, while signed in.</p>
+              {d.geo.enabled && <p><i className="fas fa-location-dot" aria-hidden="true" />Location check-in only works on the school premises.</p>}
+            </section>
           </div>
-          {d.prefill_code && !d.today && <button className="btn btn-primary mt-2" disabled={busy} onClick={() => post({ method: 'qr', code: d.prefill_code })}><i aria-hidden="true" className="fas fa-check" /> Confirm QR check-in</button>}
-          {!d.geo.enabled && <p className="form-hint mt-2">Tip: an administrator can require on-site GPS check-in in HR Settings.</p>}
-        </div></div>
+        </div>
       )}
     </>
   );
 }
 
 function CheckInQR({ d }) {
+  const box = useRef(null);
+  const full = () => { const el = box.current; if (el && el.requestFullscreen) el.requestFullscreen().catch(() => {}); };
   return (
     <>
-      <Head icon="fa-qrcode" title="Check-in QR" sub="Show this on a screen at the gate or staff room">
+      <Head icon="fa-qrcode" title="Check-in QR" sub="Show this on a screen at the gate or in the staff room">
         <a href={d.urls.attendance} className="rs-btn ghost"><i className="fas fa-arrow-left" aria-hidden="true" /><span className="rs-hide-sm">Attendance</span></a>
       </Head>
       <Tabs d={d} />
-      <div className="card" style={{ maxWidth: 460 }}><div className="card-body text-center">
-        <h3 style={{ marginTop: 0 }}>Staff check-in</h3>
-        <p className="text-muted">{d.today_label} · today only</p>
-        <img src={d.qr} alt="Attendance QR code" style={{ width: '100%', maxWidth: 300, height: 'auto', margin: '0 auto' }} />
-        <p className="text-muted text-sm mt-2">Staff scan this with their phone (while signed in) to check in. The code changes each day.</p>
-        <a href={d.url} className="text-sm" data-native>{d.url}</a>
-      </div></div>
+      <section className="hrq" ref={box}>
+        <h2>Staff check-in</h2>
+        <p className="hrq-date">{d.today_label}</p>
+        <img src={d.qr} alt="Today’s staff check-in QR code" />
+        <p className="hrq-how">Point your phone camera here while signed in. <b>The code changes every day.</b></p>
+        <div className="hrq-a">
+          <button type="button" className="rs-btn" onClick={full}><i className="fas fa-expand" aria-hidden="true" />Full screen</button>
+          <button type="button" className="rs-btn ghost" onClick={() => window.print()}><i className="fas fa-print" aria-hidden="true" />Print</button>
+        </div>
+      </section>
     </>
   );
 }
 
 // ---- Recruitment: vacancies list -------------------------------------------
-const vacBadge = (s) => 'badge ' + (s === 'Open' ? 'badge-success' : s === 'Filled' ? 'badge-info' : 'badge-secondary');
-const appBadge = (s) => 'badge ' + ({ Applied: 'badge-secondary', Shortlisted: 'badge-info', Interview: 'badge-warning', Offered: 'badge-primary', Hired: 'badge-success', Rejected: 'badge-danger' }[s] || 'badge-secondary');
+const VAC_TONE = { Open: 'good', Filled: 'info', Closed: '' };
+const APP_TONE = { Applied: '', Shortlisted: 'info', Interview: 'mid', Offered: 'info', Hired: 'good', Rejected: 'bad' };
+const STAGES = ['Applied', 'Shortlisted', 'Interview', 'Offered', 'Hired', 'Rejected'];
+const closingText = (v) => {
+  if (v.days_left == null) return 'No closing date';
+  if (v.days_left < 0) return `Closed ${-v.days_left} day${v.days_left === -1 ? '' : 's'} ago`;
+  if (v.days_left === 0) return 'Closes today';
+  return `Closes in ${v.days_left} day${v.days_left === 1 ? '' : 's'}`;
+};
+
+function VacancySheet({ d, v, notify, onClose, onDone }) {
+  const isNew = !v;
+  const [f, setF] = useState(() => (v ? { title: v.title, department_id: v.department_id || '', staff_type: v.staff_type, employment_type: v.employment_type,
+    positions: v.positions, closing_date: v.closing_date || '', description: v.description, requirements: v.requirements, status: v.status }
+    : { title: '', department_id: '', staff_type: (d.staff_types || ['Teaching'])[0], employment_type: (d.employment_types || ['Full-time'])[0],
+      positions: 1, closing_date: '', description: '', requirements: '' }));
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const save = async (e) => {
+    e.preventDefault();
+    if (!f.title.trim()) { notify('error', 'Enter a job title.'); return; }
+    setBusy(true);
+    const r = await submitJson(isNew ? d.add_url : d.urls.edit, f);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); onDone(r); } else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <Sheet title={isNew ? 'Post a vacancy' : 'Edit vacancy'} onClose={onClose}>
+      <form className="hrf-form" onSubmit={save}>
+        <F label="Job title"><input autoFocus value={f.title} onChange={set('title')} placeholder="e.g. Physics Teacher" maxLength={150} /></F>
+        <div className="hrf-2">
+          <F label="Department"><select value={f.department_id} onChange={set('department_id')}><option value="">—</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></F>
+          <F label="Openings"><input type="number" min="1" value={f.positions} onChange={set('positions')} /></F>
+          <F label="Staff type"><select value={f.staff_type} onChange={set('staff_type')}>{d.staff_types.map((t) => <option key={t}>{t}</option>)}</select></F>
+          <F label="Employment"><select value={f.employment_type} onChange={set('employment_type')}>{d.employment_types.map((t) => <option key={t}>{t}</option>)}</select></F>
+        </div>
+        <F label="Closing date" hint="Optional — when you stop taking applications."><input type="date" value={f.closing_date} onChange={set('closing_date')} /></F>
+        <F label="About the role"><textarea rows="3" value={f.description} onChange={set('description')} placeholder="What the person will do" /></F>
+        <F label="Requirements"><textarea rows="3" value={f.requirements} onChange={set('requirements')} placeholder="e.g. B.Sc Physics, TRCN, 2 years’ experience" /></F>
+        <button className="rs-btn primary wide" disabled={busy}><i className={'fas ' + (isNew ? 'fa-bullhorn' : 'fa-check')} aria-hidden="true" />{busy ? 'Saving…' : isNew ? 'Post vacancy' : 'Save changes'}</button>
+      </form>
+    </Sheet>
+  );
+}
 
 function Recruitment({ d, notify }) {
   const nav = useNav();
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ title: '', department_id: '', staff_type: (d.staff_types || ['Teaching'])[0], employment_type: (d.employment_types || ['Full-time'])[0], positions: 1, closing_date: '', description: '', requirements: '' });
-  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
-  const add = async (e) => {
-    e.preventDefault();
-    if (!f.title.trim()) { notify('error', 'Enter a job title.'); return; }
-    const r = await submitJson(d.add_url, f);
-    if (r.ok) { notify('success', r.message); nav.go(r.redirect); } else notify('error', r.error || 'Could not post.');
-  };
+  const [posting, setPosting] = useState(false);
+  const [show, setShow] = useState(d.status || 'Open');
+  const [q, setQ] = useState('');
+  const all = d.vacancies;
+  const count = (s) => all.filter((v) => v.status === s).length;
+  const list = all.filter((v) => (show === 'All' || v.status === show) && (!q || (v.title + ' ' + v.department).toLowerCase().includes(q.toLowerCase())));
+  const sum = (k) => all.reduce((t, v) => t + ((v.pipeline && v.pipeline[k]) || 0), 0);
+  const applicants = all.reduce((t, v) => t + (v.applicants || 0), 0);
+  const filters = ['Open', 'Closed', 'Filled', 'All'].map((s) => ({ value: s, label: s, count: s === 'All' ? all.length : count(s) }));
   return (
     <>
-      <Head icon="fa-user-plus" title="Recruitment" sub={`${d.vacancies.filter((v) => v.status === 'Open').length} open vacancies · ${d.vacancies.reduce((t, v) => t + (v.applicants || 0), 0)} applicants`}>
-        {canWrite(d, 'recruitment_create') && <button type="button" className="rs-btn primary" onClick={() => setOpen(!open)}><i className="fas fa-bullhorn" aria-hidden="true" /><span className="rs-hide-sm">Post vacancy</span></button>}
+      <Head icon="fa-user-plus" title="Recruitment" sub={`${count('Open')} open · ${applicants} applicants`}>
+        {canWrite(d, 'recruitment_create') && <button type="button" className="rs-btn primary" onClick={() => setPosting(true)}><i className="fas fa-bullhorn" aria-hidden="true" /><span className="rs-hide-sm">Post vacancy</span></button>}
       </Head>
       <Tabs d={d} />
-      {open && canWrite(d, 'recruitment_create') && (
-        <div className="card mb-3"><div className="card-header"><h3>New vacancy</h3></div><div className="card-body">
-          <form onSubmit={add}>
-            <div className="form-row">
-              <div className="form-group" style={{ flex: 2 }}><label className="form-label">Job title <span className="required">*</span></label><input type="text" className="form-control" value={f.title} onChange={(e) => set('title', e.target.value)} /></div>
-              <div className="form-group"><label className="form-label">Department</label><select className="form-control" value={f.department_id} onChange={(e) => set('department_id', e.target.value)}><option value="">—</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-              <div className="form-group"><label className="form-label">Openings</label><input type="number" className="form-control" min="1" value={f.positions} onChange={(e) => set('positions', e.target.value)} /></div>
-            </div>
-            <div className="form-row">
-              <div className="form-group"><label className="form-label">Type</label><select className="form-control" value={f.staff_type} onChange={(e) => set('staff_type', e.target.value)}>{d.staff_types.map((t) => <option key={t}>{t}</option>)}</select></div>
-              <div className="form-group"><label className="form-label">Employment</label><select className="form-control" value={f.employment_type} onChange={(e) => set('employment_type', e.target.value)}>{d.employment_types.map((t) => <option key={t}>{t}</option>)}</select></div>
-              <div className="form-group"><label className="form-label">Closing date</label><input type="date" className="form-control" value={f.closing_date} onChange={(e) => set('closing_date', e.target.value)} /></div>
-            </div>
-            <div className="form-group"><label className="form-label">Description</label><textarea className="form-control" rows="2" value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Requirements</label><textarea className="form-control" rows="2" value={f.requirements} onChange={(e) => set('requirements', e.target.value)} /></div>
-            <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-bullhorn" /> Post</button>
-          </form>
-        </div></div>
+      <Tiles items={[
+        { label: 'Open vacancies', value: count('Open') },
+        { label: 'Applicants', value: applicants, sub: `${sum('Applied')} new` },
+        { label: 'In interview', value: sum('Interview'), sub: `${sum('Shortlisted')} shortlisted` },
+        { label: 'Hired', value: sum('Hired'), tone: sum('Hired') ? 'good' : '' },
+      ]} />
+      <div className="hrv-bar">
+        <Seg label="Show" value={show} onChange={setShow} options={filters} />
+        {all.length > 5 && <label className="hrr-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a vacancy" aria-label="Find a vacancy" /></label>}
+      </div>
+      {!list.length ? (
+        <Blank icon="fa-user-plus" title={all.length ? `No ${show === 'All' ? '' : show.toLowerCase() + ' '}vacancies` : 'No vacancies yet'}>
+          <p>{all.length ? 'Try another filter.' : 'Post an opening, then record applicants as they apply.'}</p>
+          {!all.length && canWrite(d, 'recruitment_create') && <button type="button" className="rs-btn primary" onClick={() => setPosting(true)}>Post a vacancy</button>}
+        </Blank>
+      ) : (
+        <div className="hrv-grid">{list.map((v) => {
+          const p = v.pipeline || {};
+          const late = v.status === 'Open' && v.days_left != null && v.days_left < 0;
+          return (
+            <a key={v.id} href={v.url} className="hrv-card">
+              <div className="hrv-top">
+                <div className="hrv-t"><b>{v.title}</b><small>{[v.department, v.staff_type, v.employment_type].filter(Boolean).join(' · ')}</small></div>
+                <Pill tone={VAC_TONE[v.status] || ''}>{v.status}</Pill>
+              </div>
+              <div className="hrv-fill">
+                <span className="hrv-bar2"><i style={{ width: `${Math.min(100, (v.hired / (v.positions || 1)) * 100)}%` }} /></span>
+                <small>{v.hired} of {v.positions} filled</small>
+              </div>
+              <div className="hrv-pipe">
+                {STAGES.filter((s) => s !== 'Hired').map((s) => (
+                  <span key={s} className={'hrv-st' + (p[s] ? ' on' : '')}><b>{p[s] || 0}</b>{s}</span>))}
+              </div>
+              <div className={'hrv-foot' + (late ? ' late' : '')}><i className="fas fa-calendar" aria-hidden="true" />{closingText(v)}{late ? ' — still open' : ''}</div>
+            </a>
+          );
+        })}</div>
       )}
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group"><label className="form-label">Status</label>
-          <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.self_url, { status: e.target.value })}>
-            <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-      </div></div></div>
-      <div className="card"><div className="card-header"><h3>{d.vacancies.length} vacancy(ies)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.vacancies.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Title</th><th>Dept</th><th>Openings</th><th className="text-right">Applicants</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.vacancies.map((v) => (
-                <tr key={v.id}><td data-label="Title"><a href={v.url}><strong>{v.title}</strong></a><div className="text-muted text-sm">{v.staff_type} · {v.employment_type}</div></td>
-                  <td data-label="Dept">{v.department || '—'}</td><td data-label="Openings">{v.positions}</td>
-                  <td data-label="Applicants" className="text-right">{v.applicants}{v.shortlisted ? <span className="text-muted text-sm"> ({v.shortlisted} short)</span> : ''}</td>
-                  <td data-label="Status"><span className={vacBadge(v.status)}>{v.status}</span></td>
-                  <td className="actions"><a href={v.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-user-plus" title="No vacancies"><p>Post an opening to start receiving applications.</p></Empty>}
-        </div></div>
+      {posting && <VacancySheet d={d} notify={notify} onClose={() => setPosting(false)} onDone={(r) => { setPosting(false); if (r.redirect) nav.go(r.redirect); else nav.refresh(); }} />}
     </>
   );
 }
@@ -1783,127 +1905,170 @@ function Recruitment({ d, notify }) {
 function Vacancy({ d, notify }) {
   const nav = useNav();
   const v = d.vacancy;
-  const [addOpen, setAddOpen] = useState(false);
-  const [af, setAf] = useState({ first_name: '', surname: '', email: '', phone: '', qualification: '', experience_years: '', cover_note: '' });
-  const [file, setFile] = useState(null);
-  const [intvFor, setIntvFor] = useState(null);
-  const setA = (k, val) => setAf((x) => ({ ...x, [k]: val }));
+  const [sheet, setSheet] = useState(null);       // 'edit' | 'add' | {interview: app}
+  const [stage, setStage] = useState('All');
   const act = async (url, fields, confirmMsg, follow) => {
     if (confirmMsg && !await confirm(confirmMsg)) return;
     const r = await submitJson(url, fields || {});
     if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
     else notify('error', r.error || 'Action failed.');
   };
-  const addApp = async (e) => {
-    e.preventDefault();
-    if (!af.first_name.trim() || !af.surname.trim()) { notify('error', 'Enter the candidate name.'); return; }
-    const r = file ? await postFile(d.urls.add_application, file, af) : await submitJson(d.urls.add_application, af);
-    if (r.ok) { notify('success', r.message); setAf({ first_name: '', surname: '', email: '', phone: '', qualification: '', experience_years: '', cover_note: '' }); setFile(null); setAddOpen(false); nav.refresh(); }
-    else notify('error', r.error || 'Could not add.');
-  };
+  const setStatus = (s) => act(d.urls.edit, { title: v.title, department_id: v.department_id, staff_type: v.staff_type, employment_type: v.employment_type,
+    positions: v.positions, closing_date: v.closing_date, description: v.description, requirements: v.requirements, status: s });
+  const apps = d.applications;
+  const n = (s) => apps.filter((a) => a.status === s).length;
+  const shown = stage === 'All' ? apps : apps.filter((a) => a.status === stage);
+  const edit = canWrite(d, 'recruitment_edit');
+  const late = v.status === 'Open' && v.days_left != null && v.days_left < 0;
   return (
     <>
       <Head icon="fa-briefcase" title={v.title} sub={[v.department, v.staff_type, v.employment_type].filter(Boolean).join(' · ')}>
+        {edit && <button type="button" className="rs-btn" onClick={() => setSheet('edit')}><i className="fas fa-pen" aria-hidden="true" /><span className="rs-hide-sm">Edit</span></button>}
         <Menu label="More" items={[
           { icon: 'fa-arrow-left', label: 'All vacancies', href: d.urls.back },
           canWrite(d, 'recruitment_delete') && { icon: 'fa-trash', label: 'Delete vacancy', danger: true, onClick: () => act(d.urls.delete, {}, 'Delete this vacancy and its applications?', true) },
         ]} />
       </Head>
       <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body">
-        <div className="d-flex gap-2 flex-wrap align-center mb-2">
-          <span className={vacBadge(v.status)}>{v.status}</span>
-          <span className="badge badge-secondary">{v.staff_type}</span>
-          <span className="badge badge-secondary">{v.employment_type}</span>
-          <span className="text-muted">{v.department || 'No department'} · {v.hired}/{v.positions} filled{v.posted ? ` · posted ${v.posted}` : ''}</span>
+      <section className="rs-card hrv-head">
+        <div className="hrv-meta">
+          <Pill tone={VAC_TONE[v.status] || ''}>{v.status}</Pill>
+          <span><i className="fas fa-users" aria-hidden="true" />{v.hired} of {v.positions} filled</span>
+          <span className={late ? 'late' : ''}><i className="fas fa-calendar" aria-hidden="true" />{closingText(v)}</span>
+          {v.posted && <span><i className="fas fa-bullhorn" aria-hidden="true" />Posted {v.posted}</span>}
         </div>
-        {v.description && <p className="mb-1">{v.description}</p>}
-        {v.requirements && <p className="text-muted text-sm mb-0"><strong>Requirements:</strong> {v.requirements}</p>}
-        {canWrite(d, 'recruitment_edit') && (
-          <div className="d-flex gap-1 mt-2 flex-wrap">
-            {d.statuses.filter((s) => s !== v.status).map((s) => (
-              <button key={s} className="btn btn-secondary btn-sm" onClick={() => act(d.urls.edit, { title: v.title, department_id: v.department_id, staff_type: v.staff_type, employment_type: v.employment_type, positions: v.positions, closing_date: v.closing_date, description: v.description, requirements: v.requirements, status: s })}>Mark {s}</button>))}
+        {(v.description || v.requirements) && (
+          <div className="hrv-desc">
+            {v.description && <p>{v.description}</p>}
+            {v.requirements && <p><b>Requirements:</b> {v.requirements}</p>}
           </div>)}
-      </div></div>
+        {edit && (
+          <div className="hrv-status">
+            <span className="rs-muted">Vacancy is</span>
+            <Seg label="Vacancy status" value={v.status} onChange={(s) => s !== v.status && setStatus(s)}
+                 options={d.statuses.map((s) => ({ value: s, label: s }))} />
+          </div>)}
+      </section>
 
-      <div className="d-flex justify-between align-center mb-2">
-        <h3 style={{ margin: 0 }}>Applications ({d.applications.length})</h3>
-        {canWrite(d, 'recruitment_create') && <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(!addOpen)}><i aria-hidden="true" className="fas fa-plus" /> Add applicant</button>}
+      <div className="hrv-bar">
+        <div className="rs-chips">
+          {['All', ...STAGES].map((s) => (
+            <button type="button" key={s} className={'rs-chip' + (stage === s ? ' on' : '')} onClick={() => setStage(s)}>
+              {s}<small>{s === 'All' ? apps.length : n(s)}</small></button>))}
+        </div>
+        {canWrite(d, 'recruitment_create') && <button type="button" className="rs-btn primary" onClick={() => setSheet('add')}><i className="fas fa-user-plus" aria-hidden="true" />Add applicant</button>}
       </div>
-      {addOpen && canWrite(d, 'recruitment_create') && (
-        <div className="card mb-3"><div className="card-body"><form onSubmit={addApp}>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">First name <span className="required">*</span></label><input type="text" className="form-control" value={af.first_name} onChange={(e) => setA('first_name', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Surname <span className="required">*</span></label><input type="text" className="form-control" value={af.surname} onChange={(e) => setA('surname', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Phone</label><input type="text" className="form-control" value={af.phone} onChange={(e) => setA('phone', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Email</label><input type="email" className="form-control" value={af.email} onChange={(e) => setA('email', e.target.value)} /></div>
-          </div>
-          <div className="form-row">
-            <div className="form-group" style={{ flex: 2 }}><label className="form-label">Qualification</label><input type="text" className="form-control" value={af.qualification} onChange={(e) => setA('qualification', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">Experience (yrs)</label><input type="number" className="form-control" min="0" value={af.experience_years} onChange={(e) => setA('experience_years', e.target.value)} /></div>
-            <div className="form-group"><label className="form-label">CV / résumé</label><input type="file" className="form-control" onChange={(e) => setFile(e.target.files && e.target.files[0])} /></div>
-          </div>
-          <div className="form-group"><label className="form-label">Cover note</label><textarea className="form-control" rows="2" value={af.cover_note} onChange={(e) => setA('cover_note', e.target.value)} /></div>
-          <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
-        </form></div></div>
-      )}
 
-      {d.applications.length ? d.applications.map((a) => (
-        <div key={a.id} className="card mb-2"><div className="card-body">
-          <div className="d-flex justify-between align-center flex-wrap gap-1">
-            <div><strong>{a.name}</strong> <span className={appBadge(a.status)}>{a.status}</span>
-              <div className="text-muted text-sm">{[a.qualification, a.experience_years != null ? `${a.experience_years} yr(s)` : '', a.phone, a.email].filter(Boolean).join(' · ')}</div></div>
-            <div className="d-flex gap-1 flex-wrap">
-              {a.resume_url && <a href={a.resume_url} data-native className="btn btn-secondary btn-sm" title="CV"><i aria-hidden="true" className="fas fa-file-lines" /></a>}
-              {a.staff_url && <a href={a.staff_url} className="btn btn-success btn-sm"><i aria-hidden="true" className="fas fa-id-badge" /> Staff</a>}
-              {a.status !== 'Hired' && a.status !== 'Rejected' && <>
-                {a.status === 'Applied' && canWrite(d, 'recruitment_edit') && <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Shortlisted' })}>Shortlist</button>}
-                {canWrite(d, 'recruitment_edit') && <button className="btn btn-secondary btn-sm" onClick={() => setIntvFor(intvFor === a.id ? null : a.id)}><i aria-hidden="true" className="fas fa-calendar-day" /> Interview</button>}
-                {canWrite(d, 'recruitment_hire') && <button className="btn btn-primary btn-sm" onClick={() => act(a.hire_url, {}, `Hire ${a.name} and add them to staff?`, true)}><i aria-hidden="true" className="fas fa-user-check" /> Hire</button>}
-                {canWrite(d, 'recruitment_edit') && <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Rejected' }, `Reject ${a.name}?`)}>Reject</button>}
-              </>}
-              {canWrite(d, 'recruitment_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(a.delete_url, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
-            </div>
-          </div>
-          {a.cover_note && <p className="text-muted text-sm mt-1 mb-0">{a.cover_note}</p>}
-          {a.interviews.length > 0 && (
-            <div className="mt-2">{a.interviews.map((iv) => (
-              <div key={iv.id} className="d-flex justify-between align-center flex-wrap gap-1" style={{ borderTop: '1px solid var(--border-light)', paddingTop: '.4rem', marginTop: '.4rem' }}>
-                <span className="text-sm"><i aria-hidden="true" className="fas fa-calendar-day" /> {iv.when || 'TBD'} · {iv.mode}{iv.location ? ` · ${iv.location}` : ''}{iv.interviewer ? ` · ${iv.interviewer}` : ''}</span>
-                <span className="d-flex gap-1 align-center">
-                  <span className={'badge ' + (iv.outcome === 'Passed' ? 'badge-success' : iv.outcome === 'Failed' ? 'badge-danger' : 'badge-warning')}>{iv.outcome}</span>
-                  {iv.outcome === 'Pending' && canWrite(d, 'recruitment_edit') && <>
-                    <button className="btn btn-success btn-sm" onClick={() => act(iv.outcome_url, { outcome: 'Passed' })}><i aria-hidden="true" className="fas fa-check" /></button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => act(iv.outcome_url, { outcome: 'Failed' })}><i aria-hidden="true" className="fas fa-xmark" /></button>
-                  </>}
-                </span>
-              </div>))}</div>
-          )}
-          {intvFor === a.id && <InterviewForm d={d} url={a.interview_url} onDone={() => { setIntvFor(null); nav.refresh(); }} notify={notify} />}
-        </div></div>
-      )) : <div className="card"><div className="card-body"><Empty icon="fa-users" title="No applications yet"><p>Add candidates above as they apply.</p></Empty></div></div>}
+      {!shown.length ? (
+        <Blank icon="fa-users" title={apps.length ? `No one at “${stage}”` : 'No applications yet'}>
+          <p>{apps.length ? 'Pick another stage above.' : 'Record candidates here as they apply — attach their CV too.'}</p></Blank>
+      ) : (
+        <div className="hrv-apps">{shown.map((a) => {
+          const open = a.status !== 'Hired' && a.status !== 'Rejected';
+          return (
+            <article key={a.id} className="hrv-app">
+              <div className="hrv-app-top">
+                <Face name={a.name} size={42} />
+                <div className="hrv-t"><b>{a.name}</b>
+                  <small>{[a.qualification, a.experience_years != null && a.experience_years !== '' ? `${a.experience_years} yr${a.experience_years === 1 ? '' : 's'} exp.` : '', a.applied && `applied ${a.applied}`].filter(Boolean).join(' · ')}</small>
+                  <small>{[a.phone, a.email].filter(Boolean).join(' · ')}</small></div>
+                {edit && open ? (
+                  <label className="rs-sel hrv-stage"><span>Stage</span>
+                    <select value={a.status} onChange={(e) => act(a.status_url, { status: e.target.value })}>
+                      {STAGES.filter((s) => s !== 'Hired').map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
+                ) : <Pill tone={APP_TONE[a.status] || ''}>{a.status}</Pill>}
+              </div>
+              {a.cover_note && <p className="hrv-note">{a.cover_note}</p>}
+              {a.interviews.length > 0 && (
+                <div className="hrv-ivs">{a.interviews.map((iv) => (
+                  <div key={iv.id} className="hrv-iv">
+                    <i className="fas fa-calendar-day" aria-hidden="true" />
+                    <span>{iv.when || 'Time to be confirmed'} · {iv.mode}{iv.location ? ` · ${iv.location}` : ''}{iv.interviewer ? ` · ${iv.interviewer}` : ''}</span>
+                    {iv.outcome === 'Pending' && edit ? (
+                      <span className="hrv-iv-a">
+                        <button type="button" className="rs-btn sm" onClick={() => act(iv.outcome_url, { outcome: 'Passed' })}><i className="fas fa-check" aria-hidden="true" />Passed</button>
+                        <button type="button" className="rs-btn sm ghost" onClick={() => act(iv.outcome_url, { outcome: 'Failed' })}><i className="fas fa-xmark" aria-hidden="true" />Failed</button>
+                      </span>
+                    ) : <Pill tone={iv.outcome === 'Passed' ? 'good' : iv.outcome === 'Failed' ? 'bad' : 'mid'}>{iv.outcome}</Pill>}
+                  </div>))}</div>
+              )}
+              <div className="hrv-app-a">
+                {a.resume_url && <a href={a.resume_url} data-native="" className="rs-btn sm ghost"><i className="fas fa-file-lines" aria-hidden="true" />CV</a>}
+                {a.staff_url && <a href={a.staff_url} className="rs-btn sm"><i className="fas fa-id-badge" aria-hidden="true" />Staff profile</a>}
+                {open && edit && <button type="button" className="rs-btn sm" onClick={() => setSheet({ interview: a })}><i className="fas fa-calendar-plus" aria-hidden="true" />Interview</button>}
+                {open && canWrite(d, 'recruitment_hire') && <button type="button" className="rs-btn sm primary" onClick={() => act(a.hire_url, {}, `Hire ${a.name} and add them to staff?`, true)}><i className="fas fa-user-check" aria-hidden="true" />Hire</button>}
+                {canWrite(d, 'recruitment_delete') && <button type="button" className="rs-btn sm ghost hrf-danger" aria-label={'Delete ' + a.name} onClick={() => act(a.delete_url, {}, `Delete ${a.name}’s application?`)}><i className="fas fa-trash-can" aria-hidden="true" /></button>}
+              </div>
+            </article>
+          );
+        })}</div>
+      )}
+      {sheet === 'edit' && <VacancySheet d={d} v={v} notify={notify} onClose={() => setSheet(null)} onDone={() => { setSheet(null); nav.refresh(); }} />}
+      {sheet === 'add' && <ApplicantSheet d={d} notify={notify} onClose={() => setSheet(null)} onDone={() => { setSheet(null); nav.refresh(); }} />}
+      {sheet && sheet.interview && <InterviewSheet d={d} app={sheet.interview} notify={notify} onClose={() => setSheet(null)} onDone={() => { setSheet(null); nav.refresh(); }} />}
     </>
   );
 }
 
-function InterviewForm({ d, url, onDone, notify }) {
-  const [f, setF] = useState({ scheduled_at: '', mode: (d.interview_modes || ['In-person'])[0], location: '', interviewer: '', notes: '' });
-  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
-  const submit = async (e) => {
+function ApplicantSheet({ d, notify, onClose, onDone }) {
+  const [f, setF] = useState({ first_name: '', surname: '', email: '', phone: '', qualification: '', experience_years: '', cover_note: '' });
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const save = async (e) => {
     e.preventDefault();
-    const r = await submitJson(url, f);
+    if (!f.first_name.trim() || !f.surname.trim()) { notify('error', 'Enter the candidate’s first name and surname.'); return; }
+    setBusy(true);
+    const r = file ? await postFile(d.urls.add_application, file, f) : await submitJson(d.urls.add_application, f);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); onDone(); } else notify('error', r.error || 'Could not add.');
+  };
+  return (
+    <Sheet title="Add an applicant" onClose={onClose}>
+      <form className="hrf-form" onSubmit={save}>
+        <div className="hrf-2">
+          <F label="First name"><input autoFocus value={f.first_name} onChange={set('first_name')} /></F>
+          <F label="Surname"><input value={f.surname} onChange={set('surname')} /></F>
+          <F label="Phone"><input type="tel" inputMode="tel" value={f.phone} onChange={set('phone')} /></F>
+          <F label="Email"><input type="email" inputMode="email" value={f.email} onChange={set('email')} /></F>
+          <F label="Qualification"><input value={f.qualification} onChange={set('qualification')} placeholder="e.g. B.Ed English" /></F>
+          <F label="Experience (years)"><input type="number" min="0" value={f.experience_years} onChange={set('experience_years')} /></F>
+        </div>
+        <F label="CV / résumé" hint="PDF, Word or a photo."><input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setFile(e.target.files && e.target.files[0])} /></F>
+        <F label="Cover note"><textarea rows="3" value={f.cover_note} onChange={set('cover_note')} /></F>
+        <button className="rs-btn primary wide" disabled={busy}><i className="fas fa-check" aria-hidden="true" />{busy ? 'Adding…' : 'Add applicant'}</button>
+      </form>
+    </Sheet>
+  );
+}
+
+function InterviewSheet({ d, app, notify, onClose, onDone }) {
+  const [f, setF] = useState({ scheduled_at: '', mode: (d.interview_modes || ['In-person'])[0], location: '', interviewer: '', notes: '' });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const save = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    const r = await submitJson(app.interview_url, f);
+    setBusy(false);
     if (r.ok) { notify('success', r.message); onDone(); } else notify('error', r.error || 'Could not schedule.');
   };
   return (
-    <form onSubmit={submit} className="lc-form mt-2">
-      <div className="form-group mb-0"><label className="form-label">When</label><input type="datetime-local" className="form-control" value={f.scheduled_at} onChange={(e) => set('scheduled_at', e.target.value)} /></div>
-      <div className="form-group mb-0"><label className="form-label">Mode</label><select className="form-control" value={f.mode} onChange={(e) => set('mode', e.target.value)}>{(d.interview_modes || []).map((m) => <option key={m}>{m}</option>)}</select></div>
-      <div className="form-group mb-0"><label className="form-label">Location / link</label><input type="text" className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} /></div>
-      <div className="form-group mb-0"><label className="form-label">Interviewer</label><input type="text" className="form-control" value={f.interviewer} onChange={(e) => set('interviewer', e.target.value)} /></div>
-      <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-calendar-plus" /> Schedule</button>
-    </form>
+    <Sheet title={`Interview ${app.name}`} onClose={onClose}>
+      <form className="hrf-form" onSubmit={save}>
+        <F label="When" hint="Leave empty if the time isn’t fixed yet."><input type="datetime-local" value={f.scheduled_at} onChange={set('scheduled_at')} /></F>
+        <span className="hrf-l">How</span>
+        <div className="rs-chips">{(d.interview_modes || []).map((m) => (
+          <button type="button" key={m} className={'rs-chip' + (f.mode === m ? ' on' : '')} onClick={() => setF((x) => ({ ...x, mode: m }))}>{m}</button>))}</div>
+        <F label={f.mode === 'In-person' ? 'Where' : f.mode === 'Video' ? 'Meeting link' : 'Phone number'}><input value={f.location} onChange={set('location')} /></F>
+        <F label="Interviewer" hint="Leave empty to put yourself."><input value={f.interviewer} onChange={set('interviewer')} /></F>
+        <F label="Notes"><textarea rows="2" value={f.notes} onChange={set('notes')} /></F>
+        <button className="rs-btn primary wide" disabled={busy}><i className="fas fa-calendar-plus" aria-hidden="true" />{busy ? 'Scheduling…' : 'Schedule interview'}</button>
+      </form>
+    </Sheet>
   );
 }
+
 
 const SCREENS = { dashboard: Dashboard, staff: Staff, staff_form: StaffForm, staff_detail: StaffDetail,
   departments: Departments, leave: Leave, payroll: Payroll, payroll_detail: PayrollDetail,
