@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount,
-    StudentEnrollment, ClassArmAssignment,
+    StudentEnrollment, ClassArmAssignment, Student,
 )
 
 
@@ -128,7 +128,9 @@ def defaulters_summary(term_id, class_id=None):
         StudentEnrollment.query
         .join(ClassArmAssignment,
               StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .join(Student, StudentEnrollment.student_id == Student.id)
         .filter(StudentEnrollment.is_active == True,
+                Student.is_active == True,          # trashed students owe nothing
                 ClassArmAssignment.term_id == term_id),
         ClassArmAssignment)
     if class_id:

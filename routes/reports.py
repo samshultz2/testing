@@ -12,6 +12,7 @@ from utils.excel_utils import (
 )
 from utils.web_exports import xlsx_response
 from utils.branch_scope import scope_query, scope_by_student, viewing_branch_id, require_branch_access
+from utils.branch_scope import scope_by_student as _scope_by_student
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -545,7 +546,8 @@ def _sum_students(term):
              .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
              .join(SchoolClass, ClassArmAssignment.class_id == SchoolClass.id)
              .join(Student, StudentEnrollment.student_id == Student.id)
-             .filter(ClassArmAssignment.term_id == term.id, StudentEnrollment.is_active.is_(True)))
+             .filter(ClassArmAssignment.term_id == term.id, StudentEnrollment.is_active.is_(True),
+                     Student.is_active.is_(True), Student.not_graduated()))   # same people as the total
         bid = viewing_branch_id()
         if bid is not None:
             q = q.filter(ClassArmAssignment.branch_id == bid)
@@ -574,7 +576,9 @@ def _sum_attendance(term):
 
     def scoped(q):
         q = (q.join(StudentEnrollment, Attendance.enrollment_id == StudentEnrollment.id)
-              .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id))
+              .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+              .join(Student, StudentEnrollment.student_id == Student.id)
+              .filter(Student.is_active.is_(True)))          # leave trashed students out
         bid = viewing_branch_id()
         if bid is not None:
             q = q.filter(ClassArmAssignment.branch_id == bid)
@@ -627,6 +631,10 @@ def _sum_finance(term):
 
 def _sum_results():
     from models import WAECResult, JAMBResult
+    live = db.session.query(Student.id).filter(Student.is_active.is_(True))
+
+    def scope_by_student(q, model):           # branch scope + leave trashed students out
+        return _scope_by_student(q, model).filter(model.student_id.in_(live))
     out = {'with_waec': scope_by_student(db.session.query(WAECResult.student_id), WAECResult).distinct().count(),
            'with_jamb': scope_by_student(db.session.query(JAMBResult.student_id), JAMBResult).distinct().count()}
     # The latest sitting with a real cohort (a stray early entry for next year
@@ -653,7 +661,7 @@ def _sum_results():
         out.update({'waec_year': yr, 'waec_candidates': n,
                     'waec_five_credits': five, 'waec_five_rate': round(five / n * 100, 1) if n else None,
                     'waec_credit_rate': round(sum(1 for _s, _j, g in rows if g in credit) / len(rows) * 100, 1) if rows else None})
-    jyr = db.session.query(func.max(JAMBResult.exam_year)).scalar()
+    jyr = scope_by_student(db.session.query(func.max(JAMBResult.exam_year)), JAMBResult).scalar()
     if jyr:
         tot = [t for (t,) in scope_by_student(db.session.query(JAMBResult.total_score)
                                               .filter(JAMBResult.exam_year == jyr), JAMBResult).all() if t is not None]

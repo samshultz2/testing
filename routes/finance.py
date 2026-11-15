@@ -223,11 +223,15 @@ def _term_fee_summary(term_id):
     # Map each enrolled student to their class/arm for this term. Eager-load the
     # assignment + its class so the loop below doesn't lazy-load per enrollment (N+1).
     from sqlalchemy.orm import joinedload as _joinedload
+    # Deleted (trashed) students keep their enrolment rows so a restore puts them
+    # back in class — but they owe nothing while they're in the trash.
     enrollments = scope_query(
         StudentEnrollment.query
         .join(ClassArmAssignment,
               StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .join(Student, StudentEnrollment.student_id == Student.id)
         .filter(StudentEnrollment.is_active == True,
+                Student.is_active == True,
                 ClassArmAssignment.term_id == term_id),
         ClassArmAssignment).options(
             _joinedload(StudentEnrollment.class_arm_assignment)
@@ -250,9 +254,10 @@ def _term_fee_summary(term_id):
     summary['enrolled'] = len(placement)
 
     from utils.branch_scope import scope_by_student
+    live = db.session.query(Student.id).filter(Student.is_active == True)
     summary['discounts'] = (scope_by_student(
         db.session.query(func.coalesce(func.sum(FeeDiscount.amount), 0.0))
-        .filter(FeeDiscount.term_id == term_id), FeeDiscount).scalar()) or 0.0
+        .filter(FeeDiscount.term_id == term_id, FeeDiscount.student_id.in_(live)), FeeDiscount).scalar()) or 0.0
 
     payments = scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment).all()
     collected = 0.0
@@ -936,6 +941,7 @@ def defaulters():
             .options(contains_eager(StudentEnrollment.class_arm_assignment),
                     contains_eager(StudentEnrollment.student))
             .filter(StudentEnrollment.is_active == True,
+                    Student.is_active == True,          # not in the trash
                     ClassArmAssignment.term_id == term_id),
             ClassArmAssignment)
         if class_id:

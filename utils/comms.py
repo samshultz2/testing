@@ -382,6 +382,7 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
                 .options(contains_eager(StudentEnrollment.class_arm_assignment),
                         contains_eager(StudentEnrollment.student))
                 .filter(StudentEnrollment.is_active == True,
+                        Student.is_active == True,      # never message about a trashed student
                         ClassArmAssignment.term_id == term.id),
                 ClassArmAssignment)
             if class_id:
