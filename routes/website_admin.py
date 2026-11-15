@@ -9,7 +9,7 @@ import copy
 import re
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, abort)
+                   flash, abort, jsonify)
 from sqlalchemy.orm.attributes import flag_modified
 
 from models import db, SiteSettings, SitePage, SiteMedia
@@ -19,6 +19,8 @@ from utils.site_themes import preset_choices, PRESETS
 from utils import site_blocks
 from utils import site_media
 from utils import site_admissions
+from utils.spa import wants_json, render_or_json
+from utils import website_editor as wed
 
 website_admin_bp = Blueprint('website_admin', __name__, url_prefix='/website')
 
@@ -40,24 +42,97 @@ def _seed_if_empty():
     return settings
 
 
+def _done(msg, url, **extra):
+    """Finish an action: JSON for the app, flash + redirect for a plain form."""
+    if wants_json():
+        return jsonify(ok=True, message=msg, **extra)
+    if msg:
+        flash(msg, 'success')
+    return redirect(url)
+
+
+def _fail(msg, url, status=400):
+    if wants_json():
+        return jsonify(ok=False, error=msg), status
+    flash(msg, 'error')
+    return redirect(url)
+
+
+def _nav():
+    return {k: url_for('website_admin.' + e) for k, e in (
+        ('home', 'index'), ('news', 'news'), ('media', 'media_library'),
+        ('assignments', 'assignments'), ('analytics', 'analytics'))}
+
+
+def _payload(page, **data):
+    from utils import site_ai
+    settings = SiteSettings.get()
+    data.update(page=page, nav=_nav(), public_home=url_for('website.home'),
+                published=bool(settings.published), ai_available=site_ai.is_available(),
+                site_name=_site_name())
+    return render_or_json('website/app.html', 'web_json', data)
+
+
+def _site_name():
+    try:
+        from utils.site_data import public_branding
+        return (public_branding() or {}).get('name') or 'Your school'
+    except Exception:
+        return 'Your school'
+
+
+def _page_row(p):
+    return {'id': p.id, 'title': p.title, 'slug': p.slug, 'is_home': p.slug == SitePage.HOME_SLUG,
+            'address': '/site' + ('' if p.slug == SitePage.HOME_SLUG else '/' + p.slug),
+            'published': bool(p.is_published), 'in_nav': bool(p.show_in_nav),
+            'sections': len(p.blocks or []), 'edit': url_for('website_admin.edit_page', page_id=p.id),
+            'public': (url_for('website.home') if p.slug == SitePage.HOME_SLUG
+                       else url_for('website.page', slug=p.slug))}
+
+
 @website_admin_bp.route('/')
 @login_required
 @module_required('website')
 def index():
     settings = _seed_if_empty()
     pages = SitePage.query.order_by(SitePage.nav_order.asc(), SitePage.title.asc()).all()
-    from models import AcademicSession
+    from models import AcademicSession, NewsPost, HolidayAssignment
     try:
         sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
     except Exception:
         sessions = []
-    from utils import site_ai
-    return render_template('website/admin_overview.html', settings=settings, pages=pages,
-                           presets=preset_choices(), public_home=url_for('website.home'),
-                           adm=site_admissions.settings(), sessions=sessions,
-                           pay_configured=_payments_configured(),
-                           apply_url=url_for('website.apply'),
-                           ai_available=site_ai.is_available())
+    theme = dict(settings.theme or {})
+    preset = theme.get('preset') if theme.get('preset') in PRESETS else 'emerald'
+    views = None
+    try:
+        from utils import site_analytics
+        views = site_analytics.summary(days=7)['total_views']
+    except Exception:
+        db.session.rollback()
+    adm = site_admissions.settings()
+    return _payload(
+        'home',
+        pages=[_page_row(p) for p in pages],
+        theme={'preset': preset, 'primary': theme.get('primary') or '', 'accent': theme.get('accent') or '',
+               'seo_title': settings.seo_title or '', 'seo_description': settings.seo_description or ''},
+        presets=[{'key': k, 'label': v['label'].split(' (')[0],
+                  'mood': (v['label'].split(' (')[1].rstrip(')') if ' (' in v['label'] else ''),
+                  'primary': v['primary'], 'accent': v['accent'], 'ink': v['ink'], 'muted': v['muted'],
+                  'font': v['font_head'].split(',')[0].strip('"'), 'radius': v['radius']}
+                 for k, v in PRESETS.items()],
+        adm={'open': bool(adm.get('open')), 'intro': adm.get('intro') or '', 'fee': adm.get('fee') or 0,
+             'session_id': adm.get('session_id') or ''},
+        sessions=[{'id': s.id, 'name': s.name} for s in sessions],
+        pay_configured=_payments_configured(), apply_url=url_for('website.apply'),
+        counts={'posts': NewsPost.query.count(),
+                'drafts': NewsPost.query.filter_by(is_published=False).count(),
+                'media': SiteMedia.query.count(), 'assignments': HolidayAssignment.query.count(),
+                'views7': views},
+        urls={'publish': url_for('website_admin.publish'), 'theme': url_for('website_admin.theme'),
+              'admissions': url_for('website_admin.admissions_settings'),
+              'generate': url_for('website_admin.generate_site'),
+              'new_page': url_for('website_admin.new_page'),
+              'reorder': url_for('website_admin.reorder_pages')})
 
 
 def _payments_configured():
@@ -78,8 +153,7 @@ def admissions_settings():
         fee=request.form.get('fee'),
         session_id=request.form.get('session_id'))
     log_action('website.admissions_settings')
-    flash('Online admissions settings saved.', 'success')
-    return redirect(url_for('website_admin.index'))
+    return _done('Online admissions settings saved.', url_for('website_admin.index'))
 
 
 @website_admin_bp.route('/generate', methods=['POST'])
@@ -96,12 +170,11 @@ def generate_site():
         n = site_generator.generate(salt=salt, use_ai=use_ai)
     except Exception:
         db.session.rollback()
-        flash('Sorry — the site could not be generated. Please try again.', 'error')
-        return redirect(url_for('website_admin.index'))
+        return _fail('Sorry — the site could not be generated. Please try again.',
+                     url_for('website_admin.index'), 500)
     log_action('website.generate', detail=f'{n} pages, ai={use_ai}')
-    flash(f'Your website has been built — {n} pages ready to review and edit. '
-          'Publish it when you’re happy.', 'success')
-    return redirect(url_for('website_admin.index'))
+    return _done(f'Your website has been built — {n} pages ready to review and edit. '
+                 'Publish it when you’re happy.', url_for('website_admin.index'))
 
 
 @website_admin_bp.route('/publish', methods=['POST'])
@@ -112,8 +185,8 @@ def publish():
     settings.published = (request.form.get('published') == 'on')
     db.session.commit()
     log_action('website.publish', detail=str(settings.published))
-    flash('Website published.' if settings.published else 'Website unpublished (draft).', 'success')
-    return redirect(url_for('website_admin.index'))
+    return _done('Your website is live.' if settings.published else 'Your website is now a private draft.',
+                 url_for('website_admin.index'), published=bool(settings.published))
 
 
 @website_admin_bp.route('/theme', methods=['POST'])
@@ -125,11 +198,16 @@ def theme():
     theme = dict(settings.theme or {})
     if preset in PRESETS:
         theme['preset'] = preset
-    # Optional individual overrides (colors) — blank clears to the preset value.
+    # Optional colour overrides. A colour picker always submits a value, so the
+    # old "blank = use the preset" rule never fired and a saved colour stuck
+    # forever (picking a new preset kept the old colours). Overrides now apply
+    # only when "custom colours" is on, and must be real #rrggbb values.
+    custom = request.form.get('custom_colors')
     for key in ('primary', 'accent'):
         val = (request.form.get(key) or '').strip()
-        if val:
-            theme[key] = val
+        keep = (custom == 'on') if custom is not None else bool(val)
+        if keep and re.fullmatch(r'#[0-9a-fA-F]{6}', val):
+            theme[key] = val.lower()
         else:
             theme.pop(key, None)
     settings.theme = theme
@@ -137,8 +215,7 @@ def theme():
     settings.seo_description = (request.form.get('seo_description') or '').strip()[:180] or None
     db.session.commit()
     log_action('website.theme', detail=theme.get('preset'))
-    flash('Theme updated.', 'success')
-    return redirect(url_for('website_admin.index'))
+    return _done('Look and search details saved.', url_for('website_admin.index'))
 
 
 @website_admin_bp.route('/pages/new', methods=['POST'])
@@ -147,14 +224,55 @@ def theme():
 def new_page():
     title = (request.form.get('title') or '').strip() or 'New page'
     slug = _slugify(request.form.get('slug') or title)
-    if slug == SitePage.HOME_SLUG or SitePage.query.filter_by(slug=slug).first():
-        flash('That page address is already taken.', 'error')
-        return redirect(url_for('website_admin.index'))
-    pg = SitePage(slug=slug, title=title, blocks=site_blocks.default_page_blocks(slug, title),
-                  nav_order=(SitePage.query.count() + 1))
+    if slug in _RESERVED or SitePage.query.filter_by(slug=slug).first():
+        return _fail('A page with that address already exists — try a different title.',
+                     url_for('website_admin.index'))
+    last = db.session.query(db.func.max(SitePage.nav_order)).scalar() or 0
+    pg = SitePage(slug=slug, title=title[:120], blocks=site_blocks.default_page_blocks(slug, title),
+                  nav_order=last + 1)
     db.session.add(pg); db.session.commit()
     log_action('website.page_create', target=pg)
-    return redirect(url_for('website_admin.edit_page', page_id=pg.id))
+    url = url_for('website_admin.edit_page', page_id=pg.id)
+    if wants_json():
+        return jsonify(ok=True, message='Page created.', redirect=url)
+    return redirect(url)
+
+
+# Addresses the public site already uses for its own routes.
+_RESERVED = {SitePage.HOME_SLUG, 'apply', 'media', 'assignments', 'sitemap.xml', 'robots.txt'}
+
+
+@website_admin_bp.route('/pages/reorder', methods=['POST'])
+@login_required
+@module_required('website')
+def reorder_pages():
+    ids = [int(x) for x in (request.form.get('order') or '').split(',') if x.strip().isdigit()]
+    pages = {p.id: p for p in SitePage.query.filter(SitePage.id.in_(ids)).all()} if ids else {}
+    for i, pid in enumerate(ids):
+        if pid in pages:
+            pages[pid].nav_order = i
+    db.session.commit()
+    log_action('website.page_reorder')
+    return _done('Menu order saved.', url_for('website_admin.index'))
+
+
+def _page_payload(pg):
+    from utils import site_ai
+    ai = site_ai.is_available()
+    public_url = (url_for('website.home') if pg.slug == SitePage.HOME_SLUG
+                  else url_for('website.page', slug=pg.slug))
+    base = '/website/pages/%d' % pg.id
+    return dict(pg=dict(_page_row(pg), meta_description=pg.meta_description or ''),
+                blocks=[wed.serialize_block(b, i, ai) for i, b in enumerate(pg.blocks or [])],
+                catalogue=wed.catalogue(), public_url=public_url,
+                pages_for_links=[{'title': p.title, 'address': '/site' + ('/' if p.slug == SitePage.HOME_SLUG else '/' + p.slug)}
+                                 for p in SitePage.query.order_by(SitePage.nav_order.asc()).all()
+                                 if p.slug != SitePage.HOME_SLUG],
+                urls={'meta': url_for('website_admin.save_page_meta', page_id=pg.id),
+                      'add': url_for('website_admin.add_block', page_id=pg.id),
+                      'delete': url_for('website_admin.delete_page', page_id=pg.id),
+                      'base': base, 'upload': url_for('website_admin.media_upload'),
+                      'library': url_for('website_admin.media_library')})
 
 
 @website_admin_bp.route('/pages/<int:page_id>')
@@ -162,17 +280,7 @@ def new_page():
 @module_required('website')
 def edit_page(page_id):
     pg = db.get_or_404(SitePage, page_id)
-    public_url = (url_for('website.home') if pg.slug == SitePage.HOME_SLUG
-                  else url_for('website.page', slug=pg.slug))
-    from utils import site_ai
-    ai_available = site_ai.is_available()
-    # which block indexes have editable text worth an AI draft
-    ai_text_idx = {i for i, b in enumerate(pg.blocks or [])
-                   if site_ai.copy_fields((b or {}).get('props'))} if ai_available else set()
-    return render_template('website/admin_page.html', pg=pg,
-                           blocks=pg.blocks or [], catalogue=site_blocks.catalogue(),
-                           registry=site_blocks.REGISTRY, public_url=public_url,
-                           ai_available=ai_available, ai_text_idx=ai_text_idx)
+    return _payload('page', **_page_payload(pg))
 
 
 @website_admin_bp.route('/pages/<int:page_id>/meta', methods=['POST'])
@@ -180,18 +288,27 @@ def edit_page(page_id):
 @module_required('website')
 def save_page_meta(page_id):
     pg = db.get_or_404(SitePage, page_id)
-    pg.title = (request.form.get('title') or pg.title).strip()[:120]
+    back = url_for('website_admin.edit_page', page_id=pg.id)
+    pg.title = ((request.form.get('title') or '').strip() or pg.title)[:120]
     pg.meta_description = (request.form.get('meta_description') or '').strip()[:180] or None
     pg.show_in_nav = (request.form.get('show_in_nav') == 'on')
-    pg.is_published = (request.form.get('is_published') == 'on')
+    # The home page is always published — hiding it would take the whole site down.
+    pg.is_published = True if pg.slug == SitePage.HOME_SLUG else (request.form.get('is_published') == 'on')
     try:
         pg.nav_order = int(request.form.get('nav_order') or pg.nav_order)
     except (TypeError, ValueError):
         pass
+    raw_slug = (request.form.get('slug') or '').strip()
+    if raw_slug and pg.slug != SitePage.HOME_SLUG:
+        slug = _slugify(raw_slug)
+        if slug != pg.slug:
+            if slug in _RESERVED or SitePage.query.filter(SitePage.slug == slug, SitePage.id != pg.id).first():
+                db.session.rollback()
+                return _fail('That address is already used — pick another.', back)
+            pg.slug = slug
     db.session.commit()
     log_action('website.page_meta', target=pg)
-    flash('Page settings saved.', 'success')
-    return redirect(url_for('website_admin.edit_page', page_id=pg.id))
+    return _done('Page settings saved.', back, page=_page_payload(pg))
 
 
 def _blocks(pg):
@@ -221,10 +338,17 @@ def add_block(page_id):
     if not site_blocks.valid_type(btype):
         abort(400)
     blocks = _blocks(pg)
-    blocks.append(site_blocks.block_defaults(btype))
+    new = site_blocks.block_defaults(btype)
+    # Keep the footer last: a section added after it would sit below the footer.
+    at = len(blocks)
+    if btype != 'footer' and blocks and blocks[-1].get('type') == 'footer':
+        at -= 1
+    blocks.insert(at, new)
     _save_blocks(pg, blocks)
     log_action('website.block_add', detail=btype, target=pg)
-    return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % (len(blocks) - 1)))
+    if wants_json():
+        return jsonify(ok=True, message='Section added.', page=_page_payload(pg), selected=at)
+    return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % at))
 
 
 @website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/op', methods=['POST'])
@@ -235,6 +359,8 @@ def block_op(page_id, idx):
     blocks = _blocks(pg)
     if not (0 <= idx < len(blocks)):
         abort(404)
+    if not _same_block(blocks, idx):
+        return _stale(pg)
     op = request.form.get('op')
     if op == 'up' and idx > 0:
         blocks[idx - 1], blocks[idx] = blocks[idx], blocks[idx - 1]
@@ -243,7 +369,6 @@ def block_op(page_id, idx):
     elif op == 'delete':
         blocks.pop(idx)
     elif op == 'duplicate':
-        import copy
         blocks.insert(idx + 1, copy.deepcopy(blocks[idx]))
     elif op == 'toggle':
         blocks[idx]['enabled'] = not blocks[idx].get('enabled', True)
@@ -253,7 +378,53 @@ def block_op(page_id, idx):
             blocks[idx]['variant'] = variant
     _save_blocks(pg, blocks)
     log_action('website.block_op', detail=op, target=pg)
+    if wants_json():
+        sel = {'up': idx - 1, 'down': idx + 1, 'duplicate': idx + 1, 'delete': min(idx, len(blocks) - 1)}.get(op, idx)
+        return jsonify(ok=True, page=_page_payload(pg), selected=max(0, min(sel, len(blocks) - 1)),
+                       message={'delete': 'Section removed.', 'duplicate': 'Section copied.'}.get(op))
     return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % min(idx, len(blocks) - 1) if blocks else None))
+
+
+def _same_block(blocks, idx):
+    """The app sends the section type it is editing; if the page changed in
+    another tab, the index may now point at a different section."""
+    want = request.form.get('expect') or ((request.get_json(silent=True) or {}).get('expect') if request.is_json else None)
+    return not want or blocks[idx].get('type') == want
+
+
+def _stale(pg):
+    if wants_json():
+        return jsonify(ok=False, stale=True, page=_page_payload(pg),
+                       error='This page was changed somewhere else — it has been reloaded. Please try again.'), 409
+    abort(409)
+
+
+@website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/save', methods=['POST'])
+@login_required
+@module_required('website')
+def block_save(page_id, idx):
+    """Save a whole section from the app in one go: its content, design and
+    visibility. Content is checked against the block registry."""
+    pg = db.get_or_404(SitePage, page_id)
+    blocks = _blocks(pg)
+    if not (0 <= idx < len(blocks)):
+        abort(404)
+    body = request.get_json(silent=True) or {}
+    if not _same_block(blocks, idx):
+        return _stale(pg)
+    blk = blocks[idx]
+    try:
+        blk['props'] = wed.clean_props(blk['type'], blk.get('props') or {}, body.get('props') or {})
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    variant = body.get('variant')
+    if variant and site_blocks.valid_variant(blk['type'], variant):
+        blk['variant'] = variant
+    if 'enabled' in body:
+        blk['enabled'] = bool(body.get('enabled'))
+    _save_blocks(pg, blocks)
+    log_action('website.block_content', target=pg)
+    return jsonify(ok=True, message='Saved.', page=_page_payload(pg), selected=idx)
 
 
 @website_admin_bp.route('/pages/<int:page_id>/block/<int:idx>/content', methods=['POST'])
@@ -327,14 +498,14 @@ def block_ai(page_id, idx):
     if not (0 <= idx < len(blocks)):
         abort(404)
     if not site_ai.is_available():
-        flash('AI copywriting isn’t set up on this site.', 'error')
-        return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+        return _fail('AI writing isn’t set up on this site.',
+                     url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
     block = blocks[idx]
     props = dict(block.get('props') or {})
     fields = site_ai.copy_fields(props)
     if not fields:
-        flash('This section has no editable text to write.', 'error')
-        return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+        return _fail('This section has no text to write.',
+                     url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
     spec = site_blocks.REGISTRY.get(block['type']) or {}
     from utils.site_data import public_context
     branding = public_context()['branding']
@@ -343,8 +514,14 @@ def block_ai(page_id, idx):
         tone=(request.form.get('tone') or '').strip()[:60],
         keywords=(request.form.get('keywords') or '').strip()[:200])
     if not suggestions:
-        flash('AI couldn’t generate copy just now — please try again.', 'error')
-        return redirect(url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx))
+        return _fail('AI couldn’t write anything just now — please try again.',
+                     url_for('website_admin.edit_page', page_id=pg.id, _anchor='b%d' % idx), 502)
+    if wants_json():
+        # The app drops the draft into the fields; nothing is saved (or goes
+        # live) until the person reviews it and taps Save.
+        log_action('website.block_ai', detail=block['type'], target=pg)
+        return jsonify(ok=True, suggestions={k: v for k, v in suggestions.items() if k in fields},
+                       message='Draft written — check the wording, then Save.')
     props.update(suggestions)
     block['props'] = props
     _save_blocks(pg, blocks)
@@ -359,41 +536,104 @@ def block_ai(page_id, idx):
 def delete_page(page_id):
     pg = db.get_or_404(SitePage, page_id)
     if pg.slug == SitePage.HOME_SLUG:
-        flash('The home page cannot be deleted.', 'error')
-        return redirect(url_for('website_admin.edit_page', page_id=pg.id))
+        return _fail('The home page cannot be deleted.', url_for('website_admin.edit_page', page_id=pg.id))
     name = pg.title
     db.session.delete(pg); db.session.commit()
     log_action('website.page_delete', detail=name)
-    flash(f'Page “{name}” deleted.', 'success')
-    return redirect(url_for('website_admin.index'))
+    return _done(f'Page “{name}” deleted.', url_for('website_admin.index'), redirect=url_for('website_admin.index'))
 
 
 # --- media library ---------------------------------------------------------
+def _media_row(m):
+    return {'id': m.id, 'url': m.url, 'name': m.filename or 'Image', 'w': m.width, 'h': m.height,
+            'kb': round((m.bytes or 0) / 1024), 'date': m.created_at.strftime('%d %b %Y') if m.created_at else '',
+            'delete': url_for('website_admin.media_delete', media_id=m.id)}
+
+
+def _media_used():
+    """Every image URL a page or post currently uses, so the library can warn
+    before deleting an image that is still on the site."""
+    used = set()
+
+    def walk(v):
+        if isinstance(v, str):
+            if v.startswith('/site/media/') or v.startswith('http'):
+                used.add(v)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+    for p in SitePage.query.all():
+        walk(p.blocks or [])
+    try:
+        from models import NewsPost
+        for n in NewsPost.query.filter(NewsPost.cover_image.isnot(None)).all():
+            used.add(n.cover_image)
+    except Exception:
+        db.session.rollback()
+    return used
+
+
 @website_admin_bp.route('/media')
 @login_required
 @module_required('website')
 def media_library():
-    items = SiteMedia.query.order_by(SiteMedia.created_at.desc()).all()
+    items = SiteMedia.query.order_by(SiteMedia.created_at.desc(), SiteMedia.id.desc()).all()
     total = sum(m.bytes or 0 for m in items)
     from utils import media_storage
     labels = {'db': 'this school’s database', 'local': 'a filesystem volume', 's3': 'object storage (S3/R2)'}
     where = labels.get(media_storage.backend(), media_storage.backend())
-    return render_template('website/admin_media.html', items=items, total=total, storage_where=where)
+    used = _media_used()
+    rows = []
+    for m in items:
+        r = _media_row(m)
+        r['used'] = m.url in used
+        rows.append(r)
+    return _payload('media', items=rows, total_mb=round(total / 1024 / 1024, 2), storage_where=where,
+                    urls={'upload': url_for('website_admin.media_upload')})
 
 
 @website_admin_bp.route('/media/upload', methods=['POST'])
 @login_required
 @module_required('website')
 def media_upload():
+    done, errors = [], []
     for up in request.files.getlist('file'):
         if up and up.filename:
             try:
                 m = site_media.store_upload(up)
+                done.append(m)
                 log_action('website.media_upload', detail='%dx%d' % (m.width or 0, m.height or 0))
             except ValueError as e:
-                flash(str(e), 'error')
-    flash('Image(s) uploaded.', 'success')
+                errors.append(f'{up.filename}: {e}')
+    if wants_json():
+        if not done:
+            return jsonify(ok=False, error=errors[0] if errors else 'Choose an image to upload.'), 400
+        return jsonify(ok=True, items=[_media_row(m) for m in done], errors=errors,
+                       message=f'{len(done)} image{"s" if len(done) != 1 else ""} uploaded.')
+    # Only claim success for what actually uploaded (it used to say "uploaded"
+    # even when every file was rejected).
+    for e in errors:
+        flash(e, 'error')
+    if done:
+        flash(f'{len(done)} image{"s" if len(done) != 1 else ""} uploaded.', 'success')
+    elif not errors:
+        flash('Choose an image to upload.', 'error')
     return redirect(url_for('website_admin.media_library'))
+
+
+@website_admin_bp.route('/media/<int:media_id>/delete', methods=['POST'])
+@login_required
+@module_required('website')
+def media_delete(media_id):
+    m = db.get_or_404(SiteMedia, media_id)
+    from utils import media_storage
+    media_storage.delete(m)                    # remove filesystem/object bytes too
+    db.session.delete(m); db.session.commit()
+    log_action('website.media_delete', detail=str(media_id))
+    return _done('Image deleted.', url_for('website_admin.media_library'))
 
 
 # --- holiday assignments ---------------------------------------------------
@@ -410,6 +650,16 @@ def _class_choices():
         return []
 
 
+def _assignment_row(a):
+    return {'id': a.id, 'class_id': a.class_id, 'class_label': a.class_label, 'title': a.title,
+            'session_label': a.session_label or '', 'filename': a.filename, 'ext': (a.ext or '').upper(),
+            'icon': a.icon, 'size': a.size_human, 'published': bool(a.is_published),
+            'date': a.created_at.strftime('%d %b %Y') if a.created_at else '',
+            'download': url_for('website.assignment_download', aid=a.id),
+            'toggle': url_for('website_admin.assignment_toggle', aid=a.id),
+            'delete': url_for('website_admin.assignment_delete', aid=a.id)}
+
+
 @website_admin_bp.route('/assignments')
 @login_required
 @module_required('website')
@@ -417,8 +667,9 @@ def assignments():
     from models import HolidayAssignment
     items = HolidayAssignment.query.order_by(HolidayAssignment.class_label.asc(),
                                              HolidayAssignment.created_at.desc()).all()
-    return render_template('website/admin_assignments.html', items=items,
-                           classes=_class_choices())
+    return _payload('assignments', items=[_assignment_row(a) for a in items],
+                    classes=[{'id': cid, 'name': n} for cid, n in _class_choices()],
+                    urls={'upload': url_for('website_admin.assignment_upload')})
 
 
 @website_admin_bp.route('/assignments/upload', methods=['POST'])
@@ -426,20 +677,18 @@ def assignments():
 @module_required('website')
 def assignment_upload():
     from models import HolidayAssignment, SchoolClass
+    back = url_for('website_admin.assignments')
     up = request.files.get('file')
     title = (request.form.get('title') or '').strip()[:200]
     session_label = (request.form.get('session_label') or '').strip()[:60]
     if not up or not up.filename or not title:
-        flash('Please provide a title and choose a file.', 'error')
-        return redirect(url_for('website_admin.assignments'))
+        return _fail('Please give it a title and choose a file.', back)
     ext = up.filename.rsplit('.', 1)[-1].lower() if '.' in up.filename else ''
     if ext not in _ASSIGN_EXT:
-        flash('Only PDF and Word (.doc/.docx) files are allowed.', 'error')
-        return redirect(url_for('website_admin.assignments'))
+        return _fail('Only PDF and Word (.doc/.docx) files are allowed.', back)
     data = up.read()
     if not data or len(data) > _ASSIGN_MAX:
-        flash('That file is empty or larger than 20 MB.', 'error')
-        return redirect(url_for('website_admin.assignments'))
+        return _fail('That file is empty or larger than 20 MB.', back)
     # resolve the class label (denormalised, survives class edits/deletes)
     cid = request.form.get('class_id')
     cid = int(cid) if (cid and str(cid).isdigit()) else None
@@ -447,13 +696,14 @@ def assignment_upload():
     if cid:
         c = db.session.get(SchoolClass, cid)
         label = c.name if c else 'General'
+        if not c:
+            cid = None
     a = HolidayAssignment(class_id=cid, class_label=label, title=title,
                           session_label=session_label or None, filename=up.filename[:200],
                           mime=_ASSIGN_EXT[ext], bytes=len(data), data=data, is_published=True)
     db.session.add(a); db.session.commit()
     log_action('website.assignment_upload', detail=f'{label}: {title}', target=a)
-    flash('Assignment uploaded.', 'success')
-    return redirect(url_for('website_admin.assignments'))
+    return _done('Assignment uploaded.', back, item=_assignment_row(a))
 
 
 @website_admin_bp.route('/assignments/<int:aid>/toggle', methods=['POST'])
@@ -465,7 +715,8 @@ def assignment_toggle(aid):
     a.is_published = not a.is_published
     db.session.commit()
     log_action('website.assignment_toggle', detail=str(a.is_published), target=a)
-    return redirect(url_for('website_admin.assignments'))
+    return _done(None if not wants_json() else ('Now on the website.' if a.is_published else 'Hidden from the website.'),
+                 url_for('website_admin.assignments'), item=_assignment_row(a))
 
 
 @website_admin_bp.route('/assignments/<int:aid>/delete', methods=['POST'])
@@ -476,8 +727,7 @@ def assignment_delete(aid):
     a = db.get_or_404(HolidayAssignment, aid)
     db.session.delete(a); db.session.commit()
     log_action('website.assignment_delete', detail=str(aid))
-    flash('Assignment deleted.', 'success')
-    return redirect(url_for('website_admin.assignments'))
+    return _done('Assignment deleted.', url_for('website_admin.assignments'))
 
 
 # --- news / blog -----------------------------------------------------------
@@ -492,13 +742,25 @@ def _unique_news_slug(title, exclude_id=None):
         slug = f'{base}-{i}'; i += 1
 
 
+def _post_row(p):
+    return {'id': p.id, 'title': p.title, 'slug': p.slug, 'excerpt': p.excerpt or '', 'body': p.body or '',
+            'category': p.category or '', 'author': p.author or '', 'published': bool(p.is_published),
+            'date': p.published_at.isoformat() if p.published_at else '',
+            'date_label': p.published_at.strftime('%d %b %Y') if p.published_at else '',
+            'cover': p.cover_image or '',
+            'words': len((p.body or '').split()),
+            'edit': url_for('website_admin.news_edit', post_id=p.id),
+            'public': url_for('website.news_article', slug=p.slug)}
+
+
 @website_admin_bp.route('/news')
 @login_required
 @module_required('website')
 def news():
     from models import NewsPost
     posts = NewsPost.query.order_by(NewsPost.published_at.desc(), NewsPost.id.desc()).all()
-    return render_template('website/admin_news.html', posts=posts)
+    return _payload('news', posts=[_post_row(p) for p in posts],
+                    urls={'new': url_for('website_admin.news_new')})
 
 
 @website_admin_bp.route('/news/new', methods=['POST'])
@@ -511,7 +773,10 @@ def news_new():
                  body='', excerpt='')
     db.session.add(p); db.session.commit()
     log_action('website.news_create', target=p)
-    return redirect(url_for('website_admin.news_edit', post_id=p.id))
+    url = url_for('website_admin.news_edit', post_id=p.id)
+    if wants_json():
+        return jsonify(ok=True, redirect=url)
+    return redirect(url)
 
 
 @website_admin_bp.route('/news/<int:post_id>')
@@ -520,8 +785,12 @@ def news_new():
 def news_edit(post_id):
     from models import NewsPost
     p = db.get_or_404(NewsPost, post_id)
-    public_url = url_for('website.news_article', slug=p.slug)
-    return render_template('website/admin_news_edit.html', p=p, public_url=public_url)
+    cats = sorted({c for (c,) in db.session.query(NewsPost.category).filter(NewsPost.category.isnot(None)).all() if c})
+    return _payload('post', post=_post_row(p), categories=cats,
+                    urls={'save': url_for('website_admin.news_save', post_id=p.id),
+                          'delete': url_for('website_admin.news_delete', post_id=p.id),
+                          'upload': url_for('website_admin.media_upload'),
+                          'library': url_for('website_admin.media_library')})
 
 
 @website_admin_bp.route('/news/<int:post_id>/save', methods=['POST'])
@@ -531,7 +800,8 @@ def news_save(post_id):
     from models import NewsPost
     from datetime import datetime
     p = db.get_or_404(NewsPost, post_id)
-    new_title = (request.form.get('title') or p.title).strip()[:200]
+    back = url_for('website_admin.news_edit', post_id=p.id)
+    new_title = ((request.form.get('title') or '').strip() or p.title)[:200]
     if _slugify(new_title) != _slugify(p.title):
         p.slug = _unique_news_slug(new_title, exclude_id=p.id)
     p.title = new_title
@@ -546,20 +816,23 @@ def news_save(post_id):
             p.published_at = datetime.strptime(pub, '%Y-%m-%d').date()
         except ValueError:
             pass
+    elif p.is_published and not p.published_at:
+        from models import local_now
+        p.published_at = local_now().date()
     up = request.files.get('cover_file')
     if up and up.filename:
         try:
             p.cover_image = site_media.store_upload(up).url
         except ValueError as e:
-            flash(str(e), 'error')
+            db.session.rollback()
+            return _fail(str(e), back)
     elif request.form.get('clear_cover'):
         p.cover_image = None
     elif (request.form.get('cover_url') or '').strip():
         p.cover_image = request.form.get('cover_url').strip()[:400]
     db.session.commit()
     log_action('website.news_save', target=p)
-    flash('Post saved.', 'success')
-    return redirect(url_for('website_admin.news_edit', post_id=p.id))
+    return _done('Post published.' if p.is_published else 'Draft saved.', back, post=_post_row(p))
 
 
 @website_admin_bp.route('/news/<int:post_id>/delete', methods=['POST'])
@@ -571,23 +844,38 @@ def news_delete(post_id):
     name = p.title
     db.session.delete(p); db.session.commit()
     log_action('website.news_delete', detail=name)
-    flash(f'Post “{name}” deleted.', 'success')
-    return redirect(url_for('website_admin.news'))
+    return _done(f'Post “{name}” deleted.', url_for('website_admin.news'), redirect=url_for('website_admin.news'))
 
 
 # --- analytics -------------------------------------------------------------
+def _days():
+    try:
+        return min(90, max(7, int(request.args.get('days', 30))))
+    except (TypeError, ValueError):
+        return 30
+
+
 @website_admin_bp.route('/analytics')
 @login_required
 @module_required('website')
 def analytics():
     from utils import site_analytics
-    try:
-        days = min(90, max(7, int(request.args.get('days', 30))))
-    except (TypeError, ValueError):
-        days = 30
+    days = _days()
     data = site_analytics.summary(days=days)
     peak = max((p['views'] for p in data['series']), default=0)
-    return render_template('website/admin_analytics.html', data=data, peak=peak, days=days)
+    busiest = max(data['series'], key=lambda p: p['views'], default=None)
+    half = len(data['series']) // 2
+    first = sum(p['views'] for p in data['series'][:half])
+    second = sum(p['views'] for p in data['series'][half:])
+    return _payload('analytics', days=days,
+                    start=data['start'].strftime('%d %b'), end=data['end'].strftime('%d %b %Y'),
+                    total=data['total_views'], unique=data['unique_visitors'], peak=peak,
+                    busiest=(busiest['day'].strftime('%a %d %b') if busiest and peak else ''),
+                    trend=(None if not first else round((second - first) / first * 100)),
+                    series=[{'day': p['day'].isoformat(), 'label': p['day'].strftime('%a %d %b'),
+                             'short': p['day'].strftime('%d %b'), 'views': p['views']} for p in data['series']],
+                    top_pages=data['top_pages'], top_referrers=data['top_referrers'],
+                    urls={'csv': url_for('website_admin.analytics_export', days=days)})
 
 
 @website_admin_bp.route('/analytics/export')
@@ -598,10 +886,7 @@ def analytics_export():
     import io
     from utils import site_analytics
     from utils.web_exports import csv_response, formula_guard
-    try:
-        days = min(90, max(7, int(request.args.get('days', 30))))
-    except (TypeError, ValueError):
-        days = 30
+    days = _days()
     data = site_analytics.summary(days=days)
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -618,16 +903,3 @@ def analytics_export():
         w.writerow([formula_guard(r['source']), r['views']])
     log_action('website.analytics_export', detail=f'{days}d')
     return csv_response(buf.getvalue(), f'website-analytics-{days}d.csv')
-
-
-@website_admin_bp.route('/media/<int:media_id>/delete', methods=['POST'])
-@login_required
-@module_required('website')
-def media_delete(media_id):
-    m = db.get_or_404(SiteMedia, media_id)
-    from utils import media_storage
-    media_storage.delete(m)                    # remove filesystem/object bytes too
-    db.session.delete(m); db.session.commit()
-    log_action('website.media_delete', detail=str(media_id))
-    flash('Image deleted.', 'success')
-    return redirect(url_for('website_admin.media_library'))

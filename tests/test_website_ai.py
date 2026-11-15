@@ -60,8 +60,8 @@ def test_editor_hides_ai_when_unavailable(app, monkeypatch):
     c = _admin(app)
     with app.app_context():
         pid = SitePage.query.filter_by(slug='home').first().id
-    html = c.get(f'/website/pages/{pid}').get_data(as_text=True)
-    assert 'Write with AI' not in html
+    d = c.get(f'/website/pages/{pid}', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['ai_available'] is False and not any(b['ai'] for b in d['blocks'])
 
 
 def test_editor_shows_ai_when_available(app, monkeypatch):
@@ -70,8 +70,30 @@ def test_editor_shows_ai_when_available(app, monkeypatch):
     c = _admin(app)
     with app.app_context():
         pid = SitePage.query.filter_by(slug='home').first().id
-    html = c.get(f'/website/pages/{pid}').get_data(as_text=True)
-    assert 'Write with AI' in html
+    d = c.get(f'/website/pages/{pid}', headers={'X-Requested-With': 'fetch'}).get_json()
+    hero = next(b for b in d['blocks'] if b['type'] == 'hero')
+    assert d['ai_available'] is True and hero['ai'] is True
+
+
+def test_ai_draft_from_app_is_not_saved(app, monkeypatch):
+    """From the app, an AI draft only fills the boxes: nothing is stored (or
+    goes live) until the person reviews it and taps Save."""
+    _publish(app)
+    monkeypatch.setattr(site_ai, 'is_available', lambda: True)
+    monkeypatch.setattr(site_ai, 'suggest_block_copy',
+                        lambda *a, **k: {'heading': 'Drafted Heading', 'image': 'x'})
+    c = _admin(app)
+    with app.app_context():
+        pg = SitePage.query.filter_by(slug='home').first()
+        pid = pg.id
+        hero_idx = next(i for i, b in enumerate(pg.blocks) if b['type'] == 'hero')
+        before = pg.blocks[hero_idx]['props'].get('heading')
+    r = c.post(f'/website/pages/{pid}/block/{hero_idx}/ai', headers={'X-Requested-With': 'fetch'},
+               data={'_csrf_token': auth_csrf(c), 'expect': 'hero'})
+    j = r.get_json()
+    assert j['ok'] and j['suggestions'] == {'heading': 'Drafted Heading'}   # text fields only
+    with app.app_context():
+        assert SitePage.query.get(pid).blocks[hero_idx]['props'].get('heading') == before
 
 
 def test_ai_route_unavailable_changes_nothing(app, monkeypatch):

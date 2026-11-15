@@ -102,7 +102,11 @@ def test_admin_dashboard_renders(app):
     r = c.get('/website/analytics')
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert 'Website analytics' in html and 'Page views' in html
+    assert 'Website analytics' in html and 'id="web-app"' in html
+    # the app's data: one view recorded, a daily series and the CSV link
+    d = c.get('/website/analytics', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['page'] == 'analytics' and d['total'] >= 1 and len(d['series']) == 30
+    assert d['urls']['csv'].endswith('days=30')
 
 
 def test_analytics_csv_export(app):

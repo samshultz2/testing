@@ -18,7 +18,7 @@ const ENTRIES = [
   'library-app', 'events-app', 'admissions-app', 'reports-app', 'promotion-app',
   'mock-jamb-app', 'comms-app', 'hr-app', 'finance-app', 'subjects-app',
   'results-app', 'cbt-app', 'academics-app', 'settings-app', 'users-app',
-  'contributions-app', 'timetable-app', 'scratchcards-app', 'parent-app',
+  'contributions-app', 'timetable-app', 'scratchcards-app', 'parent-app', 'website-app',
 ].map((n) => `src/${n}.jsx`);
 
 // Map the bare React specifiers to the globals exposed by the vendored UMD bundles.

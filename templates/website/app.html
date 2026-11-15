@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% set _t = {'home':'Website Builder','page':'Edit page','news':'News & blog','post':'Edit post','media':'Media library','assignments':'Holiday assignments','analytics':'Website analytics'} %}
+{% block title %}{{ _t.get(web_json.page, 'Website Builder') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if web_json.page == 'home' %}<span>Website Builder</span>
+{% else %}<a href="{{ url_for('website_admin.index') }}">Website Builder</a> / <span>{{ _t.get(web_json.page, '') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/website-app.css') }}">
+{% endblock %}
+{% block content %}
+<div id="web-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="web-data">{{ web_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/website-app.js') }}" defer></script>
+{% endblock %}
