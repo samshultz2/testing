@@ -1867,6 +1867,7 @@ el('satManage').addEventListener('change', function(e){
 // exact percentage of it, so html2canvas/jsPDF have nothing left to
 // recalculate — they just rasterise the layout that's already correct.
 var _exportOrientation = 'landscape';
+var _exportPaper = 'a4';   // 'a4' or 'a3' (PDF pages)
 function exportName(){
     return (el('title').value || layout().title || 'timetable').replace(/[^\w]+/g, '_');
 }
@@ -2157,14 +2158,17 @@ function captureExport(){
     _capBusy = true;
     var sheet = el('sheet');
     _exportOrientation = (el('pageOrient') && el('pageOrient').value) || 'landscape';
+    _exportPaper = (el('pagePaper') && el('pagePaper').value) || 'a4';
     var wrap = sheet.closest('.td-wrap');
     if(wrap) wrap.classList.add('td-exporting'); // phones hide the preview; keep it measurable
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
+    // A3 is √2 wider than A4 at the same text size: same printed size, twice the room.
+    sheet.classList.toggle('a3', _exportPaper === 'a3');
     var cleanup = function(){
         _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = null; clearFloor(); clearTableExportSizing();
         sheet.style.fontSize = '';
-        sheet.classList.remove('exporting', 'portrait');
+        sheet.classList.remove('exporting', 'portrait', 'a3');
         if(wrap) wrap.classList.remove('td-exporting');
         renderSheet();
         _capBusy = false;
@@ -2213,8 +2217,8 @@ function showExportPages(){
     }).join('');
     box.style.display = 'flex';
     el('exportSpinner').style.display = 'none';
-    var b = document.querySelector('#exportModal [data-call="downloadImage"]');
-    if(b) b.innerHTML = '<i class="fas fa-image"></i> ' + (n > 1 ? 'Download '+n+' images' : 'Download image');
+    var b = document.querySelector('#exportModal [data-call="downloadPDF"]');
+    if(b) b.innerHTML = '<i class="fas fa-file-pdf"></i> Download PDF <small>('+_exportPaper.toUpperCase()+(n > 1 ? ', '+n+' pages' : '')+')</small>';
 }
 function openExport(){
     var modal = el('exportModal');
@@ -2227,25 +2231,56 @@ function openExport(){
     captureExport();
 }
 function closeExport(){ el('exportModal').style.display = 'none'; document.body.style.overflow = ''; }
+// "Download image": ONE long image for phones/WhatsApp. Always phone-shaped
+// (portrait width) at the chosen text size, as tall as the timetable needs —
+// no pages, nothing shrunk. Rendered on demand (the preview shows the PDF).
 function downloadImage(){
-    if(!_exportPages.length || _capBusy) return;   // never download a stale render
-    var n = _exportPages.length;
-    _exportPages.forEach(function(p, i){
-        setTimeout(function(){
-            var a = document.createElement('a');
-            a.href = p.url;
-            a.download = exportName() + (n > 1 ? '-page-' + (i+1) : '') + '.png';
-            a.click();
-        }, i * 700);
-    });
+    if(_capBusy) return;
+    var btn = document.querySelector('#exportModal [data-call="downloadImage"]');
+    var label = btn ? btn.innerHTML : '';
+    if(btn){ btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Making image…'; }
+    _capBusy = true;
+    var sheet = el('sheet'), wrap = sheet.closest('.td-wrap');
+    var keepO = _exportOrientation;
+    _exportOrientation = 'portrait';
+    if(wrap) wrap.classList.add('td-exporting');
+    sheet.classList.add('exporting', 'portrait');
+    var done = function(){
+        _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = null;
+        clearFloor(); clearTableExportSizing(); sheet.style.fontSize = '';
+        sheet.classList.remove('exporting', 'portrait', 'a3');
+        if(wrap) wrap.classList.remove('td-exporting');
+        _exportOrientation = keepO;
+        renderSheet();
+        _capBusy = false;
+        if(btn){ btn.disabled = false; btn.innerHTML = label; }
+        if(_capAgain){ _capAgain = false; captureExport(); }
+    };
+    try {
+        // The column layout that reads best (fewest broken words), then the most compact.
+        _pageKeys = null; renderSheet();
+        var rs = tryLayouts(null, sheet);
+        var best = rs.reduce(function(a, b){ return b.bad < a.bad || (b.bad === a.bad && b.h < a.h) ? b : a; });
+        layoutPage(null, sheet, best.cand);
+    } catch(e){ layoutPage(null, sheet, null); }
+    // Long sheets: drop the scale before a phone runs out of canvas memory.
+    var w = sheet.offsetWidth || 1046, h = sheet.scrollHeight || 1;
+    var scale = Math.max(1, Math.min(2, Math.sqrt(15000000 / (w * h))));
+    html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff', windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: h})
+        .then(function(canvas){
+            var url = canvas.toDataURL('image/png'); freeCanvas(canvas);
+            done();
+            var a = document.createElement('a'); a.href = url; a.download = exportName() + '.png'; a.click();
+        })
+        .catch(function(e){ done(); alert('Could not make the image: ' + e); });
 }
 function downloadPDF(){
     if(!_exportPages.length || _capBusy) return;   // never download a stale render
     var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-    var pdf = new JsPDF({orientation: _exportOrientation, unit: 'mm', format: 'a4'});
+    var pdf = new JsPDF({orientation: _exportOrientation, unit: 'mm', format: _exportPaper});
     var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
     _exportPages.forEach(function(p, i){
-        if(i) pdf.addPage('a4', _exportOrientation);
+        if(i) pdf.addPage(_exportPaper, _exportOrientation);
         // Fill the page width, keep the aspect ratio; fit to height if taller.
         var imgW = pw, imgH = pw * p.h / p.w;
         if(imgH > ph){ imgH = ph; imgW = ph * p.w / p.h; }
@@ -2262,6 +2297,11 @@ document.getElementById('exportModal').addEventListener('click', function(e){
 el('pageOrient').addEventListener('change', function(){
     if(el('exportModal').style.display !== 'none') captureExport();
 });
+if(el('pagePaper')) el('pagePaper').addEventListener('change', function(){
+    try { localStorage.setItem('ttExportPaper', this.value); } catch(e){}
+    if(el('exportModal').style.display !== 'none') captureExport();
+});
+try { var _pp = localStorage.getItem('ttExportPaper'); if(_pp && el('pagePaper') && el('pagePaper').querySelector('option[value="'+_pp+'"]')) el('pagePaper').value = _pp; } catch(e){}
 (function(){
     var saved = null;
     try { saved = localStorage.getItem('ttExportSize'); } catch(e){}

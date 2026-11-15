@@ -806,6 +806,10 @@
 .export-modal img{max-width:100%;max-height:68vh;border:1px solid var(--gray-200);align-self:center}
 .export-pages{flex-direction:column;align-items:center;gap:.5rem}
 .export-pg{font-size:.75rem;font-weight:700;color:var(--text-muted);align-self:flex-start}
+.td-exp-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.export-actions .btn small{font-weight:500;opacity:.85}
+.tt-sheet.exporting.a3{width:2093px}
+.tt-sheet.exporting.a3.portrait{width:1479px}
 .td-size{display:inline-flex;background:var(--gray-50,#f8f9fa);border:1px solid var(--border-color,#ddd);border-radius:10px;padding:3px;gap:2px}
 .td-size label{cursor:pointer;margin:0}
 .td-size input{position:absolute;opacity:0;pointer-events:none}
@@ -1349,12 +1353,21 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
 <div class="export-modal no-print" id="exportModal">
     <div class="box">
         <h3><i class="fas fa-eye"></i> Preview</h3>
-        <div class="form-group" style="margin:0 0 .25rem">
-            <label class="form-label" style="font-size:.8rem">A4 page orientation</label>
-            <select id="pageOrient" class="form-control">
-                <option value="landscape">Landscape (297 × 210mm)</option>
-                <option value="portrait">Portrait (210 × 297mm)</option>
-            </select>
+        <div class="td-exp-row">
+            <div class="form-group" style="margin:0">
+                <label class="form-label" style="font-size:.8rem" for="pagePaper">PDF paper</label>
+                <select id="pagePaper" class="form-control">
+                    <option value="a4">A4 (any printer)</option>
+                    <option value="a3">A3 (one big sheet)</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin:0">
+                <label class="form-label" style="font-size:.8rem" for="pageOrient">Orientation</label>
+                <select id="pageOrient" class="form-control">
+                    <option value="landscape">Landscape</option>
+                    <option value="portrait">Portrait</option>
+                </select>
+            </div>
         </div>
         <div class="form-group" style="margin:0 0 .25rem">
             <label class="form-label" style="font-size:.8rem">Text size</label>
@@ -1363,13 +1376,13 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
                 <label><input type="radio" name="exportSize" value="m" checked><span>Medium</span></label>
                 <label><input type="radio" name="exportSize" value="l"><span>Large</span></label>
             </div>
-            <small class="td-size-note">Every size reads on a phone without zooming. A long timetable continues on a second page instead of shrinking.</small>
+            <small class="td-size-note">Every size reads on a phone without zooming. The image is one long picture for WhatsApp; the PDF continues on another page instead of shrinking.</small>
         </div>
         <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
         <div id="exportImg" class="export-pages" style="display:none"></div>
         <div class="export-actions">
             <button class="btn btn-primary" data-call="downloadPDF"><i class="fas fa-file-pdf"></i> Download PDF</button>
-            <button class="btn btn-success" data-call="downloadImage"><i class="fas fa-image"></i> Download image (Full HD)</button>
+            <button class="btn btn-success" data-call="downloadImage"><i class="fas fa-image"></i> Download image <small>(one long picture)</small></button>
             <button class="btn btn-secondary" data-call="closeExport">Close</button>
         </div>
     </div>

@@ -263,4 +263,17 @@ def test_export_offers_small_medium_large_text(auth_client):
     # and multi-page planning + PDF pages
     assert 'var EXPORT_TEXT' in DESIGNER_JS and 'EXPORT_MIN_RATIO' in DESIGNER_JS
     assert 'function planPages(' in DESIGNER_JS
-    assert "pdf.addPage('a4', _exportOrientation)" in DESIGNER_JS
+    assert 'pdf.addPage(' in DESIGNER_JS
+
+
+def test_export_offers_a3_and_one_long_image(auth_client):
+    """PDF on A4 or A3 paper; the image download is one long phone-width
+    picture (no pages) for sharing."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    assert 'id="pagePaper"' in html
+    assert '<option value="a4">' in html and '<option value="a3">' in html
+    assert '.tt-sheet.exporting.a3{width:2093px}' in html
+    assert 'one long picture' in html
+    assert "format: _exportPaper" in DESIGNER_JS
+    assert "pdf.addPage(_exportPaper, _exportOrientation)" in DESIGNER_JS
+    assert "_exportOrientation = 'portrait';" in DESIGNER_JS   # long image is phone-shaped
