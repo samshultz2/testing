@@ -82,6 +82,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, fi
   const [summary, setSummary] = useState(true);
   const [signatures, setSignatures] = useState(false);
   const [blank, setBlank] = useState(false);
+  const [blankText, setBlankText] = useState('Mark 1, Mark 2, Mark 3');
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [pv, setPv] = useState({ url: '', pages: 1, page: 1, loading: true, error: false, title: '', subtitle: '', orient: 'portrait' });
@@ -96,13 +97,15 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, fi
     p.set('preset', ['class', 'contact', 'exam', 'all'].includes(preset) ? preset : '');
     p.set('orientation', orientation); p.set('size', size);
     p.set('group', group ? '1' : '0'); p.set('summary', summary ? '1' : '0');
-    p.set('signatures', signatures ? '1' : '0'); p.set('blank', blank ? '3' : '0');
+    p.set('signatures', signatures ? '1' : '0'); const blankLabels = blankText.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 6);
+    p.set('blank', blank ? String(Math.max(1, blankLabels.length)) : '0');
+    if (blank && blankLabels.length) p.set('blank_labels', blankLabels.join(','));
     if (title.trim()) p.set('title', title.trim());
     if (subtitle.trim()) p.set('subtitle', subtitle.trim());
     if (scope === 'selected' && selectedIds.length) p.set('student_ids', JSON.stringify(selectedIds));
     else Object.entries(applied || {}).forEach(([k, v]) => { if (v) p.set(k, v); });
     return p;
-  }, [fields, preset, orientation, size, group, summary, signatures, blank, title, subtitle, scope, selectedIds, applied]);
+  }, [fields, preset, orientation, size, group, summary, signatures, blank, blankText, title, subtitle, scope, selectedIds, applied]);
 
   // Live preview: page N of the real document, re-rendered (debounced) on change.
   useEffect(() => {
@@ -340,6 +343,10 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, fi
               {docLike && <Toggle on={signatures} onChange={setSignatures}>Signature lines</Toggle>}
               {docLike && <Toggle on={blank} onChange={setBlank}>Blank columns for marking</Toggle>}
             </div>
+            {docLike && blank && (
+              <label className="sx-inp sx-blank"><span>Marking columns <small>(comma-separated, up to 6)</small></span>
+                <input value={blankText} maxLength={150} onChange={(e) => setBlankText(e.target.value)} placeholder="e.g. CA 1, CA 2, Exam" /></label>
+            )}
             <div className="sx-row2">
               <label className="sx-inp"><span>Title</span>
                 <input value={title} maxLength={150} onChange={(e) => setTitle(e.target.value)} placeholder={pv.title || 'Automatic'} /></label>

@@ -174,6 +174,14 @@ def _natural_widths(spec, fs):
     return widths
 
 
+def blank_labels(spec):
+    """Headings for the blank marking columns (e.g. "CA 1", "Exam"); a column
+    with no heading reads as a rendering fault, so unnamed ones get "Mark n"."""
+    nb = spec.get('blank_cols', 0) or 0
+    given = [str(x).strip()[:24] for x in (spec.get('blank_labels') or [])]
+    return [(given[i] if i < len(given) and given[i] else 'Mark %d' % (i + 1)) for i in range(nb)]
+
+
 def _fit_widths(natural, avail, kinds, blank_cols, fs):
     sn = fs * 2.6
     blank_w = fs * 4.2
@@ -465,7 +473,7 @@ def render_pdf(spec):
         return Paragraph(_esc(_cell_text(col, v)), st_cell)
 
     head_row = [Paragraph('#', st_head)] + [Paragraph(_esc(c['label'].upper()), st_head) for c in spec['columns']] \
-        + [Paragraph('', st_head) for _ in range(spec.get('blank_cols', 0))]
+        + [Paragraph(_esc(l.upper()), st_head) for l in blank_labels(spec)]
 
     def table_for(rows):
         data = [head_row]
@@ -743,7 +751,7 @@ def render_docx(spec):
         t = doc.add_table(rows=1, cols=1 + len(cols) + nb)
         t.autofit = False
         hdr = t.rows[0].cells
-        labels = ['#'] + [c['label'].upper() for c in cols] + [''] * nb
+        labels = ['#'] + [c['label'].upper() for c in cols] + [l.upper() for l in blank_labels(spec)]
         for i, lab in enumerate(labels):
             shade(hdr[i], BG); borders(hdr[i], top=(6, LINE), bottom=(6, LINE))
             run(hdr[i].paragraphs[0], lab, fs * .75, True, MUTED, spacing=12)
@@ -837,7 +845,7 @@ def render_xlsx(spec, about=None):
     if grouped and not any(k == 'current_class' for k, _, _ in cols):
         cols.append(('__group', 'Class', 'text'))
     nb = spec.get('blank_cols', 0)
-    headers = ['#'] + [h for _, h, _ in cols] + [''] * nb
+    headers = ['#'] + [h for _, h, _ in cols] + blank_labels(spec)
     ncol = len(headers)
     last = get_column_letter(ncol)
 

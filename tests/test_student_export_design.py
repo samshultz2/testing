@@ -202,3 +202,18 @@ def test_moved_student_is_grouped_under_current_arm(app):
     with app.app_context():
         from routes.main import current_class_map
         assert current_class_map([sid, sid2]) == {sid: iris, sid2: iris}
+
+
+def test_blank_marking_columns_have_headings(app):
+    """Blank marking columns are labelled ("Mark 1"… by default, or the
+    user's own names) — unlabelled columns looked like a rendering fault."""
+    ids = _students(app)
+    c = _admin(app)
+    t = _pdf_text(_get(c, ids, 'pdf', blank=3).data)
+    assert 'MARK 1' in t and 'MARK 2' in t and 'MARK 3' in t
+    t = _pdf_text(_get(c, ids, 'pdf', blank=2, blank_labels='CA 1,Exam').data)
+    assert 'CA 1' in t and 'EXAM' in t and 'MARK' not in t
+    import openpyxl
+    ws = openpyxl.load_workbook(io.BytesIO(_get(c, ids, 'excel', blank=2, blank_labels='CA 1,Exam').data)).active
+    heads = next(r for r in ws.iter_rows(values_only=True) if r and r[0] == '#')
+    assert heads[-2:] == ('CA 1', 'Exam')

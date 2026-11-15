@@ -1643,6 +1643,7 @@ def export_students_data():
         'columns': columns, 'groups': groups, 'stats': stats,
         'orientation': request.args.get('orientation') if request.args.get('orientation') in ('portrait', 'landscape') else 'auto',
         'size': size, 'signatures': request.args.get('signatures') == '1', 'blank_cols': blank,
+        'blank_labels': [x for x in (request.args.get('blank_labels') or '').split(',')][:6],
         'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else '',
         'generated': timeutil.now(),
         'school': school_profile(), 'colors': SLE.colors_for(document_branding()),
