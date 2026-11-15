@@ -403,7 +403,7 @@ EXAM_KINDS = ('peme', 'cbt', 'theory')
 
 
 def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class_subject=None,
-                    fill=None):
+                    fill=None, signature=True):
     """The score sheet for a class. With ``class_subject`` it is printed
     *filled*: every student's saved score in each column, their Exam Total
     (P.E/M.E + CBT + PBT/Theory) and General Total, with each column's maximum shown.
@@ -564,10 +564,11 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class
         foot = ParagraphStyle('f', parent=styles['Normal'], fontSize=8.5, leading=12, textColor=colors.black)
         elems += [Spacer(1, 10),
                   Paragraph(f"{entered} of {len(students)} students have scores. "
-                            f"Printed {timeutil.today().strftime('%d %b %Y')}.", foot),
-                  Spacer(1, 14),
-                  Paragraph('Subject teacher: ______________________________ &nbsp;&nbsp; '
-                            'Signature: ______________ &nbsp;&nbsp; Date: ______________', foot)]
+                            f"Printed {timeutil.today().strftime('%d %b %Y')}.", foot)]
+        if signature:
+            elems += [Spacer(1, 14),
+                      Paragraph('Subject teacher: ______________________________ &nbsp;&nbsp; '
+                                'Signature: ______________ &nbsp;&nbsp; Date: ______________', foot)]
     doc.build(elems)
     return buf.getvalue()
 

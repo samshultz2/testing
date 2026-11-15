@@ -138,3 +138,15 @@ def test_exam_total_includes_peme(app):
     row = _rows(c.get(d['urls']['filled_sheet'] + '&fill=EXAM_TOTAL').data)['Filledsheet']
     nums = [w for w in row if w.replace('.', '').isdigit()][1:]
     assert nums == [str(ids['exam'])]                       # includes P.E/M.E
+
+
+def test_signature_line_can_be_removed(app):
+    ids = _seed(app)
+    c = _admin(app)
+    d = c.get(f"/subjects/scores?term_id={ids['term']}&assignment_id={ids['asg']}&class_subject_id={ids['cs']}",
+              headers={'X-Requested-With': 'fetch'}).get_json()
+    url = d.get('data', d)['urls']['filled_sheet']
+    assert 'Subject teacher' in _text(c.get(url).data)
+    without = _text(c.get(url + '&sign=0').data)
+    assert 'Subject teacher' not in without and 'Signature' not in without
+    assert 'students have scores' in without                 # the rest of the footer stays

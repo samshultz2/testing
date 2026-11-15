@@ -555,6 +555,9 @@ function PrintScores({ d, onClose }) {
     } catch (e) { /* storage unavailable */ }
     return all;
   });
+  const [sign, setSign] = useState(() => {
+    try { return localStorage.getItem(PRINT_KEY + ':sign') !== '0'; } catch (e) { return true; }
+  });
   const has = (k) => pick.includes(k);
   const flip = (k) => setPick((p) => (p.includes(k) ? p.filter((x) => x !== k) : p.concat(k)));
   const scoreCols = cols.filter((c) => c.kind !== 'total');
@@ -569,8 +572,9 @@ function PrintScores({ d, onClose }) {
   ].filter((p) => p.label === 'Nothing' || p.keys.length);
   const same = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
   const print = () => {
-    try { localStorage.setItem(PRINT_KEY, JSON.stringify(pick)); } catch (e) { /* ignore */ }
-    const url = d.urls.filled_sheet + (same(pick, all) ? '' : '&fill=' + encodeURIComponent(pick.join(',')));
+    try { localStorage.setItem(PRINT_KEY, JSON.stringify(pick)); localStorage.setItem(PRINT_KEY + ':sign', sign ? '1' : '0'); } catch (e) { /* ignore */ }
+    const url = d.urls.filled_sheet + (same(pick, all) ? '' : '&fill=' + encodeURIComponent(pick.join(',')))
+      + (sign ? '' : '&sign=0');
     window.open(url, '_blank', 'noopener');
     onClose();
   };
@@ -595,6 +599,12 @@ function PrintScores({ d, onClose }) {
         {scoreCols.map(row)}
         <div className="rs-pf-h">Totals</div>
         {totals.map(row)}
+        <div className="rs-pf-h">Footer</div>
+        <label className={'rs-pf-row' + (sign ? ' on' : '')}>
+          <input type="checkbox" checked={sign} onChange={() => setSign((v) => !v)} />
+          <span className="rs-pf-t"><b>Signature line</b><small>Subject teacher, signature and date</small></span>
+          <span className="rs-pf-s">{sign ? 'Shown' : 'Hidden'}</span>
+        </label>
       </div>
       <p className="rs-muted" style={{ fontSize: '.8rem', margin: '.6rem 0 .9rem' }}>Totals always add up every saved score, even for columns you leave empty.</p>
       <button type="button" className="rs-btn primary wide" onClick={print}>
