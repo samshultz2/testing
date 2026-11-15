@@ -2,10 +2,29 @@
 {% block title %}{{ t.name }}{% endblock %}
 {% block heading %}{{ t.name }}{% endblock %}
 {% block subheading %}{{ t.subdomain }} · tenant profile{% endblock %}
+{% block back %}{{ url_for('platform.schools') }}{% endblock %}
 
 {% block head %}
 <style>
   .profile-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start}
+  .t-hero{padding:18px 20px;margin-bottom:16px}
+  .t-top{display:flex;gap:14px;align-items:center}
+  .t-ic{width:56px;height:56px;border-radius:16px;flex:none;display:grid;place-items:center;font-family:var(--font-display);font-size:22px;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+  .t-id{min-width:0;flex:1}
+  .t-id b{font-family:var(--font-display);font-size:20px;display:block;line-height:1.2}
+  .t-id .sub{font-size:13px;color:var(--faint)}
+  .t-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2)}
+  @media (max-width:640px){.t-acts{display:grid;grid-template-columns:1fr 1fr}.t-acts .btn{width:100%}}
+  .lbl{display:block;font-size:12.5px;font-weight:650;color:var(--soft);margin:12px 0 6px}
+  .daychips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .daychips button{height:36px;padding:0 13px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-weight:650;font-size:13px;cursor:pointer}
+  .daychips button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .st-opt{display:flex;gap:12px;align-items:center;padding:14px 0;border-top:1px solid var(--line-2)}
+  .st-opt>div{flex:1;min-width:0}
+  .st-opt b{display:block;font-size:14px}
+  .st-opt small{color:var(--faint);font-size:12.5px}
+  .st-opt.danger>div>b{color:var(--bad)}
   .info-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line-2);font-size:13.5px}
   .info-row:first-child{border-top:0}
   .info-row .k{color:var(--faint)} .info-row .v{font-weight:600;text-align:right}
@@ -80,28 +99,33 @@
 {% block content %}
 <a class="backlink" href="{{ url_for('platform.schools') }}"><i class="fas fa-arrow-left"></i> All schools</a>
 
-<div class="panel" style="padding:16px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-  <span class="school"><span class="ic">{{ t.name[0]|upper }}</span>
-    <span><b style="font-size:16px">{{ t.name }}</b><br>
-      <a class="sub" href="{{ portal_url }}" target="_blank" rel="noopener">{{ t.subdomain }} <i class="fas fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span></span>
-  <span style="margin-left:auto">
-    {% if row.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
-    {% elif t.status == 'archived' %}<span class="pill p-archived"><i class="fas fa-box-archive"></i> Archived</span>
-    {% elif t.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
-    {% elif row.on_trial %}<span class="pill p-trial">Trial · {{ row.days_left }}d left</span>
-    {% elif row.active %}<span class="pill p-active">Active · {{ row.days_left }}d left</span>
-    {% else %}<span class="pill p-unpaid">Unpaid</span>{% endif %}
-  </span>
-  {% if not row.owner and t.status == 'active' %}
-  <a class="btn sm" href="#support-access"><i class="fas fa-user-secret"></i> View as support</a>
-  {% endif %}
-  {% if t.priority in ('vip','high') or t.risk in ('watch','high') or t.account_manager %}
-  <div class="hdr-badges">
-    {% if t.priority == 'vip' %}<span class="badge b-vip"><i class="fas fa-star"></i> VIP</span>
-    {% elif t.priority == 'high' %}<span class="badge b-high"><i class="fas fa-arrow-up"></i> High priority</span>{% endif %}
-    {% if t.risk == 'high' %}<span class="badge b-risk-high"><i class="fas fa-triangle-exclamation"></i> High churn risk</span>
-    {% elif t.risk == 'watch' %}<span class="badge b-risk-watch"><i class="fas fa-eye"></i> Watch</span>{% endif %}
-    {% if t.account_manager %}<span class="badge b-am"><i class="fas fa-user-tie"></i> {{ t.account_manager }}</span>{% endif %}
+<div class="panel t-hero">
+  <div class="t-top">
+    <span class="t-ic">{{ t.name[0]|upper }}</span>
+    <div class="t-id">
+      <b>{{ t.name }}</b>
+      <a class="sub" href="{{ portal_url }}" target="_blank" rel="noopener">{{ t.subdomain }}.{{ config.TENANT_BASE_DOMAIN }} <i class="fas fa-arrow-up-right-from-square" style="font-size:10px"></i></a>
+      <div class="hdr-badges">
+        {% if row.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
+        {% elif t.status == 'archived' %}<span class="pill p-archived"><i class="fas fa-box-archive"></i> Archived</span>
+        {% elif t.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
+        {% elif row.on_trial %}<span class="pill p-trial">Trial · {{ row.days_left }}d left</span>
+        {% elif row.active %}<span class="pill p-active">Active · {{ row.days_left }}d left</span>
+        {% else %}<span class="pill p-unpaid">Unpaid</span>{% endif %}
+        {% if t.priority == 'vip' %}<span class="badge b-vip"><i class="fas fa-star"></i> VIP</span>
+        {% elif t.priority == 'high' %}<span class="badge b-high"><i class="fas fa-arrow-up"></i> High priority</span>{% endif %}
+        {% if t.risk == 'high' %}<span class="badge b-risk-high"><i class="fas fa-triangle-exclamation"></i> High churn risk</span>
+        {% elif t.risk == 'watch' %}<span class="badge b-risk-watch"><i class="fas fa-eye"></i> Watch</span>{% endif %}
+        {% if t.account_manager %}<span class="badge b-am"><i class="fas fa-user-tie"></i> {{ t.account_manager }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% if not row.owner %}
+  <div class="t-acts">
+    <button type="button" class="btn primary" data-open="paySheet"><i class="fas fa-naira-sign"></i> Record payment</button>
+    {% if t.status == 'active' %}<a class="btn" href="#support-access"><i class="fas fa-user-secret"></i> View as support</a>{% endif %}
+    <button type="button" class="btn" data-open="statusSheet"><i class="fas fa-power-off"></i> Status</button>
+    <a class="btn" href="{{ portal_url }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Portal</a>
   </div>
   {% endif %}
 </div>
@@ -265,37 +289,7 @@
       {% endif %}
     </div>
 
-    <!-- Actions -->
     {% if not row.owner %}
-    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
-      <h3 style="font-size:15px;margin:0 0 10px">Quick actions</h3>
-      <div class="act-grid">
-        <form method="post" action="{{ url_for('platform.grant', subdomain=t.subdomain) }}">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-          <input class="field" style="width:60px" name="days" type="number" value="{{ plan_days }}" min="1" title="days to grant">
-          <select class="field" name="tier" title="plan they paid for">
-            <option value="">Keep plan</option>
-            {% for tid in tier_ids %}<option value="{{ tid }}" {{ 'selected' if ent.tier == tid }}>{{ tier_labels[tid] }}</option>{% endfor %}
-          </select>
-          <button class="btn sm"><i class="fas fa-plus"></i> Record payment</button>
-        </form>
-        <form method="post" action="{{ url_for('platform.suspend', subdomain=t.subdomain) }}">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-          <button class="btn sm">{{ 'Reactivate' if t.status == 'suspended' else 'Suspend' }}</button>
-        </form>
-        <form method="post" action="{{ url_for('platform.archive', subdomain=t.subdomain) }}">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-          <button class="btn sm" title="{{ 'Bring the portal back online' if t.status == 'archived' else 'Take offline but keep all data — restorable' }}">
-            <i class="fas fa-box-archive"></i> {{ 'Restore' if t.status == 'archived' else 'Archive' }}</button>
-        </form>
-      </div>
-      <form method="post" action="{{ url_for('platform.delete', subdomain=t.subdomain) }}" style="display:flex;gap:6px;align-items:flex-end;margin-top:12px">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <input class="field" name="confirm" placeholder="type {{ t.subdomain }} to delete" style="flex:1">
-        <button class="btn sm danger"><i class="fas fa-trash"></i> Delete</button>
-      </form>
-    </div>
-
     <!-- Support access (impersonation) -->
     <div class="panel" id="support-access" style="padding:16px 18px;margin-bottom:16px">
       <h3 style="font-size:15px;margin:0 0 4px"><i class="fas fa-user-secret" style="color:var(--warn)"></i> Support access</h3>
@@ -327,6 +321,59 @@
     </div>
   </div>
 </div>
+
+{% if not row.owner %}
+<div class="sheet-bg" id="paySheet" role="dialog" aria-modal="true" aria-label="Record payment">
+  <div class="sheet">
+    <div class="grip"></div>
+    <div class="sheet-h"><h3>Record payment</h3><button class="sheet-x" type="button" data-close aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+    <p class="muted" style="margin:0 0 12px;font-size:13.5px">Adds access days to {{ t.name }} — use it for a bank transfer or cash payment made outside checkout.</p>
+    <form method="post" action="{{ url_for('platform.grant', subdomain=t.subdomain) }}" class="js-days">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label class="lbl">Days of access</label>
+      <div class="daychips">{% for d in [30, 90, 120, 365] %}<button type="button" data-days="{{ d }}" class="{{ 'on' if d == plan_days }}">{{ d }} days</button>{% endfor %}</div>
+      <input name="days" type="number" value="{{ plan_days }}" min="1" style="width:100%" aria-label="Days of access">
+      <label class="lbl">Plan they paid for</label>
+      <select name="tier" style="width:100%">
+        <option value="">Keep current plan ({{ ent.tier_label }})</option>
+        {% for tid in tier_ids %}<option value="{{ tid }}">{{ tier_labels[tid] }}</option>{% endfor %}
+      </select>
+      <button class="btn primary wide" style="margin-top:16px"><i class="fas fa-check"></i> Record payment</button>
+    </form>
+  </div>
+</div>
+
+<div class="sheet-bg" id="statusSheet" role="dialog" aria-modal="true" aria-label="School status">
+  <div class="sheet">
+    <div class="grip"></div>
+    <div class="sheet-h"><h3>Status · {{ t.status|title }}</h3><button class="sheet-x" type="button" data-close aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+    <div class="st-opt">
+      <div><b>{{ 'Reactivate' if t.status == 'suspended' else 'Suspend' }}</b><small>{{ 'Bring the portal back online.' if t.status == 'suspended' else 'Portal goes offline until you reactivate it.' }}</small></div>
+      <form method="post" action="{{ url_for('platform.suspend', subdomain=t.subdomain) }}"
+            {% if t.status != 'suspended' %}data-confirm="{{ t.name }}’s portal will be unreachable until you reactivate it." data-confirm-title="Suspend {{ t.name }}?" data-confirm-ok="Suspend" data-danger{% endif %}>
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn">{{ 'Reactivate' if t.status == 'suspended' else 'Suspend' }}</button>
+      </form>
+    </div>
+    <div class="st-opt">
+      <div><b>{{ 'Restore' if t.status == 'archived' else 'Archive' }}</b><small>{{ 'Bring the portal back online.' if t.status == 'archived' else 'Take offline but keep all data — restorable any time.' }}</small></div>
+      <form method="post" action="{{ url_for('platform.archive', subdomain=t.subdomain) }}"
+            {% if t.status != 'archived' %}data-confirm="The portal goes offline; every record is kept and you can restore it later." data-confirm-title="Archive {{ t.name }}?" data-confirm-ok="Archive"{% endif %}>
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn"><i class="fas fa-box-archive"></i> {{ 'Restore' if t.status == 'archived' else 'Archive' }}</button>
+      </form>
+    </div>
+    <div class="st-opt danger">
+      <div style="flex:1"><b>Delete school</b><small>Drops the database and every record. Type <b>{{ t.subdomain }}</b> to confirm.</small>
+        <form method="post" action="{{ url_for('platform.delete', subdomain=t.subdomain) }}" class="js-typed" data-want="{{ t.subdomain }}" style="display:flex;gap:8px;margin-top:10px">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input name="confirm" placeholder="{{ t.subdomain }}" autocomplete="off" autocapitalize="none" spellcheck="false" style="flex:1;min-width:0" aria-label="Type the subdomain to confirm">
+          <button class="btn danger solid" disabled><i class="fas fa-trash"></i> Delete</button>
+        </form></div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -338,5 +385,14 @@
     list.unshift({sub:{{ t.subdomain|tojson }}, name:{{ t.name|tojson }}});
     localStorage.setItem(key, JSON.stringify(list.slice(0,8)));
   } catch(e){}
+  [].forEach.call(document.querySelectorAll('form.js-days'),function(f){
+    var inp=f.querySelector('input[name=days]');
+    f.addEventListener('click',function(e){ var b=e.target.closest('[data-days]'); if(!b) return;
+      inp.value=b.dataset.days; [].forEach.call(f.querySelectorAll('[data-days]'),function(x){x.classList.toggle('on',x===b);}); });
+  });
+  [].forEach.call(document.querySelectorAll('form.js-typed'),function(f){
+    var inp=f.querySelector('input[name=confirm]'), btn=f.querySelector('button');
+    inp.addEventListener('input',function(){ btn.disabled=inp.value.trim().toLowerCase()!==f.dataset.want; });
+  });
 </script>
 {% endblock %}

@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block content %}
-<form method="post" action="{{ url_for('platform.settings_page') }}">
+<form method="post" action="{{ url_for('platform.settings_page') }}" class="js-dirty">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <div class="panel" style="padding:18px 20px;margin-bottom:20px">
     <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-headset"></i> Support contact</h2>
@@ -47,14 +47,15 @@
 
   <div class="panel" style="padding:18px 20px;margin-bottom:20px">
     <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-triangle-exclamation"></i> Maintenance mode</h2>
-    <label class="switch"><input type="checkbox" name="maintenance_mode" {{ 'checked' if s.maintenance_mode }}>
-      Show a maintenance banner on every school's portal</label>
+    <label class="sw"><input type="checkbox" name="maintenance_mode" {{ 'checked' if s.maintenance_mode }}><span class="tr"></span>
+      <span>Show a maintenance banner on every school's portal</span></label>
     <div class="fld" style="margin-top:12px"><label>Maintenance message</label>
       <textarea name="maintenance_message" placeholder="e.g. We’re performing scheduled maintenance until 4am WAT.">{{ s.maintenance_message }}</textarea>
       <div class="hint">Displayed as a critical banner to all tenant admins while maintenance mode is on.</div></div>
   </div>
 
-  <button class="btn primary"><i class="fas fa-floppy-disk"></i> Save settings</button>
+  <div class="savebar"><span class="st">All changes saved</span>
+    <button class="btn primary"><i class="fas fa-check"></i> Save settings</button></div>
 </form>
 
 <div class="panel" style="padding:18px 20px;margin-top:22px">

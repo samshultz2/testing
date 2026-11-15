@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 {% set _home = 'https://' ~ base_domain ~ '/' %}
 {% set _desc = content.get('meta_description') or content.hero_subtitle %}
 <title>{{ content.brand }} — All-in-one school management for Nigerian schools</title>
 <meta name="description" content="{{ _desc }}">
 <meta name="keywords" content="school management system, Nigeria, students, results, WAEC, NECO, JAMB, school fees, payroll, attendance, report cards, multi-branch, parent portal">
-<meta name="theme-color" content="#0e1b3d">
+<meta name="theme-color" content="#ffffff">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="{{ _home }}">
 <meta property="og:type" content="website">
@@ -26,345 +26,7 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
 <link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
-<style>
-  :root{
-    --bg:#ffffff; --soft:#f4f7fc; --soft-2:#eef3fb;
-    --navy:#0e1b3d; --navy-2:#0b1730; --navy-3:#16233f;
-    --blue:#2f6bff; --blue-ink:#1f5cf5; --blue-tint:#eaf1ff;
-    --ink:#1f2a44; --ink-2:#5b6b8c; --ink-3:#8a97b4;
-    --line:#e6ecf5; --line-2:#dbe3f0;
-    --gold:#f4a825; --gold-2:#ef9a10; --gold-tint:#fdf1d6;
-    --green:#16a34a; --green-tint:#e8f7ee;
-    --radius:18px; --radius-sm:13px;
-    --shadow:0 18px 40px -20px rgba(20,40,90,.28);
-    --shadow-sm:0 8px 22px -14px rgba(20,40,90,.25);
-    --maxw:1240px;
-  }
-  *{box-sizing:border-box}
-  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-  a{color:inherit;text-decoration:none}
-  img,svg{max-width:100%;display:block}
-  h1,h2,h3,h4,h5{margin:0;line-height:1.15;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
-  p{margin:0}
-  ul{margin:0}
-  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 20px}
-  .skip-link{position:absolute;left:-999px}
-  .skip-link:focus{left:12px;top:12px;background:#fff;padding:8px 14px;border-radius:8px;z-index:200}
-  .only-desktop{display:none}
-  .accent{color:var(--blue)}
-
-  /* Buttons */
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
-    font-weight:700;font-size:15px;border-radius:12px;padding:13px 20px;border:1.5px solid transparent;
-    cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s;white-space:nowrap}
-  .btn:active{transform:translateY(1px)}
-  .btn-primary{background:var(--blue);color:#fff}
-  .btn-primary:hover{box-shadow:0 12px 24px -12px rgba(47,107,255,.7)}
-  .btn-navy{background:var(--navy);color:#fff}
-  .btn-outline{background:#fff;color:var(--navy);border-color:var(--line-2)}
-  .btn-outline:hover{border-color:var(--blue);color:var(--blue-ink)}
-  .btn-gold{background:linear-gradient(180deg,var(--gold),var(--gold-2));color:#3a2a05;
-    box-shadow:0 14px 26px -14px rgba(240,160,20,.9)}
-  .btn-ghost-d{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
-  .btn-block{width:100%}
-  .btn-lg{padding:15px 24px;font-size:16px}
-
-  /* Header */
-  .site-head{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);
-    backdrop-filter:saturate(180%) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s,box-shadow .2s}
-  .site-head.scrolled{border-bottom-color:var(--line);box-shadow:0 6px 20px -18px rgba(20,40,90,.5)}
-  .head-in{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0}
-  .brand{display:flex;align-items:center;gap:11px}
-  .brand .logo{width:38px;height:38px;flex:0 0 auto}
-  .brand .bt{display:flex;flex-direction:column;line-height:1.05}
-  .brand .bn{font-size:20px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
-  .brand .bs{font-size:11px;color:var(--ink-2);font-weight:500}
-  .head-nav{display:none;align-items:center;gap:26px}
-  .head-nav a{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:14.5px;color:var(--ink)}
-  .head-nav a:hover{color:var(--blue-ink)}
-  .head-nav a i{font-size:10px;color:var(--ink-3)}
-  .head-right{display:flex;align-items:center;gap:14px}
-  .head-signin{display:none;font-weight:700;font-size:14.5px;color:var(--navy)}
-  .head-cta{display:none}
-  .menu-btn{width:44px;height:44px;flex:0 0 auto;border:none;border-radius:11px;background:var(--navy);color:#fff;
-    font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-  .menu-btn .fa-xmark{display:none}
-  .menu-open .menu-btn .fa-bars{display:none}
-  .menu-open .menu-btn .fa-xmark{display:block}
-  .drawer{display:none;border-top:1px solid var(--line);background:#fff}
-  .menu-open .drawer{display:block}
-  .drawer-in{display:flex;flex-direction:column;gap:2px;padding:12px 0 18px}
-  .drawer a.ml{padding:12px 6px;font-weight:600;color:var(--ink);border-radius:10px}
-  .drawer a.ml:hover{background:var(--soft)}
-  .signin{display:flex;align-items:center;gap:6px;background:var(--soft);border:1px solid var(--line);
-    border-radius:11px;padding:5px 5px 5px 12px;margin:8px 0 6px}
-  .signin input{border:none;background:transparent;outline:none;font-size:14px;min-width:0;flex:1;color:var(--ink);font-family:inherit}
-  .signin .sfx{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
-  .signin button{border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;padding:9px 13px;border-radius:8px;cursor:pointer}
-
-  /* Hero */
-  .hero{padding:26px 0 10px;background:
-     radial-gradient(120% 90% at 100% -10%, #eaf0ff 0%, rgba(234,240,255,0) 55%),
-     radial-gradient(90% 70% at -10% 8%, #fff5e3 0%, rgba(255,245,227,0) 45%)}
-  .hero-grid{display:grid;grid-template-columns:1fr;gap:24px;align-items:center}
-  .badge{display:inline-flex;align-items:center;gap:8px;background:var(--gold-tint);color:#7a5406;
-    font-weight:700;font-size:13px;padding:8px 14px;border-radius:999px;border:1px solid #f3dfae}
-  .badge i{color:var(--gold-2)}
-  .hero h1{font-size:clamp(34px,9vw,54px);margin:18px 0 0}
-  .hero .lede{margin-top:16px;font-size:17px;color:var(--ink-2);max-width:46ch}
-  .hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
-  .hero-cta .btn{flex:1 1 auto;min-width:150px}
-  .play{width:26px;height:26px;border-radius:50%;background:var(--blue-tint);color:var(--blue);
-    display:inline-flex;align-items:center;justify-content:center;font-size:11px}
-  .trust{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
-  .trust span.t{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--ink)}
-  .trust span.t i{color:var(--blue)}
-  .trust .flag-i{width:15px;height:11px;border-radius:2px;overflow:hidden;display:inline-flex}
-  .trust .flag-i i{flex:1}.trust .flag-i .g{background:#0b8a3c}.trust .flag-i .w{background:#fff}
-  .trust .sep{width:1px;height:15px;background:var(--line-2)}
-
-  /* Dashboard preview */
-  .device{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;display:flex}
-  .dv-side{width:92px;flex:0 0 auto;background:var(--navy);color:#c7d2ea;padding:11px 7px}
-  .dv-brand{display:flex;align-items:center;gap:6px;font-weight:800;color:#fff;font-size:11.5px;margin-bottom:11px}
-  .dv-brand .d{width:18px;height:18px;flex:0 0 auto;border-radius:5px;background:linear-gradient(150deg,var(--blue),#7aa2ff)}
-  .dv-nav{display:flex;flex-direction:column;gap:2px}
-  .dv-nav a{display:flex;align-items:center;gap:7px;font-size:10.5px;padding:6px 7px;border-radius:8px;color:#aeb9d6}
-  .dv-nav a i{width:13px;text-align:center;font-size:10.5px}
-  .dv-nav a.on{background:var(--blue);color:#fff;font-weight:700}
-  .dv-nav a.x{display:none}
-  .dv-main{flex:1 1 auto;min-width:0;padding:15px 14px 17px;background:#fbfcfe}
-  .dv-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
-  .dv-hi{font-size:15px;font-weight:800;color:var(--navy)}
-  .dv-sub{font-size:11.5px;color:var(--ink-2);margin-top:2px}
-  .dv-top-r{display:flex;align-items:center;gap:9px}
-  .dv-pill{display:none;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--ink-2);
-    background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
-  .dv-ic{display:none;width:30px;height:30px;border-radius:8px;background:#fff;border:1px solid var(--line);
-    align-items:center;justify-content:center;color:var(--ink-2);font-size:12px}
-  .dv-av{width:34px;height:34px;border-radius:50%;flex:0 0 auto;
-    background:linear-gradient(150deg,#5b76b7,#33436f);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px}
-  .dv-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
-  .dv-kpi{border-radius:12px;padding:10px 11px;border:1px solid transparent}
-  .dv-kpi .l{font-size:10.5px;font-weight:700}
-  .dv-kpi .v{font-size:19px;font-weight:800;color:var(--navy);line-height:1.1;margin-top:2px;letter-spacing:-.02em}
-  .dv-kpi .t{font-size:10px;font-weight:700;color:var(--green);margin-top:2px}
-  .dv-kpi.b{background:var(--blue-tint)} .dv-kpi.b .l{color:var(--blue-ink)}
-  .dv-kpi.g{background:var(--green-tint)} .dv-kpi.g .l{color:var(--green)}
-  .dv-kpi.p{background:#f2edfc} .dv-kpi.p .l{color:#7c4ddb}
-  .dv-kpi.y{background:var(--gold-tint)} .dv-kpi.y .l{color:#b3760a}
-  .dv-charts{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
-  .dv-card{border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff}
-  .dv-card h5{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px}
-  .dv-ch-head{display:flex;align-items:center;justify-content:space-between}
-  .dv-ch-head .mini-pill{font-size:9.5px;color:var(--ink-2);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
-  .dv-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--ink-3);margin-top:5px}
-  .dv-legend{display:flex;gap:12px;margin-top:7px;font-size:9.5px;color:var(--ink-2)}
-  .dv-legend span{display:inline-flex;align-items:center;gap:5px}
-  .donut-wrap{display:flex;align-items:center;gap:14px}
-  .donut{width:86px;height:86px;flex:0 0 auto;border-radius:50%;position:relative;
-    background:conic-gradient(var(--green) 0 92%, #ef5a5a 92% 98%, var(--gold) 98% 100%)}
-  .donut::after{content:"92%";position:absolute;inset:14px;background:#fff;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:15px}
-  .leg{display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--ink)}
-  .leg span{display:flex;align-items:center;gap:8px}
-  .leg b{margin-left:auto;color:var(--navy)}
-  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
-  .dot.pr{background:var(--green)} .dot.ab{background:#ef5a5a} .dot.la{background:var(--gold)}
-  .dot.ca{background:var(--blue)} .dot.tp{background:var(--gold)}
-  .dv-lists{display:none;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
-  .dv-list h5{font-size:11.5px;margin-bottom:8px}
-  .dv-li{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--soft-2);font-size:11px;color:var(--ink)}
-  .dv-li:first-of-type{border-top:none}
-  .dv-li .li-ic{width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:var(--soft);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:10px}
-  .dv-li .li-when{margin-left:auto;color:var(--ink-3);font-size:9.5px;white-space:nowrap}
-  .dv-more{font-size:10px;color:var(--blue-ink);font-weight:700;margin-top:7px;display:inline-block}
-
-  /* Stats band — light card on mobile (mockup-1), dark full-width on desktop */
-  .stats{padding:22px 0}
-  .stats-in{background:var(--soft);border:1px solid var(--line);border-radius:18px;
-    padding:22px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-  .stat{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;position:relative;padding:2px 4px}
-  .stat + .stat::before{content:"";position:absolute;left:0;top:15%;height:70%;width:1px;background:var(--line-2)}
-  .stat i{color:var(--blue);font-size:20px}
-  .stat .n{font-size:clamp(18px,5vw,26px);font-weight:800;letter-spacing:-.02em;color:var(--navy)}
-  .stat .l{font-size:11px;color:var(--ink-2);font-weight:600;line-height:1.2}
-  .stat.x5{display:none}
-
-  /* Section */
-  .sec{padding:34px 0}
-  .sec-head{text-align:center;max-width:40ch;margin:0 auto 26px}
-  .sec-head h2{font-size:clamp(23px,6vw,34px)}
-  .sec-head p{margin-top:10px;color:var(--ink-2);font-size:15px}
-
-  /* Features */
-  .feat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-  .feat{background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 14px;box-shadow:var(--shadow-sm)}
-  .feat .fic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:11px}
-  .feat h3{font-size:14.5px;font-weight:700;color:var(--navy)}
-  .feat p{display:none;margin-top:6px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
-  .fic.c1{background:var(--blue-tint);color:var(--blue)}
-  .fic.c2{background:var(--green-tint);color:var(--green)}
-  .fic.c3{background:var(--gold-tint);color:#c07f08}
-  .fic.c4{background:#eceafd;color:#5b46d6}
-  .fic.c5{background:#f6ecfb;color:#a855c7}
-  .fic.c6{background:#ffeede;color:#e07219}
-  .fic.c7{background:#e7f7ef;color:#12a150}
-  .feat-more{text-align:center;margin-top:20px}
-  .feat-more a{color:var(--blue-ink);font-weight:700;font-size:14px}
-
-  /* Composite band */
-  .composite{display:grid;grid-template-columns:1fr;gap:16px}
-  .cc{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column}
-  /* Nigerian card */
-  .cc.ng{background:var(--green-tint);border-color:#cdecd8}
-  .cc .eyebrow{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--green);text-transform:uppercase}
-  .cc.ng h3{font-size:20px;margin-top:8px}
-  .ng-list{list-style:none;padding:0;margin:16px 0 0;display:grid;grid-template-columns:1fr;gap:11px}
-  .ng-list li{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--navy)}
-  .ng-list li i{color:var(--green);flex:0 0 auto}
-  .ng-photo{margin-top:16px;min-height:150px;flex:1;border-radius:12px;overflow:hidden;position:relative;
-    background:linear-gradient(to top, rgba(14,27,61,.55), rgba(14,27,61,.05)),
-    url('{{ url_for('static', filename='img/classroom.svg') }}') center/cover no-repeat,
-    linear-gradient(135deg,#123069,#2f6bff);
-    display:flex;align-items:flex-end;padding:14px}
-  .ng-photo .cap{color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px;text-shadow:0 1px 4px rgba(0,0,0,.3)}
-  /* Testimonial carousel */
-  .cc.quote{overflow:hidden}
-  .q-title{text-align:center;font-weight:800;color:var(--navy);font-size:14px}
-  .q-track{position:relative;flex:1;min-height:216px;margin-top:12px}
-  .q-slide{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;justify-content:center;
-    opacity:0;visibility:hidden;transition:opacity .5s ease;pointer-events:none;text-align:left}
-  .q-slide.on{opacity:1;visibility:visible;pointer-events:auto}
-  .q-slide .stars{color:var(--gold);font-size:14px;letter-spacing:3px;margin-bottom:10px}
-  .q-slide blockquote{margin:0;font-size:14.5px;color:var(--ink);line-height:1.6}
-  .who{display:flex;align-items:center;gap:11px;margin-top:16px}
-  .who .av{width:44px;height:44px;border-radius:50%;flex:0 0 auto;background:linear-gradient(150deg,#5b76b7,#33436f);
-    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
-  .who .n{font-weight:700;color:var(--navy);font-size:14px}
-  .who .role{font-size:12px;color:var(--ink-2)}
-  .dots{display:flex;gap:6px;margin-top:auto;padding-top:16px;justify-content:center}
-  .dots button{width:7px;height:7px;padding:0;border:none;border-radius:50%;background:var(--line-2);cursor:pointer;transition:width .2s,background .2s}
-  .dots button.on{background:var(--blue);width:18px;border-radius:4px}
-  /* Pricing — its own row of tier cards */
-  .price-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
-  .price-head h2{font-size:clamp(22px,5.5vw,32px)}
-  .price-head .vf{font-size:13px;font-weight:700;color:var(--blue-ink);white-space:nowrap}
-  .price-row{display:grid;grid-template-columns:1fr;gap:14px;align-items:stretch}
-  .mtier{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;padding:20px 18px;position:relative;background:#fff;box-shadow:var(--shadow-sm)}
-  .mtier.pop{border-color:var(--blue);box-shadow:0 20px 40px -22px rgba(47,107,255,.55)}
-  .mtier .mpop{position:absolute;top:-11px;left:18px;background:var(--green);color:#fff;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px}
-  .mtier .mn{font-weight:800;color:var(--navy);font-size:17px}
-  .mtier .md{font-size:12.5px;color:var(--ink-2);margin-top:2px}
-  .mtier .mamt{font-size:28px;font-weight:800;color:var(--navy);margin:10px 0 1px;letter-spacing:-.02em}
-  .mtier .mamt small{font-size:13px;color:var(--ink-2);font-weight:600}
-  .mtier .mper{font-size:11.5px;color:var(--ink-3)}
-  .mtier .btn{margin-top:14px;padding:11px;font-size:14px}
-  .mtier ul{list-style:none;padding:14px 0 0;margin:14px 0 0;border-top:1px solid var(--line);display:grid;gap:9px}
-  .mtier li{display:flex;gap:8px;font-size:13px;color:var(--ink)}
-  .mtier li i{color:var(--green);margin-top:3px}
-  /* Identity card */
-  .cc.identity{background:var(--blue-tint);border-color:#cfe0ff;justify-content:center}
-  .cc.identity .shield{width:52px;height:52px;border-radius:14px;background:linear-gradient(150deg,var(--blue),#1e46c8);
-    color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
-  .cc.identity h3{font-size:20px;line-height:1.2}
-  .cc.identity p{margin-top:10px;font-size:13.5px;color:var(--ink-2)}
-  .cc.identity .signin{margin:16px 0 0}
-  .cc.identity .btn{margin-top:10px}
-
-  /* FAQ */
-  .faq{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
-  .faq details{background:#fff;border:1px solid var(--line);border-radius:13px;padding:2px 16px}
-  .faq summary{list-style:none;cursor:pointer;font-weight:700;color:var(--navy);font-size:15px;padding:15px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .faq summary::-webkit-details-marker{display:none}
-  .faq summary .ico{width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:12px}
-  .faq details[open] summary .ico i{transform:rotate(45deg)}
-  .faq p{padding:0 0 15px;color:var(--ink-2);font-size:14px}
-
-  /* Bottom CTA */
-  .join{padding:8px 0 30px}
-  .cta-band{background:var(--navy);color:#fff;position:relative;overflow:hidden}
-  .cta-in{display:grid;grid-template-columns:1fr;gap:20px;padding:32px 0;align-items:center}
-  .cta-head{display:flex;align-items:center;gap:16px}
-  .cta-cap{width:56px;height:56px;flex:0 0 auto;border-radius:14px;background:rgba(255,255,255,.08);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:24px}
-  .cta-head h2{color:#fff;font-size:clamp(22px,6vw,30px)}
-  .cta-head p{margin-top:8px;color:#aab6d6;font-size:14.5px;max-width:46ch}
-  .cta-actions{display:flex;flex-wrap:wrap;gap:12px}
-  .cta-trust{display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px}
-  .cta-trust .ct{display:flex;align-items:center;gap:11px}
-  .cta-trust .ct i{width:34px;height:34px;flex:0 0 auto;border-radius:9px;background:rgba(255,255,255,.09);color:#9db6ff;display:flex;align-items:center;justify-content:center;font-size:14px}
-  .cta-trust .ct b{color:#fff;font-size:13.5px;display:block}
-  .cta-trust .ct span{color:#9aa7c8;font-size:12px}
-
-  /* Footer */
-  footer{background:var(--navy-2);color:#c3cee6}
-  .foot-grid{display:grid;grid-template-columns:1fr;gap:24px;padding:34px 0 20px}
-  .foot-brand .fb{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;font-size:18px}
-  .foot-brand .fb img{width:32px;height:32px}
-  .foot-tag{margin-top:10px;font-size:13.5px;color:#93a1c4;max-width:40ch}
-  .foot-social{display:flex;gap:10px;margin-top:14px}
-  .foot-social a{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.08);color:#cfd9ef;display:flex;align-items:center;justify-content:center}
-  .foot-col h4{color:#fff;font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-  .foot-col a{display:block;color:#a7b4d4;font-size:14px;padding:5px 0}
-  .foot-col a:hover{color:#fff}
-  .foot-bottom{border-top:1px solid rgba(255,255,255,.1);padding:16px 0;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#8b99bd;text-align:center}
-
-  .reveal{opacity:0;transform:translateY(16px)}
-  .reveal.in{opacity:1;transform:none;transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.2,1)}
-  @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
-
-  /* ── Desktop ─────────────────────────────────────── */
-  @media(min-width:600px){
-    .feat-grid{grid-template-columns:repeat(4,1fr)}
-    .stats-in{grid-template-columns:repeat(5,1fr)}
-    .stat.x5{display:flex}
-  }
-  @media(min-width:980px){
-    .only-desktop{display:block}
-    .only-mobile{display:none}
-    .stats{background:var(--navy);padding:0}
-    .stats-in{background:transparent;border:none;border-radius:0;padding:24px 8px}
-    .stats .stat + .stat::before{background:rgba(255,255,255,.13)}
-    .stats .stat i{color:#9db6ff}
-    .stats .stat .n{color:#fff}
-    .stats .stat .l{color:#a9b6d6}
-    .head-nav{display:flex}
-    .head-signin,.head-cta{display:inline-flex}
-    .menu-btn{display:none}
-    .hero{padding:44px 0 30px}
-    .hero-grid{grid-template-columns:0.92fr 1.28fr;gap:34px}
-    .hero h1{margin-top:16px}
-    .device{border-radius:16px}
-    .dv-side{width:150px;padding:14px 11px}
-    .dv-brand{font-size:14px;gap:8px}.dv-brand .d{width:22px;height:22px}
-    .dv-nav a{font-size:12.5px;padding:8px 10px;gap:10px}.dv-nav a i{width:15px;font-size:12px}
-    .dv-nav a.x{display:flex}
-    .dv-main{padding:18px 18px 20px}
-    .dv-hi{font-size:17px}.dv-sub{font-size:12.5px}
-    .dv-pill,.dv-ic{display:flex}
-    .dv-kpis{grid-template-columns:repeat(4,1fr);gap:11px}
-    .dv-kpi .v{font-size:21px}
-    .dv-charts{grid-template-columns:1.5fr 1fr}
-    .dv-lists{display:grid}
-    .feat-grid{grid-template-columns:repeat(4,1fr);gap:16px}
-    .feat{box-shadow:none;border:none;background:transparent;padding:6px 10px}
-    .feat p{display:block}
-    .composite{grid-template-columns:1.1fr 1fr .95fr;align-items:stretch}
-    .price-row{grid-template-columns:repeat(3,1fr)}
-    .cta-in{grid-template-columns:1.3fr .7fr;padding:40px 0}
-    .cta-actions{margin-top:22px}
-    .cta-trust{grid-template-columns:1fr}
-    .foot-grid{grid-template-columns:2fr 1fr 1fr 1fr}
-    .foot-bottom{flex-direction:row;justify-content:space-between;text-align:left}
-  }
-  @media(min-width:1140px){
-    .feat-grid{grid-template-columns:repeat(7,1fr);gap:14px}
-  }
-</style>
+<link rel="stylesheet" href="{{ bundle_url('css/home.css') }}">
 <script type="application/ld+json" nonce="{{ csp_nonce }}">
 { "@context":"https://schema.org", "@type":"SoftwareApplication",
   "name":{{ content.brand | tojson }}, "applicationCategory":"BusinessApplication",
@@ -381,379 +43,359 @@
 ]}
 </script>
 {% endif %}
+<noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
 </head>
 <body>
+{% set ct = content.contact or {} %}
+{% set trial = config.TENANT_TRIAL_DAYS or 3 %}
+{% set CYCLES = [('monthly', 'Monthly'), ('termly', 'Termly'), ('annual', 'Annual')] %}
+{% set first_row = grid[0] if grid else none %}
+{% set live_cycles = (first_row.plan_list | map(attribute='cycle') | list) if first_row else ['monthly'] %}
+{% set ICONS = ['fa-shield-halved', 'fa-layer-group', 'fa-code-branch', 'fa-file-lines', 'fa-people-roof', 'fa-bolt', 'fa-chart-line', 'fa-mobile-screen'] %}
 <a class="skip-link" href="#top">Skip to content</a>
 
-<header class="site-head" id="head">
+<header class="head" id="head">
   <div class="wrap head-in">
-    <a class="brand" href="#top">
-      <img class="logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="{{ content.brand }} logo">
-      <span class="bt"><span class="bn">{{ content.brand }}</span><span class="bs">School Management, Simplified.</span></span>
-    </a>
-    <nav class="head-nav" aria-label="Primary">
-      <a href="#features">Product</a>
-      <a href="#features">Solutions</a>
-      <a href="#nigeria">Why {{ content.brand }}</a>
-      <a href="#faq">Resources</a>
+    <a class="brand" href="#top" aria-label="{{ content.brand }} home">
+      <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> {{ content.brand }}</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
       <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
     </nav>
-    <div class="head-right">
-      <a class="head-signin" href="{{ register_url }}">Sign In</a>
-      <a class="btn btn-navy head-cta" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
-      <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
-        <i class="fas fa-bars"></i><i class="fas fa-xmark"></i>
-      </button>
-    </div>
-  </div>
-  <div class="drawer" id="drawer">
-    <div class="wrap drawer-in">
-      <a class="ml" href="#features">Features</a>
-      <a class="ml" href="#nigeria">Why {{ content.brand }}</a>
-      <a class="ml" href="#pricing">Pricing</a>
-      <a class="ml" href="#faq">FAQ</a>
-      <form class="signin js-school" title="Go to your school">
-        <input class="js-sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
-        <span class="sfx">.{{ base_domain }}</span>
-        <button type="submit">Sign in</button>
-      </form>
-      <a class="btn btn-navy btn-block" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
+    <div class="head-r">
+      <button type="button" class="signin-link" data-open="findSchool">Sign in</button>
+      <a class="btn btn-primary btn-sm" href="{{ register_url }}">{{ content.hero_cta or 'Get started free' }}</a>
     </div>
   </div>
 </header>
 
 <main id="top">
-  <!-- HERO -->
-  <section class="hero"><div class="wrap hero-grid">
-    <div>
-      <span class="badge"><i class="fas fa-trophy"></i> Nigeria's Preferred School Management System</span>
-      <h1>{{ content.hero_title }}{% if content.hero_accent %}<br><span class="accent">{{ content.hero_accent }}</span>{% endif %}</h1>
-      <p class="lede">{{ content.hero_subtitle }}</p>
-      <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
-        <a class="btn btn-outline btn-lg" href="#preview"><span class="play"><i class="fas fa-play"></i></span> Watch Demo</a>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="kicker"><b>{{ trial }} days free</b> {{ content.get('hero_kicker') or 'For nurseries, primary & secondary schools' }}</span>
+        <h1>{{ content.hero_title }}{% if content.hero_accent %}<br><span class="accent">{{ content.hero_accent }}</span>{% endif %}</h1>
+        <p class="lede">{{ content.hero_subtitle }}</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="{{ register_url }}">{{ content.hero_cta or 'Get started free' }} <i class="fas fa-arrow-right"></i></a>
+          <a class="btn btn-ghost btn-lg" href="#tour"><i class="fas fa-play" style="font-size:12px"></i> See it in action</a>
+        </div>
+        <div class="hero-points">
+          <span><i class="fas fa-circle-check"></i> {{ content.trial_note or 'No card required' }}</span>
+          <span><i class="fas fa-circle-check"></i> Ready in minutes</span>
+          <span><i class="fas fa-circle-check"></i> Your own web address</span>
+        </div>
       </div>
-      <div class="trust">
-        <span class="t"><i class="fas fa-shield-halved"></i> Secure &amp; Reliable</span><span class="sep"></span>
-        <span class="t"><i class="fas fa-sitemap"></i> Multi-Branch Support</span><span class="sep"></span>
-        <span class="t"><i class="fas fa-mobile-screen-button"></i> Works on Mobile</span>
-        <span class="sep only-desktop"></span>
-        <span class="t only-desktop"><span class="flag-i"><i class="g"></i><i class="w"></i><i class="g"></i></span> Made for Nigerian Schools</span>
-      </div>
-    </div>
-
-    <!-- Dashboard preview -->
-    <div id="preview">
-      <div class="device reveal">
-        <aside class="dv-side">
-          <div class="dv-brand"><span class="d"></span> {{ content.brand }}</div>
-          <nav class="dv-nav">
-            <a class="on"><i class="fas fa-table-columns"></i> Dashboard</a>
-            <a><i class="fas fa-user-graduate"></i> Students</a>
-            <a><i class="fas fa-clipboard-user"></i> Attendance</a>
-            <a class="x"><i class="fas fa-book-open"></i> Academics</a>
-            <a class="x"><i class="fas fa-file-pen"></i> Examinations</a>
-            <a><i class="fas fa-wallet"></i> Finance</a>
-            <a class="x"><i class="fas fa-comments"></i> Communication</a>
-            <a><i class="fas fa-book"></i> Library</a>
-            <a class="x"><i class="fas fa-user-tie"></i> Staff</a>
-            <a><i class="fas fa-chart-line"></i> Reports</a>
-            <a class="x"><i class="fas fa-gear"></i> Settings</a>
-          </nav>
-        </aside>
-        <div class="dv-main">
-          <div class="dv-top">
-            <div>
-              <div class="dv-hi">Good morning, Admin 👋</div>
-              <div class="dv-sub">Greensprings College – Main Campus</div>
-            </div>
-            <div class="dv-top-r">
-              <span class="dv-pill">2024/2025 Session <i class="fas fa-chevron-down" style="font-size:9px"></i></span>
-              <span class="dv-ic"><i class="fas fa-bell"></i></span>
-              <div class="dv-av"><i class="fas fa-user"></i></div>
-            </div>
+      <div class="mock reveal" aria-label="Sample dashboard" role="img">
+        <span class="mock-cap">Sample dashboard</span>
+        <div class="mock-in">
+          <div class="mk-side" aria-hidden="true">
+            <b>Riverside Academy</b>
+            <span class="on">Dashboard</span><span>Students</span><span>Attendance</span><span>Results</span><span>Exams &amp; CBT</span><span>Finance</span><span>Messages</span><span>Website</span>
           </div>
-          <div class="dv-kpis">
-            <div class="dv-kpi b"><div class="l">Total Students</div><div class="v">1,248</div><div class="t">↑ 12% vs last term</div></div>
-            <div class="dv-kpi g"><div class="l">Attendance Rate</div><div class="v">92%</div><div class="t">↑ 6% vs last week</div></div>
-            <div class="dv-kpi p"><div class="l">Fees Collected</div><div class="v">₦8.45M</div><div class="t">↑ 18% vs last month</div></div>
-            <div class="dv-kpi y"><div class="l">Exam Pass Rate</div><div class="v">87%</div><div class="t">↑ 4% vs last term</div></div>
-          </div>
-          <div class="dv-charts">
-            <div class="dv-card">
-              <div class="dv-ch-head"><h5>Performance Overview</h5><span class="mini-pill">This Term ▾</span></div>
-              <svg viewBox="0 0 320 96" preserveAspectRatio="none" style="width:100%;height:84px" aria-hidden="true">
-                <polyline fill="none" stroke="#2f6bff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-                  points="6,60 55,44 104,50 153,30 202,40 251,22 314,16"/>
-                <polyline fill="none" stroke="#f4a825" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-                  points="6,78 55,72 104,74 153,64 202,70 251,58 314,60"/>
-              </svg>
-              <div class="dv-axis"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span></div>
-              <div class="dv-legend"><span><span class="dot ca"></span> Class Average</span><span><span class="dot tp"></span> Top Performer</span></div>
+          <div class="mk-main" aria-hidden="true">
+            <div class="mk-top"><div><b>Good morning 👋</b><small>Riverside Academy · Main campus</small></div><span class="mk-pill">Second term</span></div>
+            <div class="mk-kpis">
+              <div class="mk-k"><span>Students</span><b>842</b><i>+36 this term</i></div>
+              <div class="mk-k"><span>Attendance</span><b>94%</b><i>today</i></div>
+              <div class="mk-k"><span>Fees paid</span><b>₦6.1M</b><i>78% of billed</i></div>
+              <div class="mk-k"><span>Results</span><b>12/14</b><i>classes ready</i></div>
             </div>
-            <div class="dv-card">
-              <h5>Attendance Overview</h5>
-              <div class="donut-wrap">
-                <div class="donut"></div>
-                <div class="leg">
-                  <span><span class="dot pr"></span> Present <b>92%</b></span>
-                  <span><span class="dot ab"></span> Absent <b>6%</b></span>
-                  <span><span class="dot la"></span> Late <b>2%</b></span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="dv-lists">
-            <div class="dv-list">
-              <h5>Recent Activities</h5>
-              <div class="dv-li"><span class="li-ic"><i class="fas fa-money-bill"></i></span> Fee payment of ₦25,000 by John Doe <span class="li-when">2h ago</span></div>
-              <div class="dv-li"><span class="li-ic"><i class="fas fa-user-plus"></i></span> New student admission – Mary Akan <span class="li-when">4h ago</span></div>
-              <div class="dv-li"><span class="li-ic"><i class="fas fa-file-lines"></i></span> Results published for JSS 3 <span class="li-when">1d ago</span></div>
-              <a class="dv-more">View all activities →</a>
-            </div>
-            <div class="dv-list">
-              <h5>Upcoming Events</h5>
-              <div class="dv-li"><span class="li-ic"><i class="fas fa-users"></i></span> Parent-Teacher Meeting <span class="li-when">May 24</span></div>
-              <div class="dv-li"><span class="li-ic"><i class="fas fa-file-pen"></i></span> Mock JAMB Examination <span class="li-when">May 30</span></div>
-              <div class="dv-li"><span class="li-ic"><i class="fas fa-mug-hot"></i></span> End of Term Break <span class="li-when">Jun 28</span></div>
-              <a class="dv-more">View all events →</a>
+            <div class="mk-row">
+              <div class="mk-card"><h5>Average score by class</h5>
+                <div class="mk-bars">{% for h in [52, 64, 58, 72, 69, 81, 77] %}<i style="height:{{ h }}%"></i>{% endfor %}</div></div>
+              <div class="mk-card"><h5>Attendance</h5><div class="mk-donut"></div><small>Present · Late · Absent</small></div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div></section>
-
-  <!-- STATS BAND -->
-  <section class="stats"><div class="wrap stats-in reveal">
-    <div class="stat"><i class="fas fa-building-columns"></i><div class="n">500+</div><div class="l">Schools</div></div>
-    <div class="stat"><i class="fas fa-users"></i><div class="n">120K+</div><div class="l">Students</div></div>
-    <div class="stat"><i class="fas fa-chart-simple"></i><div class="n">2M+</div><div class="l">Results Processed</div></div>
-    <div class="stat"><i class="fas fa-shield-halved"></i><div class="n">98.7%</div><div class="l">System Uptime</div></div>
-    <div class="stat x5"><i class="fas fa-code-branch"></i><div class="n">150+</div><div class="l">Branches Managed</div></div>
-  </div></section>
-
-  <!-- FEATURES -->
-  <section class="sec" id="features"><div class="wrap">
-    <div class="sec-head reveal">
-      <h2 class="only-desktop">Everything your school needs. <span class="accent">Connected</span> seamlessly.</h2>
-      <h2 class="only-mobile">Built for the way<br><span class="accent">Nigerian schools actually work</span></h2>
-    </div>
-    <div class="feat-grid reveal">
-      <div class="feat"><div class="fic c1"><i class="fas fa-graduation-cap"></i></div><h3>Academic Management</h3><p>Results, broadsheets, report cards &amp; performance tracking.</p></div>
-      <div class="feat"><div class="fic c2"><i class="fas fa-user-check"></i></div><h3>Attendance Management</h3><p>Real-time tracking, intervention &amp; detailed reports.</p></div>
-      <div class="feat"><div class="fic c3"><i class="fas fa-wallet"></i></div><h3>Finance Management</h3><p>Fees, payments, invoices, expenses &amp; financial reports.</p></div>
-      <div class="feat"><div class="fic c4"><i class="fas fa-clipboard-check"></i></div><h3>Examination Intelligence</h3><p>Mock WAEC, Mock JAMB, analytics, predictions &amp; readiness reports.</p></div>
-      <div class="feat"><div class="fic c5"><i class="fas fa-bullhorn"></i></div><h3>Communication</h3><p>Announcements, SMS, notifications &amp; parent engagement.</p></div>
-      <div class="feat"><div class="fic c6"><i class="fas fa-building"></i></div><h3>Multi-Branch Management</h3><p>Centralized control with branch autonomy &amp; data isolation.</p></div>
-      <div class="feat"><div class="fic c7"><i class="fas fa-chart-column"></i></div><h3>Reports &amp; Analytics</h3><p>Powerful insights for smarter decisions &amp; better outcomes.</p></div>
-    </div>
-    <div class="feat-more only-desktop"><a href="#pricing">Explore all features →</a></div>
-  </div></section>
-
-  <!-- COMPOSITE BAND -->
-  {% set ct = content.contact or {} %}
-  {% set defcyc = 'monthly' %}
-  <section class="sec" id="nigeria" style="padding-top:6px"><div class="wrap">
-    <div class="composite reveal">
-      <!-- Nigerian schools -->
-      <div class="cc ng">
-        <span class="eyebrow">Built for Nigerian Schools</span>
-        <h3>We understand how Nigerian schools work</h3>
-        <ul class="ng-list">
-          <li><i class="fas fa-circle-check"></i> WAEC, NECO, JAMB &amp; Post-UME Ready</li>
-          <li><i class="fas fa-circle-check"></i> Nigerian Grading System</li>
-          <li><i class="fas fa-circle-check"></i> Parent &amp; Student Portals</li>
-          <li><i class="fas fa-circle-check"></i> Multiple Branches &amp; Campuses</li>
-          <li><i class="fas fa-circle-check"></i> Secure, Reliable &amp; Always Available</li>
-        </ul>
-        <div class="ng-photo"><span class="cap"><i class="fas fa-graduation-cap"></i> Trusted by schools across Nigeria</span></div>
+    <div class="wrap">
+      <div class="facts reveal">
+        <div class="fact"><i class="fas fa-globe"></i><div><b>Your own portal</b><span>yourschool.{{ base_domain }}</span></div></div>
+        <div class="fact"><i class="fas fa-database"></i><div><b>Private database</b><span>Never shared with another school</span></div></div>
+        <div class="fact"><i class="fas fa-graduation-cap"></i><div><b>WAEC · NECO · JAMB</b><span>Mock exams &amp; CBT built in</span></div></div>
+        <div class="fact"><i class="fas fa-mobile-screen"></i><div><b>Any device</b><span>Phone, tablet or laptop</span></div></div>
       </div>
+    </div>
+  </section>
 
-      <!-- Testimonial carousel -->
-      {% set _fallback = [
-        {'quote':'EduSyncra has transformed the way we manage our school. From results to fees to communication, everything is now seamless — and our results have improved tremendously.','name':'Mr. Adeyemi Samuel','role':'Principal, Greensprings College, Lagos'},
-        {'quote':'Result processing that took us a week now takes an afternoon. Report cards are ready the same day and parents get them instantly.','name':'Mrs. Okafor Ngozi','role':'Vice Principal, Crescent Academy, Enugu'},
-        {'quote':'Parents love the portal — fees, attendance and results all in one place. Our fee collection improved within a single term.','name':'Mr. Bello Ahmed','role':'Proprietor, Al-Noor Schools, Abuja'},
-        {'quote':'Running three campuses from one dashboard used to be a nightmare. Now every branch reports in automatically. It just works.','name':'Dr. Funke Adeyinka','role':'Director, Bright Stars Group, Ibadan'}
+  <section class="sec" id="features">
+    <div class="wrap">
+      <div class="sec-h reveal">
+        <span class="eyebrow">Everything in one place</span>
+        <h2>One system for the <span class="accent">whole school</span></h2>
+        <p>Admissions to graduation — results, exams, fees, attendance, staff and parents, all connected.</p>
+      </div>
+      <div class="feats">
+        {% for f in content.features %}
+        <div class="feat reveal"><div class="fi c{{ loop.index0 % 6 }}"><i class="fas {{ ICONS[loop.index0 % ICONS|length] }}"></i></div>
+          <h3>{{ f.title }}</h3>{% if f.body %}<p>{{ f.body }}</p>{% endif %}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="sec alt" id="tour">
+    <div class="wrap">
+      <div class="sec-h reveal">
+        <span class="eyebrow">A look inside</span>
+        <h2>Made for the way schools <span class="accent">actually work</span></h2>
+      </div>
+      {% set TOUR = [
+        ('results', 'fa-file-lines', 'Results', 'Report cards the same day', 'Teachers enter scores once. Broadsheets, positions, comments and report cards are ready to print with your logo.',
+          ['Score entry on any phone', 'Automatic positions and grades', 'Report cards and broadsheets in one click'],
+          [('fa-check', 'JSS 2 Gold · scores', 'Done', 'ok'), ('fa-check', 'SS 1 Science · comments', 'Done', 'ok'), ('fa-clock', 'SS 2 Arts · scores', '18/22', 'warn')]),
+        ('exams', 'fa-laptop-code', 'Exams & CBT', 'Mock WAEC, NECO and JAMB', 'Run computer-based tests and mock exams, then see who is on track and which topics need attention.',
+          ['Computer-based tests with timers', 'Mock exam analytics and predictions', 'Subject and topic weak spots'],
+          [('fa-user-graduate', 'Mock JAMB · English', '71%', 'ok'), ('fa-user-graduate', 'Mock WAEC · Maths', '64%', 'ok'), ('fa-triangle-exclamation', 'Physics · near credit', '9 students', 'warn')]),
+        ('fees', 'fa-wallet', 'Fees', 'Know who has paid', 'Bill every class, record payments and send receipts. Parents can pay online and see their balance.',
+          ['Class billing and part payments', 'Receipts and reminders', 'Income and expense reports'],
+          [('fa-naira-sign', 'Paid this week', '₦1.2M', 'ok'), ('fa-receipt', 'Receipts sent', '146', 'ok'), ('fa-bell', 'Reminders due', '38', 'warn')]),
+        ('parents', 'fa-people-roof', 'Parents', 'Parents always in the loop', 'Parents see results, attendance and fees on their phone, and get messages by SMS, WhatsApp or email.',
+          ['Parent and student portals', 'SMS, WhatsApp and email', 'Attendance alerts'],
+          [('fa-message', 'Results published', 'Sent', 'ok'), ('fa-calendar-check', 'Absence alert · JSS 1', 'Sent', 'ok'), ('fa-clock', 'PTA meeting reminder', 'Friday', 'warn')]),
+        ('website', 'fa-globe', 'Website', 'A school website in minutes', 'A beautiful public website with online admissions, news and holiday assignments — no designer needed.',
+          ['Ready-made designs', 'Online applications', 'News and downloads'],
+          [('fa-user-plus', 'New applications', '12', 'ok'), ('fa-newspaper', 'News posts', '8', 'ok'), ('fa-eye', 'Visitors this week', '1,940', 'ok')]),
       ] %}
-      {% set testimonials = content.testimonials if (content.testimonials and content.testimonials|length >= 2) else _fallback %}
-      <div class="cc quote">
-        <div class="q-title">Trusted by School Leaders</div>
-        <div class="q-track" id="qTrack">
-          {% for t in testimonials %}
-          <figure class="q-slide{{ ' on' if loop.first }}">
-            <div class="stars">★★★★★</div>
-            <blockquote>“{{ t.quote }}”</blockquote>
-            <figcaption class="who">
-              <span class="av">{{ (t.name[0]|upper) if t.name else 'S' }}</span>
-              <span><span class="n">{{ t.name }}</span><br><span class="role">{{ t.role or '' }}</span></span>
-            </figcaption>
-          </figure>
+      <div class="tour reveal">
+        <div class="tour-tabs" role="tablist" aria-label="Features">
+          {% for key, icon, label, h, p, pts, rows in TOUR %}
+          <button type="button" role="tab" id="tt-{{ key }}" aria-controls="tp-{{ key }}" aria-selected="{{ 'true' if loop.first else 'false' }}"><i class="fas {{ icon }}"></i>{{ label }}</button>
           {% endfor %}
         </div>
-        <div class="dots" id="qDots">
-          {% for t in testimonials %}<button type="button" class="{{ 'on' if loop.first }}" data-i="{{ loop.index0 }}" aria-label="Testimonial {{ loop.index }}"></button>{% endfor %}
+        <div>
+          {% for key, icon, label, h, p, pts, rows in TOUR %}
+          <div class="tour-panel {{ 'on' if loop.first }}" id="tp-{{ key }}" role="tabpanel" aria-labelledby="tt-{{ key }}">
+            <div><h3>{{ h }}</h3><p>{{ p }}</p>
+              <ul>{% for x in pts %}<li><i class="fas fa-circle-check"></i>{{ x }}</li>{% endfor %}</ul></div>
+            <div class="tour-art" aria-hidden="true">
+              {% for ic, l, v, tone in rows %}<div class="ta-row"><span class="ta-dot"><i class="fas {{ ic }}"></i></span>{{ l }}<b class="{{ tone }}">{{ v }}</b></div>{% endfor %}
+            </div>
+          </div>
+          {% endfor %}
         </div>
       </div>
+    </div>
+  </section>
 
-      <!-- Pricing mini -->
-      <!-- Identity -->
-      <div class="cc identity">
-        <div class="shield"><i class="fas fa-shield-halved"></i></div>
-        <h3>Your School.<br>Your Identity.<br>Your Data.</h3>
-        <p>Get your own branded school portal and manage everything in your space.</p>
-        <form class="signin js-school" title="Go to your school">
-          <input class="js-sub" placeholder="yourschool" aria-label="Your school subdomain" autocomplete="off">
-          <span class="sfx">.{{ base_domain }}</span>
-        </form>
-        <a class="btn btn-navy btn-block" href="{{ register_url }}">Claim Your School <i class="fas fa-arrow-right"></i></a>
+  {% if content.steps %}
+  <section class="sec" id="how">
+    <div class="wrap">
+      <div class="sec-h reveal">
+        <span class="eyebrow">How it works</span>
+        <h2>Up and running <span class="accent">today</span></h2>
+      </div>
+      <div class="steps">
+        {% for s in content.steps %}<div class="step reveal"><h3>{{ s.title }}</h3>{% if s.body %}<p>{{ s.body }}</p>{% endif %}</div>{% endfor %}
       </div>
     </div>
-  </div></section>
+  </section>
+  {% endif %}
 
-  <!-- PRICING (own row) -->
-  <section class="sec" id="pricing" style="padding-top:8px"><div class="wrap">
-    <div class="price-head reveal">
-      <h2>Simple, <span class="accent">Transparent Pricing</span></h2>
-      <a class="vf" href="{{ register_url }}">View full pricing →</a>
-    </div>
-    <div class="price-row reveal">
-      {% for row in grid[:3] %}
-      {% set p = row.plans[defcyc] %}
-      <div class="mtier{{ ' pop' if row.popular }}">
-        {% if row.popular %}<span class="mpop">Most Popular</span>{% endif %}
-        <div class="mn">{{ row.label }}</div>
-        <div class="md">{{ 'For growing schools with more needs' if row.popular else ('For large schools & groups' if loop.last else 'For small schools getting started') }}</div>
-        <div class="mamt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small>/{{ p.per }}</small></div>
-        <div class="mper">{{ 'Free Forever' if p.price_naira == 0 else 'Billed ' ~ p.per + 'ly' }}</div>
-        <a class="btn {{ 'btn-primary' if row.popular else 'btn-outline' }} btn-block" href="{{ register_url }}?tier={{ row.tier }}">{{ 'Contact Sales' if row.limits.students == -1 else 'Get Started' }}</a>
-        <ul>
-          <li><i class="fas fa-check"></i> {{ 'Unlimited students' if row.limits.students == -1 else 'Up to {:,} students'.format(row.limits.students) }}</li>
-          <li><i class="fas fa-check"></i> {{ 'All Features' if row.features.mock_exams else 'Basic Features' }}</li>
-          <li><i class="fas fa-check"></i> {{ 'Priority Support' if row.popular else ('Dedicated Support' if row.limits.students == -1 else 'Email Support') }}</li>
+  <section class="sec alt" id="security">
+    <div class="wrap duo">
+      <div class="panel ng reveal">
+        <span class="eyebrow">Built for Nigerian schools</span>
+        <h3>We know how your school runs</h3>
+        <p>{{ content.get('nigeria_note') or 'WAEC, NECO and JAMB ready, with term-based report cards out of the box.' }}</p>
+        <ul class="ticks">
+          <li><i class="fas fa-circle-check"></i> WAEC, NECO, JAMB and Common Entrance</li>
+          <li><i class="fas fa-circle-check"></i> Three-term sessions and Nigerian grading</li>
+          <li><i class="fas fa-circle-check"></i> Naira fees, part payments and receipts</li>
+          <li><i class="fas fa-circle-check"></i> Many campuses, or a single school</li>
         </ul>
       </div>
-      {% endfor %}
+      <div class="panel reveal">
+        <span class="eyebrow">Safe by design</span>
+        <h3>Your data stays yours</h3>
+        <div class="sec-list">
+          {% for s in (content.get('security') or []) %}
+          <div class="sec-it"><i class="fas {{ ['fa-database', 'fa-lock', 'fa-user-shield', 'fa-cloud'][loop.index0 % 4] }}"></i><div><b>{{ s.title }}</b><span>{{ s.body }}</span></div></div>
+          {% endfor %}
+        </div>
+      </div>
     </div>
-  </div></section>
+  </section>
 
-  <!-- FAQ -->
-  {% if content.faqs %}
-  <section class="sec" id="faq"><div class="wrap">
-    <div class="sec-head reveal"><h2>Frequently <span class="accent">asked</span></h2></div>
-    <div class="faq">
-      {% for q in content.faqs %}
-      <details class="reveal"{{ ' open' if loop.first }}><summary>{{ q.q }}<span class="ico"><i class="fas fa-plus"></i></span></summary><p>{{ q.a }}</p></details>
-      {% endfor %}
+  <section class="sec" id="pricing">
+    <div class="wrap">
+      <div class="sec-h reveal">
+        <span class="eyebrow">Pricing</span>
+        <h2>Simple pricing, <span class="accent">no surprises</span></h2>
+        <p>Start with {{ trial }} days free. Pick a plan when you’re ready.</p>
+      </div>
+      {% if grid %}
+      <div class="cyc" role="group" aria-label="Billing cycle">
+        {% for cid, clabel in CYCLES if cid in live_cycles %}
+        <button type="button" data-cyc="{{ cid }}" aria-pressed="{{ 'true' if cid == 'monthly' else 'false' }}">{{ first_row.plans[cid].cycle_label or clabel }}{% if cid != 'monthly' and first_row.plans[cid].savings > 0 %}<em>−{{ first_row.plans[cid].savings }}%</em>{% endif %}</button>
+        {% endfor %}
+      </div>
+      <div class="tiers">
+        {% for row in grid[:3] %}
+        {% set p = row.plans['monthly'] %}
+        <div class="tier reveal{{ ' pop' if row.popular }}" data-tier="{{ row.tier }}">
+          {% if row.popular %}<span class="tag">Most popular</span>{% endif %}
+          <h3>{{ row.label }}</h3>
+          <div class="for">{{ 'For growing schools' if row.popular else ('For large schools & groups' if loop.last and grid|length > 2 else 'For schools getting started') }}</div>
+          <div class="amt">₦<span class="num">{{ '{:,.0f}'.format(p.price_naira) }}</span><small> / <span class="per">{{ p.per }}</span></small></div>
+          <div class="save"></div>
+          <a class="btn {{ 'btn-primary' if row.popular else 'btn-ghost' }} btn-block js-plan" href="{{ register_url }}?tier={{ row.tier }}&amp;cycle=monthly" data-base="{{ register_url }}?tier={{ row.tier }}">Start {{ trial }}-day free trial</a>
+          <ul>
+            <li><i class="fas fa-check"></i>{{ 'Unlimited students' if row.limits.students == -1 else 'Up to {:,} students'.format(row.limits.students) }}</li>
+            <li><i class="fas fa-check"></i>{{ 'Unlimited branches' if row.limits.branches == -1 else (row.limits.branches ~ ' branches' if row.limits.branches > 1 else 'Single campus') }}</li>
+            <li class="{{ '' if row.features.mock_exams else 'off' }}"><i class="fas {{ 'fa-check' if row.features.mock_exams else 'fa-minus' }}"></i>Mock exams &amp; CBT</li>
+            <li class="{{ '' if row.features.predictive_analytics else 'off' }}"><i class="fas {{ 'fa-check' if row.features.predictive_analytics else 'fa-minus' }}"></i>Predictive analytics</li>
+            <li class="{{ '' if row.features.website_builder else 'off' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-minus' }}"></i>School website builder</li>
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="price-note"><i class="fas fa-gift"></i> {{ content.trial_note or 'No card required' }}. Cancel any time.</p>
+      <script type="application/json" id="priceData">{{ price_json|tojson }}</script>
+      {% endif %}
     </div>
-  </div></section>
+  </section>
+
+  {% if content.testimonials %}
+  <section class="sec alt" id="stories">
+    <div class="wrap">
+      <div class="sec-h reveal"><span class="eyebrow">From schools</span><h2>What school leaders <span class="accent">say</span></h2></div>
+      <div class="quotes">
+        {% for t in content.testimonials %}
+        <figure class="quote reveal"><blockquote>“{{ t.quote }}”</blockquote>
+          <figcaption><span class="av">{{ (t.name[0]|upper) if t.name else '★' }}</span>{{ t.name }}</figcaption></figure>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
   {% endif %}
+
+  {% if content.faqs %}
+  <section class="sec" id="faq">
+    <div class="wrap">
+      <div class="sec-h reveal"><span class="eyebrow">FAQ</span><h2>Questions, <span class="accent">answered</span></h2></div>
+      <div class="faq">
+        {% for q in content.faqs %}
+        <details class="reveal"{{ ' open' if loop.first }}><summary>{{ q.q }}<i class="fas fa-plus" aria-hidden="true"></i></summary><p>{{ q.a }}</p></details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="sec alt" id="contact">
+    <div class="wrap">
+      <div class="sec-h reveal"><span class="eyebrow">Talk to us</span><h2>We’re here to <span class="accent">help</span></h2></div>
+      <div class="contact">
+        {% if ct.whatsapp %}<a class="cc reveal" href="https://wa.me/{{ ct.whatsapp }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp wa"></i><div><b>WhatsApp</b><span>Chat with our team</span></div></a>{% endif %}
+        {% if ct.email %}<a class="cc reveal" href="mailto:{{ ct.email }}"><i class="fas fa-envelope em"></i><div><b>Email</b><span>{{ ct.email }}</span></div></a>{% endif %}
+        {% if ct.phone %}<a class="cc reveal" href="tel:{{ ct.phone | replace(' ', '') }}"><i class="fas fa-phone ph"></i><div><b>Call</b><span>{{ ct.phone }}</span></div></a>{% endif %}
+      </div>
+      <div class="cta reveal">
+        <h2>Ready to run your school from one place?</h2>
+        <p>Set up your portal in minutes. {{ trial }} days free — {{ (content.trial_note or 'no card required')|lower }}.</p>
+        <div class="btns">
+          <a class="btn btn-gold btn-lg" href="{{ register_url }}">{{ content.hero_cta or 'Get started free' }} <i class="fas fa-arrow-right"></i></a>
+          <button type="button" class="btn btn-ghost btn-lg" data-open="findSchool">Sign in to my school</button>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
-<!-- BOTTOM CTA — gold button on mobile (mockup-1), dark band on desktop (mockup-2) -->
-<section class="join only-mobile"><div class="wrap reveal">
-  <a class="btn btn-gold btn-lg btn-block" href="{{ register_url }}" style="padding:18px 22px;font-size:17px;border-radius:14px">Join 500+ Schools on {{ content.brand }} <i class="fas fa-arrow-right"></i></a>
-</div></section>
-<section class="cta-band only-desktop" id="contact"><div class="wrap cta-in reveal">
-  <div>
-    <div class="cta-head">
-      <span class="cta-cap"><i class="fas fa-graduation-cap"></i></span>
-      <div>
-        <h2>Ready to transform your school?</h2>
-        <p>Join hundreds of schools already using {{ content.brand }} to work smarter, engage better and achieve more.</p>
-      </div>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div><a class="brand" href="#top"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> {{ content.brand }}</a>
+        <p>All-in-one school management for nurseries, primary and secondary schools — and school groups.</p></div>
+      <nav aria-label="Product"><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="{{ register_url }}">Start free trial</a></nav>
+      <nav aria-label="Contact"><h4>Contact</h4>
+        {% if ct.email %}<a href="mailto:{{ ct.email }}">Email</a>{% endif %}{% if ct.whatsapp %}<a href="https://wa.me/{{ ct.whatsapp }}" target="_blank" rel="noopener">WhatsApp</a>{% endif %}{% if ct.phone %}<a href="tel:{{ ct.phone | replace(' ', '') }}">Call us</a>{% endif %}</nav>
+      <nav aria-label="Legal"><h4>Legal</h4>
+        <a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy Policy</a>
+        <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms of Service</a>
+        <a href="{{ url_for('marketing.legal', slug='cookies') }}">Cookie Policy</a></nav>
     </div>
-    <div class="cta-actions">
-      <a class="btn btn-gold btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
-      <a class="btn btn-ghost-d btn-lg" href="{% if ct.email %}mailto:{{ ct.email }}{% else %}{{ register_url }}{% endif %}">Book a Demo</a>
-    </div>
+    <div class="foot-b"><span>{{ content.footer }}</span><span>© {{ now_year }} {{ content.brand }}. All rights reserved.</span></div>
   </div>
-  <div class="cta-trust" id="security">
-    <div class="ct"><i class="fas fa-wand-magic-sparkles"></i><div><b>Easy to Use</b><span>Intuitive &amp; simple for everyone</span></div></div>
-    <div class="ct"><i class="fas fa-lock"></i><div><b>Secure &amp; Compliant</b><span>Your data is always protected</span></div></div>
-    <div class="ct"><i class="fas fa-headset"></i><div><b>Local Support</b><span>We're here to help you succeed</span></div></div>
-  </div>
-</div></section>
+</footer>
 
-<footer><div class="wrap">
-  <div class="foot-grid">
-    <div class="foot-brand">
-      <div class="fb"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> {{ content.brand }}</div>
-      <p class="foot-tag">All-in-one school management for nurseries, primary &amp; secondary schools — and school groups.</p>
-      <div class="foot-social">
-        {% if ct.email %}<a href="mailto:{{ ct.email }}" aria-label="Email us"><i class="fas fa-envelope"></i></a>{% endif %}
-        {% if ct.whatsapp %}<a href="https://wa.me/{{ ct.whatsapp }}" rel="noopener" target="_blank" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>{% endif %}
-        {% if ct.phone %}<a href="tel:{{ ct.phone | replace(' ', '') }}" aria-label="Call us"><i class="fas fa-phone"></i></a>{% endif %}
-      </div>
-    </div>
-    <nav class="foot-col" aria-label="Product"><h4>Product</h4>
-      <a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
-    <nav class="foot-col" aria-label="Company"><h4>Company</h4>
-      {% if ct.email %}<a href="mailto:{{ ct.email }}">Contact</a>{% endif %}<a href="{{ register_url }}">Start free trial</a></nav>
-    <nav class="foot-col" aria-label="Legal"><h4>Legal</h4>
-      <a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy Policy</a>
-      <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms of Service</a>
-      <a href="{{ url_for('marketing.legal', slug='cookies') }}">Cookie Policy</a></nav>
-  </div>
-  <div class="foot-bottom">
-    <span>{{ content.footer }}</span>
-    <span>© {{ now_year }} {{ content.brand }}. All rights reserved.</span>
-  </div>
-</div></footer>
+<div class="dock" id="dock">
+  <button type="button" class="btn btn-ghost" data-open="findSchool">Sign in</button>
+  <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta or 'Get started free' }}</a>
+</div>
+
+<div class="sheet-bg" id="findSchool" role="dialog" aria-modal="true" aria-labelledby="fsTitle">
+  <form class="sheet" id="fsForm">
+    <div class="grip"></div>
+    <h3 id="fsTitle">Sign in to your school</h3>
+    <p>Enter your school’s web address.</p>
+    <label class="sub-in"><input id="fsSub" placeholder="yourschool" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Your school’s web address"><span>.{{ base_domain }}</span></label>
+    <button class="btn btn-primary btn-lg btn-block" type="submit">Continue <i class="fas fa-arrow-right"></i></button>
+    <div class="alt">New here? <a href="{{ register_url }}">Register your school</a></div>
+  </form>
+</div>
 
 <script nonce="{{ csp_nonce }}">
-  var BASE_DOMAIN = {{ base_domain | tojson }};
-  var head = document.getElementById('head');
-  addEventListener('scroll', function(){ head.classList.toggle('scrolled', scrollY > 8); }, {passive:true});
-  document.querySelectorAll('.js-school').forEach(function(form){
-    form.addEventListener('submit', function(e){
-      e.preventDefault();
-      var inp = form.querySelector('.js-sub');
-      var s = (inp && inp.value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g,'');
-      if (s) location.href = 'https://' + s + '.' + BASE_DOMAIN + '/';
-    });
-  });
-  var menuBtn = document.getElementById('menuBtn');
-  function closeMenu(){ head.classList.remove('menu-open'); menuBtn.setAttribute('aria-expanded','false'); }
-  menuBtn.addEventListener('click', function(){
-    var open = head.classList.toggle('menu-open');
-    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-  document.querySelectorAll('#drawer .ml').forEach(function(a){ a.addEventListener('click', closeMenu); });
-  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
-  addEventListener('resize', function(){ if (innerWidth > 980) closeMenu(); });
-  // testimonial carousel: auto-rotate, dot navigation, pause on hover
-  (function(){
-    var track = document.getElementById('qTrack');
-    if (!track) return;
-    var slides = track.querySelectorAll('.q-slide');
-    var dots = document.querySelectorAll('#qDots button');
-    if (slides.length < 2) return;
-    var i = 0, timer = null;
-    function show(n){
-      i = (n + slides.length) % slides.length;
-      slides.forEach(function(s, k){ s.classList.toggle('on', k === i); });
-      dots.forEach(function(d, k){ d.classList.toggle('on', k === i); });
-    }
-    function start(){ stop(); timer = setInterval(function(){ show(i + 1); }, 5000); }
-    function stop(){ if (timer) { clearInterval(timer); timer = null; } }
-    dots.forEach(function(d){ d.addEventListener('click', function(){ show(+d.getAttribute('data-i')); start(); }); });
-    var card = track.closest('.cc');
-    if (card){ card.addEventListener('mouseenter', stop); card.addEventListener('mouseleave', start); }
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) start();
-  })();
+(function(){
+  var BASE = {{ base_domain | tojson }};
+  var head = document.getElementById('head'), dock = document.getElementById('dock');
+  function onScroll(){ head.classList.toggle('scrolled', scrollY > 8); dock.classList.toggle('on', scrollY > 420); }
+  addEventListener('scroll', onScroll, {passive:true}); onScroll();
 
-  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /* find-your-school sheet */
+  var fs = document.getElementById('findSchool'), sub = document.getElementById('fsSub');
+  function open(){ fs.classList.add('open'); setTimeout(function(){ sub.focus(); }, 60); }
+  function close(){ fs.classList.remove('open'); }
+  document.querySelectorAll('[data-open=findSchool]').forEach(function(b){ b.addEventListener('click', open); });
+  fs.addEventListener('click', function(e){ if (e.target === fs) close(); });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  sub.addEventListener('input', function(){ var c = sub.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); if (c !== sub.value) sub.value = c; });
+  document.getElementById('fsForm').addEventListener('submit', function(e){
+    e.preventDefault(); var s = sub.value.trim(); if (!s) { sub.focus(); return; }
+    location.href = 'https://' + s + '.' + BASE + '/login';
+  });
+
+  /* feature tour tabs (arrow keys too) */
+  var tabs = [].slice.call(document.querySelectorAll('.tour-tabs [role=tab]'));
+  function pick(t){ tabs.forEach(function(x){ var on = x === t; x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1;
+    document.getElementById(x.getAttribute('aria-controls')).classList.toggle('on', on); }); }
+  tabs.forEach(function(t, i){ t.tabIndex = i ? -1 : 0; t.addEventListener('click', function(){ pick(t); });
+    t.addEventListener('keydown', function(e){ var d = {ArrowRight:1, ArrowDown:1, ArrowLeft:-1, ArrowUp:-1}[e.key];
+      if (d){ e.preventDefault(); var n = tabs[(i + d + tabs.length) % tabs.length]; n.focus(); pick(n); } }); });
+
+  /* pricing cycle toggle */
+  var node = document.getElementById('priceData');
+  if (node) {
+    var prices = {}; try { prices = JSON.parse(node.textContent || '{}'); } catch (e) {}
+    var fmt = function(n){ return Number(n || 0).toLocaleString('en-NG'); };
+    document.querySelectorAll('[data-cyc]').forEach(function(b){
+      b.addEventListener('click', function(){
+        var c = b.getAttribute('data-cyc');
+        document.querySelectorAll('[data-cyc]').forEach(function(x){ x.setAttribute('aria-pressed', x === b); });
+        document.querySelectorAll('.tier').forEach(function(t){
+          var p = (prices[t.getAttribute('data-tier')] || {})[c]; if (!p) return;
+          t.querySelector('.num').textContent = fmt(p.naira); t.querySelector('.per').textContent = p.per;
+          t.querySelector('.save').textContent = p.savings > 0 ? 'Save ' + p.savings + '% vs monthly' : '';
+          var a = t.querySelector('.js-plan'); a.href = a.getAttribute('data-base') + '&cycle=' + c;
+        });
+      });
+    });
+  }
+
+  /* reveal on scroll */
   var els = document.querySelectorAll('.reveal');
-  if (reduce || !('IntersectionObserver' in window)) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) {
     els.forEach(function(el){ el.classList.add('in'); });
   } else {
-    var io = new IntersectionObserver(function(es){
-      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-    }, {threshold:.1});
+    var io = new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } }); }, {threshold:.08});
     els.forEach(function(el){ io.observe(el); });
   }
+})();
 </script>
 </body>
 </html>

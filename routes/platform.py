@@ -13,7 +13,7 @@ from utils.web_exports import csv_response
 from functools import wraps
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, current_app, session, abort)
+                   flash, current_app, session, abort, jsonify)
 
 from utils.access_control import is_admin
 from utils.tenant_runtime import current_tenant
@@ -340,8 +340,7 @@ def homepage():
         return redirect(url_for('platform.homepage'))
 
     content = site_content.get_homepage()
-    base = current_app.config.get('TENANT_BASE_DOMAIN', '')
-    marketing_url = f'https://www.{base}/' if base else '/'
+    marketing_url = url_for('marketing.home')
     return render_template(
         'platform/homepage.html', active='homepage', content=content, marketing_url=marketing_url,
         features_text=site_content.format_pairs(content.get('features'), ('title', 'body')),
@@ -417,13 +416,16 @@ def features():
     from utils import entitlements as ent
     if request.method == 'POST':
         tiers = {}
+        before = ent.get_tiers()
         for tid in ent.TIER_IDS:
             feats = {fk: (request.form.get(f'{tid}__f__{fk}') == 'on')
                      for fk, _ in ent.FEATURES}
             lims = {}
             for lk, _label, _unit in ent.LIMITS:
                 v = request.form.get(f'{tid}__l__{lk}', type=int)
-                lims[lk] = v if v is not None else 0
+                if v is None:   # left blank / not a number → keep the current value
+                    v = ((before.get(tid) or {}).get('limits') or {}).get(lk, 0)
+                lims[lk] = max(-1, v)
             tiers[tid] = {'features': feats, 'limits': lims}
         ent.save_tiers(tiers)
         _audit('features', detail='entitlement matrix updated')
@@ -630,6 +632,8 @@ def ticket_detail(ticket_id):
                 notify_school_of_reply(ticket, body)
                 _audit('ticket_reply', subdomain=ticket.subdomain, detail=f'#{ticket_id}')
                 flash('Reply sent.', 'success')
+            else:
+                flash('Write a reply before sending.', 'error')
         return redirect(url_for('platform.ticket_detail', ticket_id=ticket_id))
     return render_template('platform/ticket.html', active='tickets',
                            ticket=ticket, messages=messages)
@@ -843,7 +847,10 @@ def bulk():
         flash('Tick "confirm delete" to delete the selected schools.', 'error')
         return _back()
 
-    done = 0
+    done, queued = 0, 0
+    two_person = action == 'delete' and _platform_admin_count() > 1
+    actor = session.get('username') or 'admin'
+    pending = (tenancy.get_content('pending_deletes') or {}) if two_person else {}
     for sub in subs:
         t = tenancy.get_tenant(sub)
         if t is None or billing.is_owner(t):
@@ -859,10 +866,26 @@ def bulk():
             billing.record_payment(sub, days=days)
             done += 1
         elif action == 'delete':
+            if two_person:
+                req = pending.get(sub)
+                if not (req and req.get('actor') and req['actor'] != actor):
+                    # Same rule as a single delete: a second, different admin approves.
+                    pending[sub] = {'actor': actor, 'at': _dt.datetime.utcnow().isoformat()}
+                    _audit('delete_request', subdomain=sub, detail=t.name)
+                    queued += 1
+                    continue
+                pending.pop(sub, None)
+                _audit('delete_approved', subdomain=sub, detail=f'{t.name} (by {req["actor"]} + {actor})')
             provisioning.drop_tenant(sub, forget=True)
             done += 1
-    _audit(f'bulk_{action}', detail=f'{done} school(s)')
-    flash(f'{(action or "").title()} applied to {done} school(s).', 'success')
+    if two_person:
+        tenancy.save_content('pending_deletes', pending)
+    _audit(f'bulk_{action}', detail=f'{done} school(s)' + (f', {queued} awaiting approval' if queued else ''))
+    if queued:
+        flash(f'Deletion of {queued} school(s) requested — a second platform admin must approve.'
+              + (f' {done} deleted.' if done else ''), 'info')
+    else:
+        flash(f'{(action or "").title()} applied to {done} school(s).', 'success')
     return _back()
 
 

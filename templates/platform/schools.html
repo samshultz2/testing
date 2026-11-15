@@ -2,56 +2,82 @@
 {% block title %}Schools{% endblock %}
 {% block heading %}Schools{% endblock %}
 {% block subheading %}Every school on the platform, with billing status and controls.{% endblock %}
+{% block topbar_right %}
+<a class="btn" href="{{ url_for('platform.schools_export', filter=segment) }}"><i class="fas fa-file-csv"></i><span class="lbl">Export CSV</span></a>
+{% endblock %}
 
 {% block head %}
 <style>
-  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
-  .search{flex:1;min-width:200px;display:flex;align-items:center;gap:9px;background:var(--surface);
-          border:1px solid var(--line);border-radius:10px;padding:9px 13px;box-shadow:var(--shadow)}
-  .search i{color:var(--faint)} .search input{border:0;background:transparent;color:var(--ink);font-size:14px;width:100%;outline:none;font-family:inherit}
-  .actbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .acts form{display:inline}
-  .acts .btn{margin:0 2px 2px 0}
-  .conf{width:120px}
+  .s-tools{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .search{flex:1;min-width:220px;display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:0 13px;height:44px;box-shadow:var(--shadow)}
+  .search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+  .search i{color:var(--faint)} .search input{border:0!important;box-shadow:none!important;background:transparent;font-size:15px;width:100%;outline:none;padding:0!important;min-height:0!important}
+  .recent{display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:-2px 0 12px;font-size:12.5px}
+  .sel-cell{display:flex;align-items:center;gap:12px;min-width:0}
+  .sel-cell input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex:none}
+  th .all{width:18px;height:18px;accent-color:var(--accent);vertical-align:middle;margin-right:10px}
   .no-match{display:none}
+  .manage{white-space:nowrap;text-align:right}
+  /* bulk bar */
+  .bulk{position:sticky;bottom:12px;z-index:30;display:none;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px 10px 16px;border-radius:16px;
+    background:var(--ink);color:var(--surface);box-shadow:var(--shadow-lg)}
+  .bulk.on{display:flex}
+  .bulk b{font-size:14px;margin-right:auto}
+  .bulk select,.bulk input[type=number]{background:transparent!important;color:inherit!important;border-color:rgba(255,255,255,.25)!important}
+  .bulk select option{color:#0f172a}
+  .bulk .cd{display:none;align-items:center;gap:6px;font-size:13px;color:#fca5a5}
+  .bulk .cd.on{display:flex}
+  .bulk .btn{border-color:rgba(255,255,255,.25)}
+  @media (max-width:1023px){.bulk{bottom:calc(var(--tabbar) + 10px + env(safe-area-inset-bottom))}}
+  /* manage sheet */
+  .m-head{display:flex;align-items:center;gap:12px;padding:4px 0 14px}
+  .m-sec{border-top:1px solid var(--line-2);padding:14px 0}
+  .m-sec h4{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+  .daychips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .daychips button{height:36px;padding:0 13px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-weight:650;font-size:13px;cursor:pointer}
+  .daychips button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .m-row{display:flex;gap:8px;align-items:center}
+  .m-row input{flex:1;min-width:0}
+  .m-links{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style>
 {% endblock %}
 
 {% block content %}
-  <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
-    <div class="kpi"><div class="lab">Total</div><div class="num">{{ summary.total }}</div></div>
-    <div class="kpi"><div class="lab">Paying</div><div class="num">{{ summary.paying }}</div></div>
-    <div class="kpi"><div class="lab">Trial</div><div class="num">{{ summary.trial }}</div></div>
-    <div class="kpi"><div class="lab">Unpaid</div><div class="num">{{ summary.blocked }}</div></div>
-    <div class="kpi"><div class="lab">Suspended</div><div class="num">{{ summary.suspended }}</div></div>
+  {% set SEGS = [('', 'All', summary.total), ('paying', 'Paying', summary.paying), ('trial', 'Trial', summary.trial),
+                 ('unpaid', 'Unpaid', summary.blocked), ('ending_soon', 'Ending soon', summary.ending_soon),
+                 ('suspended', 'Suspended', summary.suspended), ('archived', 'Archived', None)] %}
+  <div class="chips" role="tablist" aria-label="Filter schools">
+    {% for key, label, n in SEGS %}
+    <a class="chip {{ 'on' if segment == key }}" role="tab" aria-selected="{{ 'true' if segment == key else 'false' }}"
+       href="{{ url_for('platform.schools', filter=key) if key else url_for('platform.schools') }}">{{ label }}{% if n is not none %} <em>{{ n }}</em>{% endif %}</a>
+    {% endfor %}
+    {% if segment %}<a class="chip" href="{{ url_for('platform.schools') }}" title="Clear filter"><i class="fas fa-xmark"></i> Clear</a>{% endif %}
   </div>
 
-  <div class="toolbar">
+  <div class="s-tools">
     <label class="search"><i class="fas fa-magnifying-glass"></i>
-      <input id="q" type="search" placeholder="Search schools by name, subdomain or email…" autocomplete="off"></label>
-    {% if segment %}<a class="btn sm" href="{{ url_for('platform.schools') }}" title="Clear filter">
-      <i class="fas fa-filter"></i> {{ segment|replace('_',' ')|capitalize }} · clear ✕</a>{% endif %}
-    <a class="btn sm" href="{{ url_for('platform.schools_export', filter=segment) }}"><i class="fas fa-file-csv"></i> Export CSV</a>
+      <input id="q" type="search" placeholder="Search by name, subdomain or email" autocomplete="off" aria-label="Search schools"></label>
   </div>
-  <div id="recent" class="recent-tenants" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px">
-    <span class="muted" style="font-size:12.5px"><i class="fas fa-clock-rotate-left"></i> Recent:</span>
-  </div>
+  <div id="recent" class="recent"><span class="muted"><i class="fas fa-clock-rotate-left"></i> Recent:</span></div>
 
   <div class="panel">
     <div class="tablewrap">
       <table id="tbl">
         <thead><tr>
-          <th style="width:26px"></th><th>School</th><th>Status</th><th>Access until</th>
-          <th>Admin email</th><th>Created</th><th>Actions</th>
+          <th><input type="checkbox" class="all" id="selAll" aria-label="Select all">School</th><th>Status</th><th>Access until</th>
+          <th>Admin email</th><th>Created</th><th></th>
         </tr></thead>
         <tbody>
         {% for r in rows %}
           <tr data-name="{{ r.name|lower }}" data-sub="{{ r.subdomain }}" data-email="{{ (r.admin_email or '')|lower }}">
-            <td>{% if not r.owner %}<input type="checkbox" name="subdomains" value="{{ r.subdomain }}" form="bulkform">{% endif %}</td>
-            <td><a class="school" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}" title="Open profile"><span class="ic">{{ r.name[0]|upper }}</span>
-              <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></a></td>
-            <td>
+            <td class="c-main"><div class="sel-cell">
+              {% if not r.owner %}<input type="checkbox" name="subdomains" value="{{ r.subdomain }}" form="bulkform" aria-label="Select {{ r.name }}">{% endif %}
+              <a class="school" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}"><span class="ic">{{ r.name[0]|upper }}</span>
+                <span style="min-width:0"><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></a></div></td>
+            <td class="c-end">
               {% if r.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
+              {% elif r.status == 'archived' %}<span class="pill p-archived">Archived</span>
               {% elif r.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
               {% elif r.on_trial %}<span class="pill p-trial">Trial · {{ r.days_left }}d</span>
               {% elif r.active %}<span class="pill p-active">Active · {{ r.days_left }}d</span>
@@ -60,49 +86,76 @@
             <td class="muted">{{ r.access_until }}</td>
             <td class="muted">{{ r.admin_email }}</td>
             <td class="muted">{{ r.created }}</td>
-            <td class="acts">
-              {% if not r.owner %}
-                <form method="post" action="{{ url_for('platform.grant', subdomain=r.subdomain) }}">
-                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <input class="field" style="width:52px" name="days" type="number" value="{{ plan_days }}" min="1" title="days to grant">
-                  <button class="btn sm"><i class="fas fa-plus"></i> days</button>
-                </form>
-                <form method="post" action="{{ url_for('platform.suspend', subdomain=r.subdomain) }}">
-                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn sm">{{ 'Reactivate' if r.status == 'suspended' else 'Suspend' }}</button>
-                </form>
-                <form method="post" action="{{ url_for('platform.delete', subdomain=r.subdomain) }}">
-                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <input class="field conf" name="confirm" placeholder="type {{ r.subdomain }}" title="type the subdomain to confirm">
-                  <button class="btn sm danger"><i class="fas fa-trash"></i></button>
-                </form>
-              {% else %}<span class="muted">—</span>{% endif %}
+            <td class="manage">
+              {% if not r.owner %}<button type="button" class="btn sm" data-open="m-{{ r.subdomain }}"><i class="fas fa-sliders"></i> Manage</button>
+              {% else %}<a class="btn sm ghost" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}">Open</a>{% endif %}
             </td>
           </tr>
         {% endfor %}
-          <tr class="no-match" id="nomatch"><td colspan="7"><div class="empty"><i class="fas fa-magnifying-glass"></i>No schools match your search.</div></td></tr>
+          <tr class="no-match" id="nomatch"><td colspan="6"><div class="empty"><i class="fas fa-magnifying-glass"></i>No schools match your search.</div></td></tr>
         </tbody>
       </table>
+      {% if not rows %}<div class="empty"><i class="fas fa-school"></i>No schools in this view.</div>{% endif %}
     </div>
   </div>
 
-  <form id="bulkform" method="post" action="{{ url_for('platform.bulk') }}" class="panel" style="padding:16px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+  <form id="bulkform" method="post" action="{{ url_for('platform.bulk') }}" class="bulk" aria-live="polite"
+        data-confirm="Apply this to every selected school? The owner school is never affected." data-confirm-title="Apply to selected schools?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <strong style="font-size:13px;"><i class="fas fa-layer-group"></i> With selected:</strong>
-    <select name="action" class="field" required>
+    <b id="selCount">0 selected</b>
+    <select name="action" id="bulkAct" required aria-label="Action">
+      <option value="grant">Grant days</option>
       <option value="suspend">Suspend</option>
       <option value="reactivate">Reactivate</option>
-      <option value="grant">Grant days</option>
       <option value="delete">Delete (database + all data)</option>
     </select>
-    <input class="field" name="days" type="number" min="1" value="{{ plan_days }}" style="width:64px" title="days (for Grant days)">
-
-    <label style="font-size:12.5px;color:var(--bad);display:flex;align-items:center;gap:6px;">
-      <input type="checkbox" name="confirm_delete" value="yes"> confirm delete
-    </label>
-    <button class="btn danger" type="submit">Apply</button>
-    <span class="muted" style="font-size:12px;margin-left:auto;">The owner school is never affected.</span>
+    <input name="days" id="bulkDays" type="number" min="1" value="{{ plan_days }}" style="width:76px" aria-label="Days">
+    <label class="cd" id="bulkCd"><input type="checkbox" name="confirm_delete" value="yes"> confirm delete</label>
+    <button class="btn" type="button" id="bulkClear">Clear</button>
+    <button class="btn primary" type="submit">Apply</button>
   </form>
+
+  {# one manage sheet per school #}
+  {% for r in rows if not r.owner %}
+  <div class="sheet-bg" id="m-{{ r.subdomain }}" role="dialog" aria-modal="true" aria-label="Manage {{ r.name }}">
+    <div class="sheet">
+      <div class="grip"></div>
+      <div class="sheet-h"><span class="school"><span class="ic">{{ r.name[0]|upper }}</span>
+        <span style="min-width:0"><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }} · access until {{ r.access_until }}</span></span></span>
+        <button class="sheet-x" type="button" data-close aria-label="Close"><i class="fas fa-xmark"></i></button></div>
+      <div class="m-links" style="margin-bottom:14px">
+        <a class="btn" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}"><i class="fas fa-id-card"></i> Full profile</a>
+        <a class="btn" href="https://{{ r.subdomain }}.{{ config.TENANT_BASE_DOMAIN }}/" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Portal</a>
+      </div>
+      <div class="m-sec">
+        <h4>Grant access</h4>
+        <form method="post" action="{{ url_for('platform.grant', subdomain=r.subdomain) }}" class="js-days">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <div class="daychips">{% for d in [7, 30, 90, 365] %}<button type="button" data-days="{{ d }}" class="{{ 'on' if d == plan_days }}">{{ d }} days</button>{% endfor %}</div>
+          <div class="m-row"><input name="days" type="number" value="{{ plan_days }}" min="1" aria-label="Days to grant">
+            <button class="btn primary"><i class="fas fa-plus"></i> Grant</button></div>
+        </form>
+      </div>
+      <div class="m-sec">
+        <h4>Status</h4>
+        <form method="post" action="{{ url_for('platform.suspend', subdomain=r.subdomain) }}"
+              {% if r.status != 'suspended' %}data-confirm="{{ r.name }}’s portal will be unreachable until you reactivate it." data-confirm-title="Suspend {{ r.name }}?" data-confirm-ok="Suspend" data-danger{% endif %}>
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn wide">{% if r.status == 'suspended' %}<i class="fas fa-play"></i> Reactivate{% else %}<i class="fas fa-pause"></i> Suspend{% endif %}</button>
+        </form>
+      </div>
+      <div class="m-sec">
+        <h4 style="color:var(--bad)">Delete school</h4>
+        <p class="muted" style="font-size:13px;margin:0 0 10px">Drops the database and every record. Type <b>{{ r.subdomain }}</b> to confirm.</p>
+        <form method="post" action="{{ url_for('platform.delete', subdomain=r.subdomain) }}" class="m-row js-typed" data-want="{{ r.subdomain }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input name="confirm" placeholder="{{ r.subdomain }}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Type the subdomain to confirm">
+          <button class="btn danger solid" disabled><i class="fas fa-trash"></i> Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
 {% endblock %}
 
 {% block scripts %}
@@ -113,22 +166,44 @@
     q.addEventListener('input',function(){
       var v=q.value.trim().toLowerCase(), shown=0;
       rows.forEach(function(tr){
-        var hit=!v || tr.getAttribute('data-name').indexOf(v)>-1 || tr.getAttribute('data-sub').indexOf(v)>-1
-                || tr.getAttribute('data-email').indexOf(v)>-1;
+        var hit=!v || tr.dataset.name.indexOf(v)>-1 || tr.dataset.sub.indexOf(v)>-1 || tr.dataset.email.indexOf(v)>-1;
         tr.style.display=hit?'':'none'; if(hit) shown++;
       });
       nomatch.style.display=shown?'none':'table-row';
     });
-    // recently-viewed tenant chips (from the profile page)
+    /* selection + bulk bar */
+    var boxes=[].slice.call(document.querySelectorAll('input[name=subdomains]')), all=document.getElementById('selAll'),
+        bar=document.getElementById('bulkform'), cnt=document.getElementById('selCount'), act=document.getElementById('bulkAct'),
+        days=document.getElementById('bulkDays'), cd=document.getElementById('bulkCd');
+    function sync(){
+      var n=boxes.filter(function(b){return b.checked;}).length;
+      bar.classList.toggle('on',n>0); cnt.textContent=n+' selected';
+      all.checked=n>0 && n===boxes.length; all.indeterminate=n>0 && n<boxes.length;
+    }
+    boxes.forEach(function(b){b.addEventListener('change',sync);});
+    all.addEventListener('change',function(){ boxes.forEach(function(b){ if(b.closest('tr').style.display!=='none') b.checked=all.checked; }); sync(); });
+    document.getElementById('bulkClear').addEventListener('click',function(){ boxes.forEach(function(b){b.checked=false;}); sync(); });
+    function actSync(){ days.style.display=act.value==='grant'?'':'none'; cd.classList.toggle('on',act.value==='delete');
+      bar.toggleAttribute('data-danger', act.value==='delete'); }
+    act.addEventListener('change',actSync); actSync();
+    /* day chips */
+    [].forEach.call(document.querySelectorAll('form.js-days'),function(f){
+      var inp=f.querySelector('input[name=days]');
+      f.addEventListener('click',function(e){ var b=e.target.closest('[data-days]'); if(!b) return;
+        inp.value=b.dataset.days; [].forEach.call(f.querySelectorAll('[data-days]'),function(x){x.classList.toggle('on',x===b);}); });
+      inp.addEventListener('input',function(){ [].forEach.call(f.querySelectorAll('[data-days]'),function(x){x.classList.toggle('on',x.dataset.days===inp.value);}); });
+    });
+    /* typed delete confirmation enables the button */
+    [].forEach.call(document.querySelectorAll('form.js-typed'),function(f){
+      var inp=f.querySelector('input[name=confirm]'), btn=f.querySelector('button');
+      inp.addEventListener('input',function(){ btn.disabled=inp.value.trim().toLowerCase()!==f.dataset.want; });
+    });
+    /* recently viewed */
     try {
-      var box=document.getElementById('recent'),
-          list=JSON.parse(localStorage.getItem('platform:recentTenants')||'[]');
+      var box=document.getElementById('recent'), list=JSON.parse(localStorage.getItem('platform:recentTenants')||'[]');
       if(list.length){
         list.slice(0,8).forEach(function(x){
-          var a=document.createElement('a');
-          a.href='/platform/tenant/'+encodeURIComponent(x.sub);
-          a.className='btn sm'; a.textContent=x.name||x.sub;
-          box.appendChild(a);
+          var a=document.createElement('a'); a.href='/platform/tenant/'+encodeURIComponent(x.sub); a.className='chip'; a.textContent=x.name||x.sub; box.appendChild(a);
         });
         box.style.display='flex';
       }

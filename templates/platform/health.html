@@ -148,7 +148,7 @@
     {% endfor %}
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       var URL = "{{ url_for('platform.health_json') }}";
       function fmtBytesRate(bps){

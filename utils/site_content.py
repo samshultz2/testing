@@ -69,8 +69,8 @@ DEFAULTS = {
          'body': 'Every user sees only what they should, and sensitive actions '
                  'are logged.'},
         {'title': 'Secure cloud hosting',
-         'body': 'Runs on secure cloud infrastructure with 99.9% uptime — '
-                 'available anywhere, on any device.'},
+         'body': 'Runs on secure cloud infrastructure — available anywhere, '
+                 'on any device.'},
     ],
     'contact': {
         'email': 'hello@edusyncra.site',

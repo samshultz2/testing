@@ -18,10 +18,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="tabs">
-  <a href="{{ url_for('platform.tickets', status='open') }}" class="{{ 'on' if status=='open' }}">Open</a>
-  <a href="{{ url_for('platform.tickets', status='closed') }}" class="{{ 'on' if status=='closed' }}">Closed</a>
-  <a href="{{ url_for('platform.tickets') }}" class="{{ 'on' if status=='all' }}">All</a>
+<div class="chips" role="tablist" aria-label="Ticket status">
+  <a href="{{ url_for('platform.tickets', status='open') }}" class="chip {{ 'on' if status=='open' }}">Open <em>{{ open_count }}</em></a>
+  <a href="{{ url_for('platform.tickets', status='closed') }}" class="chip {{ 'on' if status=='closed' }}">Closed</a>
+  <a href="{{ url_for('platform.tickets', status='all') }}" class="chip {{ 'on' if status=='all' }}">All</a>
 </div>
 <div class="panel">
   {% if rows %}
@@ -30,7 +30,7 @@
       <thead><tr><th>Updated</th><th>School</th><th>Subject</th><th>Priority</th><th>Status</th></tr></thead>
       <tbody>
         {% for t in rows %}
-        <tr style="cursor:pointer" onclick="window.location='{{ url_for('platform.ticket_detail', ticket_id=t.id) }}'">
+        <tr>
           <td class="muted" style="white-space:nowrap">{{ t.updated_at.strftime('%d %b %H:%M') if t.updated_at else '—' }}</td>
           <td><a href="{{ url_for('platform.tenant_profile', subdomain=t.subdomain) }}">{{ t.subdomain }}</a></td>
           <td><a href="{{ url_for('platform.ticket_detail', ticket_id=t.id) }}">{{ t.subject }}</a></td>

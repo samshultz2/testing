@@ -1,124 +1,193 @@
 {% extends "platform/_layout.html" %}
 {% block title %}Edit homepage{% endblock %}
 {% block heading %}Edit homepage{% endblock %}
-{% block subheading %}Change the public marketing homepage — saved changes are live immediately, no deploy.{% endblock %}
+{% block subheading %}Change the public homepage — saved changes are live immediately, no deploy.{% endblock %}
 {% block topbar_right %}
-  <a class="btn" href="{{ marketing_url }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Preview</a>
+  <a class="btn" href="{{ marketing_url }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i><span class="lbl">Preview</span></a>
 {% endblock %}
 
 {% block head %}
 <style>
-  .grid{display:grid;grid-template-columns:1fr;gap:0;max-width:760px}
-  .sect{padding:18px 20px}
-  .sect + .sect{border-top:1px solid var(--line-2)}
-  .sect h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin:0 0 12px;font-weight:700}
-  label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px} label:first-of-type{margin-top:0}
-  input[type=text],input[type=number],input[type=email],input[type=tel],input[type=url],textarea{
-    width:100%;padding:10px 12px;border:1px solid var(--line);
-    border-radius:9px;background:transparent;color:var(--ink);font-size:14.5px;font-family:inherit}
-  input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
-  textarea{min-height:118px;resize:vertical;line-height:1.5}
-  .hint{font-size:12px;color:var(--faint);margin-top:5px}
-  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:560px){.row2{grid-template-columns:1fr}}
-  .save{display:flex;gap:12px;align-items:center;padding:16px 20px;border-top:1px solid var(--line-2)}
-  code{background:var(--surface-2);padding:1px 5px;border-radius:5px;font-size:12px}
+  .hp{display:grid;grid-template-columns:210px minmax(0,1fr);gap:22px;align-items:start;max-width:1100px}
+  .hp-nav{position:sticky;top:96px;display:flex;flex-direction:column;gap:2px}
+  .hp-nav a{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:10px;font-size:13.5px;font-weight:600;color:var(--soft)}
+  .hp-nav a i{width:16px;text-align:center;color:var(--faint)}
+  .hp-nav a:hover{background:var(--surface)}
+  @media (max-width:1023px){.hp{grid-template-columns:minmax(0,1fr)}
+    .hp-nav{position:sticky;top:61px;z-index:20;flex-direction:row;overflow-x:auto;scrollbar-width:none;margin:-14px -16px 0;padding:8px 16px;
+      background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px)}
+    .hp-nav::-webkit-scrollbar{display:none}
+    .hp-nav a{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;height:36px;padding:0 12px}}
+  .sect{padding:18px 20px;scroll-margin-top:110px}
+  .sect h3{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:9px}
+  .sect h3 i{color:var(--accent);font-size:14px}
+  .sect > p.hint{margin:0 0 12px}
+  .fl{display:block;font-size:12.5px;font-weight:650;color:var(--soft);margin:14px 0 6px}
+  .sect input[type=text],.sect input[type=email],.sect input[type=tel],.sect textarea{width:100%}
+  .hint{font-size:12.5px;color:var(--faint);margin-top:6px;line-height:1.45}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:600px){.row2{grid-template-columns:1fr}}
+  /* list editor */
+  .le{display:flex;flex-direction:column;gap:8px}
+  .le-it{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+  .le-n{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:800;background:var(--accent-soft);color:var(--accent-ink);margin-top:6px}
+  .le-f{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .le-f input,.le-f textarea{width:100%;background:var(--surface)!important}
+  .le-f textarea{min-height:64px;resize:vertical}
+  .le-a{display:flex;flex-direction:column;gap:4px}
+  .le-a button{width:32px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--faint);cursor:pointer}
+  .le-a button:hover{background:var(--surface);color:var(--ink)}
+  .le-a button.del:hover{color:var(--bad)}
+  .le-a button:disabled{opacity:.25;cursor:default}
+  .le-add{height:44px;border:1.5px dashed var(--line);border-radius:14px;background:transparent;color:var(--accent-ink);font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .le-add:hover{border-color:var(--accent)}
+  textarea.le-src{display:none}
 </style>
 {% endblock %}
 
 {% block content %}
-<form method="post" action="{{ url_for('platform.homepage') }}">
+<form method="post" action="{{ url_for('platform.homepage') }}" class="js-dirty">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-  <div class="panel grid">
-    <div class="sect">
-      <h3>Hero</h3>
-      <label>Brand name</label>
-      <input type="text" name="brand" value="{{ content.brand }}">
-      <label>Headline</label>
-      <input type="text" name="hero_title" value="{{ content.hero_title }}">
-      <label>Sub-headline</label>
-      <textarea name="hero_subtitle" style="min-height:70px">{{ content.hero_subtitle }}</textarea>
-      <div class="row2">
-        <div><label>Call-to-action button</label><input type="text" name="hero_cta" value="{{ content.hero_cta }}"></div>
-        <div><label>Trial note / badge</label><input type="text" name="trial_note" value="{{ content.trial_note }}"></div>
+  <div class="hp">
+    <nav class="hp-nav" aria-label="Sections">
+      {% for id, icon, label in [('hero','fa-panorama','Hero'),('pricing','fa-tags','Pricing'),('features','fa-star','Features'),('steps','fa-list-ol','How it works'),
+          ('faq','fa-circle-question','FAQ'),('testimonials','fa-quote-left','Testimonials'),('contact','fa-headset','Contact'),('legal','fa-scale-balanced','Legal'),('footer','fa-grip-lines','Footer')] %}
+      <a href="#{{ id }}"><i class="fas {{ icon }}"></i>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div>
+      <div class="panel">
+        <div class="sect" id="hero">
+          <h3><i class="fas fa-panorama"></i> Hero</h3>
+          <p class="hint">The first thing a school sees.</p>
+          <label class="fl" for="f-brand">Brand name</label>
+          <input type="text" id="f-brand" name="brand" value="{{ content.brand }}">
+          <label class="fl" for="f-ht">Headline</label>
+          <input type="text" id="f-ht" name="hero_title" value="{{ content.hero_title }}">
+          <label class="fl" for="f-hs">Sub-headline</label>
+          <textarea id="f-hs" name="hero_subtitle" rows="3">{{ content.hero_subtitle }}</textarea>
+          <div class="row2">
+            <div><label class="fl" for="f-cta">Main button text</label><input type="text" id="f-cta" name="hero_cta" value="{{ content.hero_cta }}"></div>
+            <div><label class="fl" for="f-tn">Trial badge</label><input type="text" id="f-tn" name="trial_note" value="{{ content.trial_note }}"></div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="sect">
-      <h3>Pricing</h3>
-      <label>Billing period word</label>
-      <input type="text" name="price_period" value="{{ content.price_period }}">
-      <div class="hint">e.g. month, term, year. The <strong>price</strong> and plans are set on the
-        <a href="{{ url_for('platform.pricing') }}">Pricing</a> page — the homepage shows your live Monthly price automatically.</div>
-    </div>
-
-    <div class="sect">
-      <h3>Features</h3>
-      <label>One per line — <code>Title | description</code></label>
-      <textarea name="features">{{ features_text }}</textarea>
-      <div class="hint">Example: <code>Your own private portal | A dedicated subdomain and isolated database.</code></div>
-    </div>
-
-    <div class="sect">
-      <h3>How it works (steps)</h3>
-      <label>One per line — <code>Title | description</code></label>
-      <textarea name="steps" style="min-height:90px">{{ steps_text }}</textarea>
-    </div>
-
-    <div class="sect">
-      <h3>FAQ</h3>
-      <label>One per line — <code>Question | Answer</code></label>
-      <textarea name="faqs">{{ faqs_text }}</textarea>
-    </div>
-
-    <div class="sect">
-      <h3>Testimonials</h3>
-      <label>One per line — <code>Name, School | Quote</code></label>
-      <textarea name="testimonials">{{ testimonials_text }}</textarea>
-    </div>
-
-    <div class="sect">
-      <h3>Contact</h3>
-      <p class="hint">Shown in the homepage “Talk to us” cards and the footer. Leave a field blank to hide that option.</p>
-      <div class="row2">
-        <div><label>Email</label>
-          <input type="email" name="contact_email" value="{{ content.contact.email if content.contact else '' }}" placeholder="hello@edusyncra.site"></div>
-        <div><label>Phone</label>
-          <input type="tel" name="contact_phone" value="{{ content.contact.phone if content.contact else '' }}" placeholder="+234 800 000 0000"></div>
+      <div class="panel">
+        <div class="sect" id="pricing">
+          <h3><i class="fas fa-tags"></i> Pricing</h3>
+          <label class="fl" for="f-pp">Billing period word</label>
+          <input type="text" id="f-pp" name="price_period" value="{{ content.price_period }}">
+          <div class="hint">e.g. month, term, year. Prices and plans are set on the <a href="{{ url_for('platform.pricing') }}" style="color:var(--accent-ink);font-weight:600">Pricing</a> page — the homepage shows them automatically.</div>
+        </div>
       </div>
-      <label>WhatsApp number</label>
-      <input type="tel" name="contact_whatsapp" value="{{ content.contact.whatsapp if content.contact else '' }}" placeholder="2348000000000">
-      <p class="hint">Include the country code (e.g. 234…). Spaces and “+” are fine — we clean it for the WhatsApp link.</p>
-    </div>
 
-    <div class="sect">
-      <h3>Legal</h3>
-      <p class="hint">Used across the Privacy Policy, Terms of Service and Cookie Policy pages. Leave a field blank to fall back to a sensible default.</p>
-      <div class="row2">
-        <div><label>Registered company name</label>
-          <input type="text" name="legal_entity" value="{{ content.legal_entity or '' }}" placeholder="e.g. EduSyncra Technologies Ltd">
-          <div class="hint">Shown as “Issued by …”. Blank uses the brand name.</div></div>
-        <div><label>Effective date</label>
-          <input type="text" name="legal_effective" value="{{ content.legal_effective or '' }}" placeholder="e.g. 1 August 2026">
-          <div class="hint">Blank uses today’s date.</div></div>
+      {% for id, icon, label, name, text, a, b, hint, noun in [
+          ('features','fa-star','Features','features',features_text,'Title','Description','What a school gets.','feature'),
+          ('steps','fa-list-ol','How it works','steps',steps_text,'Step title','What happens','Shown as numbered steps.','step'),
+          ('faq','fa-circle-question','FAQ','faqs',faqs_text,'Question','Answer','Answers to what schools ask most.','question'),
+          ('testimonials','fa-quote-left','Testimonials','testimonials',testimonials_text,'Name, school','Quote','Kind words from schools.','testimonial')] %}
+      <div class="panel">
+        <div class="sect" id="{{ id }}">
+          <h3><i class="fas {{ icon }}"></i> {{ label }}</h3>
+          <p class="hint">{{ hint }}</p>
+          <textarea class="le-src" name="{{ name }}" data-a="{{ a }}" data-b="{{ b }}" data-noun="{{ noun }}">{{ text }}</textarea>
+        </div>
       </div>
-      <label>Data Protection Officer / privacy contact email</label>
-      <input type="email" name="dpo_email" value="{{ content.dpo_email or '' }}" placeholder="dpo@edusyncra.site">
-      <div class="hint">Shown in the Privacy Policy contact block. Blank uses your main contact email.</div>
-      <label style="margin-top:12px">Sub-processors — one per line, <code>Name | What they process</code></label>
-      <textarea name="subprocessors" style="min-height:110px">{{ subprocessors_text }}</textarea>
-      <div class="hint">The third parties that process data to run the service (hosting, payments, messaging). Listed in the Privacy Policy.</div>
-    </div>
+      {% endfor %}
 
-    <div class="sect">
-      <h3>Footer</h3>
-      <label>Footer text</label>
-      <input type="text" name="footer" value="{{ content.footer }}">
-    </div>
+      <div class="panel">
+        <div class="sect" id="contact">
+          <h3><i class="fas fa-headset"></i> Contact</h3>
+          <p class="hint">Shown in the “Talk to us” cards and the footer. Leave a field blank to hide it.</p>
+          <div class="row2">
+            <div><label class="fl" for="f-ce">Email</label>
+              <input type="email" id="f-ce" name="contact_email" value="{{ content.contact.email if content.contact else '' }}" placeholder="hello@edusyncra.site"></div>
+            <div><label class="fl" for="f-cp">Phone</label>
+              <input type="tel" id="f-cp" name="contact_phone" value="{{ content.contact.phone if content.contact else '' }}" placeholder="+234 800 000 0000"></div>
+          </div>
+          <label class="fl" for="f-cw">WhatsApp number</label>
+          <input type="tel" id="f-cw" name="contact_whatsapp" value="{{ content.contact.whatsapp if content.contact else '' }}" placeholder="2348000000000">
+          <p class="hint">Include the country code (e.g. 234…). Spaces and “+” are fine.</p>
+        </div>
+      </div>
 
-    <div class="save">
-      <button type="submit" class="btn primary"><i class="fas fa-floppy-disk"></i> Save changes</button>
-      <a class="btn" href="{{ marketing_url }}" target="_blank" rel="noopener">Preview homepage ↗</a>
+      <div class="panel">
+        <div class="sect" id="legal">
+          <h3><i class="fas fa-scale-balanced"></i> Legal</h3>
+          <p class="hint">Used across the Privacy Policy, Terms and Cookie Policy. Blank fields use sensible defaults.</p>
+          <div class="row2">
+            <div><label class="fl" for="f-le">Registered company name</label>
+              <input type="text" id="f-le" name="legal_entity" value="{{ content.legal_entity or '' }}" placeholder="e.g. EduSyncra Technologies Ltd"></div>
+            <div><label class="fl" for="f-lf">Effective date</label>
+              <input type="text" id="f-lf" name="legal_effective" value="{{ content.legal_effective or '' }}" placeholder="e.g. 1 August 2026"></div>
+          </div>
+          <label class="fl" for="f-dpo">Privacy contact email</label>
+          <input type="email" id="f-dpo" name="dpo_email" value="{{ content.dpo_email or '' }}" placeholder="dpo@edusyncra.site">
+          <label class="fl">Sub-processors</label>
+          <textarea class="le-src" name="subprocessors" data-a="Company" data-b="What they process" data-noun="sub-processor">{{ subprocessors_text }}</textarea>
+          <p class="hint">Hosting, payments and messaging providers listed in the Privacy Policy.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="sect" id="footer">
+          <h3><i class="fas fa-grip-lines"></i> Footer</h3>
+          <label class="fl" for="f-ft">Footer text</label>
+          <input type="text" id="f-ft" name="footer" value="{{ content.footer }}">
+        </div>
+      </div>
+
+      <div class="savebar">
+        <span class="st">All changes saved</span>
+        <a class="btn" href="{{ marketing_url }}" target="_blank" rel="noopener"><i class="fas fa-eye"></i><span class="lbl"> Preview</span></a>
+        <button type="submit" class="btn primary"><i class="fas fa-check"></i> Save changes</button>
+      </div>
     </div>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  /* Turn each "left | right" textarea into a list of rows the server still
+     receives as text, so nobody has to type pipes. */
+  (function(){
+    [].forEach.call(document.querySelectorAll('textarea.le-src'),function(src){
+      var A=src.dataset.a, B=src.dataset.b, noun=src.dataset.noun;
+      var items=src.value.split(/\r?\n/).filter(function(l){return l.trim();}).map(function(l){
+        var i=l.indexOf('|'); return i<0?[l.trim(),'']:[l.slice(0,i).trim(), l.slice(i+1).trim()]; });
+      var box=document.createElement('div'); box.className='le'; src.after(box);
+      function sync(){ src.value=items.map(function(p){ return p[0].replace(/\|/g,'/').replace(/\s+/g,' ').trim()+' | '+p[1].replace(/\s*\n\s*/g,' ').trim(); })
+        .filter(function(l){return l!==' | ';}).join('\n'); src.dispatchEvent(new Event('input',{bubbles:true})); }
+      function draw(focus){
+        box.innerHTML='';
+        items.forEach(function(p,i){
+          var row=document.createElement('div'); row.className='le-it';
+          row.innerHTML='<span class="le-n">'+(i+1)+'</span><div class="le-f"><input type="text"><textarea rows="2"></textarea></div>'+
+            '<div class="le-a"><button type="button" data-m="-1" aria-label="Move up"><i class="fas fa-chevron-up"></i></button>'+
+            '<button type="button" data-m="1" aria-label="Move down"><i class="fas fa-chevron-down"></i></button>'+
+            '<button type="button" class="del" aria-label="Remove"><i class="fas fa-trash-can"></i></button></div>';
+          var a=row.querySelector('input'), b=row.querySelector('textarea');
+          a.value=p[0]; a.placeholder=A; a.setAttribute('aria-label',A+' '+(i+1));
+          b.value=p[1]; b.placeholder=B; b.setAttribute('aria-label',B+' '+(i+1));
+          a.addEventListener('input',function(){p[0]=a.value; sync();});
+          b.addEventListener('input',function(){p[1]=b.value; sync();});
+          row.querySelector('[data-m="-1"]').disabled=i===0;
+          row.querySelector('[data-m="1"]').disabled=i===items.length-1;
+          [].forEach.call(row.querySelectorAll('[data-m]'),function(btn){ btn.addEventListener('click',function(){
+            var j=i+(+btn.dataset.m); var t=items[i]; items[i]=items[j]; items[j]=t; sync(); draw(); }); });
+          row.querySelector('.del').addEventListener('click',function(){ items.splice(i,1); sync(); draw(); });
+          box.appendChild(row);
+          if(focus && i===items.length-1) setTimeout(function(){a.focus();},10);
+        });
+        var add=document.createElement('button'); add.type='button'; add.className='le-add';
+        add.innerHTML='<i class="fas fa-plus"></i> Add '+noun;
+        add.addEventListener('click',function(){ items.push(['','']); draw(true); });
+        box.appendChild(add);
+      }
+      draw();
+    });
+  })();
+</script>
 {% endblock %}

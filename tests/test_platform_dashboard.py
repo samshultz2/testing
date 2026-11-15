@@ -193,7 +193,7 @@ def test_tenant_profile_loads(mt):
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert 'Alpha' in body
-    for sec in ('General information', 'Live usage', 'Subscription', 'Quick actions',
+    for sec in ('General information', 'Live usage', 'Subscription', 'Record payment',
                 'Internal notes'):
         assert sec in body
 
@@ -802,3 +802,67 @@ def test_restricted_admin_is_capability_gated(mt):
     assert c.get('/platform/analytics', headers=H).status_code == 403       # not granted
     with app.test_request_context():
         platform_roles.save_team({})   # reset for other tests
+
+
+# --- console fixes that came with the redesign ------------------------------
+def _tok(c, H):
+    return re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                     c.get('/platform/schools', headers=H).get_data(as_text=True)).group(1)
+
+
+def test_health_live_feed_works(mt):
+    """The monitoring page refreshes from /platform/health.json — which used to
+    crash (jsonify wasn't imported), and its script had no CSP nonce."""
+    app, _ = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/health.json', headers=H)
+    assert r.status_code == 200 and isinstance(r.get_json(), dict)
+    body = c.get('/platform/health', headers=H).get_data(as_text=True)
+    assert '<script>' not in body                       # every script carries the nonce
+
+
+def test_bulk_delete_follows_two_person_rule(mt, monkeypatch):
+    app, tenancy = mt
+    import routes.platform as pf
+    monkeypatch.setattr(pf, '_platform_admin_count', lambda: 2)
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = _tok(c, H)
+    data = {'_csrf_token': tok, 'action': 'delete', 'confirm_delete': 'yes', 'subdomains': ['beta']}
+    c.post('/platform/bulk', headers=H, data=data)
+    assert tenancy.get_tenant('beta') is not None                       # only requested
+    assert 'beta' in (tenancy.get_content('pending_deletes') or {})
+    tenancy.save_content('pending_deletes', {'beta': {'actor': 'someone_else', 'at': 'x'}})
+    c.post('/platform/bulk', headers=H, data=data)
+    assert tenancy.get_tenant('beta') is None                           # second admin approved
+
+
+def test_blank_plan_limit_keeps_its_value(mt):
+    """A cleared limit box used to save 0 — locking every school on that plan out."""
+    app, _ = mt
+    from utils import entitlements as ent
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    before = ent.get_tiers()
+    form = {'_csrf_token': _tok(c, H)}
+    for tid in ent.TIER_IDS:
+        for fk, _ in ent.FEATURES:
+            if before[tid]['features'].get(fk):
+                form[f'{tid}__f__{fk}'] = 'on'
+        for lk, _l, _u in ent.LIMITS:
+            form[f'{tid}__l__{lk}'] = '' if (tid == 'basic' and lk == 'students') else str(before[tid]['limits'].get(lk, 0))
+    c.post('/platform/features', headers=H, data=form)
+    after = ent.get_tiers()
+    assert after['basic']['limits']['students'] == before['basic']['limits']['students']
+
+
+def test_empty_ticket_reply_is_explained(mt):
+    app, tenancy = mt
+    tid = tenancy.create_ticket('alpha', 'Printer jam', 'It jams.', created_by='head')
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = _tok(c, H)
+    r = c.post(f'/platform/tickets/{tid}', headers=H, data={'_csrf_token': tok, 'action': 'reply', 'body': '  '},
+               follow_redirects=True)
+    assert 'Write a reply before sending' in r.get_data(as_text=True)

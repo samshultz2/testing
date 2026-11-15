@@ -16,6 +16,7 @@
 </style>
 {% endblock %}
 
+{% block back %}{{ url_for('platform.tickets') }}{% endblock %}
 {% block content %}
 <a class="backlink" href="{{ url_for('platform.tickets') }}" style="display:inline-flex;gap:7px;align-items:center;color:var(--accent-ink);font-size:13.5px;margin-bottom:12px"><i class="fas fa-arrow-left"></i> All tickets</a>
 <div class="panel" style="padding:18px 20px">

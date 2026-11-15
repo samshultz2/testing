@@ -120,7 +120,10 @@ def register():
         blocked = _registration_blocked(ip)
         if blocked:
             flash(blocked, 'error')
-            return _render_register(), 429
+            # keep what they typed — a rate-limit message shouldn't wipe the form
+            return _render_register(name=(request.form.get('name') or '').strip(),
+                                    subdomain=(request.form.get('subdomain') or '').strip().lower(),
+                                    admin_email=(request.form.get('admin_email') or '').strip()), 429
 
         cfg = current_app.config
         name = (request.form.get('name') or '').strip()

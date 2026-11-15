@@ -35,7 +35,7 @@
                       background:var(--accent-soft)}
   table.grid tbody tr:last-child th,table.grid tbody tr:last-child td{border-bottom:0}
   table.grid tbody tr.off{opacity:.6}
-  table.grid tbody th{min-width:150px}
+  table.grid tbody th{min-width:150px;position:sticky;left:0;z-index:1;background:var(--surface)}
   table.grid .tnm{font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:6px}
   table.grid td .sav{font-size:11px;font-weight:700;color:var(--ok);margin-top:5px;min-height:14px}
   table.grid td{min-width:130px}
@@ -54,7 +54,7 @@
   savings are shown versus paying Monthly for the same length.</span>
 </div>
 
-<form method="post" action="{{ url_for('platform.pricing') }}">
+<form method="post" action="{{ url_for('platform.pricing') }}" class="js-dirty">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
   <h3 class="sec">Billing cycles</h3>
@@ -103,10 +103,9 @@
     </table>
   </div>
 
-  <div class="save">
-    <button type="submit" class="btn primary"><i class="fas fa-floppy-disk"></i> Save pricing</button>
-    <a class="btn" href="{{ url_for('platform.subscriptions') }}">Cancel</a>
-    {% if updated_at %}<span class="meta">Last changed by {{ updated_by }}</span>{% endif %}
+  <div class="savebar" style="max-width:1000px">
+    <span class="st">{% if updated_at %}Last changed by {{ updated_by }}{% else %}All changes saved{% endif %}</span>
+    <button type="submit" class="btn primary"><i class="fas fa-check"></i> Save pricing</button>
   </div>
 </form>
 {% endblock %}

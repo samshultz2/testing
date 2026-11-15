@@ -16,7 +16,7 @@
 
 {% block content %}
 {% if admins %}
-<form method="post">
+<form method="post" class="js-dirty">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <div class="panel">
     {% for u in admins %}
@@ -44,7 +44,7 @@
     </div>
     {% endfor %}
   </div>
-  <div style="margin-top:14px"><button class="btn primary"><i class="fas fa-floppy-disk"></i> Save roles</button></div>
+  <div class="savebar"><span class="st">All changes saved</span><button class="btn primary"><i class="fas fa-check"></i> Save roles</button></div>
 </form>
 {% else %}
   <div class="panel"><div class="empty"><i class="fas fa-user-shield"></i> No non-super admin accounts on the owner school yet. Add staff admins there to assign platform roles.</div></div>

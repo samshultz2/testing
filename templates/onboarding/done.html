@@ -1,33 +1,37 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+{% include 'onboarding/_status_head.html' %}
   <title>{{ 'School ready' if not error else 'Link problem' }} — EduSyncra</title>
-  <link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <link rel="stylesheet" href="{{ bundle_url('css/marketing.css') }}">
 </head>
-<body>
-  <div class="auth">
-    <div class="status-card">
-      {% if error %}
-        <div class="icon err"><i class="fas fa-triangle-exclamation"></i></div>
-        <h1>This link can’t be used</h1>
-        <p>{{ error }}</p>
-        <a class="btn btn-primary btn-lg" href="{{ url_for('onboarding.register') }}" style="margin-top:24px">Register again</a>
-      {% else %}
-        <div class="icon ok"><i class="fas fa-circle-check"></i></div>
-        <h1>{{ tenant.name }} is ready</h1>
-        <p>Your school portal is live{% if trial_days %} with a {{ trial_days }}-day free trial{% endif %}. Sign in with the details below — you’ll set a new password on first login.</p>
-        <div class="creds">
-          <div class="r"><span class="k">Username</span><span class="v">{{ username }}</span></div>
-          {% if password %}<div class="r"><span class="k">Temporary password</span><span class="v">{{ password }}</span></div>
-          {% else %}<div class="r"><span class="k">Password</span><span class="v">sent to your email</span></div>{% endif %}
-        </div>
-        {% if login_url %}<a class="btn btn-primary btn-block btn-lg" href="{{ login_url }}">Go to {{ tenant.subdomain }} <i class="fas fa-arrow-right"></i></a>{% endif %}
-      {% endif %}
-    </div>
+<body class="ob">
+<header class="head scrolled"><div class="wrap head-in"><a class="brand" href="{{ url_for('marketing.home') }}"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> EduSyncra</a></div></header>
+<main class="ob-status">
+  <div class="ob-card">
+    {% if error %}
+      <div class="ob-ic err"><i class="fas fa-link-slash"></i></div>
+      <h1>This link can’t be used</h1>
+      <p>{{ error }}</p>
+      <a class="btn btn-primary btn-lg btn-block" href="{{ url_for('onboarding.register') }}" style="margin-top:24px">Register again</a>
+    {% else %}
+      <div class="ob-ic ok"><i class="fas fa-circle-check"></i></div>
+      <h1>{{ tenant.name }} is ready</h1>
+      <p>Your school portal is live{% if trial_days %} with a {{ trial_days }}-day free trial{% endif %}. Sign in with the details below — you’ll choose a new password the first time.</p>
+      <div class="creds">
+        {% if login_url %}<div class="r"><span class="k">Web address</span><span class="v">{{ login_url|replace('https://', '')|trim('/') }}</span></div>{% endif %}
+        <div class="r"><span class="k">Username</span><span class="v" id="cU">{{ username }}</span><button type="button" data-copy="cU" aria-label="Copy username"><i class="fas fa-copy"></i></button></div>
+        {% if password %}<div class="r"><span class="k">Temporary password</span><span class="v" id="cP">{{ password }}</span><button type="button" data-copy="cP" aria-label="Copy password"><i class="fas fa-copy"></i></button></div>
+        {% else %}<div class="r"><span class="k">Password</span><span class="v" style="font-family:inherit;font-weight:600">Sent to your email</span></div>{% endif %}
+      </div>
+      {% if login_url %}<a class="btn btn-primary btn-lg btn-block" href="{{ login_url }}">Open {{ tenant.subdomain }} <i class="fas fa-arrow-right"></i></a>{% endif %}
+    {% endif %}
   </div>
+</main>
+<script nonce="{{ csp_nonce }}">
+  document.querySelectorAll('[data-copy]').forEach(function(b){ b.addEventListener('click', function(){
+    var t = document.getElementById(b.dataset.copy).textContent.trim();
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ b.innerHTML = '<i class="fas fa-check"></i>'; setTimeout(function(){ b.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500); });
+  }); });
+</script>
 </body>
 </html>

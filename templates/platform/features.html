@@ -17,14 +17,17 @@
     background:transparent;color:var(--ink);font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
   .chk{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}
   .tier-h .lab{font-size:14px;color:var(--ink);font-weight:800;letter-spacing:-.01em;text-transform:none}
-  .save{display:flex;gap:12px;align-items:center;margin-top:18px}
+  table.mx tbody th,table.mx thead th:first-child{position:sticky;left:0;z-index:1;background:var(--surface)}
+  table.mx thead th:first-child{background:var(--surface-2)}
+  table.mx td{min-width:96px}
+  @media (max-width:760px){table.mx tbody th{white-space:normal;min-width:150px;font-size:13px}}
   .hint{font-size:12.5px;color:var(--faint);margin:2px 2px 14px}
 </style>
 {% endblock %}
 
 {% block content %}
 <p class="hint"><i class="fas fa-circle-info"></i> Numeric limits: use <code>-1</code> for unlimited. These entitlements resolve per-tenant (a school's tier plus any per-tenant overrides on its profile).</p>
-<form method="post" action="{{ url_for('platform.features') }}">
+<form method="post" action="{{ url_for('platform.features') }}" class="js-dirty">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <div class="panel matrix">
     <table class="mx">
@@ -56,9 +59,10 @@
       </tbody>
     </table>
   </div>
-  <div class="save">
-    <button class="btn primary"><i class="fas fa-floppy-disk"></i> Save plan matrix</button>
-    <span class="muted" style="font-size:12.5px">Assign a plan to each school from its profile.</span>
+  <div class="savebar">
+    <span class="st">All changes saved</span>
+    <button class="btn primary"><i class="fas fa-check"></i> Save plan matrix</button>
   </div>
+  <p class="muted" style="font-size:12.5px;margin-top:12px">Assign a plan to each school from its profile. A blank limit keeps its current value.</p>
 </form>
 {% endblock %}
