@@ -1637,11 +1637,28 @@ def blank_score_sheet():
         subject = Subject.query.filter(db.func.lower(Subject.name) == subject_name.lower()).first()
     if subject is not None and not subject_name:
         subject_name = subject.name
-    data = blank_sheet_pdf(term_id, assignment_id, subject_name=subject_name, subject=subject)
+    # ?filled=1 prints the saved scores too — only for someone allowed to see
+    # this subject's scores in this class (the same rule as score entry).
+    filled_cs = None
+    if request.args.get('filled') and cs_id:
+        from utils.access_control import can_enter_results
+        cs = db.session.get(ClassSubject, cs_id)
+        if not cs or cs.term_id != term_id:
+            flash('Choose a subject for this class first.', 'error')
+            return redirect(url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+        if not can_enter_results(assignment_id, cs.subject_id):
+            flash('You can only print scores for subjects you teach in this class.', 'error')
+            return redirect(url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+        filled_cs = cs
+    data = blank_sheet_pdf(term_id, assignment_id, subject_name=subject_name, subject=subject,
+                           class_subject=filled_cs)
     if not data:
         flash('Could not build the score sheet.', 'error')
         return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))
-    return pdf_response(data, blank_sheet_filename(selected_assignment, selected_term), inline=True)
+    fname = blank_sheet_filename(selected_assignment, selected_term)
+    if filled_cs is not None:
+        fname = fname.replace('score_sheet_', 'scores_' + (subject_name or 'subject').replace(' ', '_') + '_', 1)
+    return pdf_response(data, fname, inline=True)
 
 
 @subjects_bp.route('/report-cards/print-all')

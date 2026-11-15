@@ -176,7 +176,12 @@ def scores_entry():
                  'blank_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or '',
                                          subject=selected_class_subject.subject.name if selected_class_subject else '',
                                          class_subject_id=selected_class_subject.id if selected_class_subject else None)
-                                 if term_id and assignment_id else '')},
+                                 if term_id and assignment_id else ''),
+                 # the same sheet with every saved score, exam total and total filled in
+                 'filled_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id, assignment_id=assignment_id,
+                                          subject=selected_class_subject.subject.name,
+                                          class_subject_id=selected_class_subject.id, filled=1)
+                                  if term_id and assignment_id and selected_class_subject else '')},
     })
 
 

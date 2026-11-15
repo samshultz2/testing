@@ -59,10 +59,13 @@ def score_columns(subject=None, term_id=None):
         types = [at for at in types if (maxes.get(at.id) or 0) > 0]
     else:
         maxes = {}
-    seen, uniq = set(), []
+    seen, uniq, ids_by_key = set(), [], {}
     for at in types:
         key = (at.short_name or at.name or '').upper()
-        if key and key not in seen:
+        if not key:
+            continue
+        ids_by_key.setdefault(key, []).append(at.id)
+        if key not in seen:
             seen.add(key)
             uniq.append(at)
 
@@ -92,7 +95,8 @@ def score_columns(subject=None, term_id=None):
         else:
             kind = 'other'
         buckets[kind].append({'label': label_for(at, kind), 'max': maxes.get(at.id, at.max_score),
-                              'kind': kind})
+                              'kind': kind,
+                              'ids': ids_by_key.get((at.short_name or at.name or '').upper(), [at.id])})
     ordered = (buckets['ca'] + buckets['ha'] + buckets['peme'] + buckets['other']
                + buckets['cbt'] + buckets['theory'])
     return ordered
@@ -387,7 +391,10 @@ def broadsheet_png(term_id, assignment_id, dpi=200, min_score=None, filter_field
 # Blank score-entry sheet (A4, one subject) — reportlab
 # --------------------------------------------------------------------------- #
 
-def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None):
+def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class_subject=None):
+    """The score sheet for a class. With ``class_subject`` it is printed
+    *filled*: every student's saved score in each column, their Exam Total
+    (CBT + PBT/Theory) and General Total, with each column's maximum shown."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -405,6 +412,24 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None):
                 .join(Student).options(contains_eager(StudentEnrollment.student))
                 .order_by(Student.surname, Student.first_name).all())]
     cols = score_columns(subject=subject, term_id=term_id)
+    filled = class_subject is not None
+    marks = {}
+    if filled:
+        from models import StudentScore
+        for sc in StudentScore.query.filter(
+                StudentScore.class_subject_id == class_subject.id,
+                StudentScore.student_id.in_([st.id for st in students] or [0])).all():
+            if sc.score is not None:
+                marks[(sc.student_id, sc.assessment_type_id)] = sc.score
+
+    def fmt(v):
+        if v is None:
+            return ''
+        return str(int(v)) if float(v).is_integer() else f'{v:.1f}'
+
+    def cell(st, c):
+        vals = [marks[(st.id, i)] for i in c.get('ids', []) if (st.id, i) in marks]
+        return sum(vals) if vals else None
     # Plain black-and-white — no fills or shading (clean to photocopy).
     styles = getSampleStyleSheet()
     h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=colors.black, spaceAfter=1)
@@ -416,21 +441,33 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None):
     # Header row: S/N, Surname, Middle, First, <score cols…>, Exam Total, General Total.
     # No per-column max is printed — the max differs by subject, so the sheet stays generic.
     def col_head(label, mx=None):
+        # A filled sheet is for one subject, so each column's maximum is known.
+        if filled and mx:
+            return Paragraph(f'{label}<br/><font size="6">({fmt(mx)})</font>', hd)
         return Paragraph(label, hd)
     header = [Paragraph('S/N', hd), Paragraph('Surname', hd),
               Paragraph('Middle Name', hd), Paragraph('First Name', hd)]
     for c in cols:
         header.append(col_head(c['label'], c['max']))
-    header += [col_head('Exam Total'), col_head('General Total')]
+    exam_max = sum(c['max'] or 0 for c in cols if c['kind'] in ('cbt', 'theory'))
+    all_max = sum(c['max'] or 0 for c in cols)
+    header += [col_head('Exam Total', exam_max), col_head('General Total', all_max)]
     data = [header]
     for i, st in enumerate(students, 1):
         row = [str(i), Paragraph(pdf_escape(st.surname or ''), nm),
                Paragraph(pdf_escape(st.middle_name or ''), nm),
                Paragraph(pdf_escape(st.first_name or ''), nm)]
-        row += [''] * (len(cols) + 2)          # blank score cells
+        if filled:
+            vals = [cell(st, c) for c in cols]
+            exam = [v for v, c in zip(vals, cols) if c['kind'] in ('cbt', 'theory') and v is not None]
+            got = [v for v in vals if v is not None]
+            row += [fmt(v) for v in vals]
+            row += [fmt(sum(exam)) if exam else '', fmt(sum(got)) if got else '']
+        else:
+            row += [''] * (len(cols) + 2)          # blank score cells
         data.append(row)
-    # A couple of spare blank rows for late entrants.
-    for _ in range(2):
+    # A couple of spare blank rows for late entrants (blank sheets only).
+    for _ in range(0 if filled else 2):
         data.append([''] * (4 + len(cols) + 2))
 
     buf = io.BytesIO()
@@ -478,14 +515,20 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None):
     heights = [header_h] + [row_h] * body_rows
 
     t = Table(data, colWidths=widths, rowHeights=heights, repeatRows=1)
-    t.setStyle(TableStyle([
+    style = [
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('ALIGN', (4, 0), (-1, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
         ('FONTSIZE', (0, 1), (0, -1), 8),
         ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.black),
-    ]))
+    ]
+    if filled:
+        last = 4 + len(cols)
+        style += [('FONTSIZE', (4, 1), (-1, -1), 9),
+                  ('FONTNAME', (last, 1), (-1, -1), 'Helvetica-Bold'),   # the two totals
+                  ('LINEBEFORE', (last, 0), (last, -1), 1.0, colors.black)]
+    t.setStyle(TableStyle(style))
 
     subj = subject_name or '__________________________'
     metaline = (f"<b>Class:</b> {pdf_escape(asg.display_name)} &nbsp;&nbsp; "
@@ -494,6 +537,16 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None):
                 f"<b>Subject:</b> {pdf_escape(subj)}")
     elems = [Paragraph('Continuous Assessment / Examination Score Sheet', h),
              Paragraph(metaline, meta), Spacer(1, 5), t]
+    if filled:
+        from utils import timeutil
+        entered = sum(1 for st in students if any(cell(st, c) is not None for c in cols))
+        foot = ParagraphStyle('f', parent=styles['Normal'], fontSize=8.5, leading=12, textColor=colors.black)
+        elems += [Spacer(1, 10),
+                  Paragraph(f"{entered} of {len(students)} students have scores. "
+                            f"Printed {timeutil.today().strftime('%d %b %Y')}.", foot),
+                  Spacer(1, 14),
+                  Paragraph('Subject teacher: ______________________________ &nbsp;&nbsp; '
+                            'Signature: ______________ &nbsp;&nbsp; Date: ______________', foot)]
     doc.build(elems)
     return buf.getvalue()
 

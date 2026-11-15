@@ -612,6 +612,7 @@ export function Scores({ d, notify }) {
     tools && u.subject_sheet_import && { icon: 'fa-file-import', label: 'Import subject sheet', href: u.subject_sheet_import, native: true },
     tools && u.broadsheet_import && { icon: 'fa-table', label: 'Import broadsheet', href: u.broadsheet_import, native: true },
     tools && u.scan && { icon: 'fa-camera', label: 'Scan a photo of a score sheet', href: u.scan, native: true },
+    u.filled_sheet && { icon: 'fa-print', label: `Print ${d.selected_subject || 'subject'} scores`, href: u.filled_sheet, native: true, target: '_blank' },
     canWrite(d, 'scores_tools') && u.blank_sheet && { icon: 'fa-file-lines', label: 'Print blank score sheet', href: u.blank_sheet, native: true, target: '_blank' },
   ];
   const selectors = d.assignment_id ? (
@@ -630,7 +631,11 @@ export function Scores({ d, notify }) {
 
   return (
     <div className={'rs' + (phone ? ' has-bar' : '')}>
-      <Head icon="fa-pen-to-square" title="Score entry" sub={subLine(d) || 'Enter CA and exam scores'}><Menu items={menu} label="Tools" /></Head>
+      <Head icon="fa-pen-to-square" title="Score entry" sub={subLine(d) || 'Enter CA and exam scores'}>
+        {u.filled_sheet && <a className="rs-btn" href={u.filled_sheet} target="_blank" rel="noopener" data-native=""
+                              title={`Print the ${d.selected_subject || 'subject'} score sheet with every saved score`}>
+          <i className="fas fa-print" aria-hidden="true" /><span className="rs-hide-sm">Print scores</span></a>}
+        <Menu items={menu} label="Tools" /></Head>
       <Picker d={d} go={(p) => set({ class_subject_id: '', assessment_type_id: '', ...p })} termBlank extra={selectors} />
       <Flow d={d} current="scores" />
       {d.assignment_id && (
