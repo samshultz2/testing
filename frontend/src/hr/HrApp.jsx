@@ -1489,6 +1489,28 @@ const DATE_PRESETS = {
 function ymd(d) { const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
+// Phone cards for a report row: the person's name as the title, ID and job
+// title under it, status as a pill on the right, then the rest as labelled
+// details (empty ones are skipped).
+function phoneCols(columns, show, firstText, lastNum) {
+  const by = Object.fromEntries(columns.map((c) => [c.key, c]));
+  const main = by.name || firstText;
+  const subKeys = ['staff_id', 'designation'].filter((k) => by[k] && by[k] !== main);
+  const value = by.status || (lastNum !== main ? lastNum : null);
+  const used = new Set([main && main.key, value && value.key, ...subKeys]);
+  const out = [{ key: main.key, label: main.label, main: true, render: (r) => show(main, r) }];
+  if (subKeys.length) {
+    out.push({ key: '_sub', sub: true, render: (r) => subKeys.map((k) => r[k]).filter((v) => v !== '' && v != null).join(' · ') || null });
+  }
+  if (value) {
+    out.push({ key: value.key, label: value.label, value: true,
+      render: (r) => (value.key === 'status' ? <Pill tone={STATUS_TONE[r.status] || ''}>{r.status || '—'}</Pill>
+        : <span className="hrr-v"><b>{show(value, r)}</b><small>{value.label}</small></span>) });
+  }
+  columns.filter((c) => !used.has(c.key)).forEach((c) => out.push({ key: c.key, label: c.label, render: (r) => show(c, r) }));
+  return out;
+}
+
 function Reports({ d }) {
   const nav = useNav();
   const phone = usePhone();
@@ -1518,8 +1540,8 @@ function Reports({ d }) {
   }, [q, rep]);
   const firstText = rep.columns.find((c) => c.align !== 'right') || rep.columns[0];
   const lastNum = [...rep.columns].reverse().find((c) => c.align === 'right');
-  const cols = rep.columns.map((c, i) => ({ key: c.key, label: c.label, main: c === firstText, value: phone && c === lastNum && rep.columns.length > 2,
-    align: c.align, render: (r) => show(c, r) }));
+  const cols = phone ? phoneCols(rep.columns, show, firstText, lastNum)
+    : rep.columns.map((c) => ({ key: c.key, label: c.label, main: c === firstText, align: c.align, render: (r) => show(c, r) }));
 
   const list = (
     <nav className="hrr-list" aria-label="Reports">

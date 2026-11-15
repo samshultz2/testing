@@ -2130,3 +2130,13 @@ span.sj-teacher{cursor:default}
   .sidebar,.top-header,.sl-nav,.hrr-side,.hrr-flt,.hrr-presets,.hrr-pick,.hrr-search,.rs-head-a,.mobile-bottom-nav,.bottom-nav{display:none!important}
   .hrr{display:block}.hrr-table{border:0}
 }
+
+/* HR report cards on phones: name first, details as a labelled grid */
+.hrr-table .sl-crd{padding:.9rem 1rem;gap:.55rem}
+.hrr-table .sl-crd-t b{font-size:1rem}
+.hrr-table .sl-crd-t small{font-size:.8rem;margin-top:.1rem}
+.hrr-table .sl-crd-m{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem .9rem;font-size:.86rem;color:var(--text-primary)}
+.hrr-table .sl-crd-m span{display:flex;flex-direction:column;min-width:0;line-height:1.3;overflow-wrap:anywhere}
+.hrr-table .sl-crd-m em{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.hrr-v{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+.hrr-v b{font-size:1.1rem}.hrr-v small{font-family:var(--font-sans,inherit);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)}
