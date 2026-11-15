@@ -217,6 +217,31 @@
 .tt-sheet[data-theme="notebook"] #pBody>table:not(.grid-tt) td:nth-child(3){font-weight:700}
 .tt-sheet[data-theme="notebook"] table.grid-tt.blankgrid th.col-sep,.tt-sheet[data-theme="notebook"] table.grid-tt.blankgrid td.col-sep,.tt-sheet[data-theme="notebook"] table.grid-tt.cols th.day-col,.tt-sheet[data-theme="notebook"] table.grid-tt.cols td.day-col{border-left:1px solid #c9d7ee}
 .tt-sheet.exporting[data-theme="notebook"]{border:none;padding-left:4.2em;padding-right:3em}
+/* Lessons shared by every class for 2+ periods (e.g. Skill Acquisition) — one band across the streams */
+.tt-sheet[data-theme="tickets"] .tk-band{display:grid;grid-template-columns:auto .45em minmax(0,1fr);column-gap:.35em;align-items:center;margin:.25em .25em;padding:.3em .5em;border-radius:.45em;
+  background:#f7f9fc;border:1px solid #e3e8ef;border-left:.3em solid var(--c)}
+.tt-sheet[data-theme="tickets"] .tk-band time{font:700 .46em 'Space Grotesk',sans-serif;color:#6b7a90;grid-row:span 2;white-space:nowrap}
+.tt-sheet[data-theme="tickets"] .tk-band i{width:.45em;height:.45em;border-radius:50%;background:var(--c);grid-row:span 2}
+.tt-sheet[data-theme="tickets"] .tk-band b{font-size:.62em;font-weight:800;letter-spacing:.02em}
+.tt-sheet[data-theme="tickets"] .tk-band b em{font-style:normal;font-size:.75em;color:var(--c);margin-left:.3em}
+.tt-sheet[data-theme="tickets"] .tk-band small{grid-column:3;font-size:.46em;color:#6b7a90}
+.tt-sheet[data-theme="tickets"] .tk-sbrk{font-size:.44em;font-style:italic;color:#b0b9c6;text-align:center;border-top:1px dashed #d6dce5;margin:.15em .3em 0;padding-top:.05em}
+.tt-sheet[data-theme="tickets"] .tk-lanes+.tk-lanes{margin-top:.15em}
+.tt-sheet[data-theme="tickets"] .tk-main>.tk-band:last-child{flex:1 1 auto;align-content:center}
+.tt-sheet[data-theme="tickets"] .tk-main>.tk-lanes:not(:last-child){flex:0 0 auto}
+.tt-sheet[data-theme="gazette"] tr.gz-span td{text-align:left;border-bottom:1px dotted #aaa}
+.tt-sheet[data-theme="gazette"] tr.gz-span td:not(.gz-t){background:repeating-linear-gradient(135deg,rgba(179,38,30,.05) 0 .4em,transparent .4em .8em)}
+.tt-sheet[data-theme="gazette"] tr.gz-span td i{font-size:.8em;color:#b3261e}
+.tt-sheet[data-theme="gazette"] tr.gz-span td small{display:block;font-size:.82em;font-style:italic;color:#555}
+.tt-sheet[data-theme="gazette"] table.gz-tt td b{overflow-wrap:normal}
+.tt-sheet[data-theme="gazette"] table.gz-tt.big.g3{font-size:.92em}
+.tt-sheet[data-theme="gazette"] table.gz-tt.big.g4{font-size:.78em}
+.tt-sheet[data-theme="gazette"] table.gz-tt.g4{font-size:.6em}
+.tt-sheet[data-theme="swiss"] .sw-wk tr.sw-span td:not(.sw-t){background:#fff3ee;border-left:3px solid #ff3d00;padding-left:.45em}
+.tt-sheet[data-theme="swiss"] .sw-wk td b{overflow-wrap:break-word}
+.tt-sheet[data-theme="notebook"] .nb-span .nb-c{background:repeating-linear-gradient(135deg,rgba(194,37,92,.06) 0 .35em,transparent .35em .7em);border-radius:.3em;padding:.05em .3em}
+.tt-sheet[data-theme="notebook"] .nb-c b{overflow-wrap:break-word}
+
 @container (max-width:760px){ .tt-sheet[data-theme="notebook"] .nb-grid{grid-template-columns:minmax(0,1fr)} .tt-sheet[data-theme="notebook"] .nb-tabs{display:none} }
 
 /* swiss — international-typographic poster (renderSwissSheet) */

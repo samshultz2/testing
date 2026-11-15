@@ -958,6 +958,33 @@ function tlUsesTimeline(){
     return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+// Shared by the poster themes. A run of 2+ periods that is the same lesson for
+// EVERY class/stream that day (e.g. "Skill Acquisition" 10:00–1:00 for SS1–SS3)
+// is drawn once, as one band across all the streams, instead of being repeated
+// in each narrow column where a long name would overflow.
+function tlRuns(d, gs, periods){
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var cell=function(g,i){ return sig(d.cells[g+'§'+periods[i].k]||[]); };
+    var res=[];
+    for(var i=0;i<periods.length;){
+        var s0=cell(gs[0],i);
+        var all=!!s0 && gs.every(function(g){ return cell(g,i)===s0; });
+        if(!all){ i++; continue; }
+        var j=i+1;
+        while(j<periods.length && gs.every(function(g){ return cell(g,j)===s0; })) j++;
+        if(j-i>=2) res[i]=j;
+        i=j;
+    }
+    return res;
+}
+function tlRunInfo(d, gs, periods, i, j){
+    var r=(d.cells[gs[0]+'§'+periods[i].k]||[])[0]||{};
+    var end=periods[j-1].end||'';
+    return {r:r, n:j-i, from:fmtT(periods[i].start), to:end?clock12(end,true):'', who:gs.length>1?('All '+(isSaturdayLayout()?'streams':'classes')):''};
+}
+// Subject text that may break after "/" (BIO/CRS, CHEM/GOVT) instead of overflowing.
+function tlSubj(t){ return esc(t||'—').replace(/\//g,'/<wbr>'); }
+
 function tlModel(){
     var pmap={}, periods=[];
     rows.forEach(function(r){ if(r.time && !isAll(r.group)){ var k=periodKey(r);
@@ -1101,7 +1128,7 @@ function renderTicketsSheet(){
     var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
     var line=function(time, r, n){
         var sj=(r.subject||'').trim(), c=colour[sj]||'#8d99ae';
-        return '<li style="--c:'+c+'"><time>'+esc(time)+'</time><i></i><b>'+esc(sj||'—')
+        return '<li style="--c:'+c+'"><time>'+esc(time)+'</time><i></i><b>'+tlSubj(sj)
              + (n>1?'<em>×'+n+'</em>':'')+'</b>'+((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':'')+'</li>';
     };
     var n=0, html='', offPending=[], offAll=[];
@@ -1117,13 +1144,22 @@ function renderTicketsSheet(){
         var isNext = key===md.next;
         var stubTop = wkNo ? '<small>WEEK</small><span class="tk-wn">'+('0'+wkNo[1]).slice(-2)+'</span>'
                            : (p ? '<small>'+esc(d.day.toUpperCase())+'</small>' : '');
-        var lanes='';
-        (md.anyGroup ? d.groups : ['']).forEach(function(g){
+        var gsT = md.anyGroup ? d.groups : [''];
+        var runs = gsT.length ? tlRuns(d, gsT, periods) : [];
+        var segs=[], a0=0;
+        for(var si=0; si<periods.length;){
+            if(runs[si]){ if(si>a0) segs.push([a0,si]); segs.push(['run',si,runs[si]]); si=runs[si]; a0=si; }
+            else si++;
+        }
+        if(a0<periods.length) segs.push([a0,periods.length]);
+        var lanesFor=function(from, to, withHead){
+          var lanes='';
+          gsT.forEach(function(g){
             var items='';
-            for(var i=0;i<periods.length;){
+            for(var i=from;i<to;){
                 var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr), j=i+1;
-                while(sg && j<periods.length && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
-                if(i>0 && periods[i].brk===undefined && periods[i-1].end && periods[i-1].end<periods[i].start){
+                while(sg && j<to && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
+                if(i>from && periods[i].brk===undefined && periods[i-1].end && periods[i-1].end<periods[i].start){
                     var mins=(function(a,b){ var x=a.split(':'),y=b.split(':'); return (+y[0]*60+ +y[1])-(+x[0]*60+ +x[1]); })(periods[i-1].end, periods[i].start);
                     items+='<li class="tk-brk"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>Break · '+mins+' min</span></li>';
                 }
@@ -1134,7 +1170,23 @@ function renderTicketsSheet(){
                     items+='<li class="tk-brk"><time>'+esc(fmtT(periods[q-1].end))+'</time><span>Break</span></li>'; } }
                 i=j;
             }
-            lanes+='<div class="tk-lane">'+(md.anyGroup?'<h4>'+esc(g||'—')+'</h4>':'')+'<ol>'+items+'</ol></div>';
+            lanes+='<div class="tk-lane">'+(md.anyGroup && withHead?'<h4>'+esc(g||'—')+'</h4>':'')+'<ol>'+items+'</ol></div>';
+          });
+          return lanes;
+        };
+        var lanes='';
+        segs.forEach(function(sg, k){
+            if(sg[0]==='run'){
+                var ri=tlRunInfo(d,gsT,periods,sg[1],sg[2]), r=ri.r, c=colour[(r.subject||'').trim()]||'#8d99ae';
+                if(sg[1]>0 && periods[sg[1]-1].end && periods[sg[1]-1].end<periods[sg[1]].start)
+                    lanes+='<div class="tk-sbrk">Break '+esc(fmtT(periods[sg[1]-1].end))+'</div>';
+                lanes+='<div class="tk-band" style="--c:'+c+'"><time>'+esc(ri.from)+(ri.to?'–'+esc(ri.to):'')+'</time><i></i><b>'+tlSubj(r.subject)+'<em>×'+ri.n+'</em></b>'
+                    + '<small>'+esc([ri.who,(r.teacher||'').trim()].filter(Boolean).join(' · '))+'</small></div>';
+            } else {
+                if(k>0 && periods[sg[0]-1] && periods[sg[0]-1].end && periods[sg[0]-1].end<periods[sg[0]].start)
+                    lanes+='<div class="tk-sbrk">Break '+esc(fmtT(periods[sg[0]-1].end))+'</div>';
+                lanes+='<div class="tk-lanes'+(k?' cont':'')+'">'+lanesFor(sg[0],sg[1],k===0)+'</div>';
+            }
         });
         var bans=d.banners.map(function(b){ return '<div class="tk-ban"><b>'+esc(b.subject||'')+'</b>'
             + ((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':'')+'</div>'; }).join('');
@@ -1144,7 +1196,7 @@ function renderTicketsSheet(){
             + '<div class="tk-dd"><b>'+big+'</b>'+(mon?'<span>'+mon+'</span>':'')+'</div>'
             + (p && wkNo ? '<small class="tk-day">'+esc(d.day.toUpperCase())+'</small>' : '')
             + (isNext?'<span class="tk-next">NEXT CLASS</span>':'')+'</div><div class="tk-perf"></div>'
-            + '<div class="tk-main">'+note+(lanes?'<div class="tk-lanes">'+lanes+'</div>':'')+bans+'</div></article>';
+            + '<div class="tk-main">'+note+lanes+bans+'</div></article>';
     });
     if(offPending.length && html){   // lesson-free Saturdays after the last class
         var i=html.lastIndexOf('<div class="tk-main">')+'<div class="tk-main">'.length;
@@ -1179,8 +1231,17 @@ function renderGazetteSheet(){
         var gs = md.anyGroup ? groups.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
         if(!gs.length) gs=[''];
         var head='<tr><th></th>'+gs.map(function(g){ return '<th>'+esc(g||'Lesson')+'</th>'; }).join('')+'</tr>';
-        var body='';
+        var body='', runs=tlRuns(d,gs,periods), skip={};
         periods.forEach(function(pd, i){
+            if(skip[i]) return;
+            if(runs[i]){
+                for(var q=i+1;q<runs[i];q++) skip[q]=1;
+                var ri=tlRunInfo(d,gs,periods,i,runs[i]);
+                body+='<tr class="gz-span"><td class="gz-t">'+esc(ri.from)+'</td><td colspan="'+gs.length+'"><b>'+tlSubj(ri.r.subject)+'</b>'
+                    + ' <i>('+ri.n+' periods'+(ri.to?', until '+esc(ri.to):'')+')</i>'
+                    + ((ri.r.teacher||'').trim()||ri.who?'<small>'+esc([ri.who,(ri.r.teacher||'').trim()].filter(Boolean).join(' · '))+'</small>':'')+'</td></tr>';
+                return;
+            }
             if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
                 body+='<tr class="gz-br"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'">— Break —</td></tr>';
             var cells='';
@@ -1190,7 +1251,7 @@ function renderGazetteSheet(){
                 if(sg && sg===prev){ cells+='<td class="gz-cont">″</td>'; return; }
                 var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
                 cells+='<td>'+(arr.length?arr.map(function(r){
-                    return '<b>'+esc(r.subject||'—')+'</b>'+(n>1?' <i>('+(n===2?'double':n+' periods')+')</i>':'')
+                    return '<b>'+tlSubj(r.subject)+'</b>'+(n>1?' <i>('+(n===2?'double':n+' periods')+')</i>':'')
                          + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join('<br>'):'<span class="gz-free">Free</span>')+'</td>';
             });
             body+='<tr><td class="gz-t">'+esc(fmtT(pd.start))+'</td>'+cells+'</tr>';
@@ -1199,7 +1260,7 @@ function renderGazetteSheet(){
             body+='<tr class="gz-ban"><td colspan="'+(gs.length+1)+'"><b>'+esc(b.subject||'')+'</b>'
                 + ((b.teacher||'').trim()?' <small>'+esc(b.teacher)+'</small>':'')+'</td></tr>';
         });
-        return '<table class="gz-tt'+(big?' big':'')+'"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
+        return '<table class="gz-tt'+(big?' big':'')+' g'+Math.min(gs.length,4)+'"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
     };
     var real=order.filter(function(k){ return !dmap[k].off; });
     var leadKey = md.next || real[0];
@@ -1274,8 +1335,16 @@ function renderSwissSheet(){
         var w=Math.floor(85/gs.length);
         var cols='<colgroup><col style="width:15%">'+gs.map(function(){ return '<col style="width:'+w+'%">'; }).join('')+'</colgroup>';
         var head='<tr><th></th>'+gs.map(function(g){ return '<th>'+esc(g||'Lesson')+'</th>'; }).join('')+'</tr>';
-        var body='';
+        var body='', runs=tlRuns(d,gs,periods), skip={};
         periods.forEach(function(pd,i){
+            if(skip[i]) return;
+            if(runs[i]){
+                for(var q=i+1;q<runs[i];q++) skip[q]=1;
+                var ri=tlRunInfo(d,gs,periods,i,runs[i]);
+                body+='<tr class="sw-span"><td class="sw-t">'+esc(ri.from)+'</td><td colspan="'+gs.length+'"><b>'+tlSubj(ri.r.subject)+'</b><sup>'+ri.n+'×</sup>'
+                    + '<small>'+esc([ri.to?'until '+ri.to:'', ri.who, (ri.r.teacher||'').trim()].filter(Boolean).join(' · '))+'</small></td></tr>';
+                return;
+            }
             if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
                 body+='<tr class="sw-brk"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'"><span>break</span></td></tr>';
             var cells='';
@@ -1284,7 +1353,7 @@ function renderSwissSheet(){
                 var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
                 if(sg && sg===prev){ cells+='<td class="sw-cont">↓</td>'; return; }
                 var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
-                cells+='<td>'+(arr.length?arr.map(function(r){ return '<b>'+esc(r.subject||'—')+'</b>'+(n>1?'<sup>'+n+'×</sup>':'')
+                cells+='<td>'+(arr.length?arr.map(function(r){ return '<b>'+tlSubj(r.subject)+'</b>'+(n>1?'<sup>'+n+'×</sup>':'')
                     + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join(''):'<span class="sw-free">—</span>')+'</td>';
             });
             body+='<tr><td class="sw-t">'+esc(fmtT(pd.start))+'</td>'+cells+'</tr>';
@@ -1348,8 +1417,17 @@ function renderNotebookSheet(){
         var gs = md.anyGroup ? md.groupsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
         if(!gs.length) gs=[''];
         var tmpl='grid-template-columns:3.3em repeat('+gs.length+',minmax(0,1fr))';
+        var runs=tlRuns(d,gs,periods), skip={};
         var out='<div class="nb-r nb-h" style="'+tmpl+'"><span></span>'+gs.map(function(g){ return '<span>'+esc(g||'Lesson')+'</span>'; }).join('')+'</div>';
         periods.forEach(function(pd,i){
+            if(skip[i]) return;
+            if(runs[i]){
+                for(var q=i+1;q<runs[i];q++) skip[q]=1;
+                var ri=tlRunInfo(d,gs,periods,i,runs[i]);
+                out+='<div class="nb-r nb-span" style="'+tmpl+'"><span class="nb-t">'+esc(ri.from)+'</span><div class="nb-c" style="grid-column:2 / -1"><b>'+tlSubj(ri.r.subject)+'</b><u>'+ri.n+' periods</u>'
+                    + '<small>'+esc([ri.to?'until '+ri.to:'', ri.who, (ri.r.teacher||'').trim()].filter(Boolean).join(' · '))+'</small></div></div>';
+                return;
+            }
             if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
                 out+='<div class="nb-r nb-brk" style="'+tmpl+'"><span>'+esc(fmtT(periods[i-1].end))+'</span><em style="grid-column:2 / -1">break</em></div>';
             var cells='';
@@ -1358,7 +1436,7 @@ function renderNotebookSheet(){
                 var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
                 if(sg && sg===prev){ cells+='<div class="nb-c nb-cont">〃</div>'; return; }
                 var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
-                cells+='<div class="nb-c">'+(arr.length?arr.map(function(r){ return '<b>'+esc(r.subject||'—')+'</b>'+(n>1?'<u>'+(n===2?'double':n+' periods')+'</u>':'')
+                cells+='<div class="nb-c">'+(arr.length?arr.map(function(r){ return '<b>'+tlSubj(r.subject)+'</b>'+(n>1?'<u>'+(n===2?'double':n+' periods')+'</u>':'')
                     + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join(''):'<span class="nb-free">—</span>')+'</div>';
             });
             out+='<div class="nb-r" style="'+tmpl+'"><span class="nb-t">'+esc(fmtT(pd.start))+'</span>'+cells+'</div>';
@@ -1535,6 +1613,18 @@ function sizeTimelineForExport(sheet){
     var canvasW = sheet.offsetWidth;
     var canvasH = _exportOrientation === 'portrait' ? canvasW * (297 / 210) : canvasW * (210 / 297);
     var extra = canvasH - sheet.offsetHeight;
+    // More content than one page holds (e.g. 12 days x 3 classes on portrait):
+    // shrink the whole timetable step by step until it fits, instead of the
+    // PDF squashing the image.
+    var tl = document.querySelector('#pBody .tl');
+    if(extra < 0 && tl){
+        var fs = parseFloat(getComputedStyle(tl).fontSize) || 16;
+        for(var k=0; k<12 && sheet.offsetHeight > canvasH; k++){
+            fs *= Math.max(0.8, Math.min(0.985, Math.sqrt(canvasH / sheet.offsetHeight)));
+            tl.style.fontSize = fs + 'px';
+        }
+        extra = canvasH - sheet.offsetHeight;
+    }
     if(extra > 0){
         // Side-by-side lists each get all of the spare height; stacked ones share it.
         var stacked = lists.length > 1 && lists[1].getBoundingClientRect().top > list.getBoundingClientRect().bottom - 1;
