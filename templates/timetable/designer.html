@@ -171,7 +171,9 @@
 .tt-sheet.exporting[data-theme="timeline"] .tl-g{white-space:normal;overflow:visible;line-height:1.1}
 .tt-sheet.exporting[data-theme="gazette"] .gz-box{display:none}
 .tt-sheet.exporting[data-theme="gazette"] table.gz-tt.big{font-size:.84em}
-.tt-sheet.exporting:not(.portrait)[data-theme="gazette"] table.gz-tt.big{font-size:.72em}
+.tt-sheet.exporting[data-theme="gazette"] table.gz-tt{table-layout:auto}
+.tt-sheet.exporting[data-theme="gazette"] table.gz-tt th:first-child{width:1%}
+.tt-sheet.exporting[data-theme="gazette"] table.gz-tt td.gz-t{white-space:nowrap;width:1%;padding-right:.7em}
 .tt-sheet.exporting[data-theme="gazette"] .gz-lead h2{font-size:1.15em}
 .tt-sheet.exporting[data-theme="swiss"] .tt-title{font-size:2.2em}
 .tt-sheet.exporting[data-theme="swiss"] .sw-key{display:none}

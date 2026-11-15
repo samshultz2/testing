@@ -1901,7 +1901,7 @@ function mainTextPxAll(root){   // whole sheet, for a page with no date list tex
 }
 function mainTextPx(root){
     // Measure the timetable itself, not keys, legends or footers.
-    var lists=root.querySelectorAll('.tl-list'), scopes=lists.length ? Array.prototype.slice.call(lists) : [root];
+    var lists=root.querySelectorAll('.tl-list, .gz-lead'), scopes=lists.length ? Array.prototype.slice.call(lists) : [root];
     var tally={}, best=0, bestN=0, n;
     scopes.forEach(function(sc){ var w=document.createTreeWalker(sc, NodeFilter.SHOW_TEXT);
     while((n=w.nextNode())){
