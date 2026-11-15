@@ -955,7 +955,7 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook() || isBoard()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook() || isBoard() || isQuiet()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 // Shared by the poster themes. A run of 2+ periods that is the same lesson for
@@ -1554,12 +1554,113 @@ function renderBoardSheet(){
         + '<div class="bd-ft"><span>'+esc(marks.join(' · '))+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
 }
 
+// ---------- "Quiet" theme ----------
+// A calm, typographic sheet: white paper, one accent colour, hairline rules.
+// One header row per column (Date · Time · SS1 · SS2 · SS3), then one block
+// per date with a row per period, so reading a row across shows what every
+// class/stream has at that moment. Lessons shared by all classes for 2+
+// periods become one panel; the coming date is tinted and tagged NEXT.
+// Exports split the dates into 2 (portrait) or 3 (landscape, 3+ classes)
+// columns; the export re-renders once the page orientation is known.
+function isQuiet(){ return el('theme').value==='quiet'; }
+function qtCols(nGroups){
+    var sh=el('sheet');
+    if(!sh.classList.contains('exporting')) return 2;
+    if(sh.classList.contains('portrait')) return 2;
+    return nGroups>=3 ? 3 : 2;
+}
+function renderQuietSheet(){
+    var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var real=order.filter(function(k){ return !dmap[k].off; });
+    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var gsAll = md.anyGroup ? md.groupsAll : [''];
+    var tight = gsAll.length>2;
+    var who = isSaturdayLayout()?'streams':'classes';
+    // Long full names are shortened when three or more classes share a row.
+    var label=function(t){
+        var raw=(t||'').trim();
+        if(!tight) return esc(raw).replace(/\s*\/\s*/g,'<i>/</i><wbr>');
+        var caps = raw===raw.toUpperCase();
+        return raw.split('/').map(function(p){ p=p.trim(); var sh=BD_SHORT[p.toUpperCase()];
+            if(sh && !caps) sh=sh.charAt(0)+sh.slice(1).toLowerCase();
+            return esc(sh||p); }).join('<i>/</i><wbr>');
+    };
+    var tmpl='grid-template-columns:2.25em 2.1em repeat('+gsAll.length+',minmax(0,1fr))';
+    var gap=function(i){ return i>0 && periods[i-1].end && periods[i-1].end<periods[i].start; };
+    var blocks=[];
+    order.forEach(function(k){
+        var d=dmap[k], p=parseDateAny(d.date);
+        var num = p ? ('0'+p.d).slice(-2) : esc((d.day||'').slice(0,3));
+        var sub = p ? (esc((d.day||dayFromDate(d.date)||'').slice(0,3))+' · '+TL_MON[p.m-1].charAt(0)+TL_MON[p.m-1].slice(1).toLowerCase()) : esc(d.label||'');
+        if(d.off){
+            blocks.push({w:.3, h:'<div class="qt-bl off" style="'+tmpl+'"><div class="qt-dt"><b>'+num+'</b><span>'+sub+'</span></div><div class="qt-nc">No class</div></div>'});
+            return;
+        }
+        var i0=real.indexOf(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
+        var gs = md.anyGroup ? gsAll : [''];
+        var g='', rowsT=[], r=0;
+        var rowOf={};
+        periods.forEach(function(pd,i){ if(gap(i)){ r++; rowsT.push('auto'); } r++; rowOf[i]=r; rowsT.push('minmax(0,1fr)'); });
+        var nr=rowsT.length || 1;
+        g+='<div class="qt-dt" style="grid-row:1 / span '+nr+'"><b>'+num+'</b><span>'+sub+'</span>'+(st===' nx'?'<em>Next</em>':'')+'</div>';
+        var hasCells=(d.groups||[]).length && periods.some(function(pd){ return gs.some(function(gr){ return (d.cells[gr+'§'+pd.k]||[]).length; }); });
+        if(!hasCells && d.banners.length){
+            g+='<div class="qt-sk" style="grid-row:1 / span '+nr+';grid-column:2 / -1">'+d.banners.map(function(b){ return '<b>'+esc(b.subject||'')+'</b>'
+                + ((b.teacher||'').trim()?'<span>'+esc(b.teacher)+'</span>':''); }).join('')+'</div>';
+        } else {
+            var runs=tlRuns(d,gs,periods);
+            periods.forEach(function(pd,i){
+                if(gap(i)) g+='<span class="qt-bk" style="grid-row:'+(rowOf[i]-1)+'">Break · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(pd.start))+'</span>';
+                g+='<span class="qt-tm" style="grid-row:'+rowOf[i]+'">'+esc(fmtT(pd.start))+'</span>';
+            });
+            for(var i=0;i<periods.length;){
+                if(runs[i]){
+                    var ri=tlRunInfo(d,gs,periods,i,runs[i]);
+                    g+='<div class="qt-sk" style="grid-row:'+rowOf[i]+' / '+(rowOf[runs[i]-1]+1)+';grid-column:3 / -1"><b>'+esc(ri.r.subject||'')+'</b>'
+                        + '<span>'+esc([ri.who?ri.who+' together':'', (ri.r.teacher||'').trim()].filter(Boolean).join(' · '))+(ri.who||(ri.r.teacher||'').trim()?' · ':'')+'<u>'+esc(ri.from+(ri.to?' – '+ri.to:''))+'</u></span></div>';
+                    i=runs[i]; continue;
+                }
+                gs.forEach(function(gr,li){
+                    var arr=d.cells[gr+'§'+periods[i].k]||[], sg=sig(arr);
+                    if(sg && i>0 && !gap(i) && sg===sig(d.cells[gr+'§'+periods[i-1].k]||[])) return;
+                    var j=i+1; while(sg && j<periods.length && !gap(j) && !runs[j] && sig(d.cells[gr+'§'+periods[j].k]||[])===sg) j++;
+                    var n=j-i;
+                    var inner = arr.length ? arr.map(function(x){ return '<b>'+label(x.subject)+'</b>'; }).join('')
+                        + (arr.length===1 && (arr[0].teacher||'').trim() ? '<small>'+esc(arr[0].teacher)+'</small>' : '')
+                        + (n>1 ? '<em>'+(n===2?'Double period':n+' periods')+'</em>' : '') : '<b class="f">—</b>';
+                    g+='<div class="qt-sb" style="grid-row:'+rowOf[i]+' / '+(rowOf[i+n-1]+1)+';grid-column:'+(li+3)+'">'+inner+'</div>';
+                });
+                i++;
+            }
+            d.banners.forEach(function(b){ g+='<div class="qt-sk" style="grid-column:2 / -1"><b>'+esc(b.subject||'')+'</b></div>'; });
+        }
+        blocks.push({w:1, h:'<div class="qt-bl'+st+'" style="'+tmpl+';grid-template-rows:'+rowsT.join(' ')+'">'+g+'</div>'});
+    });
+    // split into balanced columns
+    var nc=Math.min(qtCols(gsAll.length), Math.max(1, blocks.length));
+    var tot=blocks.reduce(function(a,b){ return a+b.w; },0), cols=[], acc=0;
+    for(var c=0;c<nc;c++) cols.push('');
+    blocks.forEach(function(b){ var ci=Math.min(nc-1, Math.floor((acc+b.w/2)/tot*nc)); cols[ci]+=b.h; acc+=b.w; });
+    var hdr='<div class="qt-ch" style="'+tmpl+'"><span>Date</span><span>Time</span>'+gsAll.map(function(gr){ return '<span>'+esc(gr||'Lesson')+'</span>'; }).join('')+'</div>';
+    var nx=md.next?dmap[md.next]:null, np=nx?parseDateAny(nx.date):null;
+    var nextTxt = nx ? (np ? (nx.day.slice(0,3)+' '+np.d+' '+TL_MON[np.m-1].charAt(0)+TL_MON[np.m-1].slice(1).toLowerCase()) : gzDate(nx)) : '';
+    el('pBody').innerHTML='<div class="tl qt">'
+        + (nextTxt?'<div class="qt-next"><span>Next class</span><b>'+esc(nextTxt)+'</b></div>':'')
+        + '<div class="qt-cols" style="--nc:'+nc+'">'+cols.map(function(c){ return '<div class="qt-col">'+hdr+'<div class="tl-list qt-bls">'+c+'</div></div>'; }).join('')+'</div>'
+        + '<div class="qt-ft"><span>Read each row across — all '+who+' have lessons at the same time</span><span>Printed '+tlPrinted()+'</span></div></div>';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : renderTimelineSheet());
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : isQuiet() ? renderQuietSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
@@ -1756,6 +1857,7 @@ function captureExport(){
     el('exportSpinner').style.display = 'block';
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
+    if(isQuiet() && tlUsesTimeline()) renderQuietSheet(); // its column count follows the page orientation
     applyExportFontSize();                        // ...at the size the user picked...
     sizeTableForExport(sheet);                    // ...and now the content height too
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
@@ -1768,6 +1870,7 @@ function captureExport(){
             sheet.classList.remove('exporting', 'portrait');
             clearTableExportSizing();
             clearExportFontSize();
+            if(isQuiet() && tlUsesTimeline()) renderQuietSheet();
             _exportCanvas = canvas;
             var img = el('exportImg');
             img.src = canvas.toDataURL('image/png');
@@ -1778,6 +1881,7 @@ function captureExport(){
             sheet.classList.remove('exporting', 'portrait');
             clearTableExportSizing();
             clearExportFontSize();
+            if(isQuiet() && tlUsesTimeline()) renderQuietSheet();
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
 }
