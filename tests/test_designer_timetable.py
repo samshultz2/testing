@@ -287,3 +287,13 @@ def test_multipage_header_first_page_footer_last_page(auth_client):
     assert '.tt-sheet.exporting.pg-nofoot .tl-key' in html
     assert "sheet.classList.toggle('pg-nohead'" in DESIGNER_JS
     assert "sheet.classList.toggle('pg-nofoot'" in DESIGNER_JS
+
+
+def test_export_stays_within_phone_graphics_memory(auth_client):
+    """Phones draw green/blank tiles when out of graphics memory: pages are
+    capped well below that, kept as compact JPEGs, previewed as thumbnails,
+    and the long image is saved from a Blob."""
+    assert 'function exportScale(' in DESIGNER_JS and '6000000' in DESIGNER_JS
+    assert "toDataURL('image/jpeg', 0.92)" in DESIGNER_JS
+    assert 'function thumbOf(' in DESIGNER_JS and 'src="\'+p.thumb+\'"' in DESIGNER_JS
+    assert 'canvas.toBlob(' in DESIGNER_JS

@@ -2184,17 +2184,17 @@ function captureExport(){
         _pageLabel = pages.length > 1 ? 'Page '+(i+1)+' of '+pages.length : '';
         layoutPage(pages[i].keys, sheet, pages[i].cand);
         sizeTableForExport(sheet);
-        var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
-        // Phone browsers can't draw canvases much over ~16 million pixels.
-        scale = Math.max(1, Math.min(scale, Math.sqrt(15000000 / ((sheet.offsetWidth||1480) * (sheet.scrollHeight||1)))));
+        var scale = exportScale(sheet.offsetWidth || 1480, sheet.scrollHeight || 1);
         return html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
                     // Lay the copy out at desktop width so the designer's tablet/phone
                     // rules (which hide the preview) never apply to it.
                     windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: sheet.scrollHeight})
             .then(function(canvas){
-                // Keep the pixels as a PNG and free the canvas straight away, so a
-                // long timetable never holds several page-sized canvases at once.
-                out.push({url: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height});
+                // Keep the page as a compact JPEG plus a small preview thumbnail,
+                // and free the canvas straight away: phones run out of graphics
+                // memory (green/blank tiles) when several full-size pages are
+                // decoded on screen at once.
+                out.push({url: canvas.toDataURL('image/jpeg', 0.92), thumb: thumbOf(canvas), w: canvas.width, h: canvas.height});
                 freeCanvas(canvas);
                 return step(i+1);
             });
@@ -2213,10 +2213,25 @@ function captureExport(){
         el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
     });
 }
+// Render resolution. A phone shows a page ~1080px wide, so ~1600px across is
+// plenty (≈190 dpi on A4 for printing). Cap each canvas at ~6M pixels — far
+// below where phone browsers start drawing green/blank tiles.
+function exportScale(w, h){
+    return Math.max(0.6, Math.min(1.55, Math.sqrt(6000000 / (w * h))));
+}
+// A small JPEG of a page for the on-screen preview.
+function thumbOf(canvas){
+    var tw = Math.min(900, canvas.width), th = Math.round(canvas.height * tw / canvas.width);
+    var c = document.createElement('canvas'); c.width = tw; c.height = th;
+    var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, tw, th);
+    g.drawImage(canvas, 0, 0, tw, th);
+    var u = c.toDataURL('image/jpeg', 0.85); freeCanvas(c);
+    return u;
+}
 function showExportPages(){
     var box = el('exportImg'), n = _exportPages.length;
     box.innerHTML = _exportPages.map(function(p, i){
-        return (n > 1 ? '<span class="export-pg">Page '+(i+1)+' of '+n+'</span>' : '') + '<img alt="Timetable page '+(i+1)+'" src="'+p.url+'">';
+        return (n > 1 ? '<span class="export-pg">Page '+(i+1)+' of '+n+'</span>' : '') + '<img alt="Timetable page '+(i+1)+'" src="'+p.thumb+'">';
     }).join('');
     box.style.display = 'flex';
     el('exportSpinner').style.display = 'none';
@@ -2268,12 +2283,18 @@ function downloadImage(){
     } catch(e){ layoutPage(null, sheet, null); }
     // Long sheets: drop the scale before a phone runs out of canvas memory.
     var w = sheet.offsetWidth || 1046, h = sheet.scrollHeight || 1;
-    var scale = Math.max(1, Math.min(2, Math.sqrt(15000000 / (w * h))));
+    var scale = exportScale(w, h);
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff', windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: h})
         .then(function(canvas){
-            var url = canvas.toDataURL('image/png'); freeCanvas(canvas);
-            done();
-            var a = document.createElement('a'); a.href = url; a.download = exportName() + '.png'; a.click();
+            // A Blob (not a huge base64 string) keeps memory low on phones.
+            canvas.toBlob(function(blob){
+                freeCanvas(canvas);
+                done();
+                if(!blob){ alert('Could not make the image.'); return; }
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a'); a.href = url; a.download = exportName() + '.png'; a.click();
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+            }, 'image/png');
         })
         .catch(function(e){ done(); alert('Could not make the image: ' + e); });
 }
@@ -2287,7 +2308,7 @@ function downloadPDF(){
         // Fill the page width, keep the aspect ratio; fit to height if taller.
         var imgW = pw, imgH = pw * p.h / p.w;
         if(imgH > ph){ imgH = ph; imgW = ph * p.w / p.h; }
-        pdf.addImage(p.url, 'PNG', (pw - imgW) / 2, 0, imgW, imgH);
+        pdf.addImage(p.url, 'JPEG', (pw - imgW) / 2, 0, imgW, imgH);
     });
     pdf.save(exportName() + '.pdf');
 }
