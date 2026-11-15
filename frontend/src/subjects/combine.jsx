@@ -14,7 +14,7 @@ const BASES = [
   ['all_average', 'All subjects · average'], ['all_total', 'All subjects · total'],
 ];
 const OPS = [['gte', 'at least'], ['lte', 'at most'], ['eq', 'exactly']];
-const COLS = [['sn', 'S/N'], ['student', 'Student'], ['class', 'Class'], ['arm', 'Arm'], ['subjects', 'Each subject'],
+const COLS = [['student', 'Student'], ['class', 'Class'], ['arm', 'Arm'], ['subjects', 'Each subject'],
   ['total', 'Combined total'], ['average', 'Combined average'], ['missing', 'Missing count']];
 const FORMATS = [['pdf', 'PDF', 'fa-file-pdf', 'pdf'], ['image', 'Image', 'fa-file-image', 'img'], ['excel', 'Excel', 'fa-file-excel', 'xls'],
   ['word', 'Word', 'fa-file-word', 'doc'], ['csv', 'CSV', 'fa-file-csv', 'csv']];
@@ -109,7 +109,7 @@ export function Combine({ d, notify }) {
   const [showExport, setShowExport] = useState(false);
   const [expTitle, setExpTitle] = useState('');
   const [groupsN, setGroupsN] = useState(1);
-  const [cols, setCols] = useState({ sn: true, student: true, class: true, arm: true, subjects: true, total: true, average: true, missing: false });
+  const [cols, setCols] = useState({ student: true, class: true, arm: true, subjects: true, total: true, average: true, missing: false });
   const [busy, setBusy] = useState(false);
   const exportUrl = (fmt) => {
     const keys = [];

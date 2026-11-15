@@ -54,3 +54,34 @@ def test_combine_export_smoke(app):
     # No scopes/subjects → redirects with a flash (still a valid response).
     r = c.get('/subjects/broadsheet/combine')
     assert r.status_code == 200
+
+
+def test_combination_documents_use_student_list_design(app):
+    """The combination export renders through the Students-page document
+    engine: score columns are formatted and coloured, the subject key is a
+    footnote, and every format builds."""
+    import io
+    import fitz
+    import openpyxl
+    from utils import student_list_export as SLE
+    with app.app_context():
+        from utils.school import school_profile, document_branding
+        spec = {
+            'title': 'SSS2 SCIENCE MERIT LIST', 'subtitle': 'Physics + Chemistry', 'doc_tag': 'Subject combination',
+            'columns': [{'key': 'name', 'label': 'Student', 'kind': 'name'},
+                        {'key': 'subj:1', 'label': 'PHY', 'kind': 'score'},
+                        {'key': 'average', 'label': 'Average', 'kind': 'score', 'bold': True}],
+            'groups': [{'name': 'Group A', 'rows': [{'name': ('Okafor', 'Ifeoma'), 'subj:1': 86, 'average': 88.67}]},
+                       {'name': 'Group B', 'rows': [{'name': ('Musa', 'Kemi'), 'subj:1': None, 'average': 41.0}]}],
+            'stats': [(2, 'Qualify', None)], 'pass_mark': 50, 'footnote': 'Key: PHY = Physics.',
+            'school': school_profile(), 'colors': SLE.colors_for(document_branding()),
+        }
+        text = ''.join(p.get_text() for p in fitz.open(stream=SLE.render_pdf(spec), filetype='pdf'))
+        assert 'SSS2 SCIENCE MERIT LIST' in text and 'Group A' in text and 'Group B' in text
+        assert '88.7' in text and '41' in text and '41.0' not in text and '–' in text
+        assert 'Key: PHY = Physics.' in text
+        assert SLE.render_docx(spec)[:2] == b'PK'
+        ws = SLE.render_xlsx(spec).worksheets[0]
+        vals = [c.value for row in ws.iter_rows() for c in row]
+        assert 88.67 in vals and 86 in vals
+    assert SLE.score_tone(72) == 'good' and SLE.score_tone(55) == 'mid' and SLE.score_tone(30) == 'bad'

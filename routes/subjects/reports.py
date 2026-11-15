@@ -270,6 +270,8 @@ def _explore_dataset(term_id, scope_ids):
                 'student': e.student.full_name,
                 'student_id': e.student_id,
                 'gender': e.student.gender or '',
+                'surname': e.student.surname or '',
+                'other_names': ' '.join(x for x in (e.student.first_name, getattr(e.student, 'middle_name', None)) if x),
                 'assignment_id': a.id,
                 'class_name': a.school_class.name if a.school_class else '',
                 'arm_name': a.arm.name if a.arm else '',
@@ -690,6 +692,7 @@ def combine_export():
     # Sections: one per balanced group when splitting, else a single unnamed
     # section. Each group is exported on its own page(s)/sheet with S/N from 1.
     split_note = None
+    buckets = []
     if groups_n and groups_n >= 2:
         buckets = _split_into_groups(rows, groups_n)
         sections = []
@@ -717,41 +720,7 @@ def combine_export():
     title = (request.args.get('title') or '').strip() or 'Subject Combination Results'
 
     fmt = (request.args.get('format') or 'pdf').lower()
-    from utils import broadsheet_export as bx
     from flask import Response
-    from utils.school import logo_path as _logo_path, school_profile as _school_profile
-    _lp = _logo_path()
-    _sname = (_school_profile() or {}).get('name') or None
-
-    # For PDF / image, replace long subject headers with short codes + a key so
-    # columns stay narrow and full names fit; spreadsheets keep full names.
-    subj_cols = [(idx, k.split(':', 1)[1]) for idx, k in enumerate(keys) if k.startswith('subj:')]
-    codes, legend = bx.abbreviate_subjects([subj_lookup[sid]['name'] for _, sid in subj_cols]) \
-        if subj_cols else ([], [])
-    short_headers = list(headers)
-    for (idx, _sid), code in zip(subj_cols, codes):
-        short_headers[idx] = code
-
-    # For PDF/image the section rows use the short-code headers; for spreadsheets
-    # and CSV keep the full names.
-    if fmt in ('image', 'png'):
-        pages = bx.combo_png_pages(short_headers, data_rows, title, subtitle, legend=legend,
-                                   logo_path=_lp, school_name=_sname, sections=sections)
-        page = request.args.get('page', type=int) or 1
-        page = max(1, min(page, len(pages)))
-        suffix = '' if len(pages) == 1 else f'_p{page}'
-        return Response(pages[page - 1], mimetype='image/png', headers={
-            'Content-Disposition': f'attachment; filename="subject_combination{suffix}.png"',
-            'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
-    if fmt in ('excel', 'xlsx'):
-        wb = bx.combo_xlsx(headers, data_rows, title, subtitle, sections=sections)
-        return xlsx_response(wb, 'subject_combination.xlsx')
-    if fmt in ('word', 'docx'):
-        data = bx.combo_docx(short_headers, data_rows, title, subtitle, legend=legend,
-                             logo_path=_lp, school_name=_sname, sections=sections,
-                             numeric_from=_combo_numeric_from(keys))
-        return Response(data, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        headers={'Content-Disposition': 'attachment; filename="subject_combination.docx"'})
     if fmt == 'csv':
         import csv as _csv
         from io import StringIO
@@ -763,10 +732,109 @@ def combine_export():
                 w.writerow(([sec_title] if multi else []) + list(dr))
         return Response(buf.getvalue(), mimetype='text/csv', headers={
             'Content-Disposition': 'attachment; filename="subject_combination.csv"'})
-    data = bx.combo_pdf(short_headers, data_rows, title, subtitle,
-                        numeric_from=_combo_numeric_from(keys), legend=legend,
-                        logo_path=_lp, school_name=_sname, sections=sections)
-    return Response(data, mimetype='application/pdf', headers={
+
+    # PDF / image / Word / Excel: the same branded document engine as the
+    # Students page export (letterhead, title + count boxes, groups, light
+    # table, coloured marks, "Page n of N").
+    from utils import student_list_export as SLE
+    from utils.school import school_profile, document_branding
+    from utils.access_control import get_current_user
+    from utils import timeutil
+    from utils.broadsheet_export import abbreviate_subjects
+    spreadsheet = fmt in ('excel', 'xlsx')
+    subj_keys = [k for k in keys if k.startswith('subj:')]
+    codes, legend = abbreviate_subjects([subj_lookup[k.split(':', 1)[1]]['name'] for k in subj_keys]) \
+        if subj_keys else ([], [])
+    code_of = dict(zip(subj_keys, codes))
+    columns = []
+    for k in keys:
+        if k == 'sn':
+            continue                          # the engine always numbers rows
+        if k == 'student':
+            columns.append({'key': 'name', 'label': 'Student', 'kind': 'name'})
+        elif k == 'class':
+            columns.append({'key': 'class', 'label': 'Class', 'kind': 'text'})
+        elif k == 'arm':
+            columns.append({'key': 'arm', 'label': 'Arm', 'kind': 'text'})
+        elif k.startswith('subj:'):
+            full = subj_lookup[k.split(':', 1)[1]]['name']
+            columns.append({'key': k, 'label': full if spreadsheet else code_of[k], 'kind': 'score'})
+        elif k == 'total':
+            columns.append({'key': 'total', 'label': 'Combined total' if spreadsheet else 'Total', 'kind': 'num'})
+        elif k == 'average':
+            columns.append({'key': 'average', 'label': 'Combined average' if spreadsheet else 'Average', 'kind': 'score', 'bold': True})
+        elif k == 'missing':
+            columns.append({'key': 'missing', 'label': 'Missing', 'kind': 'num'})
+
+    def doc_row(r):
+        out = {'name': (r.get('surname') or r['student'], r.get('other_names') or '') if r.get('surname') else (r['student'], ''),
+               '_gender': r.get('gender') or '', 'class': r['class_name'], 'arm': r['arm_name'],
+               'total': (r['combo_total'] if spreadsheet else SLE.score_text(r['combo_total'])),
+               'average': r['combo_average'], 'missing': r['combo_missing']}
+        for k in subj_keys:
+            out[k] = r['subjects'].get(k.split(':', 1)[1])
+        return out
+
+    if groups_n and groups_n >= 2:
+        groups = [{'name': 'Group ' + (chr(ord('A') + gi) if gi < 26 else str(gi + 1)),
+                   'rows': [doc_row(r) for r in members]} for gi, members in enumerate(buckets)]
+    else:
+        ranked = sorted(rows, key=lambda r: (r['combo_total'], r['combo_average']), reverse=True)
+        groups = [{'name': None, 'rows': [doc_row(r) for r in ranked]}]
+
+    avg = (sum(r['combo_average'] for r in rows) / len(rows)) if rows else None
+    stats = [(len(rows), 'Qualify' if active else 'Students', None)]
+    if active:
+        stats.append((len(all_combo), 'Considered', None))
+    if avg is not None:
+        stats.append((SLE.score_text(round(avg, 1)), 'Combined avg', 'warn' if avg < ds['pass_mark'] else None))
+    if groups_n and groups_n >= 2:
+        stats.append((groups_n, 'Groups', None))
+    sub_bits = [' + '.join(s['name'] for s in chosen_subjects)]
+    if term:
+        sub_bits.append(term.full_name)
+    sub_bits.append(scope_names)
+    if active:
+        sub_bits.append('Where ' + cond)
+    notes = []
+    if legend and not spreadsheet:
+        notes.append('Key: ' + ', '.join('%s = %s' % (c, n) for c, n in legend) + '.')
+    notes.append('Combined average = total of the chosen subjects ÷ %d; a missing score counts as 0.' % len(chosen_subjects))
+    if split_note:
+        notes.append(split_note + '.')
+    u = get_current_user()
+    spec = {
+        'title': (request.args.get('title') or '').strip() or 'Subject Combination',
+        'subtitle': ' · '.join(sub_bits), 'doc_tag': 'Subject combination', 'noun': 'students',
+        'columns': columns, 'groups': groups, 'stats': stats,
+        'orientation': 'auto', 'size': 'm', 'signatures': False, 'blank_cols': 0,
+        'pass_mark': ds['pass_mark'], 'footnote': '   ·   '.join(notes),
+        'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else '',
+        'generated': timeutil.now(),
+        'school': school_profile(), 'colors': SLE.colors_for(document_branding()),
+    }
+    if fmt in ('image', 'png'):
+        page = max(1, request.args.get('page', type=int) or 1)
+        pages, total = SLE.render_images(spec, zoom=2.0, only_page=page)
+        suffix = '' if total == 1 else f'_p{min(page, total)}'
+        return Response(pages[0], mimetype='image/png', headers={
+            'Content-Disposition': f'attachment; filename="subject_combination{suffix}.png"',
+            'X-Total-Pages': str(total), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+    if spreadsheet:
+        about = [('Subjects', ', '.join(s['name'] for s in chosen_subjects)), ('Classes', scope_names),
+                 ('Term', term.full_name if term else '')]
+        if active:
+            about.append(('Conditions', cond))
+        try:
+            wb = SLE.render_xlsx(spec, about=about)
+        except TypeError:
+            wb = SLE.render_xlsx(spec)
+        return xlsx_response(wb, 'subject_combination.xlsx')
+    if fmt in ('word', 'docx'):
+        return Response(SLE.render_docx(spec),
+                        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        headers={'Content-Disposition': 'attachment; filename="subject_combination.docx"'})
+    return Response(SLE.render_pdf(spec), mimetype='application/pdf', headers={
         'Content-Disposition': 'attachment; filename="subject_combination.pdf"'})
 
 

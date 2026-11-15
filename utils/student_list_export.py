@@ -16,7 +16,10 @@ columns; and a footer with the preparer, a confidentiality note and
 
     title, subtitle, doc_tag              str
     columns   [{'key', 'label', 'kind'}]  kind: id | name | gender | date | phone
-                                          | exam | wrap | text | num | photo
+                                          | exam | wrap | text | num | photo | score
+              ('score': a mark, centred and coloured against ``pass_mark`` —
+              green 70+, amber pass–69, red below; ``'bold': True`` to emphasise)
+    pass_mark float;  footnote str (a key line under the tables, e.g. subject codes)
     groups    [{'name': str|None, 'rows': [{key: value, ...}]}]
               a 'name' value is (surname, rest); 'gender' is 'Male'/'Female';
               'photo' is image bytes or None; 'date' a date or None
@@ -132,7 +135,30 @@ def _cell_text(col, v):
         return fmt_date(v)
     if k == 'photo':
         return ''
+    if k == 'score':
+        return score_text(v)
     return '' if v is None else str(v)
+
+
+def score_text(v):
+    if v is None or v == '':
+        return '–'
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    return str(int(f)) if f == int(f) else ('%.1f' % f)
+
+
+def score_tone(v, pm=50):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return 'good' if f >= 70 else ('mid' if f >= pm else 'bad')
+
+
+SCORE_COLORS = {'good': '#15803d', 'mid': '#b45309', 'bad': '#dc2626', None: '#94a3b8'}
 
 
 # --------------------------------------------------------------------------- #
@@ -162,6 +188,9 @@ def _natural_widths(spec, fs):
             continue
         if k == 'gender':
             widths.append(max(head, stringWidth('Female', F['BodySemi'], fs * .92) + fs + pad))
+            continue
+        if k == 'score':
+            widths.append(max(head, stringWidth('100.0', F['BodyBold'], fs) + pad))
             continue
         font = F['BodyBold'] if k == 'name' else F['Body']
         vals = [_cell_text(c, r.get(c['key'])) for r in rows] or ['']
@@ -202,7 +231,7 @@ def _fit_widths(natural, avail, kinds, blank_cols, fs):
             widths = [w * scale for w in widths]
     else:
         extra = avail - need
-        grow = [i for i, k in enumerate(kinds) if k not in ('gender', 'photo', 'num')] or list(range(len(kinds)))
+        grow = [i for i, k in enumerate(kinds) if k not in ('gender', 'photo', 'num', 'score')] or list(range(len(kinds)))
         tot = sum(widths[i] for i in grow) or 1
         for i in grow:
             widths[i] += extra * widths[i] / tot
@@ -459,8 +488,15 @@ def render_pdf(spec):
         except Exception:
             return ''
 
+    st_score = ParagraphStyle('sc', parent=st_cell, alignment=1)
+    pm = float(spec.get('pass_mark') or 50)
+
     def cell(col, v):
         k = col['kind']
+        if k == 'score':
+            c = SCORE_COLORS[score_tone(v, pm)]
+            fnt = F['BodyBold'] if col.get('bold') else F['BodySemi']
+            return Paragraph('<font name="%s" color="%s">%s</font>' % (fnt, c, _esc(score_text(v))), st_score)
         if k == 'name':
             s, rest = v if isinstance(v, (tuple, list)) else (v or '', '')
             return Paragraph('<font name="%s" color="%s">%s</font> %s' % (F['BodyBold'], INK, _esc(s), _esc(rest)), st_name)
@@ -472,7 +508,8 @@ def render_pdf(spec):
             return Paragraph('<font name="%s" color="%s">— missing</font>' % (F['BodyBold'], WARN), st_cell)
         return Paragraph(_esc(_cell_text(col, v)), st_cell)
 
-    head_row = [Paragraph('#', st_head)] + [Paragraph(_esc(c['label'].upper()), st_head) for c in spec['columns']] \
+    st_head_c = ParagraphStyle('hc', parent=st_head, alignment=1)
+    head_row = [Paragraph('#', st_head)] + [Paragraph(_esc(c['label'].upper()), st_head_c if c['kind'] == 'score' else st_head) for c in spec['columns']] \
         + [Paragraph(_esc(l.upper()), st_head) for l in blank_labels(spec)]
 
     def table_for(rows):
@@ -546,6 +583,9 @@ def render_pdf(spec):
             story += [Spacer(1, 14), signatures()]
     if spec.get('signatures') and not any(g.get('name') for g in spec['groups']):
         story += [Spacer(1, 18), signatures()]
+    if spec.get('footnote'):
+        st_note = ParagraphStyle('fn', fontName=F['Body'], fontSize=7.6, leading=10.5, textColor=colors.HexColor(MUTED))
+        story += [Spacer(1, 10), Paragraph(_esc(spec['footnote']), st_note)]
 
     buf = io.BytesIO()
     doc = BaseDocTemplate(buf, pagesize=(PW, PH), leftMargin=margin, rightMargin=margin,
@@ -775,6 +815,9 @@ def render_docx(spec):
                             pass
                 elif c['kind'] == 'exam' and not (v or '').strip():
                     run(p, '— missing', fs, True, WARN)
+                elif c['kind'] == 'score':
+                    p.alignment = 1
+                    run(p, score_text(v), fs, bool(c.get('bold')), SCORE_COLORS[score_tone(v, float(spec.get('pass_mark') or 50))])
                 else:
                     run(p, _cell_text(c, v), fs, False, INK2)
             for j, cc in enumerate(cells):
@@ -791,6 +834,10 @@ def render_docx(spec):
             _docx_signatures(doc, run, borders)
     if spec.get('signatures') and not any(g.get('name') for g in spec['groups']):
         _docx_signatures(doc, run, borders)
+
+    if spec.get('footnote'):
+        fn = doc.add_paragraph(); fn.paragraph_format.space_before = Pt(8)
+        run(fn, spec['footnote'], 7.5, False, MUTED)
 
     # footer: school · title · prepared by …   Page X of Y
     fp = sec.footer.paragraphs[0]
@@ -835,6 +882,7 @@ def render_xlsx(spec, about=None):
     # Columns: a name splits into Surname / Other names; a grouped export
     # without a Class column gets one (Excel stays one flat, filterable table).
     cols = []
+    bold_keys = {c['key'] for c in spec['columns'] if c.get('bold')}
     for c in spec['columns']:
         if c['kind'] == 'name':
             cols.append(('name_s', 'Surname', 'name_s'))
@@ -905,15 +953,20 @@ def render_xlsx(spec, about=None):
                 elif kind in ('phone', 'id', 'exam'):
                     cell.value = formula_guard(str(v)) if v not in (None, '') else None
                     cell.number_format = '@'
-                elif kind == 'num':
+                elif kind in ('num', 'score'):
                     cell.value = v
+                    if kind == 'score' and v not in (None, ''):
+                        cell.number_format = '0.##'
                 else:
                     cell.value = formula_guard(str(v)) if v not in (None, '') else None
                 cell.font = Font(name='Calibri', size=11,
                                  bold=(kind == 'name_s'),
                                  color=(('DB2777' if str(v).lower().startswith('f') else '2563EB')
                                         if kind == 'gender' and v else ('94A3B8' if j == 1 else '1F2937')))
-                cell.alignment = Alignment(vertical='center', horizontal='center' if j == 1 else 'left',
+                if kind == 'score' and v not in (None, ''):
+                    cell.font = Font(name='Calibri', size=11, bold=cols[j - 2][0] in bold_keys,
+                                     color=SCORE_COLORS[score_tone(v, float(spec.get('pass_mark') or 50))].lstrip('#').upper())
+                cell.alignment = Alignment(vertical='center', horizontal='center' if (j == 1 or kind == 'score') else 'left',
                                            wrap_text=(kind == 'wrap'))
                 cell.border = Border(bottom=thin, left=thin if kind == 'blank' else None,
                                      right=thin if kind == 'blank' else None)
