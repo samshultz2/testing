@@ -25,6 +25,11 @@
   .st-opt b{display:block;font-size:14px}
   .st-opt small{color:var(--faint);font-size:12.5px}
   .st-opt.danger>div>b{color:var(--bad)}
+  .del-req{display:flex;gap:12px;align-items:center;padding:14px 16px;border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:var(--warn-soft)}
+  .del-req>i{color:var(--warn);font-size:18px}
+  .del-req>div{flex:1;min-width:0}
+  .del-req b{display:block;font-size:14px}
+  .del-req small{color:var(--soft);font-size:13px}
   .info-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line-2);font-size:13.5px}
   .info-row:first-child{border-top:0}
   .info-row .k{color:var(--faint)} .info-row .v{font-weight:600;text-align:right}
@@ -129,6 +134,20 @@
   </div>
   {% endif %}
 </div>
+
+{% if pending_delete and not row.owner %}
+<div class="panel del-req">
+  <i class="fas fa-hourglass-half"></i>
+  <div><b>Deletion requested by {{ pending_delete.actor }}</b>
+    <small>{% if delete_approvers and me in delete_approvers and me != pending_delete.actor %}You can approve it: open Status and confirm delete.
+    {% elif delete_approvers %}Waiting for {{ delete_approvers | reject('equalto', pending_delete.actor) | join(', ') }} to approve.
+    {% else %}No approvers are set any more — confirming delete removes it now.{% endif %}</small></div>
+  <form method="post" action="{{ url_for('platform.delete_cancel', subdomain=t.subdomain) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="btn sm">Cancel request</button>
+  </form>
+</div>
+{% endif %}
 
 <!-- Customer success: health score + onboarding -->
 <div class="cs-grid">

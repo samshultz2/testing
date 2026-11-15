@@ -590,6 +590,8 @@ def settings_page():
             'maintenance_mode': request.form.get('maintenance_mode') == 'on',
             'maintenance_message': request.form.get('maintenance_message'),
             'default_paid_tier': request.form.get('default_paid_tier'),
+            'delete_approvers': (request.form.getlist('delete_approvers')
+                                 if request.form.get('approvers_shown') else None),
         })
         _audit('settings', detail='maintenance=%s' % saved['maintenance_mode'])
         flash('Platform settings saved.', 'success')
@@ -597,7 +599,8 @@ def settings_page():
     from utils import platform_health
     checks = platform_health.health_checks(current_app)
     return render_template('platform/settings.html', active='settings',
-                           s=platform_settings.get_settings(), checks=checks)
+                           s=platform_settings.get_settings(), checks=checks,
+                           admins=_owner_admins(), me=session.get('username'))
 
 
 @platform_bp.route('/tickets')
@@ -666,6 +669,8 @@ def tenant_profile(subdomain):
                            ent=resolved, usage_limits=usage_limits,
                            feature_defs=ent.FEATURES, tier_ids=ent.TIER_IDS,
                            tier_labels=ent.TIER_LABELS,
+                           pending_delete=_pending_deletes().get(subdomain),
+                           delete_approvers=_delete_approvers(), me=session.get('username'),
                            plan_days=current_app.config.get('TENANT_PLAN_DAYS'))
 
 
@@ -848,9 +853,8 @@ def bulk():
         return _back()
 
     done, queued = 0, 0
-    two_person = action == 'delete' and _platform_admin_count() > 1
     actor = session.get('username') or 'admin'
-    pending = (tenancy.get_content('pending_deletes') or {}) if two_person else {}
+    pending = _pending_deletes() if action == 'delete' else {}
     for sub in subs:
         t = tenancy.get_tenant(sub)
         if t is None or billing.is_owner(t):
@@ -866,37 +870,85 @@ def bulk():
             billing.record_payment(sub, days=days)
             done += 1
         elif action == 'delete':
-            if two_person:
-                req = pending.get(sub)
-                if not (req and req.get('actor') and req['actor'] != actor):
-                    # Same rule as a single delete: a second, different admin approves.
-                    pending[sub] = {'actor': actor, 'at': _dt.datetime.utcnow().isoformat()}
-                    _audit('delete_request', subdomain=sub, detail=t.name)
-                    queued += 1
-                    continue
-                pending.pop(sub, None)
-                _audit('delete_approved', subdomain=sub, detail=f'{t.name} (by {req["actor"]} + {actor})')
+            verdict, note = _delete_gate(t, actor, pending)
+            if verdict == 'wait':
+                _audit('delete_request', subdomain=sub, detail=t.name)
+                queued += 1
+                continue
+            pending.pop(sub, None)
+            if note:
+                _audit('delete_approved', subdomain=sub, detail=note)
             provisioning.drop_tenant(sub, forget=True)
             done += 1
-    if two_person:
+    if action == 'delete':
         tenancy.save_content('pending_deletes', pending)
     _audit(f'bulk_{action}', detail=f'{done} school(s)' + (f', {queued} awaiting approval' if queued else ''))
     if queued:
-        flash(f'Deletion of {queued} school(s) requested — a second platform admin must approve.'
+        flash(f'Deletion of {queued} school(s) needs approval from {", ".join(_delete_approvers()) or "an approver"}.'
               + (f' {done} deleted.' if done else ''), 'info')
     else:
         flash(f'{(action or "").title()} applied to {done} school(s).', 'success')
     return _back()
 
 
-def _platform_admin_count():
-    """How many active platform admins (admin/super_admin on the owner host)."""
+def _owner_admins():
+    """Active admin accounts on the owner school — the people who can use this
+    console. (Ordinary school staff with an admin role are listed too; the
+    operator picks which of them approve deletions on the Settings page.)"""
     try:
         from models import User
-        return (User.query.filter(User.role.in_(('admin', 'super_admin')),
-                                  User.is_active == True).count())
+        return (User.query.filter(User.role.in_(('admin', 'super_admin')), User.is_active == True)
+                .order_by(User.username).all())
     except Exception:
-        return 1
+        return []
+
+
+def _delete_approvers():
+    """Named deletion approvers who still have an active admin account.
+
+    The second-approval rule used to switch on whenever the owner school had
+    more than one admin account — but school staff with an admin role (who
+    never use this console) counted too, so a solo operator could never delete
+    a school. Now it applies only to approvers the operator names in Settings."""
+    from utils import platform_settings
+    names = platform_settings.get_settings().get('delete_approvers') or []
+    if not names:
+        return []
+    active = {u.username for u in _owner_admins()}
+    return [n for n in names if n in active]
+
+
+def _pending_deletes():
+    return tenancy.get_content('pending_deletes') or {}
+
+
+def _delete_gate(t, actor, pending):
+    """Decide what a delete request by ``actor`` does. Returns
+    ('delete', note) to go ahead, or ('wait', message) to record/keep a request."""
+    approvers = _delete_approvers()
+    others = [a for a in approvers if a != actor]
+    if not others:
+        return 'delete', None                     # no one else to approve → solo operator
+    req = pending.get(t.subdomain)
+    if req and req.get('actor') and req['actor'] != actor and actor in approvers:
+        return 'delete', f'{t.name} (requested by {req["actor"]}, approved by {actor})'
+    if req and req.get('actor') and req['actor'] != actor:
+        return 'wait', (f'Deletion of {t.name} was requested by {req["actor"]} — only '
+                        f'{", ".join(others)} can approve it.')
+    pending[t.subdomain] = {'actor': actor, 'at': _dt.datetime.utcnow().isoformat()}
+    return 'wait', (f'Deletion of {t.name} requested — {", ".join(others)} must approve it '
+                    f'(open the school and confirm delete).')
+
+
+@platform_bp.route('/<subdomain>/delete/cancel', methods=['POST'])
+@platform_requires('manage_tenants')
+def delete_cancel(subdomain):
+    pending = _pending_deletes()
+    if pending.pop(subdomain, None) is not None:
+        tenancy.save_content('pending_deletes', pending)
+        _audit('delete_request_cancel', subdomain=subdomain)
+        flash('Deletion request cancelled.', 'success')
+    return _back()
 
 
 @platform_bp.route('/<subdomain>/delete', methods=['POST'])
@@ -909,21 +961,17 @@ def delete(subdomain):
         flash('Type the subdomain to confirm deletion.', 'error')
         return _back()
     actor = session.get('username') or 'admin'
-    # Two-person rule: when more than one platform admin exists, deleting a school
-    # needs a second, different admin to approve. A solo operator is unaffected.
-    if _platform_admin_count() > 1:
-        pending = tenancy.get_content('pending_deletes') or {}
-        req = pending.get(subdomain)
-        if not (req and req.get('actor') and req['actor'] != actor):
-            pending[subdomain] = {'actor': actor, 'at': _dt.datetime.utcnow().isoformat()}
-            tenancy.save_content('pending_deletes', pending)
-            _audit('delete_request', subdomain=subdomain, detail=t.name)
-            flash(f'Deletion of {t.name} requested — a second platform admin must '
-                  f'approve it (open this school and confirm delete).', 'info')
-            return _back()
-        pending.pop(subdomain, None)          # second distinct admin → approved
+    pending = _pending_deletes()
+    verdict, note = _delete_gate(t, actor, pending)
+    if verdict == 'wait':
         tenancy.save_content('pending_deletes', pending)
-        _audit('delete_approved', subdomain=subdomain, detail=f'{t.name} (by {req["actor"]} + {actor})')
+        _audit('delete_request', subdomain=subdomain, detail=t.name)
+        flash(note, 'info')
+        return _back()
+    if pending.pop(subdomain, None) is not None:
+        tenancy.save_content('pending_deletes', pending)
+    if note:
+        _audit('delete_approved', subdomain=subdomain, detail=note)
     provisioning.drop_tenant(subdomain, forget=True)   # drop DB + remove registry row
     _audit('delete', subdomain=subdomain, detail=t.name)
     flash(f'{t.name} and its database were deleted.', 'success')

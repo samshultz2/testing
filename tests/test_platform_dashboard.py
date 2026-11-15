@@ -627,7 +627,7 @@ def test_predictive_analytics_paywall(mt):
 def test_two_person_delete(mt, monkeypatch):
     app, tenancy = mt
     import routes.platform as pf
-    monkeypatch.setattr(pf, '_platform_admin_count', lambda: 2)   # simulate a team
+    monkeypatch.setattr(pf, '_delete_approvers', lambda: ['admin', 'second'])   # a named team
     c = _login_owner(app)
     H = {'Host': 'edusyncra.test'}
     tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
@@ -825,7 +825,7 @@ def test_health_live_feed_works(mt):
 def test_bulk_delete_follows_two_person_rule(mt, monkeypatch):
     app, tenancy = mt
     import routes.platform as pf
-    monkeypatch.setattr(pf, '_platform_admin_count', lambda: 2)
+    monkeypatch.setattr(pf, '_delete_approvers', lambda: ['admin', 'second'])
     c = _login_owner(app)
     H = {'Host': 'edusyncra.test'}
     tok = _tok(c, H)
@@ -866,3 +866,50 @@ def test_empty_ticket_reply_is_explained(mt):
     r = c.post(f'/platform/tickets/{tid}', headers=H, data={'_csrf_token': tok, 'action': 'reply', 'body': '  '},
                follow_redirects=True)
     assert 'Write a reply before sending' in r.get_data(as_text=True)
+
+
+def test_solo_operator_can_delete_even_with_other_school_admins(mt):
+    """Other admin accounts on the owner school (ordinary school staff) used to
+    switch on the two-person rule, so a solo operator could never delete."""
+    app, tenancy = mt
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session as _S
+    from models import User
+    eng = create_engine(tenancy.get_tenant('owner').database_url)
+    with _S(eng) as s:
+        u = User(username='bursar', full_name='School Bursar', role='admin', is_active=True)
+        u.set_password('Another!Pass42Q'); s.add(u); s.commit()
+    eng.dispose()
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    c.post('/platform/beta/delete', headers=H, data={'confirm': 'beta', '_csrf_token': _tok(c, H)})
+    assert tenancy.get_tenant('beta') is None                       # deleted straight away
+
+
+def test_named_approver_flow_and_cancel(mt):
+    app, tenancy = mt
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session as _S
+    from models import User
+    eng = create_engine(tenancy.get_tenant('owner').database_url)
+    with _S(eng) as s:
+        u = User(username='second', full_name='Second Admin', role='admin', is_active=True)
+        u.set_password('Another!Pass42Q'); s.add(u); s.commit()
+    eng.dispose()
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    tok = _tok(c, H)
+    # choose approvers on the Settings page (other settings untouched)
+    c.post('/platform/settings', headers=H, data={'_csrf_token': tok, 'approvers_shown': '1',
+                                                  'delete_approvers': ['admin', 'second'], 'default_paid_tier': 'premium'})
+    from utils import platform_settings
+    assert platform_settings.get_settings()['delete_approvers'] == ['admin', 'second']
+    c.post('/platform/beta/delete', headers=H, data={'confirm': 'beta', '_csrf_token': tok})
+    assert tenancy.get_tenant('beta') is not None and 'beta' in tenancy.get_content('pending_deletes')
+    body = c.get('/platform/tenant/beta', headers=H).get_data(as_text=True)
+    assert 'Deletion requested by admin' in body and 'Waiting for second' in body
+    c.post('/platform/beta/delete/cancel', headers=H, data={'_csrf_token': tok})
+    assert 'beta' not in (tenancy.get_content('pending_deletes') or {})
+    # saving settings without the approver field keeps the approvers
+    platform_settings.save_settings({'support_email': 'x@y.z'})
+    assert platform_settings.get_settings()['delete_approvers'] == ['admin', 'second']
