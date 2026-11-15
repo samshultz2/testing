@@ -542,7 +542,69 @@ function StudentEntry({ d, notify }) {
   );
 }
 
+// "Print scores": choose which columns get filled in. Unticked columns still
+// print (empty), so the sheet's layout never changes.
+const PRINT_KEY = 'scores:printFill';
+function PrintScores({ d, onClose }) {
+  const cols = d.sheet_cols || [];
+  const all = cols.map((c) => c.key);
+  const [pick, setPick] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PRINT_KEY) || 'null');
+      if (Array.isArray(saved)) { const k = saved.filter((x) => all.includes(x)); if (k.length) return k; }
+    } catch (e) { /* storage unavailable */ }
+    return all;
+  });
+  const has = (k) => pick.includes(k);
+  const flip = (k) => setPick((p) => (p.includes(k) ? p.filter((x) => x !== k) : p.concat(k)));
+  const scoreCols = cols.filter((c) => c.kind !== 'total');
+  const totals = cols.filter((c) => c.kind === 'total');
+  const presets = [
+    { label: 'Everything', keys: all },
+    { label: 'Scores only', keys: scoreCols.map((c) => c.key) },
+    { label: 'CA only', keys: scoreCols.filter((c) => c.kind === 'ca' || c.kind === 'ha').map((c) => c.key) },
+    { label: 'Exam only', keys: cols.filter((c) => c.kind === 'cbt' || c.kind === 'theory' || c.key === 'EXAM_TOTAL').map((c) => c.key) },
+    { label: 'Totals only', keys: totals.map((c) => c.key) },
+    { label: 'Nothing', keys: [] },
+  ].filter((p) => p.label === 'Nothing' || p.keys.length);
+  const same = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+  const print = () => {
+    try { localStorage.setItem(PRINT_KEY, JSON.stringify(pick)); } catch (e) { /* ignore */ }
+    const url = d.urls.filled_sheet + (same(pick, all) ? '' : '&fill=' + encodeURIComponent(pick.join(',')));
+    window.open(url, '_blank', 'noopener');
+    onClose();
+  };
+  const row = (c) => (
+    <label key={c.key} className={'rs-pf-row' + (has(c.key) ? ' on' : '')}>
+      <input type="checkbox" checked={has(c.key)} onChange={() => flip(c.key)} />
+      <span className="rs-pf-t"><b>{c.label}</b>{c.max ? <small>out of {fmtNum(c.max)}</small> : null}</span>
+      <span className="rs-pf-s">{has(c.key) ? 'Filled' : 'Empty'}</span>
+    </label>
+  );
+  return (
+    <Sheet title={`Print ${d.selected_subject || 'subject'} scores`} onClose={onClose}>
+      <p className="rs-muted" style={{ margin: '0 0 .7rem', fontSize: '.88rem' }}>
+        Tick what to fill in. Every column still prints — unticked ones are left empty to write in by hand.</p>
+      <div className="rs-chips" style={{ marginBottom: '.8rem' }}>
+        {presets.map((p) => (
+          <button type="button" key={p.label} className={'rs-chip' + (same(pick, p.keys) ? ' on' : '')} onClick={() => setPick(p.keys)}>{p.label}</button>
+        ))}
+      </div>
+      <div className="rs-pf">
+        <div className="rs-pf-h">Score columns</div>
+        {scoreCols.map(row)}
+        <div className="rs-pf-h">Totals</div>
+        {totals.map(row)}
+      </div>
+      <p className="rs-muted" style={{ fontSize: '.8rem', margin: '.6rem 0 .9rem' }}>Totals always add up every saved score, even for columns you leave empty.</p>
+      <button type="button" className="rs-btn primary wide" onClick={print}>
+        <i className="fas fa-print" aria-hidden="true" />{pick.length ? 'Print score sheet' : 'Print empty sheet'}</button>
+    </Sheet>
+  );
+}
+
 export function Scores({ d, notify }) {
+  const [printing, setPrinting] = useState(false);
   const nav = useNav();
   const phone = usePhone();
   const [mode, setMode] = useState('assessment');
@@ -612,7 +674,7 @@ export function Scores({ d, notify }) {
     tools && u.subject_sheet_import && { icon: 'fa-file-import', label: 'Import subject sheet', href: u.subject_sheet_import, native: true },
     tools && u.broadsheet_import && { icon: 'fa-table', label: 'Import broadsheet', href: u.broadsheet_import, native: true },
     tools && u.scan && { icon: 'fa-camera', label: 'Scan a photo of a score sheet', href: u.scan, native: true },
-    u.filled_sheet && { icon: 'fa-print', label: `Print ${d.selected_subject || 'subject'} scores`, href: u.filled_sheet, native: true, target: '_blank' },
+    u.filled_sheet && { icon: 'fa-print', label: `Print ${d.selected_subject || 'subject'} scores…`, onClick: () => setPrinting(true) },
     canWrite(d, 'scores_tools') && u.blank_sheet && { icon: 'fa-file-lines', label: 'Print blank score sheet', href: u.blank_sheet, native: true, target: '_blank' },
   ];
   const selectors = d.assignment_id ? (
@@ -632,10 +694,11 @@ export function Scores({ d, notify }) {
   return (
     <div className={'rs' + (phone ? ' has-bar' : '')}>
       <Head icon="fa-pen-to-square" title="Score entry" sub={subLine(d) || 'Enter CA and exam scores'}>
-        {u.filled_sheet && <a className="rs-btn" href={u.filled_sheet} target="_blank" rel="noopener" data-native=""
-                              title={`Print the ${d.selected_subject || 'subject'} score sheet with every saved score`}>
-          <i className="fas fa-print" aria-hidden="true" /><span className="rs-hide-sm">Print scores</span></a>}
+        {u.filled_sheet && <button type="button" className="rs-btn" onClick={() => setPrinting(true)}
+                              title={`Print the ${d.selected_subject || 'subject'} score sheet`} aria-label="Print scores">
+          <i className="fas fa-print" aria-hidden="true" /><span className="rs-hide-sm">Print scores</span></button>}
         <Menu items={menu} label="Tools" /></Head>
+      {printing && <PrintScores d={d} onClose={() => setPrinting(false)} />}
       <Picker d={d} go={(p) => set({ class_subject_id: '', assessment_type_id: '', ...p })} termBlank extra={selectors} />
       <Flow d={d} current="scores" />
       {d.assignment_id && (

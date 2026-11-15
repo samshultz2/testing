@@ -2080,3 +2080,14 @@ span.sj-teacher{cursor:default}
   .cb .rs-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .cb{padding-bottom:84px}
 }
+
+/* Print scores: choose which columns to fill */
+.rs-pf{display:flex;flex-direction:column;gap:6px}
+.rs-pf-h{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin:.4rem 0 .1rem}
+.rs-pf-row{display:flex;align-items:center;gap:.7rem;padding:.6rem .75rem;border:1px solid var(--border-color);border-radius:12px;cursor:pointer;margin:0}
+.rs-pf-row.on{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
+.rs-pf-row input{width:20px;height:20px;accent-color:var(--primary);flex:none}
+.rs-pf-t{flex:1;display:flex;flex-direction:column;line-height:1.25}
+.rs-pf-t b{font-size:.92rem}.rs-pf-t small{font-size:.76rem;color:var(--text-muted)}
+.rs-pf-s{font-size:.74rem;font-weight:700;color:var(--text-muted)}
+.rs-pf-row.on .rs-pf-s{color:var(--primary)}

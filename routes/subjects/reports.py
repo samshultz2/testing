@@ -1650,8 +1650,13 @@ def blank_score_sheet():
             flash('You can only print scores for subjects you teach in this class.', 'error')
             return redirect(url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
         filled_cs = cs
+    # ?fill=CBT,PBT/THEORY,EXAM_TOTAL … → only those columns filled in (the
+    # rest stay on the sheet, empty). Absent → fill everything.
+    fill = None
+    if filled_cs is not None and request.args.get('fill') is not None:
+        fill = {k.strip().upper() for k in request.args.get('fill', '').split(',') if k.strip()}
     data = blank_sheet_pdf(term_id, assignment_id, subject_name=subject_name, subject=subject,
-                           class_subject=filled_cs)
+                           class_subject=filled_cs, fill=fill)
     if not data:
         flash('Could not build the score sheet.', 'error')
         return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))

@@ -2,6 +2,19 @@
 from routes.subjects import *  # noqa: F401,F403
 
 
+def _sheet_cols(class_subject, term_id):
+    if not class_subject:
+        return []
+    from utils.broadsheet_export import (score_columns, sheet_col_key,
+                                         EXAM_TOTAL_KEY, GENERAL_TOTAL_KEY)
+    cols = score_columns(subject=class_subject.subject, term_id=term_id)
+    out = [{'key': sheet_col_key(c), 'label': c['label'], 'max': c['max'], 'kind': c['kind']} for c in cols]
+    exam_max = sum(c['max'] or 0 for c in cols if c['kind'] in ('cbt', 'theory'))
+    out += [{'key': EXAM_TOTAL_KEY, 'label': 'Exam Total', 'max': exam_max, 'kind': 'total'},
+            {'key': GENERAL_TOTAL_KEY, 'label': 'General Total', 'max': sum(c['max'] or 0 for c in cols), 'kind': 'total'}]
+    return out
+
+
 @subjects_bp.route('/scores')
 @login_required
 def scores_entry():
@@ -156,6 +169,9 @@ def scores_entry():
         'class_subjects': [{'id': cs.id, 'subject_name': cs.subject.name} for cs in class_subjects],
         'assessment_types': at_choices,
         'selected_subject': selected_class_subject.subject.name if selected_class_subject else '',
+        # The score sheet's columns for this subject, so "Print scores" can let
+        # the teacher choose which ones to fill in.
+        'sheet_cols': _sheet_cols(selected_class_subject, term_id),
         'selected_assessment': selected_assessment.name if selected_assessment else '',
         'max_score': max_score,
         'has_selection': bool(selected_assignment and selected_class_subject and selected_assessment),
@@ -177,7 +193,7 @@ def scores_entry():
                                          subject=selected_class_subject.subject.name if selected_class_subject else '',
                                          class_subject_id=selected_class_subject.id if selected_class_subject else None)
                                  if term_id and assignment_id else ''),
-                 # the same sheet with every saved score, exam total and total filled in
+                 # the same sheet with saved scores filled in (columns picked in the app)
                  'filled_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id, assignment_id=assignment_id,
                                           subject=selected_class_subject.subject.name,
                                           class_subject_id=selected_class_subject.id, filled=1)

@@ -391,10 +391,23 @@ def broadsheet_png(term_id, assignment_id, dpi=200, min_score=None, filter_field
 # Blank score-entry sheet (A4, one subject) — reportlab
 # --------------------------------------------------------------------------- #
 
-def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class_subject=None):
+def sheet_col_key(c):
+    """Stable key for a score-sheet column (used to pick what to fill in)."""
+    return (c['label'] or '').upper()
+
+
+EXAM_TOTAL_KEY, GENERAL_TOTAL_KEY = 'EXAM_TOTAL', 'GENERAL_TOTAL'
+
+
+def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class_subject=None,
+                    fill=None):
     """The score sheet for a class. With ``class_subject`` it is printed
     *filled*: every student's saved score in each column, their Exam Total
-    (CBT + PBT/Theory) and General Total, with each column's maximum shown."""
+    (CBT + PBT/Theory) and General Total, with each column's maximum shown.
+
+    ``fill`` (a set of column keys — see ``sheet_col_key`` plus EXAM_TOTAL_KEY /
+    GENERAL_TOTAL_KEY) limits which columns are filled in; the others are still
+    printed, just left empty. ``None`` fills every column."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -426,6 +439,9 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class
         if v is None:
             return ''
         return str(int(v)) if float(v).is_integer() else f'{v:.1f}'
+
+    def want(key):
+        return fill is None or key in fill
 
     def cell(st, c):
         vals = [marks[(st.id, i)] for i in c.get('ids', []) if (st.id, i) in marks]
@@ -459,10 +475,12 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class
                Paragraph(pdf_escape(st.first_name or ''), nm)]
         if filled:
             vals = [cell(st, c) for c in cols]
+            # Totals always add up the real saved scores, even for columns left empty.
             exam = [v for v, c in zip(vals, cols) if c['kind'] in ('cbt', 'theory') and v is not None]
             got = [v for v in vals if v is not None]
-            row += [fmt(v) for v in vals]
-            row += [fmt(sum(exam)) if exam else '', fmt(sum(got)) if got else '']
+            row += [fmt(v) if want(sheet_col_key(c)) else '' for v, c in zip(vals, cols)]
+            row += [fmt(sum(exam)) if (exam and want(EXAM_TOTAL_KEY)) else '',
+                    fmt(sum(got)) if (got and want(GENERAL_TOTAL_KEY)) else '']
         else:
             row += [''] * (len(cols) + 2)          # blank score cells
         data.append(row)

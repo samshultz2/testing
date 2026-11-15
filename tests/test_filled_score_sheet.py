@@ -79,3 +79,45 @@ def test_blank_sheet_is_still_blank(app):
     r = c.get(f"/subjects/broadsheet/blank-sheet?term_id={ids['term']}&assignment_id={ids['asg']}&class_subject_id={ids['cs']}")
     text = _text(r.data)
     assert str(ids['total']) not in text and 'students have scores' not in text
+
+
+def _rows(pdf):
+    """Each student's row text from the sheet, keyed by surname."""
+    import fitz
+    d = fitz.open(stream=pdf, filetype='pdf')
+    try:
+        words = d[0].get_text('words')
+    finally:
+        d.close()
+    out = {}
+    for name in ('Filledsheet', 'Noscores'):
+        w = next(x for x in words if x[4] == name)
+        y = (w[1] + w[3]) / 2
+        out[name] = [x[4] for x in sorted(words, key=lambda x: x[0]) if x[1] < y < x[3]]
+    return out
+
+
+def test_choose_which_columns_to_fill(app):
+    ids = _seed(app)
+    c = _admin(app)
+    d = c.get(f"/subjects/scores?term_id={ids['term']}&assignment_id={ids['asg']}&class_subject_id={ids['cs']}",
+              headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    keys = [x['key'] for x in d['sheet_cols']]
+    assert 'CBT' in keys and 'EXAM_TOTAL' in keys and 'GENERAL_TOTAL' in keys
+    base = d['urls']['filled_sheet']
+    cbt_max = next(x['max'] for x in d['sheet_cols'] if x['key'] == 'CBT')
+
+    # CBT only: just the CBT score on Ada's row; every other column (and both totals) empty
+    row = _rows(c.get(base + '&fill=CBT').data)['Filledsheet']
+    nums = [w for w in row if w.replace('.', '').isdigit()]
+    assert nums[1:] == [str(cbt_max - 1)], row          # S/N then the CBT score only
+
+    # no totals: every score, but the two total columns empty
+    row = _rows(c.get(base + '&fill=' + ','.join(k for k in keys if 'TOTAL' not in k)).data)['Filledsheet']
+    nums = [w for w in row if w.replace('.', '').isdigit()][1:]
+    assert len(nums) == ids['n'] and str(ids['total']) not in nums
+
+    # nothing ticked → a blank sheet for this subject (headings still show maxima)
+    row = _rows(c.get(base + '&fill=').data)['Filledsheet']
+    assert [w for w in row if w.replace('.', '').isdigit()][1:] == []
