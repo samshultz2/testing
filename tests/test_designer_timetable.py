@@ -248,3 +248,19 @@ def test_branch_isolation(app):
     assert cb.get(f'/timetable/designer/load/{did}').status_code == 403
     assert cb.post(f'/timetable/designer/delete/{did}',
                    headers={'X-CSRFToken': _tok(cb)}).status_code == 403
+
+
+def test_export_offers_small_medium_large_text(auth_client):
+    """The export dialog picks a text size (Small/Medium/Large), not a number,
+    and long timetables flow onto more pages instead of shrinking."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    for v, label in (('s', 'Small'), ('m', 'Medium'), ('l', 'Large')):
+        assert f'name="exportSize" value="{v}"' in html
+        assert f'<span>{label}</span>' in html
+    assert 'id="exportFontSize"' not in html
+    assert 'class="export-pages"' in html
+    # main text sizes per orientation, a readable floor for small print,
+    # and multi-page planning + PDF pages
+    assert 'var EXPORT_TEXT' in DESIGNER_JS and 'EXPORT_MIN_RATIO' in DESIGNER_JS
+    assert 'function planPages(' in DESIGNER_JS
+    assert "pdf.addPage('a4', _exportOrientation)" in DESIGNER_JS

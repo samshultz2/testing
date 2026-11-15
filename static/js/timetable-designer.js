@@ -454,7 +454,9 @@ function renderHead(){
         el('pTitle').innerHTML = (w.length?esc(w.join(' '))+' ':'')+'<span class="tl-gold">'+esc(last||'')+'</span>';
     } else if(isNotebook()) el('pTitle').innerHTML='<span class="nb-big">'+esc(ttl)+'</span>';
     else el('pTitle').textContent = ttl;
-    var sub=el('subtitle').value; el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
+    var sub=el('subtitle').value;
+    if(_pageLabel) sub = (sub ? sub+' · ' : '') + _pageLabel;   // multi-page export
+    el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
 }
 
 // Day/Date × time-period grid: rows are days (or dates), each day may hold
@@ -1017,7 +1019,7 @@ function tlModel(){
     if(isSaturdayLayout()){
         var info=computeSaturdayDates(), lastIso='';
         order.forEach(function(k){ if(dmap[k].sort>lastIso && dmap[k].sort.indexOf('zz')) lastIso=dmap[k].sort; });
-        info.saturdays.forEach(function(sv){ if(sv.free && lastIso && sv.iso<lastIso && !dmap[sv.iso]){
+        info.saturdays.forEach(function(sv){ if(sv.free && !dmap[sv.iso] && (_pageKeys ? _pageKeys[sv.iso] : (lastIso && sv.iso<lastIso))){
             dmap[sv.iso]={off:true,date:sv.iso,sort:sv.iso,groups:[],cells:{},banners:[]}; order.push(sv.iso); } });
     }
     order.sort(function(a,b){ return String(dmap[a].sort).localeCompare(String(dmap[b].sort)); });
@@ -1044,7 +1046,8 @@ function renderTimelineSheet(){
             pd.brk=col; col++;
         }
         tracks.push('minmax(0,1fr)'); pcol[pd.k]=col;
-        heads+='<div class="tl-ph" style="grid-column:'+col+'"><b>'+esc(clock12(pd.start,true))+'</b>'
+        // Exports drop am/pm: at readable sizes "11:30am" runs into the next column.
+        heads+='<div class="tl-ph" style="grid-column:'+col+'"><b>'+esc(el('sheet').classList.contains('exporting') ? fmtT(pd.start) : clock12(pd.start,true))+'</b>'
              + (pd.end?'<small>to '+esc(clock12(pd.end,true))+'</small>':'')+'</div>';
         col++;
     });
@@ -1266,18 +1269,20 @@ function renderGazetteSheet(){
         return '<table class="gz-tt'+(big?' big':'')+' g'+Math.min(gs.length,4)+'"><thead>'+head+'</thead><tbody>'+body+'</tbody></table>';
     };
     var real=order.filter(function(k){ return !dmap[k].off; });
-    var leadKey = md.next || real[0];
+    // Multi-page export: only the first page leads with a feature date.
+    var leadKey = _laterPage ? null : (md.next || real[0]);
     var weekOf=function(d){ var m=(d.label||'').match(/^Week\s+(\d+)/i); return m?('Week '+m[1]):(d.date?d.day:''); };
-    var lead=dmap[leadKey];
-    var leadHtml='<section class="gz-lead"><div class="gz-kick">'+(md.next?'Next class':'First class')+(weekOf(lead)?' · '+esc(weekOf(lead)):'')+'</div>'
+    var lead=leadKey ? dmap[leadKey] : null;
+    var leadHtml=!lead ? '' : '<section class="gz-lead"><div class="gz-kick">'+(md.next?'Next class':'First class')+(weekOf(lead)?' · '+esc(weekOf(lead)):'')+'</div>'
         + '<h2>'+esc(lead.date?(dayFromDate(lead.date)+', '+gzDate(lead)):gzDate(lead))+'</h2>'
         + table(lead, true);
     var dirKeys=Object.keys(teach).filter(function(sj){ return teach[sj].length; });
-    if(dirKeys.length){
+    if(lead && dirKeys.length){
         leadHtml+='<div class="gz-box"><h4>Teachers</h4><ul>'+dirKeys.map(function(sj){
             return '<li><b>'+esc(sj)+'</b><span>'+esc(teach[sj].join(', '))+'</span></li>'; }).join('')+'</ul></div>';
     }
-    leadHtml+='</section>';
+    if(lead) leadHtml+='</section>';
+    else leadHtml='';
     // Lesson-free Saturdays are a one-line note on the next class (not a whole
     // article), plus a mention in the dateline strip.
     var arts='', offPending=[], offAll=[], leadNote='';
@@ -1294,7 +1299,8 @@ function renderGazetteSheet(){
         var at=arts.lastIndexOf('</h3>');
         if(at>=0) arts=arts.slice(0,at+5)+noteOf(offPending,true)+arts.slice(at+5); else leadNote+=noteOf(offPending,true);
     }
-    if(leadNote) leadHtml=leadHtml.replace('</h2>','</h2>'+leadNote);
+    if(leadNote && lead) leadHtml=leadHtml.replace('</h2>','</h2>'+leadNote);
+    else if(leadNote) arts=leadNote+arts;
     var dates=real.map(function(k){ return dmap[k]; }).filter(function(d){ return d.date; });
     var range = dates.length ? (gzDate(dates[0]).replace(/(\d+) (\w{3})\w*/,'$1 $2')+' – '+gzDate(dates[dates.length-1]).replace(/(\d+) (\w{3})\w*/,'$1 $2')) : '';
     var unit = isSaturdayLayout() ? 'Saturday' : 'day';
@@ -1335,8 +1341,10 @@ function renderSwissSheet(){
         }
         var gs = md.anyGroup ? md.groupsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
         if(!gs.length) gs=[''];
-        var w=Math.floor(85/gs.length);
-        var cols='<colgroup><col style="width:15%">'+gs.map(function(){ return '<col style="width:'+w+'%">'; }).join('')+'</colgroup>';
+        // Exports lift the small times to a readable size: give them room.
+        var tw=el('sheet').classList.contains('exporting') ? 22 : 15;
+        var w=Math.floor((100-tw)/gs.length);
+        var cols='<colgroup><col style="width:'+tw+'%">'+gs.map(function(){ return '<col style="width:'+w+'%">'; }).join('')+'</colgroup>';
         var head='<tr><th></th>'+gs.map(function(g){ return '<th>'+esc(g||'Lesson')+'</th>'; }).join('')+'</tr>';
         var body='', runs=tlRuns(d,gs,periods), skip={};
         periods.forEach(function(pd,i){
@@ -1377,7 +1385,7 @@ function renderSwissSheet(){
         var big=p?pad(p.d):esc((d.day||'').slice(0,3));
         var mon=p?TL_MON[p.m-1]:'';
         var day=(p?d.day:'').toUpperCase();
-        html+='<section class="'+cls+'"><div class="sw-num">'+pad(idx)+'</div><header><span class="sw-d">'+big+'</span><span class="sw-m">'+mon
+        html+='<section class="'+cls+'"><div class="sw-num" aria-hidden="true">'+pad(idx)+'</div><header><span class="sw-d">'+big+'</span><span class="sw-m">'+mon
             + (day?'<br><i>'+esc(day)+'</i>':'')+'</span>'+(k===md.next?'<span class="sw-flag">Next class →</span>':'')+'</header>'+note+table(d)+'</section>';
     });
     if(offPending.length && html){
@@ -1419,7 +1427,8 @@ function renderNotebookSheet(){
         }
         var gs = md.anyGroup ? md.groupsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
         if(!gs.length) gs=[''];
-        var tmpl='grid-template-columns:3.3em repeat('+gs.length+',minmax(0,1fr))';
+        // Exports lift small text (the times) to a readable size: give it room.
+        var tmpl='grid-template-columns:'+(el('sheet').classList.contains('exporting')?'4.8em':'3.3em')+' repeat('+gs.length+',minmax(0,1fr))';
         var runs=tlRuns(d,gs,periods), skip={};
         var out='<div class="nb-r nb-h" style="'+tmpl+'"><span></span>'+gs.map(function(g){ return '<span>'+esc(g||'Lesson')+'</span>'; }).join('')+'</div>';
         periods.forEach(function(pd,i){
@@ -1567,6 +1576,7 @@ function renderBoardSheet(){
 // columns; the export re-renders once the page orientation is known.
 function isQuiet(){ return el('theme').value==='quiet'; }
 function qtCols(nGroups){
+    if(_forceCols) return _forceCols;   // export picks the count that reads best
     var sh=el('sheet');
     if(!sh.classList.contains('exporting')) return 2;
     if(sh.classList.contains('portrait')) return 2;
@@ -1737,37 +1747,23 @@ function renderInlineSheet(){
         + '<div class="il-cols" style="--nc:'+nc+'">'+cols.map(function(c){ return '<div class="tl-list il-col">'+c+'</div>'; }).join('')+'</div>'
         + '<div class="il-ft"><span>Each line is one time — every '+(who==='streams'?'stream':'class')+' on that line is in a lesson at the same time'+(/<em>×2/.test(cols.join(''))?' · ×2 double':'')+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
 }
-// Board: pick the number of card columns that lets the text stay largest on
-// one A4 page (a long holiday in 2 tall columns otherwise shrinks to ~23px).
-function boardBestColumns(sheet){
-    var grid=document.querySelector('#pBody .bd-grid'), tl=document.querySelector('#pBody .tl');
-    if(!grid || !tl) return;
-    var portrait=_exportOrientation==='portrait';
-    var canvasH = sheet.offsetWidth * (portrait ? 297/210 : 210/297);
-    var start = parseFloat(getComputedStyle(tl).fontSize) || 22, best=null;
-    (portrait ? [2,3,4] : [3,4,5]).forEach(function(n){
-        grid.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))';
-        var fs=start; tl.style.fontSize=fs+'px';
-        for(var k=0;k<40 && sheet.offsetHeight>canvasH;k++){
-            fs *= Math.max(0.8, Math.min(0.985, Math.sqrt(canvasH/sheet.offsetHeight)));
-            tl.style.fontSize=fs+'px';
-        }
-        var over = Array.prototype.some.call(grid.querySelectorAll('.bd-rw>span, .bd-pn header'), function(x){ return x.scrollWidth > x.clientWidth+1; });
-        if(!over && (!best || fs>best.fs+0.25)) best={n:n, fs:fs};
-    });
-    grid.style.gridTemplateColumns = best ? 'repeat('+best.n+',minmax(0,1fr))' : '';
-    tl.style.fontSize = start+'px';
-}
 
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
-    if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : isQuiet() ? renderQuietSheet() : isInline() ? renderInlineSheet() : renderTimelineSheet());
-    else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
-    else renderListSheet();
+    // A multi-page export renders one page's dates at a time.
+    var allRows = null;
+    if(_pageKeys){ allRows = rows; rows = rows.filter(function(r){ return _pageKeys[rowKey(r)]; }); }
+    try{
+        if(isBlankGrid()) renderBlankGridSheet();
+        else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : isQuiet() ? renderQuietSheet() : isInline() ? renderInlineSheet() : renderTimelineSheet());
+        else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
+        else renderListSheet();
+    } finally { if(allRows) rows = allRows; }
 }
+// The key a session is grouped under (same rule as tlModel: date, else day).
+function rowKey(r){ var date=r.date||''; return date || (r.day||'').trim() || '—'; }
 
 // Show/hide the editor panels for the current layout. Pure UI — never resets
 // entered data, so it is safe to call when loading a saved design.
@@ -1870,34 +1866,235 @@ el('satManage').addEventListener('change', function(e){
 // sheet is captured at (landscape or portrait), every column is already an
 // exact percentage of it, so html2canvas/jsPDF have nothing left to
 // recalculate — they just rasterise the layout that's already correct.
-var _exportCanvas = null;
 var _exportOrientation = 'landscape';
 function exportName(){
     return (el('title').value || layout().title || 'timetable').replace(/[^\w]+/g, '_');
 }
-// A short table (few weeks/rows) only fills the top of the export canvas,
-// leaving the rest of the page blank — the table's row heights are normally
-// intrinsic (font + padding), with nothing stretching them to the page. Give
-// every row an explicit height, computed fresh from however many rows are
-// actually on the sheet right now (any layout, any row/column count the user
-// has set up) and however much vertical space is actually left after the
-// school/title header block (measured live, not guessed, since header height
-// varies by theme/logo/subtitle). Table rows never shrink below what their
-// own content needs, so this only ever stretches a short table to fill the
-// page — it never compresses a long one (that still just fits-to-page in the
-// PDF placement below, as before).
+// ---------- Export: readable text, as many A4 pages as it takes ----------
+// These sheets are mostly shared as images/PDFs and read on a phone, where an
+// A4 page is shown at ~37% (portrait) or ~26% (landscape) of its size. So the
+// user picks Small/Medium/Large, which fixes the size of the main text, and
+// it is NEVER shrunk to squeeze everything onto one page: dates that don't
+// fit flow onto the next page instead (PDF pages / one image per page).
+// Sizes are sheet px for the main subject text (portrait sheet 1046px wide,
+// landscape 1480px); on a phone Medium is ~11.5px portrait / ~10px landscape.
+var EXPORT_TEXT = {portrait:{s:24, m:28, l:33}, landscape:{s:27, m:31, l:37}};
+var EXPORT_MIN_RATIO = 0.72;   // no text (teachers, labels, footers) below this share of it
+var _pageKeys = null;           // dates on the page being rendered (null = all)
+var _pageLabel = '';
+var _laterPage = false;          // rendering page 2+ of a multi-page export
+var _allFirst = null;            // 'Page 2 of 3' in the subtitle while exporting several pages
+var _exportPages = [];          // [{url, w, h}] of the last finished render
+var _floored = [];
+function exportSize(){ var r=document.querySelector('input[name="exportSize"]:checked'); return r ? r.value : 'm'; }
+function exportTextPx(){ return EXPORT_TEXT[_exportOrientation==='portrait'?'portrait':'landscape'][exportSize()] || 31; }
+function pageHeight(sheet){ var w=sheet.offsetWidth; return _exportOrientation==='portrait' ? w*297/210 : w*210/297; }
+function scaleRoot(){ return document.querySelector('#pBody .tl') || document.querySelector('#pBody table') || el('pBody'); }
+// The size the timetable's main text (the subject names) is set in.
+function mainTextPxAll(root){   // whole sheet, for a page with no date list text
+    var tally={}, n, w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while((n=w.nextNode())){ var t=n.nodeValue.trim(); if(!t || !n.parentElement) continue;
+        var fs=Math.round(parseFloat(getComputedStyle(n.parentElement).fontSize)*2)/2; tally[fs]=(tally[fs]||0)+t.length; }
+    var total=0, best=0; for(var k in tally) total+=tally[k];
+    Object.keys(tally).map(Number).sort(function(a,b){ return b-a; }).some(function(sz){ if(tally[sz]>=total*0.25){ best=sz; return true; } return false; });
+    return best;
+}
+function mainTextPx(root){
+    // Measure the timetable itself, not keys, legends or footers.
+    var lists=root.querySelectorAll('.tl-list'), scopes=lists.length ? Array.prototype.slice.call(lists) : [root];
+    var tally={}, best=0, bestN=0, n;
+    scopes.forEach(function(sc){ var w=document.createTreeWalker(sc, NodeFilter.SHOW_TEXT);
+    while((n=w.nextNode())){
+        var t=n.nodeValue.trim(); if(!t || !n.parentElement) continue;
+        var fs=Math.round(parseFloat(getComputedStyle(n.parentElement).fontSize)*2)/2;
+        tally[fs]=(tally[fs]||0)+t.length;
+    } });
+    // The biggest size that carries a good share (25%+) of the text: the
+    // subject names, even where smaller teacher names add up to more letters.
+    var total=0; for(var k in tally) total+=tally[k];
+    Object.keys(tally).map(Number).sort(function(a,b){ return b-a; }).some(function(sz){
+        if(tally[sz] >= total*0.25){ best=sz; return true; } return false; });
+    if(!best) for(var k2 in tally) if(tally[k2]>bestN){ bestN=tally[k2]; best=+k2; }
+    if(!best) best = mainTextPxAll(root);
+    return best;
+}
+function setMainText(px){
+    var root=scaleRoot(); root.style.fontSize='22px';
+    for(var i=0;i<4;i++){
+        var cur=parseFloat(root.style.fontSize), m=mainTextPx(root); if(!m) break;
+        var nx=cur*px/m; if(Math.abs(nx-cur)<0.25) break;
+        root.style.fontSize=nx+'px';
+    }
+}
+// Lift any small print (teacher names, labels, footers, header lines) to a
+// readable minimum. Parents come before children in document order, so a
+// lifted parent's em-sized children are re-measured after it grows.
+function floorText(scope, min){
+    Array.prototype.forEach.call(scope.querySelectorAll('*'), function(e){
+        if(!Array.prototype.some.call(e.childNodes, function(c){ return c.nodeType===3 && c.nodeValue.trim(); })) return;
+        if(parseFloat(getComputedStyle(e).fontSize) < min-0.3){ e.style.fontSize=min+'px'; _floored.push(e); }
+    });
+}
+function clearFloor(){ _floored.forEach(function(e){ e.style.fontSize=''; }); _floored=[]; }
+// Column layouts to try for the current theme on an export page. Fewer
+// columns = wider cells (no word ever breaks mid-word at the bigger sizes);
+// more = more dates per page. Each page uses whichever fits the most.
+var _forceCols = 0;   // Quiet/Inline split their dates into columns in JS
+function columnChoices(){
+    if(!tlUsesTimeline()) return [null];
+    var land = _exportOrientation !== 'portrait';
+    var grid = function(sel, ns){ return ns.map(function(n){ return {n:n, post:function(){
+        var g=document.querySelector('#pBody '+sel); if(g) g.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))'; }}; }); };
+    if(isQuiet() || isInline()) return (land ? [1,2,3] : [1,2]).map(function(n){ return {n:n, pre:n}; });
+    if(isTimeline()) return [1,2].map(function(n){ return {n:n, post:function(){
+        var sp=document.querySelector('#pBody .tl-split'); if(!sp) return;
+        sp.style.flexDirection = n>1 ? 'row' : 'column';
+        Array.prototype.forEach.call(sp.querySelectorAll('.tl-half+.tl-half .tl-hd'), function(h){ h.style.display = n>1 ? 'grid' : 'none'; });
+    }}; });
+    if(isBoard()) return grid('.bd-grid', land ? [1,2,3,4] : [1,2,3]);
+    if(isTickets()) return grid('.tk-grid', land ? [1,2,3,4] : [1,2,3]);
+    if(isSwiss()) return grid('.sw-grid', land ? [1,2,3,4] : [1,2,3]);
+    if(isNotebook()) return grid('.nb-grid', land ? [1,2,3,4] : [1,2,3]);
+    // Gazette: the lead date sits above the date columns (side by side, the
+    // lead column leaves too little room at readable sizes).
+    if(isGazette()) return [1,2,3].map(function(n){ return {n:n, post:function(){
+        var c=document.querySelector('#pBody .gz-cols'); if(c) c.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))';
+        var b=document.querySelector('#pBody .gz-body'); if(b){ b.style.gridTemplateColumns='minmax(0,1fr)'; b.classList.add('gz-stack'); }
+    }}; });
+    return [null];
+}
+// Text that doesn't read: a word broken across lines, or cut off by its box.
+function badTextNodes(scope){
+    var bad=[], rects=[], n, w=document.createTreeWalker(scope, NodeFilter.SHOW_TEXT), rg=document.createRange();
+    while((n=w.nextNode())){
+        var t=n.nodeValue.trim(); if(!t || !/[A-Za-z0-9]/.test(t)) continue;
+        if(n.parentElement && n.parentElement.closest('[aria-hidden="true"]')) continue;   // decoration
+        var words=t.split(/[\s\/]+/).filter(Boolean).length;
+        rg.selectNodeContents(n);
+        var tops={}, lines=0;
+        Array.prototype.forEach.call(rg.getClientRects(), function(r){ if(r.width>0){ var k=Math.round(r.top/3); if(!tops[k]){ tops[k]=1; lines++; } } });
+        var p=n.parentElement, cs=p && getComputedStyle(p);
+        // ...or spilling out of its cell/column over the next one
+        var box=p; while(box && box!==scope && getComputedStyle(box).display.indexOf('inline')===0) box=box.parentElement;
+        var tr=rg.getBoundingClientRect(), br=box && box.getBoundingClientRect();
+        var spill = br && br.width>0 && (tr.right>br.right+3 || tr.left<br.left-3);
+        if(lines>words || spill || (cs && cs.overflow!=='visible' && p.scrollWidth>p.clientWidth+2)) bad.push(n);
+        else Array.prototype.forEach.call(rg.getClientRects(), function(r){ if(r.width>1 && r.height>1) rects.push({n:n, r:r}); });
+    }
+    // ...or printed over another piece of text (a box wider than its column)
+    rects.sort(function(a,b){ return a.r.left-b.r.left; });
+    for(var i=0;i<rects.length;i++){
+        var A=rects[i].r;
+        for(var j=i+1;j<rects.length && rects[j].r.left < A.right-3;j++){
+            var B=rects[j].r;
+            if(rects[j].n===rects[i].n) continue;
+            if(Math.min(A.bottom,B.bottom)-Math.max(A.top,B.top) > Math.min(A.height,B.height)*0.35){
+                if(bad.indexOf(rects[i].n)<0) bad.push(rects[i].n);
+                if(bad.indexOf(rects[j].n)<0) bad.push(rects[j].n);
+            }
+        }
+    }
+    return bad;
+}
+// The short forms schools write on timetables, used only where the full
+// name would break or be cut off at the chosen text size.
+var SHORT_NAMES = {'mathematics':'Maths','further mathematics':'F. Maths','civic education':'Civic','government':'Govt',
+  'chemistry':'Chem','biology':'Bio','physics':'Phy','literature':'Lit','literature in english':'Lit','economics':'Econs',
+  'commerce':'Comm','data processing':'Data Proc.','agric science':'Agric','agricultural science':'Agric',
+  'geography':'Geo','english language':'English','christian religious studies':'CRS','islamic religious studies':'IRS',
+  'computer studies':'Computer','computer science':'Computer','technical drawing':'Tech. Drw.','financial accounting':'Accounts',
+  'home economics':'Home Econs','business studies':'Bus. Studies','basic science':'Basic Sci.','basic technology':'Basic Tech.',
+  'social studies':'Social St.','physical and health education':'PHE','cultural and creative arts':'CCA','skill acquisition':'Skills',
+  'arts & comm.':'Arts','arts & commercial':'Arts','commercial':'Comm.'};
+function shortenText(t){
+    var lead=t.match(/^\s*/)[0], trail=t.match(/\s*$/)[0], core=t.trim();
+    var out=core.split(/(\s*\/\s*)/).map(function(part){
+        var sh=SHORT_NAMES[part.trim().toLowerCase()];
+        if(!sh) return part;
+        return part.trim()===part.trim().toUpperCase() ? sh.toUpperCase() : sh;
+    }).join('');
+    return out===core ? null : lead+out+trail;
+}
+function shortenBroken(scope){
+    var changed=0;
+    badTextNodes(scope).forEach(function(n){ var t=shortenText(n.nodeValue); if(t){ n.nodeValue=t; changed++; } });
+    return changed;
+}
+// Render the dates in `keys` (null = all) for export at the chosen text size,
+// in column layout `cand`; returns the sheet height and how much text breaks.
+function layoutPage(keys, sheet, cand){
+    _pageKeys = keys ? keys.reduce(function(o,k){ o[k]=1; return o; }, {}) : null;
+    _forceCols = (cand && cand.pre) || 0;
+    _laterPage = !!(keys && _allFirst && keys[0] !== _allFirst);
+    clearTableExportSizing(); clearFloor();
+    renderSheet();
+    var px=exportTextPx();
+    sheet.style.fontSize = Math.round(px*0.82)+'px';   // header and title grow with the text
+    setMainText(px);
+    floorText(sheet, Math.round(px*EXPORT_MIN_RATIO));
+    if(cand && cand.post) cand.post();
+    if(shortenBroken(el('pBody'))) shortenBroken(el('pBody'));
+    return {h: sheet.offsetHeight, bad: badTextNodes(el('pBody')).length};
+}
+// Column layouts for these dates, each with its height and broken-text count.
+function tryLayouts(keys, sheet){
+    return columnChoices().map(function(c){ var r=layoutPage(keys, sheet, c); r.cand=c; return r; });
+}
+// The layout to use for a page of these dates: of those that fit the page
+// and read as well as this theme can (`tol` broken words per date), the one
+// with the most columns' worth of room saved; else the shortest.
+function pickLayout(rs, H, tol, n){
+    var ok=rs.filter(function(r){ return r.h<=H && r.bad<=tol*n; });
+    if(ok.length) return ok.reduce(function(a,b){ return b.bad<a.bad || (b.bad===a.bad && b.h<a.h) ? b : a; });
+    return rs.reduce(function(a,b){ return b.bad<a.bad || (b.bad===a.bad && b.h<a.h) ? b : a; });
+}
+function canPaginate(){
+    var v=el('layout').value;
+    return !isBlankGrid() && !ROSTER_PRESETS[v] && v!=='list_table';
+}
+// Split the dates into pages: as many per page as fit readably at the chosen
+// size, then evened out so the last page isn't a lonely leftover.
+// Returns [{keys, cand}] (keys null = everything on one page).
+function planPages(sheet){
+    _pageKeys=null; _forceCols=0; _pageLabel=''; renderSheet();
+    var all = canPaginate() ? tlModel().order.slice() : [];
+    _allFirst = all[0] || null;
+    var H = pageHeight(sheet) + 1;
+    // How well this theme can do at all: the fewest broken words per date
+    // over a few sample dates in any layout (some themes always break one).
+    var tol = 0;
+    if(all.length){
+        var sample = all.slice(0, Math.min(3, all.length));
+        tol = Math.min.apply(null, tryLayouts(sample, sheet).map(function(r){ return r.bad; })) / sample.length;
+    }
+    var whole = pickLayout(tryLayouts(null, sheet), H, tol, Math.max(1, all.length));
+    if(all.length < 2 || (whole.h <= H && whole.bad <= tol*all.length)) return [{keys:null, cand:whole.cand}];
+    _pageLabel = 'Page 9 of 9';   // same width as the real label
+    var memo={};
+    var fits=function(a,b){ var k=a+':'+b;
+        if(!(k in memo)){ var r=pickLayout(tryLayouts(all.slice(a,b), sheet), H, tol, b-a); memo[k]={ok:r.h<=H && r.bad<=tol*(b-a)+1e-9, cand:r.cand}; }
+        return memo[k]; };
+    // Each page takes the most dates that fit. (Not "stop at the first that
+    // doesn't": a different column layout may fit one more date.)
+    var spans=[], i=0;
+    while(i<all.length){
+        var j=i+1, miss=0;
+        for(var b=i+2; b<=all.length && miss<2; b++){ if(fits(i,b).ok){ j=b; miss=0; } else miss++; }
+        spans.push([i,j]); i=j;
+    }
+    // Even the pages out (3+2 rather than 4+1) where that still fits.
+    var P=spans.length, base=Math.floor(all.length/P), extra=all.length%P, even=[], s0=0;
+    for(var q=0;q<P;q++){ var len=base+(q<extra?1:0); even.push([s0,s0+len]); s0+=len; }
+    if(even.every(function(p){ return fits(p[0],p[1]).ok; })) spans=even;
+    return spans.map(function(p){ return {keys:all.slice(p[0],p[1]), cand:fits(p[0],p[1]).cand}; });
+}
 function sizeTimelineForExport(sheet){
     var lists = document.querySelectorAll('#pBody .tl-list');
     if(!lists.length) return false;
     var list = lists[0];
-    var cs = getComputedStyle(sheet);
-    var padTop = parseFloat(cs.paddingTop) || 0, padBottom = parseFloat(cs.paddingBottom) || 0;
-    var canvasW = sheet.offsetWidth;
-    var canvasH = _exportOrientation === 'portrait' ? canvasW * (297 / 210) : canvasW * (210 / 297);
+    var canvasH = pageHeight(sheet);
     var extra = canvasH - sheet.offsetHeight;
-    // More content than one page holds (e.g. 12 days x 3 classes on portrait):
-    // shrink the whole timetable step by step until it fits, instead of the
-    // PDF squashing the image.
+    // A single date taller than a page (only then): shrink it to fit.
     var tl = document.querySelector('#pBody .tl');
     if(extra < 0 && tl){
         var fs = parseFloat(getComputedStyle(tl).fontSize) || 16;
@@ -1921,45 +2118,35 @@ function sizeTableForExport(sheet){
     if(sizeTimelineForExport(sheet)) return;
     var table = document.querySelector('#pBody table');
     if(!table || !table.rows.length) return;
+    var canvasH = pageHeight(sheet);
+    // Too tall even alone (e.g. a roster): shrink the table to fit the page.
+    for(var k=0; k<12 && sheet.offsetHeight > canvasH; k++){
+        var fs = parseFloat(getComputedStyle(table).fontSize) || 16;
+        table.style.fontSize = fs*Math.max(0.8, Math.min(0.985, Math.sqrt(canvasH/sheet.offsetHeight))) + 'px';
+    }
     var cs = getComputedStyle(sheet);
     var padTop = parseFloat(cs.paddingTop) || 0, padBottom = parseFloat(cs.paddingBottom) || 0;
-    var canvasW = sheet.offsetWidth;
-    var canvasH = _exportOrientation === 'portrait' ? canvasW * (297 / 210) : canvasW * (210 / 297);
     var sheetContentTop = sheet.getBoundingClientRect().top + padTop;
     var usedBefore = table.getBoundingClientRect().top - sheetContentTop;
-    var available = canvasH - padTop - padBottom - usedBefore;
-    var perRow = Math.max(20, available / table.rows.length);
-    for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = perRow + 'px';
+    var after = (sheet.getBoundingClientRect().bottom - padBottom) - table.getBoundingClientRect().bottom;
+    var available = canvasH - padTop - padBottom - usedBefore - Math.max(0, after);
+    var perRow = available / table.rows.length;
+    if(perRow > 0) for(var i = 0; i < table.rows.length; i++) if(table.rows[i].offsetHeight < perRow) table.rows[i].style.height = perRow + 'px';
 }
 function clearTableExportSizing(){
     Array.prototype.forEach.call(document.querySelectorAll('#pBody .tl-list'), function(l){ l.style.minHeight = ''; });
     var bg = document.querySelector('#pBody .bd-grid'); if(bg) bg.style.gridTemplateColumns = '';
+    var root = scaleRoot(); if(root) root.style.fontSize = '';
     var table = document.querySelector('#pBody table');
     if(!table) return;
+    table.style.fontSize = '';
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = '';
 }
-// User-picked export font size (14-50pt), applied as an inline style on the
-// exported table so it wins over every theme/layout's own font-size rule
-// (all of which use em/% units on descendants, so they scale with it too).
-function applyExportFontSize(){
-    var table = document.querySelector('#pBody .tl') || document.querySelector('#pBody table');
-    if(!table) return;
-    var size = parseInt(el('exportFontSize').value, 10);
-    if(!size || isNaN(size)) return;
-    size = Math.max(14, Math.min(50, size));
-    table.style.fontSize = size + 'px';
-}
-function clearExportFontSize(){
-    var table = document.querySelector('#pBody .tl') || document.querySelector('#pBody table');
-    if(table) table.style.fontSize = '';
-}
-// Only one render at a time. On a phone each render takes many seconds; a
-// font-size/orientation change mid-render used to start a second (and third)
-// html2canvas in parallel. They finished in reverse order — the stale one
-// overwrote the preview — and several full-page canvases at once ran phones
-// out of graphics memory (green/blank blocks). Now a change during a render
-// just marks it stale: when it finishes it is discarded and ONE fresh render
-// runs with the latest settings.
+// Only one render at a time. On a phone each page takes seconds; a size or
+// orientation change mid-render used to start parallel renders that finished
+// in reverse order (a stale one overwrote the preview) and ran phones out of
+// graphics memory (green/blank blocks). A change mid-render now marks it
+// stale: it stops after the current page and ONE fresh render starts.
 var _capBusy = false, _capAgain = false;
 function freeCanvas(c){ if(c){ c.width = 0; c.height = 0; } }
 function captureExport(){
@@ -1970,58 +2157,64 @@ function captureExport(){
     _capBusy = true;
     var sheet = el('sheet');
     _exportOrientation = (el('pageOrient') && el('pageOrient').value) || 'landscape';
-    el('exportImg').style.display = 'none';
-    // Reset in case a previous attempt's .catch() left an error message here.
-    el('exportSpinner').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering…';
-    el('exportSpinner').style.display = 'block';
     var wrap = sheet.closest('.td-wrap');
     if(wrap) wrap.classList.add('td-exporting'); // phones hide the preview; keep it measurable
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
-    if(isQuiet() && tlUsesTimeline()) renderQuietSheet(); // its column count follows the page orientation
-    if(isInline() && tlUsesTimeline()) renderInlineSheet();
-    applyExportFontSize();                        // ...at the size the user picked...
-    if(isBoard() && tlUsesTimeline()) boardBestColumns(sheet);
-    sizeTableForExport(sheet);                    // ...and now the content height too
-    var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
-    // Phone browsers can't draw canvases much over ~16 million pixels (the
-    // overflow renders as green/blank blocks), so never ask for more.
-    var area = (sheet.offsetWidth || 1480) * (sheet.scrollHeight || 1);
-    scale = Math.max(1, Math.min(scale, Math.sqrt(15000000 / area)));
-    html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
-                        // The capture re-lays the page out in a frame this wide; keep it at
-                        // desktop width so the designer's tablet/phone rules (which hide the
-                        // preview) never apply to the copy — portrait sheets are only 1046px.
-                        windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: sheet.scrollHeight})
-        .then(function(canvas){
-            sheet.classList.remove('exporting', 'portrait');
-            if(wrap) wrap.classList.remove('td-exporting');
-            clearTableExportSizing();
-            clearExportFontSize();
-            if((isQuiet() || isInline()) && tlUsesTimeline()) renderSheet();
-            _capBusy = false;
-            if(_capAgain || el('exportModal').style.display === 'none'){
+    var cleanup = function(){
+        _pageKeys = null; _pageLabel = ''; _forceCols = 0; _laterPage = false; _allFirst = null; clearFloor(); clearTableExportSizing();
+        sheet.style.fontSize = '';
+        sheet.classList.remove('exporting', 'portrait');
+        if(wrap) wrap.classList.remove('td-exporting');
+        renderSheet();
+        _capBusy = false;
+    };
+    var pages, out = [];
+    try { pages = planPages(sheet); } catch(e){ pages = [{keys:null, cand:null}]; }
+    var step = function(i){
+        if(_capAgain || el('exportModal').style.display === 'none') return Promise.resolve('stale');
+        if(i >= pages.length) return Promise.resolve('done');
+        _pageLabel = pages.length > 1 ? 'Page '+(i+1)+' of '+pages.length : '';
+        layoutPage(pages[i].keys, sheet, pages[i].cand);
+        sizeTableForExport(sheet);
+        var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
+        // Phone browsers can't draw canvases much over ~16 million pixels.
+        scale = Math.max(1, Math.min(scale, Math.sqrt(15000000 / ((sheet.offsetWidth||1480) * (sheet.scrollHeight||1)))));
+        return html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
+                    // Lay the copy out at desktop width so the designer's tablet/phone
+                    // rules (which hide the preview) never apply to it.
+                    windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: sheet.scrollHeight})
+            .then(function(canvas){
+                // Keep the pixels as a PNG and free the canvas straight away, so a
+                // long timetable never holds several page-sized canvases at once.
+                out.push({url: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height});
                 freeCanvas(canvas);
-                if(_capAgain){ _capAgain = false; captureExport(); }
-                return;
-            }
-            freeCanvas(_exportCanvas);
-            _exportCanvas = canvas;
-            var img = el('exportImg');
-            img.src = canvas.toDataURL('image/png');
-            img.style.display = 'block';
-            el('exportSpinner').style.display = 'none';
-        })
-        .catch(function(e){
-            _capBusy = false;
-            sheet.classList.remove('exporting', 'portrait');
-            if(wrap) wrap.classList.remove('td-exporting');
-            clearTableExportSizing();
-            clearExportFontSize();
-            if((isQuiet() || isInline()) && tlUsesTimeline()) renderSheet();
-            if(_capAgain){ _capAgain = false; captureExport(); return; }
-            el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
-        });
+                return step(i+1);
+            });
+    };
+    step(0).then(function(res){
+        cleanup();
+        if(res === 'stale'){
+            if(_capAgain){ _capAgain = false; captureExport(); }
+            return;
+        }
+        _exportPages = out;
+        showExportPages();
+    }).catch(function(e){
+        cleanup();
+        if(_capAgain){ _capAgain = false; captureExport(); return; }
+        el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
+    });
+}
+function showExportPages(){
+    var box = el('exportImg'), n = _exportPages.length;
+    box.innerHTML = _exportPages.map(function(p, i){
+        return (n > 1 ? '<span class="export-pg">Page '+(i+1)+' of '+n+'</span>' : '') + '<img alt="Timetable page '+(i+1)+'" src="'+p.url+'">';
+    }).join('');
+    box.style.display = 'flex';
+    el('exportSpinner').style.display = 'none';
+    var b = document.querySelector('#exportModal [data-call="downloadImage"]');
+    if(b) b.innerHTML = '<i class="fas fa-image"></i> ' + (n > 1 ? 'Download '+n+' images' : 'Download image');
 }
 function openExport(){
     var modal = el('exportModal');
@@ -2035,43 +2228,52 @@ function openExport(){
 }
 function closeExport(){ el('exportModal').style.display = 'none'; document.body.style.overflow = ''; }
 function downloadImage(){
-    if(!_exportCanvas || _capBusy) return;   // never download a stale render
-    var a = document.createElement('a');
-    a.href = _exportCanvas.toDataURL('image/png');
-    a.download = exportName() + '.png';
-    a.click();
+    if(!_exportPages.length || _capBusy) return;   // never download a stale render
+    var n = _exportPages.length;
+    _exportPages.forEach(function(p, i){
+        setTimeout(function(){
+            var a = document.createElement('a');
+            a.href = p.url;
+            a.download = exportName() + (n > 1 ? '-page-' + (i+1) : '') + '.png';
+            a.click();
+        }, i * 700);
+    });
 }
 function downloadPDF(){
-    if(!_exportCanvas || _capBusy) return;   // never download a stale render
+    if(!_exportPages.length || _capBusy) return;   // never download a stale render
     var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
     var pdf = new JsPDF({orientation: _exportOrientation, unit: 'mm', format: 'a4'});
     var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-    // Fill the page width and keep the natural aspect ratio (no vertical
-    // stretch); if that would overflow the page height, fit to height instead.
-    var iw = _exportCanvas.width, ih = _exportCanvas.height;
-    var imgW = pw, imgH = pw * ih / iw;
-    if(imgH > ph){ imgH = ph; imgW = ph * iw / ih; }
-    var x = (pw - imgW) / 2, y = 0;
-    pdf.addImage(_exportCanvas.toDataURL('image/png'), 'PNG', x, y, imgW, imgH);
+    _exportPages.forEach(function(p, i){
+        if(i) pdf.addPage('a4', _exportOrientation);
+        // Fill the page width, keep the aspect ratio; fit to height if taller.
+        var imgW = pw, imgH = pw * p.h / p.w;
+        if(imgH > ph){ imgH = ph; imgW = ph * p.w / p.h; }
+        pdf.addImage(p.url, 'PNG', (pw - imgW) / 2, 0, imgW, imgH);
+    });
     pdf.save(exportName() + '.pdf');
 }
 // click outside the box closes the preview
 document.getElementById('exportModal').addEventListener('click', function(e){
     if(e.target === this) closeExport();
 });
-// switching A4 orientation re-renders the preview (and what PDF/image download
-// will use) — only while the modal's actually open, never on page load.
+// Orientation and text size re-render the preview (what the downloads use) —
+// only while the modal is open. The chosen text size is remembered.
 el('pageOrient').addEventListener('change', function(){
     if(el('exportModal').style.display !== 'none') captureExport();
 });
-// same for the font size picker — clamp to 14-50 as the user types, then
-// re-render so the preview always matches what downloadPDF()/downloadImage()
-// will actually produce.
-el('exportFontSize').addEventListener('change', function(){
-    var v = Math.max(14, Math.min(50, parseInt(this.value, 10) || 26));
-    this.value = v;
-    if(el('exportModal').style.display !== 'none') captureExport();
-});
+(function(){
+    var saved = null;
+    try { saved = localStorage.getItem('ttExportSize'); } catch(e){}
+    var r = saved && document.querySelector('input[name="exportSize"][value="'+saved+'"]');
+    if(r) r.checked = true;
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="exportSize"]'), function(inp){
+        inp.addEventListener('change', function(){
+            try { localStorage.setItem('ttExportSize', inp.value); } catch(e){}
+            if(el('exportModal').style.display !== 'none') captureExport();
+        });
+    });
+})();
 
 // seed with a couple of sessions so the tool is immediately usable
 addRow(); addRow();

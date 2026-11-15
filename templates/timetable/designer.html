@@ -155,6 +155,32 @@
 .tt-sheet table.grid-tt.roster{font-size:26px}
 
 /* themes */
+/* Exports are set at a size that reads on a phone, so the dense themes drop
+   what the sheet already says elsewhere: Timeline's per-lesson teacher names
+   and "to 10am" lines (its key lists every teacher), Gazette's Teachers box
+   (each lesson shows its teacher), Swiss's key (likewise), and Swiss's poster title
+   is scaled to leave room for the timetable. */
+.tt-sheet.exporting[data-theme="timeline"] .tl-c small,
+.tt-sheet.exporting[data-theme="timeline"] .tl-ph small{display:none}
+/* Timeline: lesson names are the main text of an export; set them at the
+   theme's base size so the date and label columns don't balloon around them. */
+.tt-sheet.exporting[data-theme="timeline"] .tl-c b{font-size:1em}
+.tt-sheet.exporting[data-theme="timeline"] .tl-c{padding:.08em .35em}
+.tt-sheet.exporting[data-theme="timeline"] .tl-dt b{font-size:1.5em}
+.tt-sheet.exporting[data-theme="timeline"] .tl-ph b{font-size:.9em}
+.tt-sheet.exporting[data-theme="timeline"] .tl-g{white-space:normal;overflow:visible;line-height:1.1}
+.tt-sheet.exporting[data-theme="gazette"] .gz-box{display:none}
+.tt-sheet.exporting[data-theme="gazette"] table.gz-tt.big{font-size:.84em}
+.tt-sheet.exporting:not(.portrait)[data-theme="gazette"] table.gz-tt.big{font-size:.72em}
+.tt-sheet.exporting[data-theme="gazette"] .gz-lead h2{font-size:1.15em}
+.tt-sheet.exporting[data-theme="swiss"] .tt-title{font-size:2.2em}
+.tt-sheet.exporting[data-theme="swiss"] .sw-key{display:none}
+.tt-sheet.exporting:not(.portrait)[data-theme="swiss"] .tt-title{font-size:1.7em}
+.tt-sheet.exporting:not(.portrait)[data-theme="swiss"] .sw-prog{display:none}
+.tt-sheet.exporting[data-theme="tickets"] .tk-lane li{grid-template-columns:max-content .4em minmax(0,1fr)}
+.tt-sheet.exporting[data-theme="tickets"] .tk-lane li.tk-brk,.tt-sheet.exporting[data-theme="tickets"] .tk-lane li.tk-free{grid-template-columns:max-content minmax(0,1fr)}
+.tt-sheet.exporting[data-theme="gazette"] .gz-stack>.gz-lead{border-right:0;padding-right:0;border-bottom:1px solid #111;padding-bottom:.5em;margin-bottom:.5em}
+
 /* inline — one line per period, read like a message (renderInlineSheet) */
 .tt-sheet[data-theme="inline"]{font-family:'DM Sans','Inter',system-ui,sans-serif;background:#f6f5f2;color:#1f2328}
 .tt-sheet[data-theme="inline"] .tt-head{text-align:left;margin-bottom:0}
@@ -776,6 +802,15 @@
     padding:1rem;display:flex;flex-direction:column;gap:.75rem}
 .export-modal .box h3{margin:0;font-size:1rem}
 .export-modal img{max-width:100%;max-height:68vh;border:1px solid var(--gray-200);align-self:center}
+.export-pages{flex-direction:column;align-items:center;gap:.5rem}
+.export-pg{font-size:.75rem;font-weight:700;color:var(--text-muted);align-self:flex-start}
+.td-size{display:inline-flex;background:var(--gray-50,#f8f9fa);border:1px solid var(--border-color,#ddd);border-radius:10px;padding:3px;gap:2px}
+.td-size label{cursor:pointer;margin:0}
+.td-size input{position:absolute;opacity:0;pointer-events:none}
+.td-size span{display:block;padding:.4rem .9rem;border-radius:7px;font-size:.8rem;font-weight:600;color:var(--text-muted)}
+.td-size input:checked+span{background:var(--bg-card,#fff);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.td-size input:focus-visible+span{outline:2px solid var(--primary);outline-offset:1px}
+.td-size-note{display:block;margin-top:.3rem;font-size:.72rem;color:var(--text-muted)}
 .export-actions{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end}
 .export-spinner{padding:1rem;text-align:center;color:var(--text-muted)}
 
@@ -1320,11 +1355,16 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
             </select>
         </div>
         <div class="form-group" style="margin:0 0 .25rem">
-            <label class="form-label" style="font-size:.8rem">Font size (14–50pt)</label>
-            <input type="number" id="exportFontSize" class="form-control" min="14" max="50" step="1" value="26">
+            <label class="form-label" style="font-size:.8rem">Text size</label>
+            <div class="td-size" role="radiogroup" aria-label="Text size">
+                <label><input type="radio" name="exportSize" value="s"><span>Small</span></label>
+                <label><input type="radio" name="exportSize" value="m" checked><span>Medium</span></label>
+                <label><input type="radio" name="exportSize" value="l"><span>Large</span></label>
+            </div>
+            <small class="td-size-note">Every size reads on a phone without zooming. A long timetable continues on a second page instead of shrinking.</small>
         </div>
         <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
-        <img id="exportImg" alt="Timetable preview" style="display:none">
+        <div id="exportImg" class="export-pages" style="display:none"></div>
         <div class="export-actions">
             <button class="btn btn-primary" data-call="downloadPDF"><i class="fas fa-file-pdf"></i> Download PDF</button>
             <button class="btn btn-success" data-call="downloadImage"><i class="fas fa-image"></i> Download image (Full HD)</button>
