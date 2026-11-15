@@ -622,8 +622,12 @@ def _sum_finance(term):
     payable = max(fees['expected'] - fees['discounts'], 0)
     collected = fees['collected']
     dflt = defaulters_summary(term.id)
+    # "Still owed" is the sum of what each student still owes — the same figure
+    # as the defaulter count. (payable − collected let one family's overpayment,
+    # or money from a student since removed, shrink everyone else's debt.)
+    owed = round(dflt.get('balance', 0) or 0, 2)
     return {'payable': round(payable, 2), 'collected': round(collected, 2),
-            'outstanding': round(max(payable - collected, 0), 2),
+            'outstanding': owed,
             'rate': round(collected / payable * 100, 1) if payable else None,
             'expenses': round(exp['expenses'], 2), 'net': round(collected - exp['expenses'], 2),
             'defaulters': dflt.get('count', 0), 'owed': round(dflt.get('balance', 0) or 0, 2)}
