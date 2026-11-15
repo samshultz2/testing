@@ -77,7 +77,7 @@ def test_combination_documents_use_student_list_design(app):
             'school': school_profile(), 'colors': SLE.colors_for(document_branding()),
         }
         text = ''.join(p.get_text() for p in fitz.open(stream=SLE.render_pdf(spec), filetype='pdf'))
-        assert 'SSS2 SCIENCE MERIT LIST' in text and 'Group A' in text and 'Group B' in text
+        assert 'SSS2 Science Merit List' in text and 'Group A' in text and 'Group B' in text
         assert '88.7' in text and '41' in text and '41.0' not in text and '–' in text
         assert 'Key: PHY = Physics.' in text
         assert SLE.render_docx(spec)[:2] == b'PK'
