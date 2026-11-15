@@ -858,6 +858,13 @@
 .tt-sheet.exporting{position:fixed;left:-10000px;top:0;width:1480px;max-width:none;
     height:auto;overflow:visible;border:none;border-radius:0}
 .tt-sheet.exporting.portrait{width:1046px}
+/* Phones/tablets hide the preview pane (edit tab). The sheet must still be laid
+   out while exporting, or it measures 0px tall, "fit to one A4 page" never
+   runs and the canvas grows past what phone browsers can draw (it comes out
+   with green/blank blocks). Keep the pane in the layout, invisible and
+   zero-height; only the off-screen sheet itself is visible to the capture. */
+.td .td-wrap.td-exporting .td-preview{display:block!important;visibility:hidden;height:0;min-height:0;padding:0;border:0;overflow:visible}
+.td .td-wrap.td-exporting .td-preview .tt-sheet.exporting{visibility:visible}
 
 /* export preview modal */
 .export-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100000;

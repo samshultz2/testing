@@ -1855,12 +1855,18 @@ function captureExport(){
     // Reset in case a previous attempt's .catch() left an error message here.
     el('exportSpinner').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering…';
     el('exportSpinner').style.display = 'block';
+    var wrap = sheet.closest('.td-wrap');
+    if(wrap) wrap.classList.add('td-exporting'); // phones hide the preview; keep it measurable
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
     if(isQuiet() && tlUsesTimeline()) renderQuietSheet(); // its column count follows the page orientation
     applyExportFontSize();                        // ...at the size the user picked...
     sizeTableForExport(sheet);                    // ...and now the content height too
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
+    // Phone browsers can't draw canvases much over ~16 million pixels (the
+    // overflow renders as green/blank blocks), so never ask for more.
+    var area = (sheet.offsetWidth || 1480) * (sheet.scrollHeight || 1);
+    scale = Math.max(1, Math.min(scale, Math.sqrt(15000000 / area)));
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
                         // The capture re-lays the page out in a frame this wide; keep it at
                         // desktop width so the designer's tablet/phone rules (which hide the
@@ -1868,6 +1874,7 @@ function captureExport(){
                         windowWidth: Math.max(1400, sheet.scrollWidth), windowHeight: sheet.scrollHeight})
         .then(function(canvas){
             sheet.classList.remove('exporting', 'portrait');
+            if(wrap) wrap.classList.remove('td-exporting');
             clearTableExportSizing();
             clearExportFontSize();
             if(isQuiet() && tlUsesTimeline()) renderQuietSheet();
@@ -1879,6 +1886,7 @@ function captureExport(){
         })
         .catch(function(e){
             sheet.classList.remove('exporting', 'portrait');
+            if(wrap) wrap.classList.remove('td-exporting');
             clearTableExportSizing();
             clearExportFontSize();
             if(isQuiet() && tlUsesTimeline()) renderQuietSheet();
