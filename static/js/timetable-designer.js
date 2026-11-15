@@ -836,7 +836,10 @@ function collectState(){
 function applyState(s){
     if(!s) return;
     el('layout').value=s.layout||'saturday';
-    el('theme').value=s.theme||'modern';
+    // Themes that no longer exist (Modern, Classic, Ocean, ...) fall back to
+    // the first theme, Timeline, so older saved timetables still open.
+    var th=el('theme');
+    th.value = (s.theme && th.querySelector('option[value="'+s.theme+'"]')) ? s.theme : th.options[0].value;
     el('school').value=s.school||'';
     el('subtitle').value=s.subtitle||'';
     el('orient').value=s.orient||'rows';
@@ -1950,7 +1953,21 @@ function clearExportFontSize(){
     var table = document.querySelector('#pBody .tl') || document.querySelector('#pBody table');
     if(table) table.style.fontSize = '';
 }
+// Only one render at a time. On a phone each render takes many seconds; a
+// font-size/orientation change mid-render used to start a second (and third)
+// html2canvas in parallel. They finished in reverse order — the stale one
+// overwrote the preview — and several full-page canvases at once ran phones
+// out of graphics memory (green/blank blocks). Now a change during a render
+// just marks it stale: when it finishes it is discarded and ONE fresh render
+// runs with the latest settings.
+var _capBusy = false, _capAgain = false;
+function freeCanvas(c){ if(c){ c.width = 0; c.height = 0; } }
 function captureExport(){
+    el('exportImg').style.display = 'none';
+    el('exportSpinner').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering…';
+    el('exportSpinner').style.display = 'block';
+    if(_capBusy){ _capAgain = true; return; }
+    _capBusy = true;
     var sheet = el('sheet');
     _exportOrientation = (el('pageOrient') && el('pageOrient').value) || 'landscape';
     el('exportImg').style.display = 'none';
@@ -1982,6 +1999,13 @@ function captureExport(){
             clearTableExportSizing();
             clearExportFontSize();
             if((isQuiet() || isInline()) && tlUsesTimeline()) renderSheet();
+            _capBusy = false;
+            if(_capAgain || el('exportModal').style.display === 'none'){
+                freeCanvas(canvas);
+                if(_capAgain){ _capAgain = false; captureExport(); }
+                return;
+            }
+            freeCanvas(_exportCanvas);
             _exportCanvas = canvas;
             var img = el('exportImg');
             img.src = canvas.toDataURL('image/png');
@@ -1989,11 +2013,13 @@ function captureExport(){
             el('exportSpinner').style.display = 'none';
         })
         .catch(function(e){
+            _capBusy = false;
             sheet.classList.remove('exporting', 'portrait');
             if(wrap) wrap.classList.remove('td-exporting');
             clearTableExportSizing();
             clearExportFontSize();
             if((isQuiet() || isInline()) && tlUsesTimeline()) renderSheet();
+            if(_capAgain){ _capAgain = false; captureExport(); return; }
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
 }
@@ -2009,14 +2035,14 @@ function openExport(){
 }
 function closeExport(){ el('exportModal').style.display = 'none'; document.body.style.overflow = ''; }
 function downloadImage(){
-    if(!_exportCanvas) return;
+    if(!_exportCanvas || _capBusy) return;   // never download a stale render
     var a = document.createElement('a');
     a.href = _exportCanvas.toDataURL('image/png');
     a.download = exportName() + '.png';
     a.click();
 }
 function downloadPDF(){
-    if(!_exportCanvas) return;
+    if(!_exportCanvas || _capBusy) return;   // never download a stale render
     var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
     var pdf = new JsPDF({orientation: _exportOrientation, unit: 'mm', format: 'a4'});
     var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();

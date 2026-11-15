@@ -193,13 +193,21 @@ def test_grid_paste_preserves_a_slash_in_the_subject_cell(auth_client):
     assert 'PHY/GOVT' in html   # on-page hint's worked example
 
 
-def test_designer_offers_extra_themes(auth_client):
-    """The added design themes are selectable and have matching CSS."""
+def test_designer_offers_current_themes(auth_client):
+    """The designer offers the 8 poster themes plus the black & white ones,
+    each with matching CSS; the retired colour themes are gone, and saved
+    timetables using one fall back to the first theme (Timeline)."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
-    for t in ('forest', 'royal', 'slate', 'midnight', 'coral', 'emerald',
-              'burgundy', 'sky', 'amber', 'plum', 'graphite'):
+    for t in ('timeline', 'tickets', 'gazette', 'swiss', 'notebook', 'board',
+              'quiet', 'inline', 'print', 'mono', 'plain'):
         assert f'value="{t}"' in html, f'missing theme option {t}'
         assert f'data-theme="{t}"' in html, f'missing theme CSS {t}'
+    for t in ('modern', 'classic', 'colour', 'forest', 'royal', 'slate', 'midnight',
+              'coral', 'emerald', 'burgundy', 'sky', 'amber', 'plum', 'graphite'):
+        assert f'value="{t}"' not in html, f'retired theme still offered: {t}'
+        assert f'data-theme="{t}"' not in html, f'retired theme CSS left: {t}'
+    assert '<option value="timeline" selected>' in html
+    assert "th.options[0].value" in DESIGNER_JS   # unknown saved theme -> first theme
 
 
 def test_save_requires_a_name(auth_client):
