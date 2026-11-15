@@ -85,3 +85,12 @@ def test_combination_documents_use_student_list_design(app):
         vals = [c.value for row in ws.iter_rows() for c in row]
         assert 88.67 in vals and 86 in vals
     assert SLE.score_tone(72) == 'good' and SLE.score_tone(55) == 'mid' and SLE.score_tone(30) == 'bad'
+
+
+def test_all_caps_heading_is_set_in_title_case():
+    from utils.student_list_export import display_title as d
+    assert d('SSS2 SCIENCE MERIT LIST') == 'SSS2 Science Merit List'
+    assert d('JSS3 GOLD CLASS LIST OF STUDENTS') == 'JSS3 Gold Class List of Students'
+    assert d('WAEC CANDIDATES') == 'WAEC Candidates'
+    assert d('Science merit list') == 'Science merit list'      # typed in mixed case: kept
+    assert d('') == ''

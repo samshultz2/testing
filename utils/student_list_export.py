@@ -29,6 +29,7 @@ columns; and a footer with the preparer, a confidentiality note and
     school    utils.school.school_profile();  colors  see colors_for()
 """
 import io
+import re
 import os
 from datetime import date, datetime
 
@@ -119,6 +120,35 @@ def fmt_date(v):
     if isinstance(v, (date, datetime)):
         return v.strftime('%d %b %Y')
     return v or ''
+
+
+
+# Codes that stay in capitals when an all-caps heading is set in title case.
+_KEEP_CAPS = {'JSS', 'SSS', 'SS', 'JS', 'WAEC', 'NECO', 'JAMB', 'BECE', 'UTME', 'SSCE', 'GCE', 'CA', 'PTA',
+              'ICT', 'CRS', 'IRS', 'CRK', 'IRK', 'PHE', 'CCA', 'NIN', 'ID', 'II', 'III', 'IV', 'VI', 'A', 'B'}
+_SMALL = {'and', 'of', 'the', 'for', 'in', 'on', 'to', 'by', 'at', 'a', 'an', 'or', 'with'}
+
+
+def display_title(t):
+    """The heading as it is set on the document. One typed in capitals
+    ("SSS2 SCIENCE MERIT LIST") reads as shouting in the large display face,
+    so it becomes title case ("SSS2 Science Merit List"), keeping class
+    names and codes (SSS2, JSS3, WAEC, CA) as they are. Mixed case is kept."""
+    t = (t or '').strip()
+    letters = [c for c in t if c.isalpha()]
+    if len(letters) < 4 or any(c.islower() for c in letters):
+        return t
+    out = []
+    for i, w in enumerate(t.split(' ')):
+        core = re.sub(r'[^A-Za-z]', '', w)
+        if not core or any(ch.isdigit() for ch in w) or core in _KEEP_CAPS:
+            out.append(w)
+        elif i and core.lower() in _SMALL:
+            out.append(w.lower())
+        else:
+            out.append(re.sub(r'[A-Za-z]+', lambda m: m.group(0)[0] + m.group(0)[1:].lower(), w, count=1)
+                       if w[:1].isalpha() else w.lower())
+    return ' '.join(out)
 
 
 def _contact_line(school):
@@ -394,7 +424,7 @@ def render_pdf(spec):
     head_h = 112      # first-page letterhead
     head2_h = 46      # later pages
     foot_h = 40
-    title = spec.get('title') or 'Student List'
+    title = display_title(spec.get('title')) or 'Student List'
     gen = spec.get('generated') or _now()
 
     NumberedCanvas = numbered_canvas(spec, PW, PH, margin, head_h, title)
@@ -759,7 +789,7 @@ def render_docx(spec):
     bar.paragraph_format.space_after = Pt(8)
 
     # Title + stats
-    p = doc.add_paragraph(); run(p, spec.get('title') or 'Student List', 20, True, INK)
+    p = doc.add_paragraph(); run(p, display_title(spec.get('title')) or 'Student List', 20, True, INK)
     p.paragraph_format.space_after = Pt(0)
     if spec.get('subtitle'):
         p = doc.add_paragraph(); run(p, spec['subtitle'], 9.5, False, INK2)
@@ -842,7 +872,7 @@ def render_docx(spec):
     # footer: school · title · prepared by …   Page X of Y
     fp = sec.footer.paragraphs[0]
     run(fp, (school.get('name') or 'School'), 7.5, True, INK2)
-    run(fp, ' · ' + (spec.get('title') or 'Student List')
+    run(fp, ' · ' + (display_title(spec.get('title')) or 'Student List')
         + (' · prepared by ' + spec['prepared_by'] if spec.get('prepared_by') else '')
         + '  ·  Contains personal data — handle confidentially      Page ', 7.5, False, MUTED)
     field(fp, 'PAGE', 7.5, INK2); run(fp, ' of ', 7.5, False, MUTED); field(fp, 'NUMPAGES', 7.5, INK2)
@@ -897,7 +927,7 @@ def render_xlsx(spec, about=None):
     ncol = len(headers)
     last = get_column_letter(ncol)
 
-    title = '%s — %s' % (school.get('name') or 'School', spec.get('title') or 'Student List')
+    title = '%s — %s' % (school.get('name') or 'School', display_title(spec.get('title')) or 'Student List')
     ws['A1'] = formula_guard(title)
     ws['A1'].font = Font(name='Calibri', size=15, bold=True, color=P)
     ws.row_dimensions[1].height = 24
