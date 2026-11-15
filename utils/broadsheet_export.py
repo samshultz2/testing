@@ -397,13 +397,16 @@ def sheet_col_key(c):
 
 
 EXAM_TOTAL_KEY, GENERAL_TOTAL_KEY = 'EXAM_TOTAL', 'GENERAL_TOTAL'
+# Columns that make up the Exam Total: P.E/M.E (practical / mid-term exam),
+# CBT and PBT/Theory.
+EXAM_KINDS = ('peme', 'cbt', 'theory')
 
 
 def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class_subject=None,
                     fill=None):
     """The score sheet for a class. With ``class_subject`` it is printed
     *filled*: every student's saved score in each column, their Exam Total
-    (CBT + PBT/Theory) and General Total, with each column's maximum shown.
+    (P.E/M.E + CBT + PBT/Theory) and General Total, with each column's maximum shown.
 
     ``fill`` (a set of column keys — see ``sheet_col_key`` plus EXAM_TOTAL_KEY /
     GENERAL_TOTAL_KEY) limits which columns are filled in; the others are still
@@ -465,7 +468,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class
               Paragraph('Middle Name', hd), Paragraph('First Name', hd)]
     for c in cols:
         header.append(col_head(c['label'], c['max']))
-    exam_max = sum(c['max'] or 0 for c in cols if c['kind'] in ('cbt', 'theory'))
+    exam_max = sum(c['max'] or 0 for c in cols if c['kind'] in EXAM_KINDS)
     all_max = sum(c['max'] or 0 for c in cols)
     header += [col_head('Exam Total', exam_max), col_head('General Total', all_max)]
     data = [header]
@@ -476,7 +479,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class
         if filled:
             vals = [cell(st, c) for c in cols]
             # Totals always add up the real saved scores, even for columns left empty.
-            exam = [v for v, c in zip(vals, cols) if c['kind'] in ('cbt', 'theory') and v is not None]
+            exam = [v for v, c in zip(vals, cols) if c['kind'] in EXAM_KINDS and v is not None]
             got = [v for v in vals if v is not None]
             row += [fmt(v) if want(sheet_col_key(c)) else '' for v, c in zip(vals, cols)]
             row += [fmt(sum(exam)) if (exam and want(EXAM_TOTAL_KEY)) else '',

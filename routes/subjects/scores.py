@@ -5,11 +5,11 @@ from routes.subjects import *  # noqa: F401,F403
 def _sheet_cols(class_subject, term_id):
     if not class_subject:
         return []
-    from utils.broadsheet_export import (score_columns, sheet_col_key,
+    from utils.broadsheet_export import (score_columns, sheet_col_key, EXAM_KINDS,
                                          EXAM_TOTAL_KEY, GENERAL_TOTAL_KEY)
     cols = score_columns(subject=class_subject.subject, term_id=term_id)
     out = [{'key': sheet_col_key(c), 'label': c['label'], 'max': c['max'], 'kind': c['kind']} for c in cols]
-    exam_max = sum(c['max'] or 0 for c in cols if c['kind'] in ('cbt', 'theory'))
+    exam_max = sum(c['max'] or 0 for c in cols if c['kind'] in EXAM_KINDS)
     out += [{'key': EXAM_TOTAL_KEY, 'label': 'Exam Total', 'max': exam_max, 'kind': 'total'},
             {'key': GENERAL_TOTAL_KEY, 'label': 'General Total', 'max': sum(c['max'] or 0 for c in cols), 'kind': 'total'}]
     return out

@@ -563,7 +563,7 @@ function PrintScores({ d, onClose }) {
     { label: 'Everything', keys: all },
     { label: 'Scores only', keys: scoreCols.map((c) => c.key) },
     { label: 'CA only', keys: scoreCols.filter((c) => c.kind === 'ca' || c.kind === 'ha').map((c) => c.key) },
-    { label: 'Exam only', keys: cols.filter((c) => c.kind === 'cbt' || c.kind === 'theory' || c.key === 'EXAM_TOTAL').map((c) => c.key) },
+    { label: 'Exam only', keys: cols.filter((c) => c.kind === 'peme' || c.kind === 'cbt' || c.kind === 'theory' || c.key === 'EXAM_TOTAL').map((c) => c.key) },
     { label: 'Totals only', keys: totals.map((c) => c.key) },
     { label: 'Nothing', keys: [] },
   ].filter((p) => p.label === 'Nothing' || p.keys.length);

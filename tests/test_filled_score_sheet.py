@@ -1,5 +1,5 @@
 """Score entry → "Print scores": the same score sheet as the blank one, filled
-with every saved score, the Exam Total (CBT + PBT/Theory) and General Total."""
+with every saved score, the Exam Total (P.E/M.E + CBT + PBT/Theory) and General Total."""
 from config import Config
 from models import (db, Branch, AcademicSession, Term, SchoolClass, ClassArm, ClassArmAssignment,
                     Student, StudentEnrollment, Subject, ClassSubject, AssessmentType, StudentScore)
@@ -40,7 +40,7 @@ def _seed(app):
             db.session.add(StudentScore(student_id=a.id, class_subject_id=cs.id, assessment_type_id=c['ids'][0],
                                         score=c['max'] - 1))
         db.session.commit()
-        exam = sum(c['max'] - 1 for c in cols if c['kind'] in ('cbt', 'theory'))
+        exam = sum(c['max'] - 1 for c in cols if c['kind'] in ('peme', 'cbt', 'theory'))
         total = sum(c['max'] - 1 for c in cols)
         return dict(term=term.id, asg=caa.id, cs=cs.id, exam=exam, total=total, n=len(cols))
 
@@ -121,3 +121,20 @@ def test_choose_which_columns_to_fill(app):
     # nothing ticked → a blank sheet for this subject (headings still show maxima)
     row = _rows(c.get(base + '&fill=').data)['Filledsheet']
     assert [w for w in row if w.replace('.', '').isdigit()][1:] == []
+
+
+def test_exam_total_includes_peme(app):
+    """Exam Total = P.E/M.E + CBT + PBT/Theory (its heading maximum too)."""
+    ids = _seed(app)
+    c = _admin(app)
+    d = c.get(f"/subjects/scores?term_id={ids['term']}&assignment_id={ids['asg']}&class_subject_id={ids['cs']}",
+              headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    cols = {x['key']: x for x in d['sheet_cols']}
+    peme = next((x for x in d['sheet_cols'] if x['kind'] == 'peme'), None)
+    assert peme is not None
+    exam_parts = [x['max'] for x in d['sheet_cols'] if x['kind'] in ('peme', 'cbt', 'theory')]
+    assert cols['EXAM_TOTAL']['max'] == sum(exam_parts)
+    row = _rows(c.get(d['urls']['filled_sheet'] + '&fill=EXAM_TOTAL').data)['Filledsheet']
+    nums = [w for w in row if w.replace('.', '').isdigit()][1:]
+    assert nums == [str(ids['exam'])]                       # includes P.E/M.E
