@@ -162,7 +162,12 @@ a.stu-name:hover { color:var(--primary); }
    Every colour is a theme variable, so it follows the user's theme. */
 .sx-backdrop { padding:3vh 1rem !important; align-items:center !important; }
 .sx-dlg { max-width:1140px !important; height:min(900px, 94vh); max-height:94vh !important; border-radius:20px !important;
-  display:grid !important; grid-template-rows:auto minmax(0,1fr) auto; color:var(--text-primary); }
+  display:grid !important; grid-template-rows:auto minmax(0,1fr) auto; color:var(--text-primary);
+  /* Only the options/preview panels scroll. If the frame itself could
+     scroll, focusing a control low in the options (e.g. "Blank columns")
+     scrolled the whole dialog: header gone, footer floating mid-screen
+     with empty white space under it. */
+  overflow:hidden !important; overflow:clip !important; }
 .sx-hd { display:flex; align-items:center; gap:14px; padding:18px 24px; border-bottom:1px solid var(--border-color); }
 .sx-hd-ic { width:42px; height:42px; border-radius:12px; background:var(--primary-light); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:18px; flex:none; }
 .sx-hd-t { min-width:0; }
@@ -170,7 +175,8 @@ a.stu-name:hover { color:var(--primary); }
 .sx-hd-s { font-size:.84rem; color:var(--text-muted); margin-top:2px; }
 .sx-x { margin-left:auto; width:36px; height:36px; border-radius:10px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-muted); cursor:pointer; flex:none; }
 .sx-x:hover { color:var(--text-primary); border-color:var(--text-muted); }
-.sx-main { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 360px; min-height:0; }
+.sx-main { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 360px; grid-template-rows:minmax(0,1fr); min-height:0; overflow:hidden; overflow:clip; }
+.sx-left, .sx-right { min-height:0; }
 .sx-left { padding:4px 24px 16px; overflow-y:auto; overscroll-behavior:contain; }
 .sx-right { background:var(--gray-50); border-left:1px solid var(--border-color); padding:18px 20px; overflow-y:auto; }
 .sx-sec { padding:13px 0; border-bottom:1px solid var(--border-light); }
