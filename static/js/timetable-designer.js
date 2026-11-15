@@ -955,7 +955,7 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook() || isBoard() || isQuiet()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook() || isBoard() || isQuiet() || isInline()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 // Shared by the poster themes. A run of 2+ periods that is the same lesson for
@@ -1655,12 +1655,113 @@ function renderQuietSheet(){
         + '<div class="qt-ft"><span>Read each row across — all '+who+' have lessons at the same time</span><span>Printed '+tlPrinted()+'</span></div></div>';
 }
 
+// ---------- "Inline" theme ----------
+// Reads like a well-formatted message: one white card per date, and each
+// period is ONE line — "9:00  [SS1] Bio  [SS2] English  [SS3] Maths" — so
+// everything on a line is visibly happening at the same time. Classes are
+// told apart by small coloured tags; a lesson every class shares for 2+
+// periods (Skill Acquisition) is a single highlighted line.
+var IL_TAGS=[['#4338ca','#e0e7ff'],['#047857','#d1fae5'],['#c2410c','#ffedd5'],['#be185d','#fce7f3'],['#0e7490','#cffafe'],['#a16207','#fef3c7']];
+var IL_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function isInline(){ return el('theme').value==='inline'; }
+function ilTag(g){ var w=(g||'').trim().split(/\s+/)[0]||''; return w.length>5 ? w.slice(0,3) : w; }
+function renderInlineSheet(){
+    var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var real=order.filter(function(k){ return !dmap[k].off; });
+    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var gsAll = md.anyGroup ? md.groupsAll : [''];
+    var tight = gsAll.length>2;
+    var who = isSaturdayLayout()?'streams':'classes';
+    var label=function(t){
+        var raw=(t||'').trim(); if(!tight) return esc(raw).replace(/\s*\/\s*/g,'/<wbr>');
+        var caps = raw===raw.toUpperCase();
+        return raw.split('/').map(function(p){ p=p.trim(); var sh=BD_SHORT[p.toUpperCase()];
+            if(sh && !caps) sh=sh.charAt(0)+sh.slice(1).toLowerCase(); return esc(sh||p); }).join('/<wbr>');
+    };
+    var pill=function(li, inner){ var c=IL_TAGS[li%IL_TAGS.length];
+        return '<u style="--c:'+c[0]+';--b:'+c[1]+'">'+(gsAll[li]?'<i>'+esc(ilTag(gsAll[li]))+'</i>':'')+inner+'</u>'; };
+    var gap=function(i){ return i>0 && periods[i-1].end && periods[i-1].end<periods[i].start; };
+    var heading=function(d){ var p=parseDateAny(d.date), day=d.day||dayFromDate(d.date)||'';
+        return p ? (esc(day)+' '+p.d+' '+IL_MONTHS[p.m-1]) : esc(d.label||day); };
+    var cards=[];
+    order.forEach(function(k){
+        var d=dmap[k];
+        if(d.off){ cards.push({w:.35, h:'<div class="il-dy off"><h3><b>'+heading(d)+'</b></h3><p class="il-nc">No class</p></div>'}); return; }
+        var i0=real.indexOf(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
+        var gs = md.anyGroup ? gsAll : [''];
+        var lines='';
+        var hasCells=(d.groups||[]).length && periods.some(function(pd){ return gs.some(function(g){ return (d.cells[g+'§'+pd.k]||[]).length; }); });
+        if(hasCells){
+            var runs=tlRuns(d,gs,periods);
+            for(var i=0;i<periods.length;){
+                if(gap(i)) lines+='<p class="il-bk">Break · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(periods[i].start))+'</p>';
+                if(runs[i]){
+                    var ri=tlRunInfo(d,gs,periods,i,runs[i]);
+                    lines+='<p class="il-ln sk"><time>'+esc(fmtT(periods[i].start))+'</time><span><b>'+esc(ri.r.subject||'')+'</b> <em>· '
+                        + esc([ri.who?ri.who.replace(/^All /,'all '):'', ri.to?'until '+ri.to:'', (ri.r.teacher||'').trim()].filter(Boolean).join(', '))+'</em></span></p>';
+                    i=runs[i]; continue;
+                }
+                var parts='';
+                gs.forEach(function(g,li){
+                    var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr);
+                    if(sg && i>0 && !gap(i) && sg===sig(d.cells[g+'§'+periods[i-1].k]||[])){ parts+=pill(li,'<s>cont.</s>'); return; }
+                    if(!arr.length){ parts+=pill(li,'<s>—</s>'); return; }
+                    var dbl = i+1<periods.length && !gap(i+1) && sg===sig(d.cells[g+'§'+periods[i+1].k]||[]);
+                    parts+=pill(li, arr.map(function(r){ return label(r.subject); }).join(' &amp; ')+(dbl?'<em>×2</em>':''));
+                });
+                lines+='<p class="il-ln"><time>'+esc(fmtT(periods[i].start))+'</time><span>'+parts+'</span></p>';
+                i++;
+            }
+        }
+        d.banners.forEach(function(b){ lines+='<p class="il-ln sk"><time>'+(b.time?esc(fmtT(b.time)):'')+'</time><span><b>'+esc(b.subject||'')+'</b>'
+            + ((b.teacher||'').trim()?' <em>· '+esc(b.teacher)+'</em>':'')+'</span></p>'; });
+        cards.push({w:1, h:'<div class="il-dy'+st+'"><h3><b>'+heading(d)+'</b>'+(st===' nx'?'<em>Next class</em>':(st===' past'?'<small>done</small>':''))+'</h3>'+lines+'</div>'});
+    });
+    var nc=Math.min(qtCols(3), Math.max(1, cards.length));
+    var tot=cards.reduce(function(a,b){ return a+b.w; },0), cols=[], acc=0;
+    for(var c=0;c<nc;c++) cols.push('');
+    cards.forEach(function(b){ var ci=Math.min(nc-1, Math.floor((acc+b.w/2)/tot*nc)); cols[ci]+=b.h; acc+=b.w; });
+    var nx=md.next?dmap[md.next]:null, np=nx?parseDateAny(nx.date):null;
+    var nextTxt = nx ? (np ? ((nx.day||dayFromDate(nx.date)).slice(0,3)+' '+np.d+' '+IL_MONTHS[np.m-1].slice(0,3)) : gzDate(nx)) : '';
+    var leg = md.anyGroup ? gsAll.map(function(g,li){ return pill(li, esc(g)); }).join('') : '';
+    el('pBody').innerHTML='<div class="tl il'+(tight?' tight':'')+'">'
+        + ((leg||nextTxt)?'<div class="il-top"><div class="il-lg">'+leg+'</div>'+(nextTxt?'<span class="il-next">Next class<b>'+esc(nextTxt)+'</b></span>':'')+'</div>':'')
+        + '<div class="il-cols" style="--nc:'+nc+'">'+cols.map(function(c){ return '<div class="tl-list il-col">'+c+'</div>'; }).join('')+'</div>'
+        + '<div class="il-ft"><span>Each line is one time — every '+(who==='streams'?'stream':'class')+' on that line is in a lesson at the same time'+(/<em>×2/.test(cols.join(''))?' · ×2 double':'')+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
+}
+// Board: pick the number of card columns that lets the text stay largest on
+// one A4 page (a long holiday in 2 tall columns otherwise shrinks to ~23px).
+function boardBestColumns(sheet){
+    var grid=document.querySelector('#pBody .bd-grid'), tl=document.querySelector('#pBody .tl');
+    if(!grid || !tl) return;
+    var portrait=_exportOrientation==='portrait';
+    var canvasH = sheet.offsetWidth * (portrait ? 297/210 : 210/297);
+    var start = parseFloat(getComputedStyle(tl).fontSize) || 22, best=null;
+    (portrait ? [2,3,4] : [3,4,5]).forEach(function(n){
+        grid.style.gridTemplateColumns='repeat('+n+',minmax(0,1fr))';
+        var fs=start; tl.style.fontSize=fs+'px';
+        for(var k=0;k<40 && sheet.offsetHeight>canvasH;k++){
+            fs *= Math.max(0.8, Math.min(0.985, Math.sqrt(canvasH/sheet.offsetHeight)));
+            tl.style.fontSize=fs+'px';
+        }
+        var over = Array.prototype.some.call(grid.querySelectorAll('.bd-rw>span, .bd-pn header'), function(x){ return x.scrollWidth > x.clientWidth+1; });
+        if(!over && (!best || fs>best.fs+0.25)) best={n:n, fs:fs};
+    });
+    grid.style.gridTemplateColumns = best ? 'repeat('+best.n+',minmax(0,1fr))' : '';
+    tl.style.fontSize = start+'px';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : isQuiet() ? renderQuietSheet() : renderTimelineSheet());
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : isQuiet() ? renderQuietSheet() : isInline() ? renderInlineSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
@@ -1829,6 +1930,7 @@ function sizeTableForExport(sheet){
 }
 function clearTableExportSizing(){
     Array.prototype.forEach.call(document.querySelectorAll('#pBody .tl-list'), function(l){ l.style.minHeight = ''; });
+    var bg = document.querySelector('#pBody .bd-grid'); if(bg) bg.style.gridTemplateColumns = '';
     var table = document.querySelector('#pBody table');
     if(!table) return;
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = '';
@@ -1860,7 +1962,9 @@ function captureExport(){
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
     if(isQuiet() && tlUsesTimeline()) renderQuietSheet(); // its column count follows the page orientation
+    if(isInline() && tlUsesTimeline()) renderInlineSheet();
     applyExportFontSize();                        // ...at the size the user picked...
+    if(isBoard() && tlUsesTimeline()) boardBestColumns(sheet);
     sizeTableForExport(sheet);                    // ...and now the content height too
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
     // Phone browsers can't draw canvases much over ~16 million pixels (the
@@ -1877,7 +1981,7 @@ function captureExport(){
             if(wrap) wrap.classList.remove('td-exporting');
             clearTableExportSizing();
             clearExportFontSize();
-            if(isQuiet() && tlUsesTimeline()) renderQuietSheet();
+            if((isQuiet() || isInline()) && tlUsesTimeline()) renderSheet();
             _exportCanvas = canvas;
             var img = el('exportImg');
             img.src = canvas.toDataURL('image/png');
@@ -1889,7 +1993,7 @@ function captureExport(){
             if(wrap) wrap.classList.remove('td-exporting');
             clearTableExportSizing();
             clearExportFontSize();
-            if(isQuiet() && tlUsesTimeline()) renderQuietSheet();
+            if((isQuiet() || isInline()) && tlUsesTimeline()) renderSheet();
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
 }
