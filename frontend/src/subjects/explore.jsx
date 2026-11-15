@@ -17,7 +17,7 @@ const OPS = [['gte', 'at least'], ['lte', 'at most'], ['between', 'between'], ['
 const OP_SIGN = { gte: '≥', lte: '≤', eq: '=', between: '' };
 
 // Class → arm checklist, shared by the laptop card and the phone sheet.
-function ScopeList({ options, sel, toggle, toggleClass }) {
+export function ScopeList({ options, sel, toggle, toggleClass }) {
   return (
     <div className="ex-scopes">
       {options.map((cls) => {
