@@ -1618,7 +1618,7 @@ def reports():
     depts = Department.query.filter_by(is_active=True).order_by(Department.name).all()
     return _render({
         'page': 'reports', 'nav': _nav_urls(), 'report': data,
-        'report_types': [{'key': k, 'label': v} for k, v in R.REPORTS],
+        'report_types': R.catalogue(), 'report_groups': R.GROUPS,
         'departments': [{'id': d.id, 'name': d.name} for d in depts],
         'statuses': hr.STATUSES, 'staff_types': hr.STAFF_TYPES,
         'sel': {'type': data['type'], 'department_id': request.args.get('department_id', ''),

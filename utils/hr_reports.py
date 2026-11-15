@@ -26,6 +26,47 @@ REPORTS = [
 ]
 _LABELS = dict(REPORTS)
 
+# How each report is shown: its group, icon, one-line description, and which
+# date filter (if any) it uses — so the screen only offers dates that matter.
+#   dates: None | 'range' (from–to) | 'window' (from–to, defaults next 30 days)
+#          | 'until' (only "to": e.g. contracts ending by)
+META = {
+    'directory': ('People', 'fa-address-book', 'Everyone on staff, with contact details', None),
+    'teaching': ('People', 'fa-chalkboard-user', 'Teaching staff only', None),
+    'non_teaching': ('People', 'fa-user-gear', 'Non-teaching staff only', None),
+    'by_department': ('Breakdowns', 'fa-sitemap', 'How many staff in each department', None),
+    'by_branch': ('Breakdowns', 'fa-code-branch', 'How many staff in each branch', None),
+    'qualifications': ('Breakdowns', 'fa-graduation-cap', 'Staff by highest qualification', None),
+    'service_years': ('Breakdowns', 'fa-award', 'Years each person has served here', None),
+    'birthdays': ('Coming up', 'fa-cake-candles', 'Birthdays in the next 30 days', 'window'),
+    'contracts': ('Coming up', 'fa-file-signature', 'Contracts ending in the next 90 days', 'until'),
+    'retirement': ('Coming up', 'fa-person-cane', 'Staff reaching retirement age within five years', None),
+    'leave': ('Activity', 'fa-plane-departure', 'Approved leave taken in a period', 'range'),
+    'attendance': ('Activity', 'fa-user-clock', 'Present, late and absent days in a period', 'range'),
+}
+GROUPS = ['People', 'Breakdowns', 'Coming up', 'Activity']
+# Reports that are a count per group — shown with bars as well as a table.
+GROUPED = {'by_department', 'by_branch', 'qualifications'}
+
+
+def catalogue():
+    return [{'key': k, 'label': v, 'group': META[k][0], 'icon': META[k][1], 'desc': META[k][2],
+             'dates': META[k][3], 'chart': k in GROUPED} for k, v in REPORTS]
+
+
+def _staff_ok(s, filters):
+    """Does staff member ``s`` pass the shared department / type / status
+    filters? (Leave and attendance used to honour the department only.)"""
+    if s is None:
+        return not (filters.get('department_id') or filters.get('staff_type') or filters.get('status'))
+    if filters.get('department_id') and s.department_id != filters['department_id']:
+        return False
+    if filters.get('staff_type') and s.staff_type != filters['staff_type']:
+        return False
+    if filters.get('status') and s.status != filters['status']:
+        return False
+    return True
+
 RETIREMENT_AGE = 60
 
 
@@ -219,23 +260,29 @@ def _retirement(filters):
 
 
 def _leave(filters):
-    from models import LeaveRecord, StaffMember
+    """Approved leave overlapping the chosen period (default: this calendar year)."""
+    from models import LeaveRecord
     from utils.branch_scope import scope_by_staff
-    from sqlalchemy import extract
-    year = timeutil.today().year
+    today = timeutil.today()
+    start = filters.get('from') or _dt.date(today.year, 1, 1)
+    end = filters.get('to') or _dt.date(today.year, 12, 31)
     q = scope_by_staff(LeaveRecord.query.filter(LeaveRecord.status == 'Approved',
-                       extract('year', LeaveRecord.start_date) == year), LeaveRecord)
+                                                LeaveRecord.start_date <= end,
+                                                LeaveRecord.end_date >= start), LeaveRecord)
     agg = {}
     for lv in q.all():
         s = lv.staff
-        if filters.get('department_id') and (not s or s.department_id != filters['department_id']):
+        if not _staff_ok(s, filters):
             continue
-        key = lv.staff_id
-        d = agg.setdefault(key, {'name': s.full_name if s else '—', 'days': 0, 'requests': 0})
+        d = agg.setdefault(lv.staff_id, {'name': s.full_name if s else '—', 'days': 0, 'requests': 0})
         d['days'] += (lv.days or 0)
         d['requests'] += 1
     rows = sorted(agg.values(), key=lambda r: -r['days'])
-    return {'title': f'Leave Summary ({year})', 'columns': [
+    if start == _dt.date(today.year, 1, 1) and end == _dt.date(today.year, 12, 31):
+        title = f'Leave Summary ({today.year})'
+    else:
+        title = f"Leave Summary ({start.strftime('%d %b %Y')} – {end.strftime('%d %b %Y')})"
+    return {'title': title, 'columns': [
         {'key': 'name', 'label': 'Name'}, {'key': 'requests', 'label': 'Requests', 'align': 'right'},
         {'key': 'days', 'label': 'Days taken', 'align': 'right'}],
         'rows': rows, 'summary': [{'label': 'Staff on leave', 'value': len(rows)},
@@ -252,7 +299,7 @@ def _attendance(filters):
     agg = {}
     for a in q.all():
         s = a.staff
-        if filters.get('department_id') and (not s or s.department_id != filters['department_id']):
+        if not _staff_ok(s, filters):
             continue
         d = agg.setdefault(a.staff_id, {'name': s.full_name if s else '—',
                                         'present': 0, 'late': 0, 'absent': 0, 'deduction': 0.0})
@@ -268,7 +315,8 @@ def _attendance(filters):
         {'key': 'late', 'label': 'Late', 'align': 'right'}, {'key': 'absent', 'label': 'Absent', 'align': 'right'},
         {'key': 'deduction', 'label': 'Deductions', 'align': 'right', 'money': True}],
         'rows': rows, 'summary': [{'label': 'Staff', 'value': len(rows)},
-                                  {'label': 'Total deductions', 'value': round(sum(r['deduction'] for r in rows), 2)}]}
+                                  {'label': 'Total deductions', 'value': round(sum(r['deduction'] for r in rows), 2),
+                                   'money': True}]}
 
 
 def _surname():

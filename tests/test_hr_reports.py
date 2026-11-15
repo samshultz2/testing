@@ -127,3 +127,47 @@ def test_dashboard_exposes_enriched_keys(app):
     html = client.get('/hr/').get_data(as_text=True)
     for key in ('"birthdays"', '"contracts"', '"new_hires"', '"contract_expiring"'):
         assert key in html
+
+
+# --- reports redesign: filters every report honours ---------------------------
+def test_leave_and_attendance_honour_filters_and_dates(app):
+    from models import LeaveRecord, StaffAttendance
+    from utils import hr_reports as R
+    with app.app_context():
+        t = StaffMember(staff_id='LVT1', first_name='Teach', surname='Zzleave', staff_type='Teaching',
+                        status='Active', is_active=True)
+        n = StaffMember(staff_id='LVN1', first_name='Admin', surname='Zzleave', staff_type='Non-teaching',
+                        status='Active', is_active=True)
+        db.session.add_all([t, n]); db.session.flush()
+        for s in (t, n):
+            db.session.add(LeaveRecord(staff_id=s.id, leave_type='Annual', start_date=date(2001, 3, 1),
+                                       end_date=date(2001, 3, 5), days=5, status='Approved'))
+            db.session.add(StaffAttendance(staff_id=s.id, date=date(2001, 3, 9), status='Late'))
+        db.session.commit()
+    with app.test_request_context('/'):
+        from flask import session
+        session['logged_in'] = True; session['role'] = 'super_admin'
+        rng = {'from': date(2001, 3, 1), 'to': date(2001, 3, 31)}
+        # leave: the chosen period is used (it used to be "this year" only)
+        names = [r['name'] for r in R.build('leave', dict(rng))['rows'] if 'Zzleave' in r['name']]
+        assert len(names) == 2
+        assert not [r for r in R.build('leave', {})['rows'] if 'Zzleave' in r['name']]   # not this year
+        # staff type now applies to leave and attendance (it used to be ignored)
+        teach = dict(rng, staff_type='Teaching')
+        assert [r['name'] for r in R.build('leave', teach)['rows'] if 'Zzleave' in r['name']] == ['Zzleave Teach']
+        att = [r for r in R.build('attendance', teach)['rows'] if 'Zzleave' in r['name']]
+        assert [r['name'] for r in att] == ['Zzleave Teach'] and att[0]['late'] == 1
+        # money summaries say so, for the screen and exports
+        assert any(sm.get('money') for sm in R.build('attendance', dict(rng))['summary'])
+
+
+def test_report_catalogue_drives_the_screen(app):
+    from utils import hr_reports as R
+    cat = {c['key']: c for c in R.catalogue()}
+    assert set(cat) == {k for k, _ in R.REPORTS}
+    assert cat['directory']['dates'] is None and cat['leave']['dates'] == 'range'
+    assert cat['contracts']['dates'] == 'until' and cat['by_department']['chart'] is True
+    client = _admin(app)
+    d = client.get('/hr/reports?type=leave', headers={'X-Requested-With': 'fetch'}).get_json()
+    d = d.get('data', d)
+    assert d['report_groups'] == R.GROUPS and d['report_types'][0]['icon']

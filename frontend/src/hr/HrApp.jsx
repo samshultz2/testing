@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
@@ -1473,66 +1473,144 @@ function NotifyStaffModal({ d, onClose, notify }) {
 }
 
 // ---- Reports ---------------------------------------------------------------
+// A report browser: the report list beside the result on laptops; on phones a
+// picker sheet. Filters apply as soon as they change, and dates only show for
+// reports that use them.
+const DATE_PRESETS = {
+  range: [['This month', () => { const n = new Date(); return [ymd(new Date(n.getFullYear(), n.getMonth(), 1)), ymd(n)]; }],
+    ['Last 30 days', () => { const n = new Date(); return [ymd(addDays(n, -30)), ymd(n)]; }],
+    ['This year', () => { const n = new Date(); return [ymd(new Date(n.getFullYear(), 0, 1)), ymd(new Date(n.getFullYear(), 11, 31))]; }]],
+  window: [['Next 30 days', () => { const n = new Date(); return [ymd(n), ymd(addDays(n, 30))]; }],
+    ['Next 60 days', () => { const n = new Date(); return [ymd(n), ymd(addDays(n, 60))]; }],
+    ['Next 90 days', () => { const n = new Date(); return [ymd(n), ymd(addDays(n, 90))]; }]],
+  until: [['30 days', () => ['', ymd(addDays(new Date(), 30))]], ['90 days', () => ['', ymd(addDays(new Date(), 90))]],
+    ['6 months', () => ['', ymd(addDays(new Date(), 182))]]],
+};
+function ymd(d) { const z = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+
 function Reports({ d }) {
   const nav = useNav();
+  const phone = usePhone();
   const sel = d.sel || {};
   const rep = d.report || { columns: [], rows: [], summary: [], title: '' };
-  const [flt, setFlt] = useState({ department_id: sel.department_id || '', staff_type: sel.staff_type || '', status: sel.status || '', from: sel.from || '', to: sel.to || '' });
-  const params = (extra) => ({ type: sel.type, ...flt, ...extra });
-  const go = (extra) => navParams(nav.go, d.urls.self, params(extra));
-  const qs = () => Object.entries(params({})).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-  const setF = (k, v) => setFlt((x) => ({ ...x, [k]: v }));
-  const cell = (col, row) => {
+  const types = d.report_types || [];
+  const cur = types.find((t) => t.key === sel.type) || types[0] || {};
+  const [q, setQ] = useState('');
+  const [picking, setPicking] = useState(false);
+  const flt = { department_id: sel.department_id || '', staff_type: sel.staff_type || '', status: sel.status || '', from: sel.from || '', to: sel.to || '' };
+  const go = (patch) => {
+    const next = { type: cur.key, ...flt, ...patch };
+    const t = types.find((x) => x.key === next.type) || {};
+    if (!t.dates) { next.from = ''; next.to = ''; }        // dates don't apply to this report
+    navParams(nav.go, d.urls.self, Object.fromEntries(Object.entries(next).filter(([, v]) => v)));
+  };
+  const qs = Object.entries({ type: cur.key, ...flt }).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const anyFilter = flt.department_id || flt.staff_type || flt.status || flt.from || flt.to;
+  const show = (col, row) => {
     const v = row[col.key];
     if (col.money) return typeof v === 'number' ? naira(v) : v;
     return (v === '' || v == null) ? '—' : v;
   };
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? rep.rows.filter((r) => rep.columns.some((c) => String(r[c.key] ?? '').toLowerCase().includes(t))) : rep.rows;
+  }, [q, rep]);
+  const firstText = rep.columns.find((c) => c.align !== 'right') || rep.columns[0];
+  const lastNum = [...rep.columns].reverse().find((c) => c.align === 'right');
+  const cols = rep.columns.map((c, i) => ({ key: c.key, label: c.label, main: c === firstText, value: phone && c === lastNum && rep.columns.length > 2,
+    align: c.align, render: (r) => show(c, r) }));
+
+  const list = (
+    <nav className="hrr-list" aria-label="Reports">
+      {(d.report_groups || []).map((g) => (
+        <div key={g} className="hrr-grp"><div className="hrr-grp-h">{g}</div>
+          {types.filter((t) => t.group === g).map((t) => (
+            <button type="button" key={t.key} className={'hrr-it' + (t.key === cur.key ? ' on' : '')} aria-current={t.key === cur.key ? 'page' : undefined}
+                    onClick={() => { setPicking(false); setQ(''); go({ type: t.key }); }}>
+              <span className="hrr-ic"><i className={'fas ' + t.icon} aria-hidden="true" /></span>
+              <span className="hrr-t"><b>{t.label}</b><small>{t.desc}</small></span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </nav>
+  );
+
   return (
     <>
       <Head icon="fa-chart-line" title="HR reports" sub={rep.title}>
         <Menu label="Export" items={[
-          { icon: 'fa-file-csv', label: 'Download CSV', href: `${d.urls.export}?format=csv&${qs()}`, native: true },
-          { icon: 'fa-file-excel', label: 'Download Excel', href: `${d.urls.export}?format=xlsx&${qs()}`, native: true },
+          { icon: 'fa-file-excel', label: 'Download Excel', href: `${d.urls.export}?format=xlsx&${qs}`, native: true },
+          { icon: 'fa-file-csv', label: 'Download CSV', href: `${d.urls.export}?format=csv&${qs}`, native: true },
+          { icon: 'fa-print', label: 'Print', onClick: () => window.print() },
         ]} />
       </Head>
       <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body">
-        <div className="filter-form">
-          <div className="form-group"><label className="form-label">Report</label>
-            <select className="form-control" value={sel.type} onChange={(e) => go({ type: e.target.value })}>
-              {d.report_types.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Department</label>
-            <select className="form-control" value={flt.department_id} onChange={(e) => setF('department_id', e.target.value)}>
-              <option value="">All</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Type</label>
-            <select className="form-control" value={flt.staff_type} onChange={(e) => setF('staff_type', e.target.value)}>
-              <option value="">All</option>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Status</label>
-            <select className="form-control" value={flt.status} onChange={(e) => setF('status', e.target.value)}>
-              <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">From</label><input type="date" className="form-control" value={flt.from} onChange={(e) => setF('from', e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">To</label><input type="date" className="form-control" value={flt.to} onChange={(e) => setF('to', e.target.value)} /></div>
-          <div className="form-group" style={{ alignSelf: 'flex-end' }}><button type="button" className="btn btn-primary" onClick={() => go({})}><i aria-hidden="true" className="fas fa-filter" /> Apply</button></div>
-        </div>
-      </div></div>
+      <div className="hrr">
+        {!phone && <aside className="hrr-side">{list}</aside>}
+        <section className="hrr-main">
+          {phone && (
+            <button type="button" className="hrr-pick" onClick={() => setPicking(true)}>
+              <span className="hrr-ic"><i className={'fas ' + (cur.icon || 'fa-chart-line')} aria-hidden="true" /></span>
+              <span className="hrr-t"><small>Report</small><b>{cur.label}</b></span>
+              <i className="fas fa-chevron-down" aria-hidden="true" />
+            </button>
+          )}
+          <div className="hrr-flt">
+            <label className="rs-sel"><span>Department</span>
+              <select value={flt.department_id} onChange={(e) => go({ department_id: e.target.value })}>
+                <option value="">All departments</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+            {!['teaching', 'non_teaching'].includes(cur.key) && (
+              <label className="rs-sel"><span>Staff type</span>
+                <select value={flt.staff_type} onChange={(e) => go({ staff_type: e.target.value })}>
+                  <option value="">All types</option>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></label>)}
+            <label className="rs-sel"><span>Status</span>
+              <select value={flt.status} onChange={(e) => go({ status: e.target.value })}>
+                <option value="">Any status</option>{d.statuses.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+            {cur.dates && cur.dates !== 'until' && (
+              <label className="rs-sel"><span>From</span><input type="date" value={flt.from} onChange={(e) => go({ from: e.target.value })} /></label>)}
+            {cur.dates && (
+              <label className="rs-sel"><span>{cur.dates === 'until' ? 'Ending by' : 'To'}</span><input type="date" value={flt.to} onChange={(e) => go({ to: e.target.value })} /></label>)}
+            {anyFilter && <button type="button" className="rs-btn ghost sm hrr-clear" onClick={() => go({ department_id: '', staff_type: '', status: '', from: '', to: '' })}>
+              <i className="fas fa-xmark" aria-hidden="true" />Clear</button>}
+          </div>
+          {cur.dates && (
+            <div className="rs-chips hrr-presets">
+              {(DATE_PRESETS[cur.dates] || []).map(([label, fn]) => {
+                const [f, t] = fn();
+                const on = flt.from === f && flt.to === t;
+                return <button type="button" key={label} className={'rs-chip' + (on ? ' on' : '')} onClick={() => go({ from: f, to: t })}>{label}</button>;
+              })}
+            </div>
+          )}
 
-      {rep.summary && rep.summary.length > 0 && (
-        <div className="kpi-row" style={{ gridTemplateColumns: `repeat(${Math.min(rep.summary.length, 4)}, 1fr)` }}>
-          {rep.summary.map((s, i) => (
-            <div className="kpi" key={i}><div className="ic blue"><i aria-hidden="true" className="fas fa-chart-simple" /></div>
-              <div><div className="v" style={{ fontSize: '1.15rem' }}>{s.value}</div><div className="l">{s.label}</div></div></div>))}
-        </div>)}
+          {rep.summary && rep.summary.length > 0 && (
+            <Tiles items={rep.summary.map((s) => ({ label: s.label, value: s.money ? naira(s.value) : s.value }))} />
+          )}
 
-      <div className="card"><div className="card-header"><h3>{rep.title} · {rep.rows.length} row(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {rep.rows.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr>{rep.columns.map((c) => <th key={c.key} className={c.align === 'right' ? 'text-right' : ''}>{c.label}</th>)}</tr></thead>
-              <tbody>{rep.rows.map((r, i) => (
-                <tr key={i}>{rep.columns.map((c) => <td key={c.key} data-label={c.label} className={c.align === 'right' ? 'text-right' : ''}>{cell(c, r)}</td>)}</tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-chart-line" title="No data"><p>Nothing matches these filters.</p></Empty>}
-        </div></div>
+          {cur.chart && rep.rows.length > 0 && (
+            <div className="rs-card hrr-chart">
+              <div className="rs-card-h"><h3><i className="fas fa-chart-bar" aria-hidden="true" />{rep.columns[0] ? rep.columns[0].label : 'Group'}</h3></div>
+              <Bars rows={rep.rows.slice(0, 12)} label={(r) => r.group} value={(r) => r.count} fmt={(v) => v}
+                    sub={(r) => { const tot = rep.rows.reduce((a, x) => a + x.count, 0); return tot ? Math.round((r.count / tot) * 100) + '%' : ''; }} />
+            </div>
+          )}
+
+          <div className="rs-card flush hrr-table">
+            <div className="hrr-th">
+              <b>{rep.title}</b><span className="rs-muted">{q ? `${rows.length} of ${rep.rows.length}` : rep.rows.length} row{rep.rows.length === 1 ? '' : 's'}</span>
+              {rep.rows.length > 6 && (
+                <label className="hrr-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+                  <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search this report" aria-label="Search this report" /></label>)}
+            </div>
+            <DataList rows={rows} cols={cols} rowKey={(r, i) => i}
+                      empty={<Blank icon="fa-chart-line" title={q ? 'No matches' : 'Nothing to show'}>
+                        <p>{q ? 'Try a different search.' : anyFilter ? 'Nothing matches these filters.' : 'There is no data for this report yet.'}</p></Blank>} />
+          </div>
+        </section>
+      </div>
+      {phone && picking && <Sheet title="Choose a report" onClose={() => setPicking(false)}>{list}</Sheet>}
     </>
   );
 }
