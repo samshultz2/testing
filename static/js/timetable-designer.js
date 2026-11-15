@@ -955,7 +955,7 @@ var TL_COLOURS = ['#2f54eb','#e8590c','#0ca678','#ae3ec9','#e03131','#1098ad','#
 var TL_MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function isTimeline(){ return el('theme').value==='timeline'; }
 function tlUsesTimeline(){
-    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
+    return (isTimeline() || isTickets() || isGazette() || isSwiss() || isNotebook() || isBoard()) && !isBlankGrid() && layout().mode==='grid' && el('orient').value!=='cols';
 }
 function tlTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 // Shared by the poster themes. A run of 2+ periods that is the same lesson for
@@ -1477,12 +1477,89 @@ function renderNotebookSheet(){
         + '<div class="nb-foot"><span>'+esc(marks.join(' · '))+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
 }
 
+// ---------- "Board" theme ----------
+// One light card per date, styled like a departures board: period times down
+// the left, one column per class/stream, so a row is one moment and it is
+// obvious every class is in a lesson at the same time. Lessons shared by all
+// classes for 2+ periods become one block across the card; double periods are
+// marked ×2 with ↓ in the next slot; past dates DONE, the coming date NEXT.
+function isBoard(){ return el('theme').value==='board'; }
+var BD_SHORT={'ENGLISH':'ENG','BIOLOGY':'BIO','PHYSICS':'PHY','CHEMISTRY':'CHEM','MATHEMATICS':'MATHS','ECONOMICS':'ECONS','GOVERNMENT':'GOVT',
+  'LITERATURE':'LIT','GEOGRAPHY':'GEO','COMMERCE':'COMM','AGRICULTURE':'AGRIC','AGRIC SCIENCE':'AGRIC','CIVIC EDUCATION':'CIVIC','DATA PROCESSING':'DP'};
+function renderBoardSheet(){
+    var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order;
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the timetable.</p>';
+        return;
+    }
+    var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
+    var real=order.filter(function(k){ return !dmap[k].off; });
+    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var gsAll = md.anyGroup ? md.groupsAll : [''];
+    var tight = gsAll.length>2;
+    var label=function(t){
+        var up=(t||'').toUpperCase().trim();
+        if(!tight) return esc(up).replace(/\//g,'/<wbr>');
+        return up.split('/').map(function(p){ p=p.trim(); return esc(BD_SHORT[p]||p); }).join('/<wbr>');
+    };
+    var html='', offAll=[];
+    order.forEach(function(k){
+        var d=dmap[k], p=parseDateAny(d.date);
+        if(d.off){ offAll.push(gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2')); return; }
+        var i0=real.indexOf(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
+        var head = p ? (d.day.slice(0,3)+' '+('0'+p.d).slice(-2)+' '+TL_MON[p.m-1]) : (d.label||d.day||'');
+        var gs = md.anyGroup ? gsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
+        var body='';
+        if(!gs.length || (!(d.groups||[]).length && d.banners.length)){
+            body = d.banners.map(function(b){ return '<div class="bd-all bd-ev"><b>'+esc(b.subject||'')+'</b>'
+                + ((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':'')+'</div>'; }).join('');
+        } else {
+            var tmpl='grid-template-columns:3.4em repeat('+gs.length+',minmax(0,1fr))';
+            body+='<div class="bd-hd" style="'+tmpl+';--n:'+gs.length+'"><span>Time</span>'+gs.map(function(g){ return '<span>'+esc(g||'Lesson')+'</span>'; }).join('')+'</div>';
+            var runs=tlRuns(d,gs,periods);
+            for(var i=0;i<periods.length;){
+                if(i>0 && periods[i-1].end && periods[i-1].end<periods[i].start)
+                    body+='<div class="bd-br">Break</div>';
+                if(runs[i]){
+                    var ri=tlRunInfo(d,gs,periods,i,runs[i]);
+                    body+='<div class="bd-rw bd-span" style="'+tmpl+';flex:'+ri.n+'"><b>'+esc(fmtT(periods[i].start))+'</b><span class="bd-all"><b>'+label(ri.r.subject)+'</b>'
+                        + '<small>'+esc([ri.who, ri.from+(ri.to?' – '+ri.to:''), (ri.r.teacher||'').trim()].filter(Boolean).join(' · '))+'</small></span></div>';
+                    i=runs[i]; continue;
+                }
+                var cells='';
+                gs.forEach(function(g){
+                    var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr);
+                    var prev=i>0 && !(periods[i-1].end && periods[i-1].end<periods[i].start) ? sig(d.cells[g+'§'+periods[i-1].k]||[]) : '';
+                    var nxt=i+1<periods.length && !(periods[i].end && periods[i].end<periods[i+1].start) ? sig(d.cells[g+'§'+periods[i+1].k]||[]) : '';
+                    if(sg && sg===prev){ cells+='<span class="bd-c">↓</span>'; return; }
+                    if(!arr.length){ cells+='<span class="bd-f">—</span>'; return; }
+                    cells+='<span>'+arr.map(function(r){ return label(r.subject); }).join('<br>')+(sg && sg===nxt?'<em>×2</em>':'')
+                        + (arr.length===1 && (arr[0].teacher||'').trim() && !tight?'<small>'+esc(arr[0].teacher)+'</small>':'')+'</span>';
+                });
+                body+='<div class="bd-rw" style="'+tmpl+'"><b>'+esc(fmtT(periods[i].start))+'</b>'+cells+'</div>';
+                i++;
+            }
+            d.banners.forEach(function(b){ body+='<div class="bd-all bd-ev"><b>'+esc(b.subject||'')+'</b></div>'; });
+        }
+        html+='<section class="bd-pn'+st+'"><header><b>'+esc(head.toUpperCase())+'</b>'+(st===' nx'?'<i>NEXT</i>':(st===' past'?'<i class="d">DONE</i>':''))+'</header>'+body+'</section>';
+    });
+    var nx=md.next?dmap[md.next]:null, np=nx?parseDateAny(nx.date):null;
+    var nextTxt = nx ? (np ? (nx.day.slice(0,3)+' '+np.d+' '+TL_MON[np.m-1]) : gzDate(nx)) : '';
+    var marks=['Read a row across: all '+(isSaturdayLayout()?'streams':'classes')+' have lessons at the same time'];
+    if(/<em>×2/.test(html)) marks.push('×2 double'); if(/bd-c/.test(html)) marks.push('↓ continues');
+    el('pBody').innerHTML='<div class="tl bd'+(tight?' tight':'')+'">'
+        + '<div class="bd-top">'+(offAll.length?'<span class="bd-cx">✕ No class: '+esc(offAll.join(', '))+'</span>':'<span></span>')
+        + (nextTxt?'<span class="bd-next">Next · <b>'+esc(nextTxt.toUpperCase())+'</b></span>':'')+'</div>'
+        + '<div class="tl-list bd-grid g'+Math.min(gsAll.length,4)+'">'+html+'</div>'
+        + '<div class="bd-ft"><span>'+esc(marks.join(' · '))+'</span><span>Printed '+tlPrinted()+'</span></div></div>';
+}
+
 function renderSheet(){
     el('sheet').setAttribute('data-theme', el('theme').value);
     renderHead();
     applySaturdayDates();
     if(isBlankGrid()) renderBlankGridSheet();
-    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : renderTimelineSheet());
+    else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : renderTimelineSheet());
     else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
     else renderListSheet();
 }
