@@ -51,8 +51,8 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
   var k = document.getElementById('mfKey');
-  if (k && navigator.clipboard) k.addEventListener('click', function () {
-    navigator.clipboard.writeText(k.textContent.trim()).then(function () { var t = k.textContent; k.textContent = 'Copied ✓'; setTimeout(function () { k.textContent = t; }, 1200); });
+  if (k) k.addEventListener('click', function () {
+    window.copyText(k.textContent.trim()).then(function (ok) { if (!ok) return; var t = k.textContent; k.textContent = 'Copied ✓'; setTimeout(function () { k.textContent = t; }, 1200); });
   });
 })();
 </script>

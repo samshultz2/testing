@@ -3,6 +3,7 @@ import { useSave } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, SectionShell, confirm } from '../components/ui';
 import { Head, Tiles, Seg, Menu, Sheet, Blank, Bar, Meter, usePhone } from '../subjects/results';
+import { copyText } from '../lib/clipboard';
 
 const A = ({ to, className, children, title }) => {
   const nav = useNav();
@@ -11,7 +12,7 @@ const A = ({ to, className, children, title }) => {
 };
 
 function copy(text, notify) {
-  try { navigator.clipboard.writeText(text).then(() => notify('success', `Copied ${text}`)); } catch (e) { /* no clipboard */ }
+  copyText(text).then((ok) => notify(ok ? 'success' : 'error', ok ? `Copied ${text}` : 'Could not copy on this device.'));
 }
 
 // ---- Generate sheet ---------------------------------------------------------

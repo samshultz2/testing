@@ -1,3 +1,25 @@
+// Copy text without throwing: the async Clipboard API can refuse (Android
+// Chrome: "Document is not focused"; plain HTTP: missing), so fall back to a
+// hidden textarea + execCommand('copy'). Resolves true when it worked.
+window.copyText = window.copyText || function (text) {
+  text = String(text == null ? '' : text);
+  function legacy() {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+      var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+    } catch (e) { return false; }
+  }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return legacy(); });
+    }
+  } catch (e) { /* fall through */ }
+  return Promise.resolve(legacy());
+};
+
 /*
  * CSP-safe declarative behaviours.
  *
@@ -129,8 +151,9 @@
     if (el.hasAttribute('data-copy')) {
       e.preventDefault();
       var src = document.getElementById(el.getAttribute('data-copy'));
-      if (src && navigator.clipboard) {
-        navigator.clipboard.writeText(src.innerText).then(function () {
+      if (src) {
+        window.copyText(src.innerText).then(function (ok) {
+          if (!ok) return;
           var done = el.getAttribute('data-copied') || 'Copied';
           el.innerHTML = '<i class="fas fa-check"></i> ' + done;
         });

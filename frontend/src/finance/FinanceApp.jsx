@@ -11,6 +11,7 @@ import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, SectionShell, Toast } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, Ring, Meter, Avatar } from '../subjects/results';
+import { copyText } from '../lib/clipboard';
 
 // ---- small helpers ---------------------------------------------------------
 const num = (v) => Number(v) || 0;
@@ -472,8 +473,8 @@ function Defaulters({ d, notify }) {
   }, [d.rows, q, sort]);
   const copy = async () => {
     const txt = rows.map((r, i) => `${i + 1}. ${r.student} (${r.class_name}${r.arm_name ? ' ' + r.arm_name : ''}) — ${naira(r.balance)}`).join('\n');
-    try { await navigator.clipboard.writeText(txt); notify('success', `Copied ${rows.length} names — paste into WhatsApp or a message.`); }
-    catch (_) { notify('error', 'Could not copy on this device.'); }
+    if (await copyText(txt)) notify('success', `Copied ${rows.length} names — paste into WhatsApp or a message.`);
+    else notify('error', 'Could not copy on this device.');
   };
   const T = d.totals;
   return (
@@ -862,7 +863,7 @@ function Statement({ d, notify }) {
         <Card icon="fa-link" title="Payment link for the parent">
           <div className="fn-tools">
             <label className="rs-search"><i className="fas fa-link" aria-hidden="true" /><input readOnly value={d.paylink} aria-label="Payment link" onFocus={(e) => e.target.select()} /></label>
-            <button type="button" className="rs-btn primary" onClick={() => { navigator.clipboard.writeText(d.paylink); setCopied(true); }}><i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} aria-hidden="true" />{copied ? 'Copied' : 'Copy'}</button>
+            <button type="button" className="rs-btn primary" onClick={async () => { if (await copyText(d.paylink)) setCopied(true); else window.prompt('Copy this link', d.paylink); }}><i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} aria-hidden="true" />{copied ? 'Copied' : 'Copy'}</button>
             <a className="rs-btn" href={d.paylink} target="_blank" rel="noopener noreferrer"><i className="fas fa-up-right-from-square" aria-hidden="true" />Open</a>
           </div>
           <p className="rs-muted">The payment is recorded automatically once the parent completes it.</p>

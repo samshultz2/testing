@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, createContext, useContext } from 'r
 import { csrfToken } from '../lib/api';
 import { submitJson } from '../lib/forms';
 import { Sheet } from '../subjects/results';
+import { copyText as copyToClipboard } from '../lib/clipboard';
 
 export const Ctx = createContext({});
 export const useWs = () => useContext(Ctx);
@@ -173,11 +174,7 @@ export function Library({ onClose, onPick, multi }) {
 export function copyText(text, notify) {
   const full = text.startsWith('/') ? window.location.origin + text : text;
   const ok = () => notify && notify('ok', 'Link copied.');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(full).then(ok, () => window.prompt('Copy this link', full));
-  } else {
-    window.prompt('Copy this link', full);
-  }
+  copyToClipboard(full).then((done) => (done ? ok() : window.prompt('Copy this link', full)));
 }
 
 // Warn before leaving with unsaved edits.

@@ -8,6 +8,7 @@ import { useSection, NavCtx, useNav } from '../lib/section';
 import { confirm, SectionShell, Toast } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, usePhone, Avatar } from '../subjects/results';
+import { copyText } from '../lib/clipboard';
 
 const money = (n) => { const v = Math.round(Number(n) || 0); return (v < 0 ? '−₦' : '₦') + Math.abs(v).toLocaleString(); };
 const short = (n) => {
@@ -510,9 +511,8 @@ function Defaulters({ d, notify }) {
   const copy = () => {
     const lines = rows.map((x, i) => `${i + 1}. ${x.name}${x.arm ? ' (' + x.arm + ')' : ''} — owes ${money(x.remaining)}`);
     const text = `SSS3 graduation fund — still owing${arm ? ' · ' + arm : ''}\n${lines.join('\n')}\nTotal: ${money(owed)}`;
-    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
-      () => notify('success', `Copied ${rows.length} names — paste into WhatsApp or SMS.`),
-      () => notify('error', 'Copy is not available in this browser.'));
+    copyText(text).then((ok) => (ok ? notify('success', `Copied ${rows.length} names — paste into WhatsApp or SMS.`)
+      : notify('error', 'Could not copy on this device.')));
   };
   return (
     <div className="rs bx ct">

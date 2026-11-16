@@ -12,6 +12,7 @@ import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, promptDialog, SectionShell, Toast } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import { Head, Tiles, Seg, Chips, Sheet, Menu, Blank, Bar, Meter, usePhone, initials } from '../subjects/results';
+import { copyText } from '../lib/clipboard';
 
 // ---- helpers -----------------------------------------------------------------
 const plural = (n, w, p) => `${n} ${n === 1 ? w : (p || w + 's')}`;
@@ -862,8 +863,8 @@ function MessageDetail({ d, notify }) {
   };
   const copyNumbers = () => {
     const nums = rows.filter((r) => r.status !== 'Sent').map((r) => r.phone);
-    navigator.clipboard.writeText((nums.length ? nums : rows.map((r) => r.phone)).join(', ')).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 1600);
+    copyText((nums.length ? nums : rows.map((r) => r.phone)).join(', ')).then((ok) => {
+      if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1600); }
     });
   };
   const linkFor = (r) => (m.channel === 'SMS'

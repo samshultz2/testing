@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { submitJson } from '../lib/forms';
 import { Modal } from '../components/ui';
+import { copyText } from '../lib/clipboard';
 
 const SAMPLE = 'Surname, First Name, Religion, Father Phone\nOkafor, Chidi, Islam, 08011112222';
 
@@ -31,11 +32,13 @@ export default function UpdateImportModal({ updateImportUrl, filters, onClose, o
   const classes = (filters && filters.classes) || [];
   const arms = (filters && filters.arms) || [];
 
-  const copyPrompt = () => {
-    navigator.clipboard.writeText(AI_PROMPT).then(() => {
+  const copyPrompt = async () => {
+    if (await copyText(AI_PROMPT)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } else {
+      setErr('Your browser blocked copying. Long-press the prompt text to copy it instead.');
+    }
   };
 
   const doPreview = async () => {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { Modal } from '../components/ui';
+import { copyText } from '../lib/clipboard';
 
 // Friendly labels for the recognised field keys.
 const FIELD_LABELS = {
@@ -45,11 +46,13 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
   const [err, setErr] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const copyPrompt = () => {
-    navigator.clipboard.writeText(AI_PROMPT).then(() => {
+  const copyPrompt = async () => {
+    if (await copyText(AI_PROMPT)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    } else {
+      setErr('Your browser blocked copying. Long-press the prompt text to copy it instead.');
+    }
   };
 
   const doPreview = async () => {

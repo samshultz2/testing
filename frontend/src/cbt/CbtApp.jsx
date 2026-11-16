@@ -3,6 +3,7 @@ import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, SectionShell, SectionTabs, Empty, Table } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import { copyText } from '../lib/clipboard';
 
 const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['add_exam', 'fa-circle-plus', 'Exams'],
@@ -250,7 +251,7 @@ function LabSetup({ d }) {
   const [url, setUrl] = useState(d.portal_url);
   const [os, setOs] = useState('win');
   const [copied, setCopied] = useState(-1);
-  const copy = (text, i) => { navigator.clipboard.writeText(text.replace('{url}', url)); setCopied(i); setTimeout(() => setCopied(-1), 1200); };
+  const copy = async (text, i) => { if (await copyText(text.replace('{url}', url))) { setCopied(i); setTimeout(() => setCopied(-1), 1200); } };
   return (
     <>
       <div className="page-header"><h1>Lab / Kiosk Setup</h1></div>

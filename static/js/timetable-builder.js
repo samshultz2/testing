@@ -447,7 +447,7 @@
     else if (mod && (k === 'c' || k === 'C')) {
       var r = cellRow(M.days[sel.d], M.periods[sel.p]);
       clip = r ? { s: r.subject, t: r.teacher } : { s: '', t: '' };
-      try { navigator.clipboard && navigator.clipboard.writeText(clip.s + (clip.t ? ' (' + clip.t + ')' : '')); } catch (x) {}
+      try { var pr = navigator.clipboard && navigator.clipboard.writeText(clip.s + (clip.t ? ' (' + clip.t + ')' : '')); if (pr && pr.catch) pr.catch(function () {}); } catch (x) {}
       e.preventDefault(); toast('Copied');
     }
     else if (mod && (k === 'd' || k === 'D')) {

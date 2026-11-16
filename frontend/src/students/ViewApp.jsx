@@ -5,6 +5,7 @@ import { postForm } from '../lib/forms';
 import { confirm } from '../components/ui';
 import { rememberViewed } from '../lib/studprefs';
 import { canWrite } from '../lib/perms';
+import { copyText } from '../lib/clipboard';
 
 // Copies `text` to the clipboard and flashes a checkmark for ~1.2s to confirm.
 // Falls back to a hidden-textarea + execCommand when the async Clipboard API
@@ -14,22 +15,10 @@ function CopyBtn({ text }) {
   if (!text) return null;
   const doCopy = async (e) => {
     e.stopPropagation();
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(String(text));
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = String(text);
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
+    if (await copyText(text)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
-    } catch (err) { /* clipboard unavailable — silently no-op */ }
+    }
   };
   return (
     <button type="button" className="copy-btn" onClick={doCopy}

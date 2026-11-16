@@ -6,6 +6,7 @@ import { Spinner, EmptyState, ErrorState, OfflineRequired, Banner } from '../../
 import { withGroups, genderLabel } from '../roster';
 import { Picker, ClassChips, DateStepper, Seg, Tiles, Card, Person, Dot, prettyDate, pctColor, fmtPct } from '../kit';
 import { lastClass, recentClasses, rememberClass } from '../../lib/attprefs';
+import { copyText as copyToClipboard } from '../../lib/clipboard';
 
 function AbsenteesPanel({ assignmentId, date, className, ready, onNotify, notifying, canNotify }) {
   const [state] = useAsync(
@@ -17,10 +18,9 @@ function AbsenteesPanel({ assignmentId, date, className, ready, onNotify, notify
   const a = state.data;
   if (!ready || state.loading || state.error || !a || a.absentees.length === 0) return null;
 
-  const copyText = () => {
-    navigator.clipboard.writeText(a.share_text).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 1500);
-    });
+  const copyText = async () => {
+    if (await copyToClipboard(a.share_text)) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    else window.prompt('Copy this summary', a.share_text);
   };
   const shareUrl = 'https://wa.me/?text=' + encodeURIComponent(a.share_text);
 

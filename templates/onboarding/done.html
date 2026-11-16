@@ -30,7 +30,9 @@
 <script nonce="{{ csp_nonce }}">
   document.querySelectorAll('[data-copy]').forEach(function(b){ b.addEventListener('click', function(){
     var t = document.getElementById(b.dataset.copy).textContent.trim();
-    if (navigator.clipboard) navigator.clipboard.writeText(t).then(function(){ b.innerHTML = '<i class="fas fa-check"></i>'; setTimeout(function(){ b.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500); });
+    var ok = function(){ b.innerHTML = '<i class="fas fa-check"></i>'; setTimeout(function(){ b.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500); };
+    var fb = function(){ try { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); var done = document.execCommand('copy'); ta.remove(); if (done) ok(); else window.prompt('Copy this', t); } catch (e) { window.prompt('Copy this', t); } };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, fb); else fb(); } catch (e) { fb(); }
   }); });
 </script>
 </body>

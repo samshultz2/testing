@@ -11,6 +11,7 @@ import { useNav } from '../lib/section';
 import { confirm, Modal } from '../components/ui';
 import { Head, Bar, Blank, Menu, usePhone, initials } from '../subjects/results';
 import { A, SecNav, Field, Toggle, Pill, SearchBox, plural } from '../components/appkit';
+import { copyText } from '../lib/clipboard';
 
 const ruleOk = (rule, v) => (rule.min_length != null ? (v || '').length >= rule.min_length : new RegExp(rule.regex).test(v || ''));
 const pwStrong = (rules, v) => (rules || []).every((r) => ruleOk(r, v));
@@ -332,7 +333,7 @@ export function UserForm({ d, notify }) {
 // ============================================================================
 function ResetResultModal({ r, onClose }) {
   const [copied, setCopied] = useState(false);
-  const copy = async () => { try { await navigator.clipboard.writeText(r.temp_password); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (_) { /* select instead */ } };
+  const copy = async () => { if (await copyText(r.temp_password)) { setCopied(true); setTimeout(() => setCopied(false), 2000); } };
   return (
     <Modal title="Password reset" icon="fa-key" size="sm" onClose={onClose} closeOnBackdrop={false}
            footer={<button type="button" className="rs-btn primary" onClick={onClose}>Done</button>}>

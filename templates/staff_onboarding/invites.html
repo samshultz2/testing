@@ -229,9 +229,10 @@ document.querySelectorAll('.mjs-copy').forEach(function (b) {
   b.addEventListener('click', function () {
     var inp = b.parentNode.querySelector('input[data-copy]');
     inp.select();
-    try { navigator.clipboard.writeText(inp.value); } catch (_) { document.execCommand('copy'); }
-    var t = b.innerHTML; b.innerHTML = '<i class="fas fa-check"></i> Copied';
-    setTimeout(function () { b.innerHTML = t; }, 1600);
+    window.copyText(inp.value).then(function (ok) {
+      var t = b.innerHTML; b.innerHTML = ok ? '<i class="fas fa-check"></i> Copied' : 'Select the link to copy';
+      setTimeout(function () { b.innerHTML = t; }, 1600);
+    });
   });
 });
 (function () { var n = document.querySelector('.iv-link.new'); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'center' }); })();

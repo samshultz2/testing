@@ -31,10 +31,10 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
   var b = document.getElementById('bkCopy');
-  if (!b || !navigator.clipboard) { if (b) b.hidden = true; return; }
+  if (!b) return;
   b.addEventListener('click', function () {
     var t = Array.prototype.map.call(document.querySelectorAll('#bkCodes code'), function (c) { return c.textContent; }).join('\n');
-    navigator.clipboard.writeText(t).then(function () { b.lastChild.textContent = ' Copied'; });
+    window.copyText(t).then(function (ok) { b.lastChild.textContent = ok ? ' Copied' : ' Select and copy the codes'; });
   });
 })();
 </script>
