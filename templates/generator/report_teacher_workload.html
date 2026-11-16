@@ -1,72 +1,41 @@
 {% extends "base.html" %}
-{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
+{% from "generator/_gx.html" import gx_nav, gx_report_head, gx_exports with context %}
 {% block title %}Teacher Workload - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Workload</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Teacher workload</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
 {% endblock %}
-
 {% block content %}
-<div class="gx">
+<div class="gx gxr">
 {{ gx_nav('reports') }}
-<div class="page-header">
-    <h1>Teacher Workload Report</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('generator.teacher_workload_report_image', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-image"></i> Image (HD)</a>
-        <a href="{{ url_for('generator.teacher_workload_report_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+{% set exp %}{{ gx_exports('generator.teacher_workload_report_image', 'generator.teacher_workload_report_pdf', batch_id) }}{% endset %}
+{{ gx_report_head(meta, overview, 'workload', 'Teacher workload', 'Periods per teacher this week, against their weekly limit.', 'fa-user-clock', exp) }}
+{% if workload %}
+{% set peak = (workload.values()|map(attribute='total')|max) or 1 %}
+<div class="gxr-wl">
+  {% for tid, w in workload.items() %}
+  {% set mx = w.teacher.max_periods_per_week or 0 %}
+  {% set over = mx and w.total > mx %}
+  {% set scale = [peak, mx]|max %}
+  <article class="rs-card gxr-wlc {{ 'over' if over }}">
+    <div class="gxr-wlh">
+      <span class="gx-av">{{ (w.teacher.name.split()|map('first')|list)[:2]|join|upper }}</span>
+      <div class="t"><a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id, teacher_id=tid) }}"><b>{{ w.teacher.name }}</b></a><small>{{ w.classes|length }} class{{ 'es' if w.classes|length != 1 }}</small></div>
+      <div class="n"><b>{{ w.total }}</b><small>{% if mx %}of {{ mx }}{% else %}periods{% endif %}</small></div>
     </div>
-</div>
-
-<div class="card">
-    <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Teacher</th>
-                    {% for day in days %}
-                    <th style="text-align: center;">{{ day[:3] }}</th>
-                    {% endfor %}
-                    <th style="text-align: center;">Total</th>
-                    <th style="text-align: center;">Max</th>
-                    <th style="text-align: center;">Status</th>
-                    <th>Classes</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for tid, data in workload.items() %}
-                <tr>
-                    <td><strong>{{ data.teacher.name }}</strong></td>
-                    {% for d in range(5) %}
-                    <td style="text-align: center;">{{ data.per_day[d] }}</td>
-                    {% endfor %}
-                    <td style="text-align: center;"><strong>{{ data.total }}</strong></td>
-                    <td style="text-align: center;">{{ data.teacher.max_periods_per_week }}</td>
-                    <td style="text-align: center;">
-                        {% if data.total <= data.teacher.max_periods_per_week %}
-                        <span class="badge badge-success">OK</span>
-                        {% else %}
-                        <span class="badge badge-danger">Overload</span>
-                        {% endif %}
-                    </td>
-                    <td><small>{{ data.classes|join(', ') }}</small></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="gxr-load" title="{{ w.total }} of {{ mx }} periods"><i style="width:{{ (w.total / scale * 100)|round(1) }}%"></i>{% if mx %}<s style="left:{{ (mx / scale * 100)|round(1) }}%"></s>{% endif %}</div>
+    {% if over %}<p class="gxr-over"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{ w.total - mx }} period{{ 's' if w.total - mx != 1 }} over the weekly limit</p>{% endif %}
+    <div class="gxr-days">
+      {% for d in range(5) %}<span><small>{{ days[d][:3] }}</small><b class="{{ 'zero' if not w.per_day[d] }}">{{ w.per_day[d] }}</b></span>{% endfor %}
     </div>
+    <p class="gxr-cls">{{ w.classes|sort|join(', ') }}</p>
+  </article>
+  {% endfor %}
 </div>
-
-{% if not workload %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-user-clock"></i>
-            <h3>No Data</h3>
-            <p>No teacher assignments in this batch</p>
-        </div>
-    </div>
-</div>
+{% else %}
+<div class="rs-blank"><i class="fas fa-user-clock" aria-hidden="true"></i><b>No teachers in this timetable</b><p>No lesson in it has a teacher. Check the teacher assignments, then generate again.</p>
+  <a href="{{ url_for('generator.teacher_assignments') }}" class="rs-btn">Assignments</a></div>
 {% endif %}
 </div>
 {% endblock %}

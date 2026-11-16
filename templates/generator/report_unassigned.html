@@ -1,63 +1,40 @@
 {% extends "base.html" %}
-{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
+{% from "generator/_gx.html" import gx_nav, gx_report_head, gx_exports with context %}
 {% block title %}Empty Slots - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Empty Slots</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Empty slots</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
 {% endblock %}
-
 {% block content %}
-<div class="gx">
+<div class="gx gxr">
 {{ gx_nav('reports') }}
-<div class="page-header">
-    <h1>Empty/Unassigned Slots</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('generator.unassigned_report_image', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-image"></i> Image (HD)</a>
-        <a href="{{ url_for('generator.unassigned_report_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF</a>
-    </div>
-</div>
-
-{% if rows %}
-<div class="card">
-    <div class="card-header" style="background: #fff3cd;"><h3><i class="fas fa-calendar-times"></i> {{ grand_total }} Empty Slot(s) across {{ rows|length }} class-arm(s)</h3></div>
-    <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Class</th>
-                    <th>Arm</th>
-                    {% for day in days %}
-                    <th style="text-align: center;">{{ day[:3] }}</th>
-                    {% endfor %}
-                    <th style="text-align: center;">Total / Week</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                <tr>
-                    <td><strong>{{ row.class }}</strong></td>
-                    <td>{{ row.arm }}</td>
-                    {% for count in row.per_day %}
-                    <td style="text-align: center; {% if count > 0 %}color: var(--warn, #b45309);{% endif %}">{{ count }}</td>
-                    {% endfor %}
-                    <td style="text-align: center;"><strong>{{ row.total }}</strong></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+{% set exp %}{{ gx_exports('generator.unassigned_report_image', 'generator.unassigned_report_pdf', batch_id) }}{% endset %}
+{{ gx_report_head(meta, overview, 'empty', 'Empty slots', 'Periods left without a lesson, out of ' ~ periods_per_day ~ ' a day.', 'fa-calendar-xmark', exp) }}
+{% if grand_total %}
+<div class="gxr-verdict warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><div><b>{{ grand_total }} empty period{{ 's' if grand_total != 1 }} across {{ rows|selectattr('total')|list|length }} class-arm{{ 's' if rows|selectattr('total')|list|length != 1 }}</b><span>{% if overview.periods_off %}Some lessons couldn't be placed — <a href="{{ url_for('generator.period_count_report', batch_id=batch_id) }}">Periods per subject</a> shows which. Often a teacher has hit their weekly limit.{% else %}The subjects' periods add up to less than the week has room for. Add periods to a subject, or fill the slot by hand.{% endif %}</span></div></div>
 {% else %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-check-circle" style="color: var(--success);"></i>
-            <h3>All Slots Filled!</h3>
-            <p>Every period has a subject assigned</p>
-        </div>
+<div class="gxr-verdict ok"><i class="fas fa-circle-check" aria-hidden="true"></i><div><b>Every period has a lesson</b><span>No empty slots in any class.</span></div></div>
+{% endif %}
+{% if rows %}
+<div class="gxr-empty">
+  {% for r in rows %}
+  <article class="rs-card gxr-ec {{ 'none' if not r.total }}">
+    <div class="h"><b>{{ r.class }} {{ r.arm }}</b>
+      {% if r.total %}<span class="gxr-pill warn">{{ r.total }} empty</span>{% else %}<span class="gxr-pill ok"><i class="fas fa-check" aria-hidden="true"></i> Full</span>{% endif %}
+      <a class="rs-btn sm ghost" href="{{ url_for('generator.edit_timetable', batch_id=batch_id, class_name=r.class, arm_name=r.arm) }}"><i class="fas fa-pen" aria-hidden="true"></i> Edit</a></div>
+    <div class="gxr-week" style="--pp:{{ periods_per_day }}">
+      {% for d in range(5) %}
+      <div class="row"><small>{{ days[d][:3] }}</small>
+        {% for p in range(1, periods_per_day + 1) %}<i class="{{ 'gap' if (d, p) in r.gaps }}" title="{{ days[d] }} period {{ p }}{{ ' — empty' if (d, p) in r.gaps }}"></i>{% endfor %}
+        <b>{{ r.per_day[d] }}</b></div>
+      {% endfor %}
     </div>
+    {% if r.total %}<p class="gxr-gaps">{% for d in range(5) %}{% set ps = r.gaps|selectattr('0', 'equalto', d)|map(attribute='1')|list %}{% if ps %}<span><b>{{ days[d][:3] }}</b> {{ ps|join(', ') }}</span>{% endif %}{% endfor %}</p>{% endif %}
+  </article>
+  {% endfor %}
 </div>
+<p class="rs-muted bx-small">Each row is a day; each square a period. Hollow squares are empty. Total / week shown on the badge.</p>
 {% endif %}
 </div>
 {% endblock %}

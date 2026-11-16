@@ -1,66 +1,42 @@
 {% extends "base.html" %}
-{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
+{% from "generator/_gx.html" import gx_nav, gx_report_head, gx_exports with context %}
 {% block title %}Reports - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Reports</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Overview</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
 {% endblock %}
-
 {% block content %}
-<div class="gx">
+<div class="gx gxr">
 {{ gx_nav('reports') }}
-<div class="page-header">
-    <h1>Timetable Reports</h1>
-</div>
-
-{% if batch %}
-<p class="text-muted mb-3">Reports for batch: #{{ batch.batch_id }} ({{ batch.class_name }} {{ batch.arm_name }}, {{ batch.school_level|upper }})</p>
-
-<div class="card">
-    <div class="card-body">
-        <div class="data-cards" style="padding: 0;">
-            <a href="{{ url_for('generator.period_count_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
-                <div class="data-card-header">
-                    <div class="data-card-title"><i class="fas fa-calculator"></i> Period Count</div>
-                </div>
-                <div class="data-card-row">Verify periods assigned vs required per subject</div>
-            </a>
-            
-            <a href="{{ url_for('generator.teacher_workload_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
-                <div class="data-card-header">
-                    <div class="data-card-title"><i class="fas fa-user-clock"></i> Teacher Workload</div>
-                </div>
-                <div class="data-card-row">Total periods per teacher, per day breakdown</div>
-            </a>
-            
-            <a href="{{ url_for('generator.clash_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
-                <div class="data-card-header">
-                    <div class="data-card-title"><i class="fas fa-exclamation-triangle"></i> Clash Report</div>
-                </div>
-                <div class="data-card-row">Teachers assigned to multiple classes same time</div>
-            </a>
-            
-            <a href="{{ url_for('generator.unassigned_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
-                <div class="data-card-header">
-                    <div class="data-card-title"><i class="fas fa-calendar-times"></i> Empty Slots</div>
-                </div>
-                <div class="data-card-row">Periods with no subject assigned</div>
-            </a>
-        </div>
-    </div>
-</div>
+{% if not batch %}
+<header class="rs-head"><span class="rs-head-ic"><i class="fas fa-chart-column" aria-hidden="true"></i></span><div class="rs-head-t"><h1>Timetable reports</h1><p>Checks run on a generated timetable.</p></div></header>
+<div class="rs-blank"><i class="fas fa-calendar-plus" aria-hidden="true"></i><b>No timetable yet</b><p>Generate a timetable first, then check it here.</p>
+  <a href="{{ url_for('generator.generate_page') }}" class="rs-btn primary"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Generate</a></div>
 {% else %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-chart-bar"></i>
-            <h3>No Timetables Generated</h3>
-            <p>Generate timetables first to view reports</p>
-            <a href="{{ url_for('generator.generate_page') }}" class="btn btn-primary">Generate</a>
-        </div>
-    </div>
+{% set o = overview %}
+{% set problems = (1 if o.periods_off else 0) + (1 if o.overloaded else 0) + (1 if o.clashes else 0) + (1 if o.empty else 0) %}
+{{ gx_report_head(meta, o, 'home', 'Timetable reports', meta.level|upper ~ ' · ' ~ meta.arms ~ ' class-arm' ~ ('s' if meta.arms != 1 else '') ~ ' · checks run on this timetable', 'fa-chart-column') }}
+<div class="gxr-verdict {{ 'ok' if not problems else ('bad' if o.clashes else 'warn') }}">
+  <i class="fas {{ 'fa-circle-check' if not problems else 'fa-triangle-exclamation' }}" aria-hidden="true"></i>
+  <div><b>{% if not problems %}This timetable passes every check{% else %}{{ problems }} check{{ 's' if problems != 1 }} need{{ 's' if problems == 1 }} a look{% endif %}</b>
+    <span>{% if not problems %}Every class gets its periods, no teacher is double-booked or overloaded, and no slot is empty.{% else %}Open a check below to see exactly where.{% endif %}</span></div>
 </div>
+<div class="gxr-grid">
+  {% for key, ep, ic, title, n, good, bad, what in [
+      ('periods', 'generator.period_count_report', 'fa-calculator', 'Periods per subject', o.periods_off, 'Every class gets the right number of periods', (o.periods_off ~ ' subject-class cell' ~ ('s' if o.periods_off != 1 else '') ~ ' off target'), 'Planned periods against what each subject needs, class by class.'),
+      ('workload', 'generator.teacher_workload_report', 'fa-user-clock', 'Teacher workload', o.overloaded, ('All ' ~ o.teachers ~ ' teachers within their weekly limit'), (o.overloaded ~ ' teacher' ~ ('s' if o.overloaded != 1 else '') ~ ' over their weekly limit'), 'Periods per teacher, day by day, against their limit.'),
+      ('clashes', 'generator.clash_report', 'fa-people-arrows', 'Clashes', o.clashes, 'No teacher is in two places at once', (o.clashes ~ ' double-booked slot' ~ ('s' if o.clashes != 1 else '')), 'A teacher booked into two classes in the same period.'),
+      ('empty', 'generator.unassigned_report', 'fa-calendar-xmark', 'Empty slots', o.empty, 'Every period has a lesson', (o.empty ~ ' empty period' ~ ('s' if o.empty != 1 else '')), 'Periods left without a subject.')] %}
+  <a class="gxr-card {{ 'bad' if n else 'ok' }}" href="{{ url_for(ep, batch_id=meta.batch_id) }}">
+    <span class="ic"><i class="fas {{ ic }}" aria-hidden="true"></i></span>
+    <span class="t"><small>{{ title }}</small><b>{{ bad if n else good }}</b><em>{{ what }}</em></span>
+    <i class="fas fa-chevron-right go" aria-hidden="true"></i>
+  </a>
+  {% endfor %}
+</div>
+<p class="gxr-links"><a href="{{ url_for('generator.view_results', batch_id=meta.batch_id) }}"><i class="fas fa-table-cells" aria-hidden="true"></i> Open this timetable</a>
+  <a href="{{ url_for('generator.teacher_assignment_summary_report') }}"><i class="fas fa-list-check" aria-hidden="true"></i> Teacher assignment summary</a></p>
 {% endif %}
 </div>
 {% endblock %}

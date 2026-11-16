@@ -656,16 +656,17 @@ def reports_index():
     most recently. Falls back to the latest batch for the current level tab
     only when landing here with no batch in context at all."""
     batch_id = (request.args.get('batch_id') or '').strip()
-    if batch_id:
-        batch = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).first()
-        if not batch:
-            flash('That timetable batch was not found.', 'error')
-            return redirect(url_for('generator.results_list'))
-    else:
-        batch = (GenTimetableResult.query.filter_by(
-                    branch_id=gen_bid(), school_level=get_current_level())
-                .order_by(GenTimetableResult.generated_at.desc()).first())
-    return render_template('generator/reports_index.html', batch=batch)
+    if not batch_id:
+        from models import ActiveTimetableBatch
+        from utils.branch_scope import viewing_branch_id
+        batch_id = ActiveTimetableBatch.active_batch_id(viewing_branch_id(), get_current_level())
+        if not batch_id:
+            latest = (GenTimetableResult.query.filter_by(branch_id=gen_bid(), school_level=get_current_level())
+                      .order_by(GenTimetableResult.generated_at.desc()).first())
+            batch_id = latest.batch_id if latest else None
+    if not batch_id:
+        return render_template('generator/reports_index.html', batch=None, meta=None, active_report='home')
+    return _report_page('generator/reports_index.html', batch_id, 'home', batch=True)
 
 
 def _period_count_data(batch_id):
@@ -687,13 +688,157 @@ def _period_count_data(batch_id):
     return counts, configs, subjects
 
 
+def _batch_meta(batch_id):
+    """Header facts for a batch: when it was generated, its level, how many
+    class-arms it covers, and every batch in this branch for the picker."""
+    rows = (db.session.query(GenTimetableResult.class_name, GenTimetableResult.arm_name,
+                             GenTimetableResult.school_level, GenTimetableResult.generated_at)
+            .filter_by(batch_id=batch_id, branch_id=gen_bid()).distinct().all())
+    batches = (db.session.query(GenTimetableResult.batch_id,
+                                db.func.min(GenTimetableResult.generated_at).label('generated_at'))
+               .filter(GenTimetableResult.branch_id == gen_bid())
+               .group_by(GenTimetableResult.batch_id).order_by(db.desc('generated_at')).all())
+    return {
+        'batch_id': batch_id,
+        'generated_at': min((r.generated_at for r in rows if r.generated_at), default=None),
+        'level': rows[0].school_level if rows else get_current_level(),
+        'arms': len({(r.class_name, r.arm_name) for r in rows}),
+        'batches': batches,
+    }
+
+
+def _required_periods(level):
+    """{(class_name, arm_name): {subject_id: periods}} -- how many periods a
+    week each class-arm should get per subject, resolved the same way the
+    Fast generator does: class-stream > stream > per-class > the subject's
+    general setting, skipping anything switched off for that class."""
+    from collections import defaultdict
+    bid = gen_bid()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=bid).all()
+    ids = [c.id for c in classes] or [-1]
+    general = {c.subject_id: c for c in GenSubjectConfig.query.filter_by(
+        is_active=True, school_level=level, branch_id=bid).all()}
+    per_class = defaultdict(dict)
+    for c in GenClassSubjectConfig.query.filter(GenClassSubjectConfig.class_config_id.in_(ids),
+                                                GenClassSubjectConfig.is_active == True).all():
+        per_class[c.class_config_id][c.subject_id] = c
+    arm_stream = {(a.class_config_id, a.arm_name): a.stream_id
+                  for a in GenClassArmStream.query.filter(GenClassArmStream.class_config_id.in_(ids)).all()}
+    stream_ids = {v for v in arm_stream.values() if v} or {-1}
+    stream_subj = defaultdict(dict)
+    for ss in GenStreamSubject.query.filter(GenStreamSubject.stream_id.in_(stream_ids)).all():
+        stream_subj[ss.stream_id][ss.subject_id] = ss
+    class_stream = defaultdict(dict)
+    for css in GenClassStreamSubject.query.filter(GenClassStreamSubject.class_config_id.in_(ids),
+                                                  GenClassStreamSubject.stream_id.in_(stream_ids)).all():
+        class_stream[(css.class_config_id, css.stream_id)][css.subject_id] = css
+
+    out = {}
+    for cc in classes:
+        own = per_class.get(cc.id, {})
+        for arm in cc.arm_list:
+            need = {}
+            sid_stream = arm_stream.get((cc.id, arm)) if cc.has_streams else None
+            if sid_stream:
+                for subject_id, ss in stream_subj.get(sid_stream, {}).items():
+                    ccfg, css = own.get(subject_id), class_stream.get((cc.id, sid_stream), {}).get(subject_id)
+                    if (ccfg and not ccfg.is_enabled) or (css and not css.is_enabled):
+                        continue
+                    if css and css.periods_per_week is not None:
+                        need[subject_id] = css.periods_per_week
+                    elif ss.periods_per_week is not None:
+                        need[subject_id] = ss.periods_per_week
+                    elif ccfg:
+                        need[subject_id] = ccfg.periods_per_week
+                    elif subject_id in general:
+                        need[subject_id] = general[subject_id].periods_per_week
+            else:
+                for subject_id in set(general) | set(own):
+                    ccfg = own.get(subject_id)
+                    if ccfg and not ccfg.is_enabled:
+                        continue
+                    need[subject_id] = ccfg.periods_per_week if ccfg else general[subject_id].periods_per_week
+            out[(cc.class_name, arm)] = {k: v for k, v in need.items() if v}
+    return out
+
+
+def _period_check(batch_id):
+    """Planned vs required periods for every class-arm in a batch. Returns
+    {'subjects': [GenSubject...], 'arms': [{'class', 'arm', 'cells':
+    {subject_id: (got, need)}, 'off': n}], 'off': total mismatched cells}."""
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    level = results[0].school_level if results else get_current_level()
+    got = {}
+    for r in results:
+        cell = got.setdefault((r.class_name, r.arm_name), {})
+        if r.subject_id:
+            cell[r.subject_id] = cell.get(r.subject_id, 0) + 1
+    need = _required_periods(level)
+    used = set()
+    arms = []
+    for key in sorted(got):
+        want = need.get(key, {})
+        cells = {}
+        for sid in set(got[key]) | set(want):
+            cells[sid] = (got[key].get(sid, 0), want.get(sid, 0))
+            used.add(sid)
+        off = sum(1 for g, n in cells.values() if g != n)
+        arms.append({'class': key[0], 'arm': key[1], 'cells': cells, 'off': off})
+    subjects = sorted(GenSubject.query.filter(GenSubject.id.in_(used or {-1})).all(), key=lambda s: s.name.lower())
+    return {'subjects': subjects, 'arms': arms, 'off': sum(a['off'] for a in arms)}
+
+
+def _clashes(batch_id):
+    """Every slot where one teacher is booked into two or more classes."""
+    from sqlalchemy.orm import joinedload
+    results = (GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid())
+               .options(joinedload(GenTimetableResult.subject)).all())
+    slots = {}
+    for r in results:
+        if r.teacher_id:
+            slots.setdefault(r.teacher_id, {}).setdefault((r.day_of_week, r.period_number), []).append({
+                'class': f"{r.class_name} {r.arm_name}", 'class_name': r.class_name, 'arm_name': r.arm_name,
+                'subject': r.subject.name if r.subject else '-'})
+    teachers = {t.id: t for t in GenTeacher.query.filter(GenTeacher.id.in_(list(slots) or [-1])).all()}
+    out = []
+    for tid, by_slot in slots.items():
+        for (day, period), entries in sorted(by_slot.items()):
+            if len(entries) > 1:
+                out.append({'teacher': teachers.get(tid), 'day': DAYS_OF_WEEK[day], 'day_index': day,
+                            'period': period, 'entries': entries})
+    out.sort(key=lambda c: ((c['teacher'].name if c['teacher'] else ''), c['day_index'], c['period']))
+    return out
+
+
+def _report_overview(batch_id):
+    """The headline number for each report, shown on the overview and as
+    badges on the report tabs."""
+    workload = _teacher_workload(batch_id)
+    rows, _ = _unassigned_rows(batch_id)
+    return {
+        'periods_off': _period_check(batch_id)['off'],
+        'overloaded': sum(1 for w in workload.values()
+                          if w['teacher'].max_periods_per_week and w['total'] > w['teacher'].max_periods_per_week),
+        'teachers': len(workload),
+        'clashes': len(_clashes(batch_id)),
+        'empty': sum(r['total'] for r in rows),
+    }
+
+
+def _report_page(template, batch_id, active, **ctx):
+    meta = _batch_meta(batch_id)
+    if not meta['arms']:
+        flash('That timetable batch was not found.', 'error')
+        return redirect(url_for('generator.results_list'))
+    return render_template(template, batch_id=batch_id, meta=meta, active_report=active,
+                           overview=_report_overview(batch_id), **ctx)
+
+
 @generator_bp.route('/reports/period-count/<batch_id>')
 @login_required
 def period_count_report(batch_id):
-    counts, configs, subjects = _period_count_data(batch_id)
-    return render_template('generator/report_period_count.html',
-        batch_id=batch_id, counts=counts, configs=configs, subjects=subjects
-    )
+    return _report_page('generator/report_period_count.html', batch_id, 'periods',
+                        check=_period_check(batch_id))
 
 
 def _periods_for_arm(cc, arm_name, subject_id, global_subject_configs, class_subject_configs,
@@ -876,49 +1021,14 @@ def _teacher_workload(batch_id):
 @generator_bp.route('/reports/teacher-workload/<batch_id>')
 @login_required
 def teacher_workload_report(batch_id):
-    workload = _teacher_workload(batch_id)
-    return render_template('generator/report_teacher_workload.html',
-        batch_id=batch_id, workload=workload, days=DAYS_OF_WEEK
-    )
+    return _report_page('generator/report_teacher_workload.html', batch_id, 'workload',
+                        workload=_teacher_workload(batch_id), days=DAYS_OF_WEEK)
 
 
 @generator_bp.route('/reports/clashes/<batch_id>')
 @login_required
 def clash_report(batch_id):
-    from sqlalchemy.orm import joinedload
-    results = (GenTimetableResult.query
-               .filter_by(batch_id=batch_id, branch_id=gen_bid())
-               .options(joinedload(GenTimetableResult.subject))
-               .all())
-    teacher_slots = {}
-    for r in results:
-        if r.teacher_id:
-            if r.teacher_id not in teacher_slots:
-                teacher_slots[r.teacher_id] = {}
-            key = (r.day_of_week, r.period_number)
-            if key not in teacher_slots[r.teacher_id]:
-                teacher_slots[r.teacher_id][key] = []
-            teacher_slots[r.teacher_id][key].append({
-                'class': f"{r.class_name} {r.arm_name}",
-                'subject': r.subject.name if r.subject else '-'
-            })
-
-    # Batch-load every teacher that has a slot at all (not just clashing ones)
-    # in one query instead of a GenTeacher.get() per clashing teacher.
-    teachers_by_id = {t.id: t for t in GenTeacher.query.filter(
-        GenTeacher.id.in_(list(teacher_slots) or [-1])).all()}
-
-    clashes = []
-    for tid, slots in teacher_slots.items():
-        teacher = teachers_by_id.get(tid)
-        for (day, period), entries in slots.items():
-            if len(entries) > 1:
-                clashes.append({
-                    'teacher': teacher, 'day': DAYS_OF_WEEK[day],
-                    'period': period, 'entries': entries
-                })
-
-    return render_template('generator/report_clashes.html', batch_id=batch_id, clashes=clashes)
+    return _report_page('generator/report_clashes.html', batch_id, 'clashes', clashes=_clashes(batch_id))
 
 
 def _unassigned_rows(batch_id):
@@ -949,7 +1059,9 @@ def _unassigned_rows(batch_id):
             count = sum(1 for period in range(1, periods_per_day + 1)
                        if (day, period) not in filled)
             per_day.append(count)
-        rows.append({'class': cn, 'arm': an, 'per_day': per_day, 'total': sum(per_day)})
+        gaps = [(day, period) for day in range(5) for period in range(1, periods_per_day + 1)
+                if (day, period) not in filled]
+        rows.append({'class': cn, 'arm': an, 'per_day': per_day, 'total': sum(per_day), 'gaps': gaps})
     return rows, periods_per_day
 
 
@@ -958,9 +1070,8 @@ def _unassigned_rows(batch_id):
 def unassigned_report(batch_id):
     rows, periods_per_day = _unassigned_rows(batch_id)
     grand_total = sum(r['total'] for r in rows)
-    return render_template('generator/report_unassigned.html', batch_id=batch_id,
-        rows=rows, days=DAYS_OF_WEEK, grand_total=grand_total,
-        periods_per_day=periods_per_day)
+    return _report_page('generator/report_unassigned.html', batch_id, 'empty',
+        rows=rows, days=DAYS_OF_WEEK, grand_total=grand_total, periods_per_day=periods_per_day)
 
 
 @generator_bp.route('/teacher-timetable')

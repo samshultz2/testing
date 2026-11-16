@@ -418,25 +418,38 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         'excluded_periods': excluded_periods,
                     })
             else:
-                for cfg in class_configs.values():
-                    if not cfg.is_enabled:
+                # Non-stream class: its own per-class subject rows. A class
+                # whose per-class subjects page was never saved has none, and
+                # used to fail with "No requirements found" even though Fast
+                # could build it -- fall back to every subject set up for the
+                # class's level, at its general periods, as Fast does.
+                level_cfgs = {}
+                if not class_configs:
+                    level_cfgs = {sid: g for sid, g in global_subject_configs.items()
+                                  if g.school_level == cc.school_level}
+                for sid in sorted(set(level_cfgs) | set(class_configs)):
+                    cfg = class_configs.get(sid)
+                    gcfg = level_cfgs.get(sid) or global_subject_configs.get(sid)
+                    if cfg is not None and not cfg.is_enabled:
                         continue
-                    subj = GenSubject.query.get(cfg.subject_id)
+                    periods = cfg.periods_per_week if cfg is not None else (gcfg.periods_per_week if gcfg else 0)
+                    if not periods:
+                        continue
+                    subj = GenSubject.query.get(sid)
                     if not subj:
-                        logger.debug(f"Warning: Subject ID {cfg.subject_id} not found, skipping...")
+                        logger.debug(f"Warning: Subject ID {sid} not found, skipping...")
                         continue
-                    
+
                     # Non-stream class: per-class > global (no stream layers here).
-                    needs_double, double_count = resolve_double(
-                        None, None, cfg, global_subject_configs.get(cfg.subject_id))
-                    
+                    needs_double, double_count = resolve_double(None, None, cfg, gcfg)
+
                     not_first, not_last, avoid_morning, avoid_afternoon, excluded_periods = \
-                        _effective_restrictions(cfg, global_subject_configs.get(cfg.subject_id))
+                        _effective_restrictions(cfg, gcfg)
 
                     subjects.append({
-                        'subject_id': cfg.subject_id,
+                        'subject_id': sid,
                         'subject_name': subj.name,
-                        'periods': cfg.periods_per_week,
+                        'periods': periods,
                         'needs_double': needs_double,
                         'double_count': double_count,
                         'not_first_period': not_first,

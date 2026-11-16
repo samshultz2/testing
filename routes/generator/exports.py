@@ -1940,19 +1940,20 @@ def teacher_workload_report_pdf(batch_id):
 
 def _period_count_table(batch_id):
     """(headers, rows, col_widths) for the period-count report's image/PDF
-    exports: just the actual assigned periods for each class/subject, "-"
-    when unassigned."""
-    from routes.generator.generation import _period_count_data
+    exports: just the periods each class actually got per subject (the same
+    numbers as the page), "-" when it got none."""
+    from routes.generator.generation import _period_check
     from routes.generator_image import _abbrev
 
-    counts, _configs, subjects = _period_count_data(batch_id)
+    check = _period_check(batch_id)
+    subjects = check['subjects']
     headers = ['Class'] + [_abbrev(s, maxlen=6) for s in subjects]
     table_rows = []
-    for class_arm, subj_counts in counts.items():
-        row = [class_arm]
+    for arm in check['arms']:
+        row = [f"{arm['class']} {arm['arm']}"]
         for s in subjects:
-            actual = subj_counts.get(s.id, 0)
-            row.append(str(actual) if actual else '-')
+            got, _need = arm['cells'].get(s.id, (0, 0))
+            row.append(str(got) if got else '-')
         table_rows.append(row)
     col_widths = [1.6] + [0.7] * len(subjects)
     return headers, table_rows, col_widths

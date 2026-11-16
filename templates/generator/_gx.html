@@ -113,3 +113,47 @@
 })();
 </script>
 {% endmacro %}
+
+{#- Report pages: title, which timetable, and tabs that carry each report's headline number. -#}
+{% macro gx_report_head(meta, overview, active, title, sub, icon, exports=None) %}
+<header class="rs-head">
+  <span class="rs-head-ic"><i class="fas {{ icon }}" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>{{ title }}</h1><p>{{ sub }}</p></div>
+  <div class="rs-head-a">
+    <label class="rs-sel gx-batchsel"><span>Timetable</span>
+      <select data-gx-batch aria-label="Timetable">
+        {% for b in meta.batches %}<option value="{{ b.batch_id }}" {{ 'selected' if b.batch_id == meta.batch_id }}>{{ b.generated_at.strftime('%d %b %Y, %H:%M') if b.generated_at else b.batch_id }}</option>{% endfor %}
+      </select></label>
+    {% if exports %}{{ exports }}{% endif %}
+  </div>
+</header>
+<nav class="gx-rtabs" aria-label="Reports">
+  {% for key, ep, label, n, bad in [
+      ('home', 'generator.reports_index', 'Overview', None, False),
+      ('periods', 'generator.period_count_report', 'Periods', overview.periods_off, overview.periods_off > 0),
+      ('workload', 'generator.teacher_workload_report', 'Workload', overview.overloaded, overview.overloaded > 0),
+      ('clashes', 'generator.clash_report', 'Clashes', overview.clashes, overview.clashes > 0),
+      ('empty', 'generator.unassigned_report', 'Empty slots', overview.empty, overview.empty > 0)] %}
+  <a href="{{ url_for(ep, batch_id=meta.batch_id) }}" class="{{ 'on' if active == key }}"{% if active == key %} aria-current="page"{% endif %}>{{ label }}{% if n is not none %}<b class="{{ 'bad' if bad else 'ok' }}">{% if bad %}{{ n }}{% else %}<i class="fas fa-check" aria-label="none"></i>{% endif %}</b>{% endif %}</a>
+  {% endfor %}
+</nav>
+<script nonce="{{ csp_nonce }}">
+(function () { var on = document.querySelector('.gx-rtabs a.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' }); })();
+document.querySelectorAll('[data-gx-batch]').forEach(function (s) {
+  s.addEventListener('change', function () {
+    var cur = {{ meta.batch_id|tojson }}, p = location.pathname;
+    location.href = p.indexOf(cur) >= 0 ? p.replace(cur, encodeURIComponent(s.value)) : p + '?batch_id=' + encodeURIComponent(s.value);
+  });
+});
+</script>
+{% endmacro %}
+
+{% macro gx_exports(img_ep, pdf_ep, batch_id) %}
+<details class="gx-more">
+  <summary class="rs-btn" aria-label="Download"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></summary>
+  <div class="gx-more-pop" role="menu">
+    <a role="menuitem" href="{{ url_for(pdf_ep, batch_id=batch_id) }}" data-cache-bust><i class="fas fa-file-pdf" aria-hidden="true"></i> PDF</a>
+    <a role="menuitem" href="{{ url_for(img_ep, batch_id=batch_id) }}" data-cache-bust><i class="fas fa-image" aria-hidden="true"></i> Image (HD)</a>
+  </div>
+</details>
+{% endmacro %}
