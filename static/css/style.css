@@ -2652,7 +2652,7 @@ input:focus, select:focus, textarea:focus {
 .subject-check input:checked + span { font-weight:600; color:var(--primary); }
 .subject-check.is-disabled { cursor:not-allowed; opacity:0.5; }
 .subject-check.is-disabled:hover { border-color:var(--border-color); }
-.subject-check-off { font-weight:500; color:var(--warning); font-size:.74rem; }
+.subject-check-off { display:block; font-weight:600; color:var(--warning); font-size:.7rem; line-height:1.2; margin-top:.1rem; }
 .exam-subjects-sit { display:flex; gap:.5rem; align-items:flex-start; font-size:.84rem; color:var(--text-secondary); background:var(--gray-50); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:.55rem .75rem; margin:.25rem 0 .75rem; }
 .exam-subjects-sit i { color:var(--primary); margin-top:.15rem; }
 
@@ -4479,3 +4479,14 @@ body .bill-line span:last-child, body .pl-row span:last-child { font-variant-num
 .nav-back i{font-size:.95rem}
 .nav-back:hover,.nav-back:focus-visible{background:color-mix(in srgb,var(--primary) 9%,transparent);outline:none}
 @media(max-width:759px){.nav-back{font-size:1rem;margin-bottom:.4rem}}
+
+/* Exam subject checklists on phones: two compact columns instead of one very
+   long list; names wrap, rows stay comfortably tappable. */
+.subject-check span{min-width:0;overflow-wrap:anywhere;line-height:1.25}
+.exam-subjects-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.exam-subjects-head strong{flex:1 1 auto;min-width:0}
+@media (max-width:479px){
+  .subject-checks{grid-template-columns:repeat(2,minmax(0,1fr));gap:.4rem}
+  .subject-check{padding:.5rem .55rem;min-height:46px;font-size:.84rem;gap:.45rem;align-items:center}
+  .subject-check input{width:18px;height:18px}
+}

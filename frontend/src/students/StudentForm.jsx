@@ -53,7 +53,7 @@ function SubjectChecks({ legendIcon, legend, all, offered, selected, onToggle, o
             <label key={subj} className={'subject-check' + (!checked && atCap ? ' is-disabled' : '')}>
               <input type="checkbox" name={name} value={subj} disabled={!checked && atCap}
                      checked={checked} onChange={() => onToggle(subj)} />
-              <span>{subj}{offered && !offered.includes(subj) && <small className="subject-check-off" title="Not ticked for this session in Settings → Exam Subjects"> · not offered this session</small>}</span>
+              <span>{subj}{offered && !offered.includes(subj) && <small className="subject-check-off" title="Not ticked for this session in Settings → Exam Subjects">Not offered this session</small>}</span>
             </label>
           );
         })}
@@ -974,7 +974,7 @@ export default function StudentForm({ data }) {
             <span className="text-muted text-sm" style={{ marginLeft: '.5rem' }}>Fills empty lists only; never overwrites a custom selection.</span>
           </div>
         )}
-        {sit && <p className="exam-subjects-sit"><i className="fas fa-calendar-check" aria-hidden="true" /> Showing the subjects offered for the <b>{sit.label}</b> session (WAEC/JAMB {yearKey}){enrolClass && enrolClass.exam_year && enrolClass.exam_year !== opt.exam_year ? ` — ${enrolClass.class} sits next session's exam` : ''}.</p>}
+        {sit && <p className="exam-subjects-sit"><i className="fas fa-calendar-check" aria-hidden="true" /><span>Showing the subjects offered for the <b>{sit.label}</b> session (WAEC/JAMB {yearKey}){enrolClass && enrolClass.exam_year && enrolClass.exam_year !== opt.exam_year ? ` — ${enrolClass.class} sits next session's exam` : ''}.</span></p>}
         <SubjectChecks legendIcon="fa-file-alt" legend="WAEC Subjects" all={allSubjects} offered={offeredW} name="waec_subjects[]"
                        max={WAEC_SUBJECTS_MAX} selected={waec} onToggle={toggle(setWaec, WAEC_SUBJECTS_MAX)}
                        onClear={() => setWaec(new Set())} />
