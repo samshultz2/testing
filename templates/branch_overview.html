@@ -1,59 +1,161 @@
 {% extends "base.html" %}
 {% block title %}Branch Overview - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Branch Overview</span>{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.bo{max-width:1320px;margin:0 auto}
+.bo .rs-head-a{flex-wrap:wrap;justify-content:flex-end}
+.bo-period{display:flex;flex-wrap:wrap;gap:.4rem .9rem;align-items:center;font-size:.84rem;color:var(--text-secondary)}
+.bo-period i{color:var(--text-muted);margin-right:.3rem}
+.bo-period form{display:inline-flex}
+.bo-period select{height:34px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.84rem;font-weight:700;padding:0 .5rem}
+.bo-cmp-h{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap}
+.bo-bars{display:flex;flex-direction:column;gap:.7rem;margin-top:.9rem}
+.bo-bar{display:grid;grid-template-columns:minmax(110px,180px) minmax(0,1fr) auto;gap:.8rem;align-items:center;font-size:.88rem}
+.bo-bar .n{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bo-bar .t{height:12px;border-radius:99px;background:var(--gray-100);overflow:hidden}
+.bo-bar .t i{display:block;height:100%;border-radius:inherit;background:var(--primary);transition:width .3s}
+.bo-bar .t i.top{background:var(--success)}
+.bo-bar b{font-variant-numeric:tabular-nums;min-width:90px;text-align:right}
+.bo-bar.none b{color:var(--text-muted);font-weight:500}
+.bo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:.9rem}
+.bo-card{display:flex;flex-direction:column;gap:.8rem;padding:1.1rem;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-card)}
+.bo-card-h{display:flex;align-items:center;gap:.7rem}
+.bo-ic{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--primary) 11%,var(--bg-card));color:var(--primary);flex:none}
+.bo-card-h div{flex:1;min-width:0;display:flex;flex-direction:column}
+.bo-card-h b{font-size:1.02rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bo-card-h small{color:var(--text-muted);font-size:.76rem}
+.bo-tag{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.12rem .5rem;background:var(--gray-100);color:var(--text-muted)}
+.bo-kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+.bo-kv div{display:flex;flex-direction:column;padding:.55rem .7rem;border-radius:11px;background:var(--gray-50,var(--gray-100))}
+.bo-kv small{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)}
+.bo-kv b{font-size:1.05rem;font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+.bo-kv b.good{color:var(--success)}.bo-kv b.mid{color:var(--warning)}.bo-kv b.bad{color:var(--danger)}
+.bo-kv em{font-style:normal;font-size:.74rem;color:var(--text-muted)}
+.bo-card .rs-btn{margin-top:auto}
+.bo-note{font-size:.8rem;color:var(--text-muted);display:flex;gap:.5rem;align-items:flex-start;margin:0}
+@media(max-width:759px){
+  .bo .rs-head-a{width:100%;justify-content:flex-start}
+  .bo-bar{grid-template-columns:minmax(0,1fr) auto;gap:.3rem .6rem}
+  .bo-bar .t{grid-column:1/-1;grid-row:2}
+  .bo-grid{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-code-compare"></i> Branch Overview</h1>
-    {% if active_term %}<span class="badge badge-info">{{ active_term.name }}</span>{% endif %}
-</div>
+{% set n = rows|length %}
+<div class="rs bo">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-code-compare" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Branch overview</h1><p>Every branch side by side — open one to work in it.</p></div>
+  </header>
 
-<p class="text-muted text-sm" style="margin-bottom:1rem;"><i class="fas fa-info-circle"></i>
-    Side-by-side comparison across every branch. Fees collected is for the active term;
-    use the header branch switcher to drill into a single branch.</p>
+  <div class="bo-period">
+    <span><i class="fas fa-calendar" aria-hidden="true"></i>Fees{{ ' & sales' if sales_period }}: <b>{{ active_term.full_name if active_term else 'no active term' }}</b></span>
+    {% if years %}
+    <form method="get"><label><i class="fas fa-graduation-cap" aria-hidden="true"></i>WAEC &amp; JAMB:
+      <select name="year" data-autosubmit aria-label="Exam session">
+        {% for y, l in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ l }} ({{ y }})</option>{% endfor %}
+      </select></label></form>
+    {% endif %}
+  </div>
 
-<div class="card">
-    <div class="card-body" style="padding:0;">
-        <div class="table-container">
-        <table class="data-table table-stack no-mobile-scroll">
-            <thead><tr>
-                <th>Branch</th>
-                <th class="text-right">Students</th>
-                <th class="text-right">Staff</th>
-                <th class="text-right">Collected ({{ active_term.name if active_term else '—' }})</th>
-                <th class="text-right">Sales</th>
-                <th class="text-right">WAEC cand.</th>
-                <th class="text-right" title="5 credits incl. English & Maths">WAEC 5-credit</th>
-                <th class="text-right">JAMB avg</th>
-            </tr></thead>
-            <tbody>
-            {% for r in rows %}
-            <tr>
-                <td data-label="Branch"><strong>{{ r.branch.name }}</strong>{% if r.branch.is_default %} <span class="badge badge-secondary">Default</span>{% endif %}
-                    <div><a class="text-sm" href="{{ url_for('main.set_view_branch', branch_id=r.branch.id) }}"><i class="fas fa-arrow-right-to-bracket"></i> View this branch</a></div></td>
-                <td data-label="Students" class="text-right">{{ r.students }}</td>
-                <td data-label="Staff" class="text-right">{{ r.staff }}</td>
-                <td data-label="Collected" class="text-right">{{ r.collected|naira }}</td>
-                <td data-label="Sales" class="text-right">{{ r.sales|naira }}</td>
-                <td data-label="WAEC cand." class="text-right">{{ r.waec }}</td>
-                <td data-label="WAEC 5-credit" class="text-right">{{ r.waec_pass }}{% if r.waec %} <span class="text-muted text-sm">({{ (r.waec_pass / r.waec * 100)|round(0)|int }}%)</span>{% endif %}</td>
-                <td data-label="JAMB avg" class="text-right">{{ r.jamb_avg or '—' }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr style="font-weight:700;background:var(--gray-50);">
-                    <td>All branches</td>
-                    <td class="text-right">{{ totals.students }}</td>
-                    <td class="text-right">{{ totals.staff }}</td>
-                    <td class="text-right">{{ totals.collected|naira }}</td>
-                    <td class="text-right">{{ totals.sales|naira }}</td>
-                    <td class="text-right">{{ totals.waec }}</td>
-                    <td class="text-right">{{ totals.waec_pass }}</td>
-                    <td class="text-right">—</td>
-                </tr>
-            </tfoot>
-        </table>
-        </div>
+  <div class="rs-tiles">
+    <div class="rs-tile"><span class="l">Students</span><span class="v">{{ '{:,}'.format(totals.students) }}</span><span class="s">across {{ n }} branch{{ 'es' if n != 1 }}</span></div>
+    <div class="rs-tile"><span class="l">Staff</span><span class="v">{{ '{:,}'.format(totals.staff) }}</span><span class="s">{{ ('%s students per staff' % totals.ratio) if totals.ratio else '—' }}</span></div>
+    <div class="rs-tile good"><span class="l">Fees collected</span><span class="v">{{ totals.collected|naira }}</span><span class="s">{{ active_term.name if active_term else '—' }}</span></div>
+    <div class="rs-tile"><span class="l">WAEC 5 credits</span><span class="v">{{ (totals.waec_rate|string ~ '%') if totals.waec_rate is not none else '—' }}</span><span class="s">{{ totals.waec_pass }} of {{ totals.waec }} candidates{% if totals.jamb_avg %} · JAMB avg {{ totals.jamb_avg }}{% endif %}</span></div>
+  </div>
+
+  {% if n > 1 %}
+  <section class="rs-card">
+    <div class="bo-cmp-h">
+      <h3 class="bo-cmp-t" style="margin:0;font-size:1rem"><i class="fas fa-chart-bar" aria-hidden="true" style="color:var(--text-muted);margin-right:.4rem"></i>Compare by</h3>
+      <div class="rs-chips" role="radiogroup" aria-label="Compare branches by" id="boMetric">
+        <button type="button" class="rs-chip on" role="radio" aria-checked="true" data-m="students">Students</button>
+        <button type="button" class="rs-chip" role="radio" aria-checked="false" data-m="collected">Fees</button>
+        <button type="button" class="rs-chip" role="radio" aria-checked="false" data-m="sales">Sales</button>
+        <button type="button" class="rs-chip" role="radio" aria-checked="false" data-m="ratio">Students per staff</button>
+        <button type="button" class="rs-chip" role="radio" aria-checked="false" data-m="waec_rate">WAEC 5 credits</button>
+        <button type="button" class="rs-chip" role="radio" aria-checked="false" data-m="jamb_avg">JAMB avg</button>
+      </div>
     </div>
+    <div class="bo-bars" id="boBars" aria-live="polite"></div>
+  </section>
+  {% endif %}
+
+  {% if rows %}
+  <div class="bo-grid">
+    {% for r in rows %}
+    <article class="bo-card">
+      <div class="bo-card-h"><span class="bo-ic"><i class="fas fa-school" aria-hidden="true"></i></span>
+        <div><b>{{ r.branch.name }}</b><small>{{ r.students }} student{{ 's' if r.students != 1 }} · {{ r.staff }} staff</small></div>
+        {% if r.branch.is_default %}<span class="bo-tag">Main</span>{% endif %}</div>
+      <div class="bo-kv">
+        <div><small>Fees this term</small><b>{{ r.collected|naira }}</b></div>
+        <div><small>Sales this term</small><b>{{ r.sales|naira }}</b></div>
+        <div><small>Students / staff</small><b>{{ r.ratio if r.ratio is not none else '—' }}</b></div>
+        <div><small>WAEC 5 credits</small>
+          {% if r.waec_rate is not none %}<b class="{{ 'good' if r.waec_rate >= 60 else 'mid' if r.waec_rate >= 40 else 'bad' }}">{{ r.waec_rate }}%</b><em>{{ r.waec_pass }} of {{ r.waec }}</em>{% else %}<b>—</b><em>no results</em>{% endif %}</div>
+        <div><small>JAMB average</small>{% if r.jamb_avg %}<b class="{{ 'good' if r.jamb_avg >= 200 else 'mid' if r.jamb_avg >= 160 else 'bad' }}">{{ r.jamb_avg }}</b><em>{{ r.jamb }} candidates</em>{% else %}<b>—</b><em>no results</em>{% endif %}</div>
+      </div>
+      <a class="rs-btn primary wide" href="{{ r.view_url }}"><i class="fas fa-arrow-right-to-bracket" aria-hidden="true"></i>Open {{ r.branch.name }}</a>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="rs-blank"><i class="fas fa-code-branch" aria-hidden="true"></i><b>No active branches</b><p>Add branches in Settings to compare them here.</p></div>
+  {% endif %}
+
+  <p class="bo-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>WAEC “5 credits” means five or more credits including English and Mathematics. Opening a branch switches your whole view to it; pick “All branches” in the header to come back.</span></p>
 </div>
+
+<script type="application/json" id="boData">{{ rows|map(attribute='branch')|map(attribute='name')|list|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var names = JSON.parse(document.getElementById('boData').textContent);
+  var data = {{ {
+    'students': rows|map(attribute='students')|list,
+    'collected': rows|map(attribute='collected')|list,
+    'sales': rows|map(attribute='sales')|list,
+    'ratio': rows|map(attribute='ratio')|list,
+    'waec_rate': rows|map(attribute='waec_rate')|list,
+    'jamb_avg': rows|map(attribute='jamb_avg')|list,
+  }|tojson }};
+  var box = document.getElementById('boBars'); if (!box) return;
+  var naira = function (v) { return '₦' + Math.round(v).toLocaleString(); };
+  var fmt = { students: function (v) { return v.toLocaleString(); }, collected: naira, sales: naira,
+              ratio: function (v) { return v + ' : 1'; }, waec_rate: function (v) { return v + '%'; },
+              jamb_avg: function (v) { return String(v); } };
+  function draw(m) {
+    var vals = data[m], max = 0, best = null;
+    vals.forEach(function (v) { if (v != null && v > max) max = v; });
+    var order = names.map(function (n, i) { return i; }).sort(function (a, b) { return (vals[b] || -1) - (vals[a] || -1); });
+    if (m !== 'ratio') best = order[0];
+    box.innerHTML = '';
+    order.forEach(function (i) {
+      var v = vals[i], row = document.createElement('div');
+      row.className = 'bo-bar' + (v == null ? ' none' : '');
+      var n = document.createElement('span'); n.className = 'n'; n.textContent = names[i];
+      var t = document.createElement('span'); t.className = 't';
+      var bar = document.createElement('i'); bar.style.width = (v && max ? (v / max * 100) : 0) + '%';
+      if (i === best && v) bar.className = 'top';
+      t.appendChild(bar);
+      var b = document.createElement('b'); b.textContent = v == null ? 'No data' : fmt[m](v);
+      row.appendChild(n); row.appendChild(t); row.appendChild(b); box.appendChild(row);
+    });
+  }
+  var chips = document.querySelectorAll('#boMetric .rs-chip');
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      chips.forEach(function (x) { x.classList.remove('on'); x.setAttribute('aria-checked', 'false'); });
+      c.classList.add('on'); c.setAttribute('aria-checked', 'true'); draw(c.getAttribute('data-m'));
+    });
+  });
+  draw('students');
+})();
+</script>
 {% endblock %}

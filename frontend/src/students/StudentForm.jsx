@@ -31,7 +31,7 @@ function validateContactRow(c) {
 // when given, caps how many can be ticked — once reached, every unticked box
 // disables itself so it's not just discouraged but actually impossible to
 // tick a 9th WAEC subject or a 5th JAMB subject.
-function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, name, max }) {
+function SubjectChecks({ legendIcon, legend, all, offered, selected, onToggle, onClear, name, max }) {
   const atCap = !!max && selected.size >= max;
   return (
     <div className="exam-subjects-group" style={{ marginTop: '.25rem' }}>
@@ -53,7 +53,7 @@ function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, n
             <label key={subj} className={'subject-check' + (!checked && atCap ? ' is-disabled' : '')}>
               <input type="checkbox" name={name} value={subj} disabled={!checked && atCap}
                      checked={checked} onChange={() => onToggle(subj)} />
-              <span>{subj}</span>
+              <span>{subj}{offered && !offered.includes(subj) && <small className="subject-check-off" title="Not ticked for this session in Settings → Exam Subjects"> · not offered this session</small>}</span>
             </label>
           );
         })}
@@ -277,8 +277,18 @@ export default function StudentForm({ data }) {
   const blurRequired = (key, label) => () =>
     setErrors((e) => ({ ...e, [key]: String(f[key] || '').trim() ? undefined : `${label} is required.` }));
   const relationships = opt.relationships || RELATIONSHIP_FALLBACK;
-  const allSubjects = opt.waec_subjects || [];
-  const jambSubjects = opt.jamb_subjects || opt.waec_subjects || [];
+  // Subjects offered for the student's exam session (Settings → Exam Subjects).
+  // On the add form the session follows the class picked: SSS2 sits next
+  // session's exam. A subject the student already has stays listed (flagged)
+  // so it can be unticked rather than silently dropped.
+  const enrolClass = enrolment && enrolId ? (enrolment.classes || []).find((c) => String(c.id) === String(enrolId)) : null;
+  const yearKey = (enrolClass && enrolClass.exam_year) || opt.exam_year || '';
+  const sit = (opt.subjects_by_year || {})[yearKey] || null;
+  const withHeld = (list, held) => [...list, ...[...held].filter((x) => !list.includes(x))];
+  const offeredW = sit ? sit.waec : (opt.waec_subjects || []);
+  const offeredJ = sit ? sit.jamb : (opt.jamb_subjects || opt.waec_subjects || []);
+  const allSubjects = withHeld(offeredW, waec);
+  const jambSubjects = withHeld(offeredJ, jamb);
 
   // Selecting a stream fills the WAEC + JAMB subjects from that stream's
   // compulsory set. Empty lists are filled straight away; a list the student
@@ -286,8 +296,8 @@ export default function StudentForm({ data }) {
   // used to silently wipe a custom list).
   const onStream = (v) => {
     set('stream', v);
-    const wsubs = (opt.stream_waec || {})[v] || [];
-    const jsubs = (opt.stream_jamb || {})[v] || [];
+    const wsubs = ((sit && sit.stream_waec) || opt.stream_waec || {})[v] || [];
+    const jsubs = ((sit && sit.stream_jamb) || opt.stream_jamb || {})[v] || [];
     const same = (have, next) => have.size === next.length && next.every((x) => have.has(x));
     const hasW = waec.size > 0 && wsubs.length && !same(waec, wsubs);
     const hasJ = jamb.size > 0 && jsubs.length && !same(jamb, jsubs);
@@ -964,10 +974,11 @@ export default function StudentForm({ data }) {
             <span className="text-muted text-sm" style={{ marginLeft: '.5rem' }}>Fills empty lists only; never overwrites a custom selection.</span>
           </div>
         )}
-        <SubjectChecks legendIcon="fa-file-alt" legend="WAEC Subjects" all={allSubjects} name="waec_subjects[]"
+        {sit && <p className="exam-subjects-sit"><i className="fas fa-calendar-check" aria-hidden="true" /> Showing the subjects offered for the <b>{sit.label}</b> session (WAEC/JAMB {yearKey}){enrolClass && enrolClass.exam_year && enrolClass.exam_year !== opt.exam_year ? ` — ${enrolClass.class} sits next session's exam` : ''}.</p>}
+        <SubjectChecks legendIcon="fa-file-alt" legend="WAEC Subjects" all={allSubjects} offered={offeredW} name="waec_subjects[]"
                        max={WAEC_SUBJECTS_MAX} selected={waec} onToggle={toggle(setWaec, WAEC_SUBJECTS_MAX)}
                        onClear={() => setWaec(new Set())} />
-        <SubjectChecks legendIcon="fa-file-contract" legend="JAMB Subjects" all={jambSubjects} name="jamb_subjects[]"
+        <SubjectChecks legendIcon="fa-file-contract" legend="JAMB Subjects" all={jambSubjects} offered={offeredJ} name="jamb_subjects[]"
                        max={JAMB_SUBJECTS_MAX} selected={jamb} onToggle={toggle(setJamb, JAMB_SUBJECTS_MAX)}
                        onClear={() => setJamb(new Set())} />
               </section>

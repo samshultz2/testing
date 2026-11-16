@@ -47,7 +47,7 @@ def test_overview_shows_branch_metrics(app):
             db.session.commit()
     html = _legacy_admin(app).get('/branch-overview').get_data(as_text=True)
     assert 'OvB' in html
-    assert 'Branch Overview' in html
+    assert 'Branch overview' in html
 
 
 def test_sales_receipt_shows_branch(app):
@@ -91,3 +91,24 @@ def test_waec_analytics_branch_scoped(app):
         b_stats = AcademicAnalytics.get_waec_school_statistics(2024, b.id)
         assert all_stats['unique_students'] >= 2
         assert b_stats['unique_students'] == 1     # only branch B's candidate
+
+
+def test_overview_counts_one_exam_year_only(app):
+    """WAEC/JAMB figures used to mix every year together; now one sitting."""
+    from models import WAECResult
+    with app.app_context():
+        b = Branch.query.filter_by(name='OvY').first() or Branch(name='OvY', is_active=True)
+        if b.id is None:
+            db.session.add(b); db.session.commit()
+        s = Student.query.filter_by(student_id='OVY1').first()
+        if not s:
+            s = Student(student_id='OVY1', first_name='Y', surname='Ear', gender='Male', is_active=True, branch_id=b.id)
+            db.session.add(s); db.session.flush()
+            for yr in (2019, 2020):
+                db.session.add(WAECResult(student_id=s.id, subject='English Language', grade='B3', exam_year=yr))
+            db.session.commit()
+    c = _legacy_admin(app)
+    html = c.get('/branch-overview?year=2019').get_data(as_text=True)
+    assert 'OvY' in html and '0 of 1' in html
+    html = c.get('/branch-overview?year=1999').get_data(as_text=True)
+    assert 'OvY' in html

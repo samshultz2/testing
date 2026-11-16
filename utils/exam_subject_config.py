@@ -240,3 +240,24 @@ def stream_waec_map(year=None):
 
 def stream_jamb_map(year=None):
     return stream_map('jamb', year)
+
+
+def offered(exam, year=None):
+    """Subjects a sitting offers: everything ticked for it on Settings → Exam
+    Subjects (the “All” column or any stream), in the school's list order.
+    Falls back to the whole school list when nothing is ticked at all."""
+    s = sitting(exam, year)
+    ticked = set(s['general'])
+    for subs in s['streams'].values():
+        ticked.update(subs)
+    cat = catalog(exam)
+    if not ticked:
+        return list(cat)
+    out = [c for c in cat if c in ticked]
+    out += sorted(t for t in ticked if t not in out)
+    return out
+
+
+def is_sss2_class(name):
+    import re
+    return re.sub(r'[^a-z0-9]', '', (name or '').lower()) in ('sss2', 'ss2', 'seniorsecondary2')

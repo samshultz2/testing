@@ -42,6 +42,8 @@
 .ex-rm{width:32px;height:32px;border:0;border-radius:9px;background:none;color:var(--text-muted);cursor:pointer}.ex-rm:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}
 .ex-add{display:flex;gap:.5rem;padding:.8rem 1rem;border-top:1px solid var(--border-light,var(--border-color))}
 .ex-add input{flex:1;min-width:0;max-width:340px;height:38px;border:1.5px dashed var(--border-color);border-radius:10px;padding:0 .75rem;font:inherit;background:var(--bg-card);color:var(--text-primary)}
+.ex-sits-note{display:flex;gap:.55rem;align-items:flex-start;font-size:.84rem;color:var(--text-secondary);margin:.1rem 0 0}
+.ex-sits-note i{color:var(--primary);margin-top:.2rem}
 .ex-side{position:sticky;top:76px;display:flex;flex-direction:column;gap:1rem}
 .ex-sum{padding:1rem}
 .ex-sum h4{margin:0 0 .6rem;font-size:.9rem}
@@ -90,6 +92,10 @@
       <em class="{{ 'chg' if s.custom else '' }}">{% if s.custom %}{{ 'Own subjects' if not n else n ~ ' stream' ~ ('s' if n != 1) ~ ' changed' }}{% else %}Usual subjects{% endif %}</em></a>
     {% endfor %}
   </nav>
+  <p class="ex-sits-note"><i class="fas fa-circle-info" aria-hidden="true"></i>
+    <span>Sessions appear here on their own from <a href="{{ url_for('academics.sessions_list') }}">Academics → Sessions</a> — next session is listed early so you can plan for today’s SSS2.
+      Need another one? <a href="{{ url_for('academics.add_session') }}">Add a session</a>, then come back.
+      The Add / Edit student forms only offer the subjects ticked for the student’s session.</span></p>
 
   {% if view %}
   {% set anychg = view.changes.waec or view.changes.jamb %}

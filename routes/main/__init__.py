@@ -2154,13 +2154,29 @@ RELATIONSHIPS = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other']
 def _student_form_options(with_enrolment=False, exam_year=None):
     """Shared option lists for the add/edit forms; the enrolment block (add
     only) is class-scoped to the current user with their form class default."""
-    from utils.exam_subject_config import get_config, stream_waec_map, stream_jamb_map
+    from utils.exam_subject_config import (get_config, stream_waec_map, stream_jamb_map,
+                                           offered, current_exam_year)
+    from utils.helpers import exam_year_choices
     _cfg = get_config()
+    cy = current_exam_year()
+    year = exam_year or cy
+    labels = dict(exam_year_choices())
+    # Only the subjects ticked for a sitting on Settings → Exam Subjects are
+    # offered. SSS3 students sit this session's exam, SSS2 students next
+    # session's, so the add form gets both and switches with the class chosen.
+    by_year = {}
+    for y in sorted({y for y in (year, cy, (cy + 1) if cy else None) if y}):
+        by_year[str(y)] = {
+            'label': labels.get(y, f'{y - 1}/{y}'),
+            'waec': offered('waec', y) or WAEC_SUBJECTS, 'jamb': offered('jamb', y) or WAEC_SUBJECTS,
+            'stream_waec': stream_waec_map(y), 'stream_jamb': stream_jamb_map(y)}
+    cur = by_year.get(str(year)) if year else None
     opts = {
         'religions': RELIGIONS, 'streams': STREAMS,
-        'waec_subjects': _cfg['waec']['catalog'] or WAEC_SUBJECTS,
-        'jamb_subjects': _cfg['jamb']['catalog'] or WAEC_SUBJECTS,
+        'waec_subjects': cur['waec'] if cur else (_cfg['waec']['catalog'] or WAEC_SUBJECTS),
+        'jamb_subjects': cur['jamb'] if cur else (_cfg['jamb']['catalog'] or WAEC_SUBJECTS),
         'stream_waec': stream_waec_map(exam_year), 'stream_jamb': stream_jamb_map(exam_year),
+        'exam_year': str(year) if year else '', 'subjects_by_year': by_year,
         'relationships': RELATIONSHIPS, 'genders': ['Male', 'Female'],
         'apply_stream_url': url_for('main.apply_stream_subjects'),
         'exam_subjects_settings_url': url_for('settings.exam_subjects'),
@@ -2183,6 +2199,7 @@ def _student_form_options(with_enrolment=False, exam_year=None):
         opts['aspiration_urls'] = {}
     if with_enrolment:
         from utils.access_control import get_teacher_profile, filter_classes_for_user
+        from utils.exam_subject_config import is_sss2_class
         active_term = get_active_term()
         enrol = None
         if active_term:
@@ -2203,6 +2220,8 @@ def _student_form_options(with_enrolment=False, exam_year=None):
                              'class': c.school_class.name if c.school_class else '',
                              'level': (c.school_class.level if c.school_class else 0) or 0,
                              'arm': c.arm_label,
+                             'exam_year': (str(cy + 1) if cy and c.school_class and
+                                           is_sss2_class(c.school_class.name) else (str(cy) if cy else '')),
                              'branch': bnames.get(c.branch_id, '')}
                             for c in class_options],
             }

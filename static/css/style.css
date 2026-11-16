@@ -2652,6 +2652,9 @@ input:focus, select:focus, textarea:focus {
 .subject-check input:checked + span { font-weight:600; color:var(--primary); }
 .subject-check.is-disabled { cursor:not-allowed; opacity:0.5; }
 .subject-check.is-disabled:hover { border-color:var(--border-color); }
+.subject-check-off { font-weight:500; color:var(--warning); font-size:.74rem; }
+.exam-subjects-sit { display:flex; gap:.5rem; align-items:flex-start; font-size:.84rem; color:var(--text-secondary); background:var(--gray-50); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:.55rem .75rem; margin:.25rem 0 .75rem; }
+.exam-subjects-sit i { color:var(--primary); margin-top:.15rem; }
 
 /* Section sub-tabs (.fin-tabs) + autocomplete (.ac-*) — shared by React sections */
 .fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
