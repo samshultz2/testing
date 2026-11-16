@@ -967,11 +967,11 @@ export default function StudentForm({ data }) {
           {opt.exam_subjects_settings_url ? <> in <a href={opt.exam_subjects_settings_url}>Settings → Exam Subjects</a></> : null}.
         </p>
         {f.stream && opt.apply_stream_url && (
-          <div className="mb-3">
+          <div className="exam-apply">
             <button type="button" className="btn btn-secondary btn-sm" onClick={applyStreamToAll} disabled={applying}>
-              <i aria-hidden="true" className={'fas ' + (applying ? 'fa-spinner fa-spin' : 'fa-users')} /> {applying ? 'Applying…' : `Apply ${f.stream} subjects to all SSS2/SSS3 ${f.stream} students`}
+              <i aria-hidden="true" className={'fas ' + (applying ? 'fa-spinner fa-spin' : 'fa-users')} /> <span>{applying ? 'Applying…' : `Apply ${f.stream} subjects to all SSS2/SSS3 ${f.stream} students`}</span>
             </button>
-            <span className="text-muted text-sm" style={{ marginLeft: '.5rem' }}>Fills empty lists only; never overwrites a custom selection.</span>
+            <span className="text-muted text-sm">Fills empty lists only; never overwrites a custom selection.</span>
           </div>
         )}
         {sit && <p className="exam-subjects-sit"><i className="fas fa-calendar-check" aria-hidden="true" /><span>Showing the subjects offered for the <b>{sit.label}</b> session (WAEC/JAMB {yearKey}){enrolClass && enrolClass.exam_year && enrolClass.exam_year !== opt.exam_year ? ` — ${enrolClass.class} sits next session's exam` : ''}.</span></p>}
