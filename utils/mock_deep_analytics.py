@@ -204,7 +204,7 @@ def _waec_records(exam, allowed_ids):
         grade = r.grade or waec_grade_from_score(r.score)
         sc = r.score if r.score is not None else 0
         d['subs'].append({'subject': (r.subject or '').strip(), 'score': int(sc),
-                          'grade': grade, 'passed': grade in PASS_GRADES,
+                          'raw': r.score, 'grade': grade, 'passed': grade in PASS_GRADES,
                           'distinction': grade in DISTINCTION_GRADES})
     records = []
     for sid, d in by_student.items():
@@ -658,11 +658,212 @@ def deep_analytics(kind, exam_id, allowed_ids=None):
 
     recommendations = _recommendations(kind, subjects, teachers, arms, segments, cohort_pass_rate)
 
+    extra = {}
+    if kind == 'waec':
+        extra = {
+            'progress': _waec_progress(exam, records, allowed_ids),
+            'borderline': _waec_borderline(records),
+            'gaps': _waec_gaps(records),
+            'missing': _waec_missing(exam, records, allowed_ids),
+        }
+
     return {
         'meta': meta, 'kpis': kpis, 'subjects': subjects, 'teachers': teachers,
         'arms': arms, 'segments': segments, 'distribution': distribution,
-        'recommendations': recommendations,
+        'recommendations': recommendations, **extra,
     }
+
+
+# ---------------------------------------------------------------------------
+# Mock WAEC: what changed, cheapest credits, why short, what's missing
+# ---------------------------------------------------------------------------
+BORDER_LO, CREDIT_MARK = 40, 50       # 40–49 = D7/E8, just under the C6 line
+
+
+def _core_kind(subject):
+    n = _norm_subject(subject)
+    if n == 'english language':
+        return 'english'
+    if n == 'mathematics':
+        return 'maths'
+    return None
+
+
+def _qualifies(subs):
+    """5+ credits including English and Mathematics."""
+    cr = [x for x in subs if x['passed']]
+    kinds = {_core_kind(x['subject']) for x in cr}
+    return len(cr) >= 5 and 'english' in kinds and 'maths' in kinds
+
+
+def _previous_exam(exam):
+    """The mock sat just before this one (same session first, else the most
+    recent earlier one) that has results."""
+    from models import MockWAECExam, MockWAECResult
+    q = MockWAECExam.query.filter(MockWAECExam.id != exam.id)
+    cands = []
+    for e in q.all():
+        if e.session_id == exam.session_id and (e.exam_number or 0) < (exam.exam_number or 0):
+            cands.append((0, -(e.exam_number or 0), e))
+        elif exam.exam_date and e.exam_date and e.exam_date < exam.exam_date and e.session_id != exam.session_id:
+            cands.append((1, -e.exam_date.toordinal(), e))
+    for _, _, e in sorted(cands, key=lambda t: (t[0], t[1])):
+        if MockWAECResult.query.filter_by(mock_exam_id=e.id).first():
+            return e
+    return None
+
+
+def _waec_progress(exam, records, allowed_ids):
+    """Movement since the previous mock: who improved / dropped most, who
+    crossed the 5-credits-incl-English-and-Maths line, subject credit rates."""
+    prev = _previous_exam(exam)
+    if not prev:
+        return None
+    before = {r['student_id']: r for r in _waec_records(prev, allowed_ids)}
+    if not before:
+        return None
+    both = [(r, before[r['student_id']]) for r in records if r['student_id'] in before]
+    movers = []
+    gained, lost = [], []
+    for now, then in both:
+        dc = (now['credits'] or 0) - (then['credits'] or 0)
+        dm = round((now['headline'] or 0) - (then['headline'] or 0), 1)
+        movers.append({'student_id': now['student_id'], 'name': now['name'], 'credits': now['credits'],
+                       'credits_before': then['credits'], 'd_credits': dc, 'd_mean': dm})
+        q_now, q_then = _qualifies(now['subjects']), _qualifies(then['subjects'])
+        if q_now and not q_then:
+            gained.append({'student_id': now['student_id'], 'name': now['name'], 'credits': now['credits']})
+        elif q_then and not q_now:
+            lost.append({'student_id': now['student_id'], 'name': now['name'], 'credits': now['credits'],
+                         'credits_before': then['credits']})
+    key = lambda m: (m['d_credits'], m['d_mean'])
+    improved = [m for m in sorted(movers, key=key, reverse=True) if m['d_credits'] > 0 or m['d_mean'] >= 5][:8]
+    dropped = [m for m in sorted(movers, key=key) if m['d_credits'] < 0 or m['d_mean'] <= -5][:8]
+
+    def rates(recs):
+        acc = {}
+        for r in recs:
+            for x in r['subjects']:
+                a = acc.setdefault(x['subject'], [0, 0])
+                a[0] += 1
+                a[1] += 1 if x['passed'] else 0
+        return {k: (v[0], _rate(v[1], v[0])) for k, v in acc.items()}
+    rn, rp = rates(records), rates(list(before.values()))
+    subjects = []
+    for sub, (n, r) in rn.items():
+        if sub in rp and n >= 3 and rp[sub][0] >= 3 and r is not None and rp[sub][1] is not None:
+            subjects.append({'subject': sub, 'now': r, 'before': rp[sub][1], 'delta': round(r - rp[sub][1], 1), 'n': n})
+    subjects.sort(key=lambda x: x['delta'])
+    q_now = _rate(sum(1 for r in records if _qualifies(r['subjects'])), len(records))
+    q_then = _rate(sum(1 for r in before.values() if _qualifies(r['subjects'])), len(before))
+    return {
+        'prev_id': prev.id, 'prev_name': prev.display_name, 'compared': len(both),
+        'five_now': q_now, 'five_before': q_then,
+        'five_delta': round(q_now - q_then, 1) if q_now is not None and q_then is not None else None,
+        'avg_credits_now': _mean([r['credits'] or 0 for r in records]),
+        'avg_credits_before': _mean([r['credits'] or 0 for r in before.values()]),
+        'gained': sorted(gained, key=lambda x: x['name']), 'lost': sorted(lost, key=lambda x: x['name']),
+        'improved': improved, 'dropped': dropped, 'subjects': subjects,
+    }
+
+
+def _is_borderline(x):
+    if x['passed']:
+        return False
+    if x.get('raw') is not None:
+        return BORDER_LO <= x['raw'] < CREDIT_MARK
+    return x['grade'] in ('D7', 'E8')
+
+
+def _waec_borderline(records):
+    """Per subject: candidates 1–10 marks under a credit (40–49, D7/E8), and how
+    many more would reach 5 credits incl. English & Maths if that subject's
+    borderline group crossed the line — where extra lessons buy the most."""
+    by_sub = {}
+    for r in records:
+        for x in r['subjects']:
+            if _is_borderline(x):
+                by_sub.setdefault(x['subject'], []).append({
+                    'student_id': r['student_id'], 'name': r['name'], 'score': x.get('raw'),
+                    'grade': x['grade'], 'need': (CREDIT_MARK - x['raw']) if x.get('raw') is not None else None})
+    out = []
+    for sub, rows in by_sub.items():
+        ids = {x['student_id'] for x in rows}
+        unlock = 0
+        for r in records:
+            if r['student_id'] in ids and not _qualifies(r['subjects']):
+                flipped = [dict(x, passed=True) if (x['subject'] == sub and _is_borderline(x)) else x for x in r['subjects']]
+                if _qualifies(flipped):
+                    unlock += 1
+        rows.sort(key=lambda x: (x['need'] is None, x['need'] if x['need'] is not None else 99, x['name']))
+        out.append({'subject': sub, 'count': len(rows), 'unlocks': unlock, 'students': rows})
+    out.sort(key=lambda x: (-x['unlocks'], -x['count'], x['subject']))
+    # If every borderline entry in every subject became a credit.
+    now = sum(1 for r in records if _qualifies(r['subjects']))
+    best = sum(1 for r in records if _qualifies([dict(x, passed=True) if _is_borderline(x) else x for x in r['subjects']]))
+    return {'subjects': out, 'qualified_now': now, 'qualified_if_all': best,
+            'rate_now': _rate(now, len(records)), 'rate_if_all': _rate(best, len(records)),
+            'entries': sum(x['count'] for x in out)}
+
+
+def _waec_gaps(records):
+    """Why each non-qualifying candidate falls short — each group needs a
+    different class."""
+    groups = {'english': [], 'maths': [], 'both': [], 'count': []}
+    for r in records:
+        if _qualifies(r['subjects']):
+            continue
+        cr = [x for x in r['subjects'] if x['passed']]
+        kinds = {_core_kind(x['subject']) for x in cr}
+        has_e, has_m = 'english' in kinds, 'maths' in kinds
+        row = {'student_id': r['student_id'], 'name': r['name'], 'credits': len(cr)}
+        if not has_e and not has_m:
+            groups['both'].append(row)
+        elif not has_e:
+            groups['english'].append(row)
+        elif not has_m:
+            groups['maths'].append(row)
+        else:
+            row['short'] = 5 - len(cr)
+            groups['count'].append(row)
+    for g in groups.values():
+        g.sort(key=lambda x: (-x['credits'], x['name']))
+    return {k: v for k, v in groups.items()} | {'total': sum(len(v) for v in groups.values())}
+
+
+def _waec_missing(exam, records, allowed_ids):
+    """SSS3 candidates of the exam's session with no result in this mock, and
+    subjects on a candidate's profile that have no grade here."""
+    from models import Student, StudentEnrollment, ClassArmAssignment, Term
+    from utils.helpers import get_sss3_class
+    cls = get_sss3_class()
+    have = {r['student_id']: {_norm_subject(x['subject']) for x in r['subjects']} for r in records}
+    roster = []
+    if cls:
+        q = (Student.query.join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+             .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
+             .join(Term, Term.id == ClassArmAssignment.term_id)
+             .filter(ClassArmAssignment.class_id == cls.id, Term.session_id == exam.session_id,
+                     Student.is_active == True).distinct())   # noqa: E712
+        roster = [s for s in q.all() if allowed_ids is None or s.branch_id in allowed_ids]
+    no_result = sorted(({'student_id': s.id, 'name': s.full_name, 'admission_no': s.student_id or ''}
+                        for s in roster if s.id not in have), key=lambda x: x['name'])
+    partial = []
+    by_id = {s.id: s for s in roster}
+    extra_ids = [sid for sid in have if sid not in by_id]
+    if extra_ids:
+        for s in Student.query.filter(Student.id.in_(extra_ids)).all():
+            by_id[s.id] = s
+    for sid, subs in have.items():
+        st = by_id.get(sid)
+        if not st:
+            continue
+        missing = [x for x in (st.waec_subject_list or []) if x and _norm_subject(x) not in subs]
+        if missing:
+            partial.append({'student_id': sid, 'name': st.full_name, 'missing': missing})
+    partial.sort(key=lambda x: (-len(x['missing']), x['name']))
+    return {'roster': len(roster), 'no_result': no_result, 'partial': partial,
+            'missing_entries': sum(len(x['missing']) for x in partial)}
 
 
 # ---------------------------------------------------------------------------

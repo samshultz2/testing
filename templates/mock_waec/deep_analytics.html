@@ -4,7 +4,42 @@
 {% block title %}Deep Analytics — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Deep Analytics</span>{% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.dx{display:flex;flex-direction:column;gap:.8rem}
+.dx-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem}
+.dx-k{display:flex;flex-direction:column;gap:.15rem;padding:.7rem .85rem;border-radius:12px;background:var(--gray-100)}
+.dx-k small{font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em}
+.dx-k b{font-size:1.4rem;font-family:'Space Grotesk',sans-serif}.dx-k span{font-size:.8rem;font-weight:600}
+.dx-k.good b{color:var(--success)}.dx-k.bad b{color:var(--danger)}
+.dx-cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem}
+.dx-cols.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dx-col{min-width:0;display:flex;flex-direction:column;gap:.1rem;border-top:3px solid var(--border-color);padding-top:.5rem}
+.dx-col.bad{border-top-color:var(--danger)}.dx-col.good{border-top-color:var(--success)}.dx-col.mid{border-top-color:var(--warning)}
+.dx-col h4{margin:0 0 .3rem;font-size:.86rem;display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.dx-col .da-seg-row{padding:.4rem 0}
+.dx-sub{margin:.2rem 0 0;font-size:.86rem}
+.dx-subs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.3rem 1.2rem}
+.dx-srow{display:grid;grid-template-columns:minmax(0,1fr) auto 52px;gap:.5rem;align-items:center;font-size:.86rem;padding:.3rem 0;border-bottom:1px dashed var(--border-color)}
+.dx-srow .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dx-srow .d{text-align:right;font-weight:800}
+.dx-lead{margin:0;font-size:.92rem;color:var(--text-secondary);line-height:1.5}
+.dx-bl,.dx-gaps{display:flex;flex-direction:column;gap:.4rem}
+.dx-blrow,.dx-gap{border:1px solid var(--border-color);border-radius:12px;padding:0 .8rem}
+.dx-blrow summary,.dx-gap summary{display:flex;align-items:center;gap:.8rem;padding:.65rem 0;cursor:pointer;list-style:none}
+.dx-blrow summary::-webkit-details-marker,.dx-gap summary::-webkit-details-marker{display:none}
+.dx-blrow .n{flex:1;min-width:0;display:flex;flex-direction:column}.dx-blrow .n small{color:var(--text-muted);font-size:.76rem}
+.dx-blrow .u{font-size:.82rem;font-weight:700;color:var(--text-muted)}.dx-blrow .u.good{color:var(--success)}
+.dx-blrow summary>i,.dx-gap summary>i{color:var(--text-muted);font-size:.75rem;transition:transform .15s}
+details[open]>summary>i.fa-chevron-down{transform:rotate(180deg)}
+.dx-bllist{display:flex;flex-wrap:wrap;gap:.35rem;padding:0 0 .75rem}
+.dx-chip{font-size:.8rem;padding:.25rem .6rem;border-radius:999px;background:var(--gray-100);color:var(--text-secondary)}
+.dx-chip b{color:var(--text-primary);font-weight:700}
+.dx-gap summary>b{font-size:1.5rem;font-family:'Space Grotesk',sans-serif;min-width:2.2rem;text-align:center}
+.dx-gap summary>span{flex:1;display:flex;flex-direction:column;font-weight:700}.dx-gap summary small{font-weight:500;color:var(--text-muted);font-size:.78rem}
+.dx-gap.bad summary>b{color:var(--danger)}.dx-gap.mid summary>b{color:var(--warning)}.dx-gap.info summary>b{color:var(--primary)}
+@media(max-width:899px){.dx-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.dx-cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:599px){.dx-cols,.dx-cols.two{grid-template-columns:minmax(0,1fr)}.dx-blrow summary{flex-wrap:wrap;gap:.3rem .8rem}}
+</style>{% endblock %}
 
 {% block content %}
 {% set BT = {'critical':'bad','weak':'mid','fair':'info','strong':'good'} %}
@@ -45,6 +80,105 @@
     </section>
     {% endfor %}
   </div>
+
+  {# ---- 1. What changed since the previous mock ---- #}
+  {% set pg = d.progress %}
+  {% if pg %}
+  <section class="rs-card dx">
+    <div class="rs-card-h"><h3><i class="fas fa-arrows-up-down" aria-hidden="true"></i> Since {{ pg.prev_name }}</h3>
+      <small>{{ pg.compared }} candidate{{ 's' if pg.compared != 1 }} sat both · <a href="{{ url_for('mock_waec.deep', exam_id=pg.prev_id) }}">open that mock</a></small></div>
+    <div class="dx-kpis">
+      {% set dt = pg.five_delta %}
+      <div class="dx-k"><small>5 credits incl. English &amp; Maths</small><b>{{ pg.five_now if pg.five_now is not none else '—' }}%</b>
+        {% if dt is not none %}<span class="{{ 'bx-good' if dt > 0 else ('bx-bad' if dt < 0 else 'rs-muted') }}"><i class="fas fa-arrow-{{ 'up' if dt > 0 else ('down' if dt < 0 else 'right') }}" aria-hidden="true"></i> {{ '%+g'|format(dt) }} pts (was {{ pg.five_before }}%)</span>{% endif %}</div>
+      {% set dc = ((pg.avg_credits_now or 0) - (pg.avg_credits_before or 0))|round(1) %}
+      <div class="dx-k"><small>Average credits</small><b>{{ pg.avg_credits_now }}</b>
+        <span class="{{ 'bx-good' if dc > 0 else ('bx-bad' if dc < 0 else 'rs-muted') }}">{{ '%+g'|format(dc) }} (was {{ pg.avg_credits_before }})</span></div>
+      <div class="dx-k good"><small>Newly reached 5 credits + core</small><b>{{ pg.gained|length }}</b></div>
+      <div class="dx-k bad"><small>Dropped below the line</small><b>{{ pg.lost|length }}</b></div>
+    </div>
+    <div class="dx-cols">
+      {% for key, lab, tone, ic, empty in [('lost', 'Fell below 5 credits + core — act first', 'bad', 'fa-arrow-trend-down', 'Nobody fell below the line.'), ('gained', 'Now meet the admission line', 'good', 'fa-arrow-trend-up', 'Nobody newly crossed the line.')] %}
+      <div class="dx-col {{ tone }}"><h4><i class="fas {{ ic }}" aria-hidden="true"></i> {{ lab }} <span class="sl-pill {{ tone }}">{{ pg[key]|length }}</span></h4>
+        {% for x in pg[key] %}<div class="da-seg-row"><div class="n"><b>{{ x.name }}</b>{% if key == 'lost' %}<small>{{ x.credits_before }} → {{ x.credits }} credits</small>{% endif %}</div><span class="m">{{ x.credits }} cr</span></div>
+        {% else %}<p class="rs-muted">{{ empty }}</p>{% endfor %}</div>
+      {% endfor %}
+      {% for key, lab, tone, ic in [('dropped', 'Biggest drops', 'bad', 'fa-circle-arrow-down'), ('improved', 'Most improved', 'good', 'fa-circle-arrow-up')] %}
+      <div class="dx-col {{ tone }}"><h4><i class="fas {{ ic }}" aria-hidden="true"></i> {{ lab }}</h4>
+        {% for x in pg[key] %}<div class="da-seg-row"><div class="n"><b>{{ x.name }}</b><small>{{ x.credits_before }} → {{ x.credits }} credits · mean {{ '%+g'|format(x.d_mean) }}</small></div>
+          <span class="m {{ 'bx-good' if x.d_credits > 0 else ('bx-bad' if x.d_credits < 0 else '') }}">{{ '%+d'|format(x.d_credits) }}</span></div>
+        {% else %}<p class="rs-muted">No big movement.</p>{% endfor %}</div>
+      {% endfor %}
+    </div>
+    {% if pg.subjects %}
+    <h4 class="dx-sub">Credit rate by subject, then → now</h4>
+    <div class="dx-subs">
+      {% for x in pg.subjects %}
+      <div class="dx-srow"><span class="n">{{ x.subject }}</span><span class="v">{{ x.before }}% → <b>{{ x.now }}%</b></span>
+        <span class="d {{ 'bx-good' if x.delta > 0 else ('bx-bad' if x.delta < 0 else 'rs-muted') }}">{{ '%+g'|format(x.delta) }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% else %}
+  <p class="rs-muted bx-small"><i class="fas fa-circle-info" aria-hidden="true"></i> No earlier Mock WAEC with results to compare against yet — the "since last mock" view appears from the second mock.</p>
+  {% endif %}
+
+  {# ---- 2. Borderline: the cheapest credits to win ---- #}
+  {% set bl = d.borderline %}
+  <section class="rs-card dx">
+    <div class="rs-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Borderline — the cheapest credits to win</h3><small>40–49 (D7/E8): 1–10 marks under a credit</small></div>
+    {% if bl.entries %}
+    <p class="dx-lead">{{ bl.entries }} subject result{{ 's' if bl.entries != 1 }} sit just under the credit line. If they all crossed it, the share of candidates with <b>5 credits incl. English &amp; Maths</b> would go from <b>{{ bl.rate_now }}%</b> to <b class="bx-good">{{ bl.rate_if_all }}%</b> ({{ bl.qualified_now }} → {{ bl.qualified_if_all }} students). Subjects are ranked by how many extra students would reach the admission line.</p>
+    <div class="dx-bl">
+      {% for x in bl.subjects %}
+      <details class="dx-blrow">
+        <summary><span class="n"><b>{{ x.subject }}</b><small>{{ x.count }} borderline</small></span>
+          <span class="u {{ 'good' if x.unlocks else '' }}">{% if x.unlocks %}+{{ x.unlocks }} would reach 5 credits{% else %}no extra admissions{% endif %}</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+        <div class="dx-bllist">
+          {% for st in x.students %}<span class="dx-chip"><b>{{ st.name }}</b> {% if st.score is not none %}{{ st.score|round|int }} · needs +{{ st.need|round|int }}{% else %}{{ st.grade }}{% endif %}</span>{% endfor %}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+    {% else %}<p class="rs-muted">No results between 40 and 49 — nobody is just under a credit.</p>{% endif %}
+  </section>
+
+  {# ---- 3. Why the rest fall short ---- #}
+  {% set gp = d.gaps %}
+  <section class="rs-card dx">
+    <div class="rs-card-h"><h3><i class="fas fa-puzzle-piece" aria-hidden="true"></i> Why {{ gp.total }} candidate{{ 's' if gp.total != 1 }} don’t yet have 5 credits incl. English &amp; Maths</h3><small>each group needs a different class</small></div>
+    {% if gp.total %}
+    <div class="dx-gaps">
+      {% for key, lab, hint, tone in [('english', 'Missing English only', 'An English clinic gets these over the line.', 'mid'), ('maths', 'Missing Maths only', 'A Maths clinic gets these over the line.', 'mid'), ('both', 'Missing both English and Maths', 'Core-skills support in both, starting now.', 'bad'), ('count', 'Have English & Maths, short on number', 'Pick their nearest elective credits and drill those.', 'info')] %}
+      <details class="dx-gap {{ tone }}" {{ 'open' if gp[key]|length and gp[key]|length <= 8 }}>
+        <summary><b>{{ gp[key]|length }}</b><span>{{ lab }}<small>{{ hint }}</small></span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+        <div class="dx-bllist">
+          {% for x in gp[key] %}<span class="dx-chip"><b>{{ x.name }}</b> {{ x.credits }} cr{% if x.short %} · {{ x.short }} short{% endif %}</span>
+          {% else %}<span class="rs-muted">Nobody.</span>{% endfor %}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+    {% else %}<p class="rs-muted">Every candidate has 5 credits including English and Maths.</p>{% endif %}
+  </section>
+
+  {# ---- 4. Missing results ---- #}
+  {% set ms = d.missing %}
+  {% if ms.no_result or ms.partial %}
+  <section class="rs-card dx">
+    <div class="rs-card-h"><h3><i class="fas fa-circle-question" aria-hidden="true"></i> Missing results</h3><small>rates above leave these out</small></div>
+    <div class="dx-cols two">
+      <div class="dx-col bad"><h4><i class="fas fa-user-xmark" aria-hidden="true"></i> SSS3 students with no result in this mock <span class="sl-pill bad">{{ ms.no_result|length }}</span></h4>
+        {% for x in ms.no_result %}<div class="da-seg-row"><div class="n"><b>{{ x.name }}</b><small>{{ x.admission_no }}</small></div></div>
+        {% else %}<p class="rs-muted">Everyone in SSS3 ({{ ms.roster }}) has results.</p>{% endfor %}</div>
+      <div class="dx-col mid"><h4><i class="fas fa-list-check" aria-hidden="true"></i> Registered subjects with no grade <span class="sl-pill mid">{{ ms.missing_entries }}</span></h4>
+        {% for x in ms.partial %}<div class="da-seg-row"><div class="n"><b>{{ x.name }}</b><small>{{ x.missing|join(', ') }}</small></div><span class="m">{{ x.missing|length }}</span></div>
+        {% else %}<p class="rs-muted">Every candidate has a grade in each subject on their profile.</p>{% endfor %}</div>
+    </div>
+    <p class="rs-muted bx-small"><a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">Enter the missing results</a> — until then, credit rates may look better or worse than they really are.</p>
+  </section>
+  {% endif %}
 
   <div class="bx-two">
     <section class="rs-card">

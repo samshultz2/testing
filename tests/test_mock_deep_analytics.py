@@ -312,3 +312,81 @@ def test_deep_empty_exam(app):
     assert r.status_code == 200
     r = c.get(f'/mock-jamb/exam/{exam_id}/deep/export?format=pdf', follow_redirects=True)
     assert r.status_code == 200   # redirected to the page with a flash, no crash
+
+
+# ---- Mock WAEC: since-last-mock, borderline, gaps, missing ----------------------------
+def _wx_exam(app, session_id, num):
+    with app.app_context():
+        _SEQ[0] += 1
+        ex = MockWAECExam(name=f'Mock W {_SEQ[0]}', exam_number=num, session_id=session_id,
+                          exam_date=date(2025, 2, num))
+        db.session.add(ex); db.session.commit()
+        return ex.id
+
+
+def _wx(app, exam_id, sid, scores):
+    with app.app_context():
+        for subj, sc in scores.items():
+            db.session.add(MockWAECResult(student_id=sid, mock_exam_id=exam_id, subject=subj,
+                                          score=sc, grade=waec_grade_from_score(sc)))
+        db.session.commit()
+
+
+FIVE = ['English Language', 'Mathematics', 'Biology', 'Physics', 'Chemistry']
+
+
+def test_waec_progress_borderline_gaps_missing(app):
+    from utils.mock_deep_analytics import deep_analytics
+    ssid = _fresh_session_term(app)
+    ids = _students(app, 4)
+    with app.app_context():                     # put them in this session's SSS3
+        from models import StudentEnrollment, ClassArmAssignment
+        term = Term.query.filter_by(session_id=ssid).first()
+        sss3 = SchoolClass.query.filter_by(name='SSS3').first()
+        arm = ClassArm.query.filter_by(name='Gold').first() or ClassArm(name='Gold', is_active=True)
+        db.session.add(arm); db.session.flush()
+        caa = ClassArmAssignment(class_id=sss3.id, arm_id=arm.id, term_id=term.id)
+        db.session.add(caa); db.session.flush()
+        for sid in ids:
+            db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=caa.id, is_active=True))
+        db.session.get(Student, ids[0]).waec_subjects = ','.join(FIVE + ['Economics'])
+        db.session.commit()
+    m1 = _wx_exam(app, ssid, 1)
+    m2 = _wx_exam(app, ssid, 2)
+    # A: qualified in mock 1, drops Maths to 45 in mock 2 (lost the line; Maths borderline unlocks 1).
+    _wx(app, m1, ids[0], {s: 60 for s in FIVE})
+    _wx(app, m2, ids[0], dict({s: 60 for s in FIVE}, Mathematics=45))
+    # B: missing English only in mock 1, gains it in mock 2 (newly qualified).
+    _wx(app, m1, ids[1], dict({s: 60 for s in FIVE}, **{'English Language': 30}))
+    _wx(app, m2, ids[1], {s: 65 for s in FIVE})
+    # C: has English & Maths credits but only 3 credits (short on number); Physics 48 borderline.
+    _wx(app, m2, ids[2], {'English Language': 55, 'Mathematics': 55, 'Biology': 52, 'Physics': 48, 'Chemistry': 20})
+    # ids[3]: no result in mock 2 at all.
+    with app.app_context():
+        d = deep_analytics('waec', m2)
+    pg = d['progress']
+    assert pg and pg['prev_id'] == m1 and pg['compared'] == 2
+    assert [x['student_id'] for x in pg['lost']] == [ids[0]]
+    assert [x['student_id'] for x in pg['gained']] == [ids[1]]
+    bl = {x['subject']: x for x in d['borderline']['subjects']}
+    assert bl['Mathematics']['unlocks'] == 1 and bl['Mathematics']['students'][0]['need'] == 5
+    assert bl['Physics']['count'] == 1 and bl['Physics']['unlocks'] == 0     # 4 credits ≠ 5
+    gp = d['gaps']
+    assert [x['student_id'] for x in gp['maths']] == [ids[0]]
+    assert [x['student_id'] for x in gp['count']] == [ids[2]] and gp['count'][0]['short'] == 2
+    ms = d['missing']
+    assert ids[3] in {x['student_id'] for x in ms['no_result']}
+    part = {x['student_id']: x for x in ms['partial']}
+    assert part[ids[0]]['missing'] == ['Economics']
+
+
+def test_waec_deep_page_shows_new_sections(app):
+    ssid = _fresh_session_term(app)
+    ids = _students(app, 2)
+    m1 = _wx_exam(app, ssid, 1)
+    m2 = _wx_exam(app, ssid, 2)
+    for m in (m1, m2):
+        for sid in ids:
+            _wx(app, m, sid, dict({s: 60 for s in FIVE}, Physics=45))
+    html = _admin(app).get(f'/mock-waec/exam/{m2}/deep').get_data(as_text=True)
+    assert 'Borderline' in html and 'Why ' in html and 'Since First Mock WAEC' in html
