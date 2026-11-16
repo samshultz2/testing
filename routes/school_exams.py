@@ -222,7 +222,10 @@ def make_blueprint(level):
         from flask import jsonify
         _body_or_404(body)
         scheme = get_scheme(level, body)
-        students = svc.level_students(level)
+        # Only the cohort that sits the chosen year's exam (see exam_cohort).
+        year_req = request.values.get('exam_year', type=int) or request.args.get('year', type=int) \
+            or _default_year(svc.years_for(level, body))
+        students = svc.exam_cohort(level, body, year_req)
         allowed = {s.id for s in students}
         fetch = request.headers.get('X-Requested-With') == 'fetch'
         if request.method == 'POST' and request.form.get('bulk'):
@@ -384,9 +387,9 @@ def make_blueprint(level):
     def grid_entry(body):
         _body_or_404(body)
         scheme = get_scheme(level, body)
-        students = svc.level_students(level)
         year = (request.values.get('year', type=int)
                 or _default_year(svc.years_for(level, body)))
+        students = svc.exam_cohort(level, body, year)
         cols = request.values.getlist('col') or scheme.subjects[:9]
         cols = [c for c in cols if c]
         mode = request.values.get('mode', 'score')

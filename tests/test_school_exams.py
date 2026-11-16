@@ -651,3 +651,34 @@ def test_school_exam_bulk_entry_grades_scores_and_candidate(app):
         assert {x.subject for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=2061)} == {'English Studies'}
     d = c.get('/jss3-exams/state/add?year=2061', headers=H).get_json()
     assert d['exam'] == 'school' and d['grades'] and d['benchmark'] and d['bands'][0]['grade'] == 'A'
+
+
+def test_entry_lists_only_the_sessions_cohort(app):
+    """/add?year=Y lists only students in the level class during the session
+    that sits Y (plus anyone already entered for Y) — not every student who
+    ever had results for the level."""
+    from models import AcademicSession, Term, SchoolClass, ClassArm, ClassArmAssignment, StudentEnrollment
+    c = _admin(app)
+    cur, _ = _student(app, 'Cohortnow')
+    old, _ = _student(app, 'Cohortold')
+    _enroll(app, 'JSS3', 3, old)                       # makes sure the JSS3 class exists
+    with app.app_context():
+        ssn = AcademicSession(name='2070/2071', is_active=False)
+        db.session.add(ssn); db.session.flush()
+        t = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=False)
+        db.session.add(t); db.session.flush()
+        cls = SchoolClass.query.filter_by(name='JSS3').first()
+        arm = ClassArm.query.filter_by(name='Gold').first()
+        caa = ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=t.id)
+        db.session.add(caa); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=cur, class_arm_assignment_id=caa.id, is_active=True))
+        db.session.commit()
+    tok = auth_csrf(c)
+    # 'old' has results only for another year and wasn't in the 2070/2071 class.
+    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': old, 'exam_year': 2068,
+           'subject[]': ['Mathematics'], 'score[]': ['60'], 'grade[]': ['']})
+    H = {'X-Requested-With': 'fetch'}
+    ids = {s['id'] for s in c.get('/jss3-exams/state/add?year=2071', headers=H).get_json()['students']}
+    assert cur in ids and old not in ids
+    ids68 = {s['id'] for s in c.get('/jss3-exams/state/add?year=2068', headers=H).get_json()['students']}
+    assert old in ids68 and cur not in ids68

@@ -164,6 +164,61 @@ def _recent_cohort(level):
     return scope_query(q, Student).all()
 
 
+def session_for_exam_year(year):
+    """The academic session that sits an exam in calendar ``year`` (the
+    2026/2027 session writes BECE / Common Entrance in 2027), or None."""
+    from models import AcademicSession
+    from utils.helpers import session_exam_year
+    if not year:
+        return None
+    for s in AcademicSession.query.order_by(AcademicSession.id.desc()).all():
+        if session_exam_year(s) == year:
+            return s
+    return None
+
+
+def exam_cohort(level, body, year):
+    """Students who belong on the entry page for one exam sitting: those in the
+    level class in any term of the session that sits ``year`` (so 2027 lists
+    the 2026/2027 JSS3 class only), plus anyone who already has results or a
+    sitting record for this level / body / year (kept editable). When no
+    session exists for ``year`` yet, falls back to this term's class for a
+    current or future year. Branch-scoped, sorted by name."""
+    from models import ClassArmAssignment, StudentEnrollment, Term
+    from utils.branch_scope import scope_query
+    from utils.helpers import session_exam_year, get_active_session
+    out = {}
+    cls_ids = level_class_ids(level)
+    sess = session_for_exam_year(year)
+    if sess and cls_ids:
+        q = (Student.query
+             .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+             .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
+             .join(Term, Term.id == ClassArmAssignment.term_id)
+             .filter(ClassArmAssignment.class_id.in_(cls_ids), Term.session_id == sess.id,
+                     Student.is_active == True)             # noqa: E712
+             .distinct())
+        for st in scope_query(q, Student).all():
+            out[st.id] = st
+    elif not sess:
+        cur = session_exam_year(get_active_session())
+        if cur is None or (year and year >= cur):
+            for st, _ in _enrolled_rows(level):
+                out.setdefault(st.id, st)
+    if year:
+        ids = {r[0] for r in db.session.query(SchoolExamResult.student_id).filter(
+            SchoolExamResult.level == level, SchoolExamResult.body == body,
+            SchoolExamResult.exam_year == year).distinct()}
+        ids |= {r[0] for r in db.session.query(SchoolExamCandidate.student_id).filter(
+            SchoolExamCandidate.level == level, SchoolExamCandidate.body == body,
+            SchoolExamCandidate.exam_year == year).distinct()}
+        ids -= set(out)
+        if ids:
+            for st in scope_query(Student.query.filter(Student.id.in_(ids)), Student).all():
+                out[st.id] = st
+    return sorted(out.values(), key=lambda s: ((s.surname or '').lower(), (s.first_name or '').lower()))
+
+
 def level_students(level, include_with_results=True):
     """Students who can have results for ``level``: everyone enrolled in the
     level class this term, plus (so results stay editable after promotion)
