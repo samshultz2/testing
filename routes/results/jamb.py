@@ -222,6 +222,10 @@ def add_jamb():
         if extra:
             students = [extra] + students
 
+    from routes.results import entry as _entry
+    if request.method == 'POST' and request.form.get('bulk'):
+        y = request.form.get('exam_year', type=int) or exam_year
+        return _entry.jamb_bulk_save(y, get_sss3_students())
     if request.method == 'POST':
         try:
             student_id = request.form.get('student_id', type=int)
@@ -276,13 +280,10 @@ def add_jamb():
             db.session.rollback()
             flash(f'Error: {str(e)}', 'error')
     
-    return render_template('results/add_jamb.html',
-        students=students,
-        subjects=WAEC_SUBJECTS,
-        subject_map=student_subject_map(students),
-        current_year=exam_year, sessions=exam_year_choices(),
-        preselect_student_id=preselect_id
-    )
+    payload = _entry.jamb_payload(get_sss3_students(), exam_year, preselect_id)
+    if _entry.wants_fetch():
+        return jsonify(payload)
+    return render_template('results/add_jamb.html', entry=payload)
 
 
 @results_bp.route('/jamb/scan', methods=['GET', 'POST'])

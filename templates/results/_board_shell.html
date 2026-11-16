@@ -34,8 +34,8 @@
 </nav>
 {% if active in ('add', 'scan', 'paste', 'quick') and can_add %}
 <nav class="sl-sub" aria-label="Ways to add results">
-  <a href="{{ burl('results.add_waec') }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> One student</a>
-  <a href="{{ burl('results.waec_quick_entry', year=y) }}" class="{{ 'on' if active == 'quick' }}"><i class="fas fa-bolt" aria-hidden="true"></i> Quick entry (many)</a>
+  <a href="{{ burl('results.add_waec') }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> Type results</a>
+  <a href="{{ burl('results.waec_quick_entry', year=y) }}" class="{{ 'on' if active == 'quick' }}"><i class="fas fa-bolt" aria-hidden="true"></i> Quick lines</a>
   <a href="{{ burl('results.scan_waec') }}" class="{{ 'on' if active == 'scan' }}"><i class="fas fa-camera" aria-hidden="true"></i> Scan a photo</a>
   <a href="{{ burl('results.paste_waec') }}" class="{{ 'on' if active == 'paste' }}"><i class="fas fa-clipboard" aria-hidden="true"></i> Paste text</a>
 </nav>

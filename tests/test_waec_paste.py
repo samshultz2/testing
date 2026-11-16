@@ -138,9 +138,10 @@ def test_waec_pickers_hide_students_who_already_have_results(app, monkeypatch):
         if hasattr(mod, 'get_sss3_students'):
             monkeypatch.setattr(mod, 'get_sss3_students', fn, raising=False)
     c = _admin(app)
-    html = c.get('/results/waec/add?year=2039').get_data(as_text=True)
-    assert f'value="{todo}"' in html and f'value="{done}"' not in html
-    assert f'value="{done}"' in c.get('/results/waec/add?year=2040').get_data(as_text=True)
+    st = {s['id']: s for s in c.get('/results/waec/add?year=2039', headers={'X-Requested-With': 'fetch'}).get_json()['students']}
+    assert not st[todo]['entered'] and st[done]['entered']        # entry page: shown as to-do / entered
+    st = {s['id']: s for s in c.get('/results/waec/add?year=2040', headers={'X-Requested-With': 'fetch'}).get_json()['students']}
+    assert not st[done]['entered']
     # Paste review: hidden too, unless the slip is for that student.
     r = c.post('/results/waec/paste', data={'_csrf_token': auth_csrf(c), 'exam_year': 2039,
                'data': 'Someone Else Entirely\nMathematics, A1'}).get_data(as_text=True)

@@ -1,146 +1,18 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_nav with context %}
-{% from "components/searchable_select.html" import searchable_select with context %}
-{% block title %}Add {{ board.name }} - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>Add Results</span>{% endblock %}
+{% block title %}Enter {{ board.name }} results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>Enter results</span>{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-<style>
-.waec-form{max-width:760px}
-.subject-grade-row{display:grid;grid-template-columns:1fr 110px;gap:.6rem;margin-bottom:.6rem}
-.entry-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin:.25rem 0 1rem;line-height:1.4}
-.entry-hint i{margin-top:.15rem}
-</style>
 {% endblock %}
 
 {% block content %}
 <div class="rs bx bx-legacy">
-{% call bx_head('fa-keyboard', 'Add ' ~ board.name ~ ' Results', 'One student at a time · SSS3 students · pick the session, then the grades') %}{% endcall %}
+{% call bx_head('fa-keyboard', 'Enter ' ~ board.name ~ ' results', 'A grade for each subject · many students at once, or one at a time') %}{% endcall %}
 {{ bx_nav('add') }}
-<div class="card waec-form" style="overflow:visible">
-    <div class="card-body">
-        {% if students %}
-        <form method="POST">
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Student <span class="required">*</span></label>
-                    <select name="student_id" id="studentSelect" class="form-control" required>
-                        <option value="">Select Student</option>
-                        {% for s in students %}
-                        <option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>
-                        {% endfor %}
-                    </select>
-                    {{ searchable_select('studentSelect', 'Search name or admission no.…') }}
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Session <span class="required">*</span></label>
-                    {% if sessions %}
-                    <select name="exam_year" class="form-control" required id="examYearSel">
-                        {% for ey, label in sessions %}
-                        <option value="{{ ey }}" {{ 'selected' if ey == current_year else '' }}>{{ label }} (exam year {{ ey }})</option>
-                        {% endfor %}
-                    </select>
-                    <div class="text-muted" style="font-size:.75rem;margin-top:.25rem">Students who already have results for the chosen session are not listed.</div>
-                    <script nonce="{{ csp_nonce }}">
-                    (function () {
-                      /* The student list only offers students still without results for the
-                         chosen session, so reload it when the session changes. */
-                      var sel = document.getElementById('examYearSel');
-                      if (!sel) return;
-                      sel.addEventListener('change', function () {
-                        var u = new URL(window.location.href);
-                        u.searchParams.set('year', sel.value);
-                        window.location.assign(u.toString());
-                      });
-                    })();
-                    </script>
-                    {% else %}
-                    <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year }}" required>
-                    {% endif %}
-                </div>
-            </div>
-
-            <h3 class="bx-h3">Subject grades</h3>
-            <div class="entry-hint">
-                <i class="fas fa-circle-info"></i>
-                <span>Common subjects are pre-selected. Pick a student who has saved {{ board.name }} subjects and the list fills from their profile &mdash; edit any row freely.</span>
-            </div>
-
-            {% for i in range(9) %}
-            <div class="subject-grade-row">
-                <select name="subject[]" class="form-control waec-subject">
-                    <option value="">Select Subject</option>
-                    {% for subj in subjects %}
-                    <option value="{{ subj }}">{{ subj }}</option>
-                    {% endfor %}
-                </select>
-                <select name="grade[]" class="form-control">
-                    <option value="">Grade</option>
-                    {% for g in grades %}
-                    <option value="{{ g }}">{{ g }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endfor %}
-
-            <div class="rs-bar bx-static">
-                <a href="{{ burl('results.waec_list') }}" class="rs-btn ghost">Cancel</a>
-                <button type="submit" class="rs-btn primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save results</button>
-            </div>
-        </form>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-user-slash"></i>
-            <p>No SSS3 students found for the current term. Set up SSS3 class enrolment first.</p>
-            <a href="{{ burl('results.waec_list') }}" class="btn btn-primary">Back to {{ board.name }}</a>
-        </div>
-        {% endif %}
-    </div>
+<div id="xe-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 </div>
-</div>
-
-<script nonce="{{ csp_nonce }}">
-(function () {
-    const SUBJECT_MAP = {{ subject_map | tojson }};
-    const DEFAULTS = {{ default_subjects | tojson }};
-    const STREAM_DEFAULTS = {{ stream_defaults | tojson }};
-    const PRESELECT = {{ (preselect_student_id or '') | tojson }};
-    const subjectSelects = Array.from(document.querySelectorAll('.waec-subject'));
-
-    function applySubjects(list) {
-        // Grow the number of subject rows if a stream needs more than exist.
-        subjectSelects.forEach(function (sel, idx) {
-            sel.value = (list && list[idx]) ? list[idx] : '';
-        });
-    }
-
-    function subjectsForStudent(entry) {
-        if (!entry) return DEFAULTS;
-        // 1) explicit saved {{ board.name }} subjects win
-        if (entry.waec && entry.waec.length) return entry.waec;
-        // 2) otherwise fall back to the student's stream defaults
-        if (entry.stream && STREAM_DEFAULTS[entry.stream]) return STREAM_DEFAULTS[entry.stream];
-        // 3) otherwise the generic common subjects
-        return DEFAULTS;
-    }
-
-    const studentSelect = document.getElementById('studentSelect');
-    if (studentSelect) {
-        studentSelect.addEventListener('change', function () {
-            applySubjects(subjectsForStudent(SUBJECT_MAP[this.value]));
-        });
-        // Arrived from a student's profile ("Add" under {{ board.name }}) — select them
-        // automatically instead of leaving the picker on "Select Student".
-        if (PRESELECT && studentSelect.querySelector('option[value="' + PRESELECT + '"]')) {
-            studentSelect.value = String(PRESELECT);
-            studentSelect.dispatchEvent(new Event('change'));
-            return;
-        }
-    }
-
-    // Pre-select the common subjects on first load.
-    applySubjects(DEFAULTS);
-})();
-</script>
+<script type="application/json" id="xe-data">{{ entry|tojson }}</script>
+<script src="{{ bundle_url('js/react/exam-entry-app.js') }}" defer></script>
 {% endblock %}

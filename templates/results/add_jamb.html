@@ -1,159 +1,19 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head with context %}
 {% from "results/_jamb_shell.html" import jx_nav with context %}
-{% from "components/searchable_select.html" import searchable_select with context %}
-{% block title %}Add JAMB - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('results.jamb_list') }}">JAMB</a> / <span>Add Results</span>{% endblock %}
+{% block title %}Enter JAMB results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.jamb_list') }}">JAMB</a> / <span>Enter results</span>{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
-<style>
-.jamb-form{max-width:none}
-.subject-score-row{display:grid;grid-template-columns:1fr 110px;gap:.6rem;margin-bottom:.6rem}
-.entry-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin:.25rem 0 1rem;line-height:1.4}
-.entry-hint i{margin-top:.15rem}
-</style>
 {% endblock %}
 
 {% block content %}
 <div class="rs bx bx-legacy">
-{% call bx_head('fa-keyboard', 'Add JAMB Results', 'One student at a time · SSS3 students · the total adds up as you type') %}{% endcall %}
+{% call bx_head('fa-keyboard', 'Enter JAMB results', 'UTME score out of 100 for each subject · the total out of 400 adds up') %}{% endcall %}
 {{ jx_nav('add') }}
-
-
-<div class="card jamb-form" style="overflow:visible">
-    <div class="card-body">
-        {% if students %}
-        <form method="POST">
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Student <span class="required">*</span></label>
-                    <select name="student_id" id="studentSelect" class="form-control" required>
-                        <option value="">Select Student</option>
-                        {% for s in students %}
-                        <option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>
-                        {% endfor %}
-                    </select>
-                    {{ searchable_select('studentSelect', 'Search name or admission no.…') }}
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Session <span class="required">*</span></label>
-                    {% if sessions %}
-                    <select name="exam_year" class="form-control" required id="examYearSel">
-                        {% for ey, label in sessions %}
-                        <option value="{{ ey }}" {{ 'selected' if ey == current_year else '' }}>{{ label }} (exam year {{ ey }})</option>
-                        {% endfor %}
-                    </select>
-                    <div class="text-muted" style="font-size:.75rem;margin-top:.25rem">Students who already have results for the chosen session are not listed.</div>
-                    <script nonce="{{ csp_nonce }}">
-                    (function () {
-                      /* The student list only offers students still without results for the
-                         chosen session, so reload it when the session changes. */
-                      var sel = document.getElementById('examYearSel');
-                      if (!sel) return;
-                      sel.addEventListener('change', function () {
-                        var u = new URL(window.location.href);
-                        u.searchParams.set('year', sel.value);
-                        window.location.assign(u.toString());
-                      });
-                    })();
-                    </script>
-                    {% else %}
-                    <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year }}" required>
-                    {% endif %}
-                </div>
-            </div>
-
-            <h3 class="bx-h3">Subject Breakdown <span class="text-muted" style="font-size:.8rem;font-weight:400;">(optional)</span></h3>
-            <div class="entry-hint">
-                <i class="fas fa-circle-info"></i>
-                <span>English is selected by default. Pick a student who has saved JAMB subjects and the four slots fill from their profile. The total below adds up automatically as you enter scores.</span>
-            </div>
-
-            {% for i in range(1, 5) %}
-            <div class="subject-score-row">
-                <select name="subject{{ i }}" class="form-control jamb-subject">
-                    <option value="">Select Subject</option>
-                    {% for subj in subjects %}
-                    <option value="{{ subj }}">{{ subj }}</option>
-                    {% endfor %}
-                </select>
-                <input type="number" name="subject{{ i }}_score" class="form-control jamb-score" min="0" max="100" placeholder="Score">
-            </div>
-            {% endfor %}
-
-            <div class="form-group">
-                <label class="form-label">Total Score (0-400) <span class="required">*</span></label>
-                <input type="number" name="total_score" id="totalScore" class="form-control" min="0" max="400" required>
-                <span class="text-muted" style="font-size:.78rem;">Auto-calculated from the subject scores above &mdash; edit directly if you only have the official total.</span>
-            </div>
-
-            <div class="rs-bar bx-static">
-                <a href="{{ url_for('results.jamb_list') }}" class="rs-btn ghost">Cancel</a>
-                <button type="submit" class="rs-btn primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save results</button>
-            </div>
-        </form>
-        {% else %}
-        <div class="empty-state">
-            <i class="fas fa-user-slash"></i>
-            <p>No SSS3 students found for the current term. Set up SSS3 class enrolment first.</p>
-            <a href="{{ url_for('results.jamb_list') }}" class="btn btn-primary">Back to JAMB</a>
-        </div>
-        {% endif %}
-    </div>
+<div id="xe-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 </div>
-
-<script nonce="{{ csp_nonce }}">
-(function () {
-    const SUBJECT_MAP = {{ subject_map | tojson }};
-    const PRESELECT = {{ (preselect_student_id or '') | tojson }};
-    const COMPULSORY = "English Language";
-    const subjectSelects = Array.from(document.querySelectorAll('.jamb-subject'));
-    const scoreInputs = Array.from(document.querySelectorAll('.jamb-score'));
-    const totalField = document.getElementById('totalScore');
-
-    function applySubjects(list) {
-        subjectSelects.forEach(function (sel, idx) {
-            sel.value = (list && list[idx]) ? list[idx] : '';
-        });
-    }
-
-    // Sum the four subject scores into the total field as they're typed —
-    // the user can still overwrite it directly (e.g. entering an official
-    // total without the subject breakdown).
-    function recalcTotal() {
-        const total = scoreInputs.reduce(function (sum, inp) {
-            const v = parseInt(inp.value, 10);
-            return sum + (isNaN(v) ? 0 : v);
-        }, 0);
-        totalField.value = total;
-    }
-    scoreInputs.forEach(function (inp) { inp.addEventListener('input', recalcTotal); });
-
-    const studentSelect = document.getElementById('studentSelect');
-    if (studentSelect) {
-        studentSelect.addEventListener('change', function () {
-            const entry = SUBJECT_MAP[this.value];
-            const saved = entry && entry.jamb ? entry.jamb : [];
-            if (saved.length) {
-                applySubjects(saved);
-            } else {
-                applySubjects([COMPULSORY]);
-            }
-        });
-        // Arrived from a student's profile ("Add" under JAMB) — select them
-        // automatically instead of leaving the picker on "Select Student".
-        if (PRESELECT && studentSelect.querySelector('option[value="' + PRESELECT + '"]')) {
-            studentSelect.value = String(PRESELECT);
-            studentSelect.dispatchEvent(new Event('change'));
-            return;
-        }
-    }
-
-    // English compulsory by default.
-    if (subjectSelects[0]) subjectSelects[0].value = COMPULSORY;
-})();
-</script>
-</div>
+<script type="application/json" id="xe-data">{{ entry|tojson }}</script>
+<script src="{{ bundle_url('js/react/exam-entry-app.js') }}" defer></script>
 {% endblock %}

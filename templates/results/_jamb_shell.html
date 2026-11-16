@@ -12,7 +12,7 @@
 </nav>
 {% if active in ('add', 'scan', 'paste') and can_add %}
 <nav class="sl-sub" aria-label="Ways to add results">
-  <a href="{{ url_for('results.add_jamb') }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> One student</a>
+  <a href="{{ url_for('results.add_jamb') }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> Type results</a>
   <a href="{{ url_for('results.scan_jamb') }}" class="{{ 'on' if active == 'scan' }}"><i class="fas fa-camera" aria-hidden="true"></i> Scan a photo</a>
   <a href="{{ url_for('results.paste_jamb') }}" class="{{ 'on' if active == 'paste' }}"><i class="fas fa-clipboard" aria-hidden="true"></i> Paste text</a>
   <a href="{{ url_for('results.scan_batch', exam='jamb') }}"><i class="fas fa-layer-group" aria-hidden="true"></i> Batch scan</a>

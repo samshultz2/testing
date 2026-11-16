@@ -463,7 +463,9 @@ def test_waec_and_jamb_add_dropdowns_are_searchable(app):
     c = _admin(app)
     for path in ('/results/waec/add', '/results/jamb/add'):
         html = c.get(path).get_data(as_text=True)
-        assert 'id="studentSelect"' in html and '.ss-wrap' in html and 'Search name or admission no.' in html, path
+        assert 'id="xe-app"' in html and 'exam-entry-app' in html, path          # searchable picker lives in the app
+        d = c.get(path, headers={'X-Requested-With': 'fetch'}).get_json()
+        assert any(s['id'] == sid for s in d['students']), path
 
 
 def test_dashboard_has_waec_style_views_and_filters(app):

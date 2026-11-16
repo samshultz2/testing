@@ -103,9 +103,9 @@ def test_waec_add_preselects_student_from_profile_link(app, monkeypatch):
         sid = already.id
     _pin_cohort(monkeypatch, [sid])
     c = _admin(app)
-    html = c.get(f'/results/waec/add?student_id={sid}').get_data(as_text=True)
-    assert f'value="{sid}"' in html               # kept in the dropdown despite already having a result
-    assert str(sid) in html                       # PRESELECT constant fed to the pre-select script
+    d = c.get(f'/results/waec/add?student_id={sid}', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['preselect'] == sid                  # opens straight on that student
+    assert any(s['id'] == sid and s['entered'] for s in d['students'])   # listed, marked as entered
 
 
 def test_jamb_add_preselects_student_from_profile_link(app, monkeypatch):
@@ -119,14 +119,18 @@ def test_jamb_add_preselects_student_from_profile_link(app, monkeypatch):
         sid = already.id
     _pin_cohort(monkeypatch, [sid])
     c = _admin(app)
-    html = c.get(f'/results/jamb/add?student_id={sid}').get_data(as_text=True)
-    assert f'value="{sid}"' in html
-    assert str(sid) in html
+    d = c.get(f'/results/jamb/add?student_id={sid}', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['preselect'] == sid
+    row = next(s for s in d['students'] if s['id'] == sid)
+    assert row['entered'] and row['total'] == '250'
 
 
 def test_jamb_add_form_has_client_side_total_autocalc(app):
-    """The total-score field must be wired to the four subject-score inputs so
-    the total adds up as the user types (see templates/results/add_jamb.html)."""
+    """JAMB entry: four subjects each /100 with English first; the total /400
+    is worked out by the entry app (exam-entry-app) and again on save."""
     c = _admin(app)
     html = c.get('/results/jamb/add').get_data(as_text=True)
-    assert 'jamb-score' in html and 'recalcTotal' in html and 'id="totalScore"' in html
+    assert 'exam-entry-app' in html and 'Enter JAMB results' in html
+    d = c.get('/results/jamb/add', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['exam'] == 'jamb' and d['max_subject'] == 100 and d['max_total'] == 400
+    assert d['compulsory'] == 'English Language'

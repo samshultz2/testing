@@ -43,8 +43,10 @@ def test_neco_add_saves_to_neco_table_only(app):
     enroll_sss3(app, sid)
     c = _admin(app)
     html = c.get('/results/neco/add?year=2031').get_data(as_text=True)
-    assert 'Add NECO Results' in html and 'ss-wrap' in html
-    assert f'value="{sid}"' in html
+    assert 'Enter NECO results' in html and 'exam-entry-app' in html
+    d = c.get('/results/neco/add?year=2031', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['board'] == 'NECO' and '/results/neco/add' in d['save_url']
+    assert any(s['id'] == sid and not s['entered'] for s in d['students'])
     r = c.post('/results/neco/add', data={
         '_csrf_token': auth_csrf(c), 'student_id': sid, 'exam_year': 2031,
         'subject[]': ['Mathematics', 'English Language'], 'grade[]': ['A1', 'B3']})
@@ -53,9 +55,11 @@ def test_neco_add_saves_to_neco_table_only(app):
         assert {(x.subject, x.grade) for x in NECOResult.query.filter_by(student_id=sid)} == {
             ('Mathematics', 'A1'), ('English Language', 'B3')}
         assert WAECResult.query.filter_by(student_id=sid).count() == 0
-    # Already entered → no longer offered for that year.
-    html = c.get('/results/neco/add?year=2031').get_data(as_text=True)
-    assert f'<option value="{sid}">' not in html
+    # Already entered → marked as entered for that year (editable, not offered as new).
+    d = c.get('/results/neco/add?year=2031', headers={'X-Requested-With': 'fetch'}).get_json()
+    row = next(s for s in d['students'] if s['id'] == sid)
+    assert row['entered'] and {(x['name'], x['value']) for x in row['subjects'] if x['value']} == {
+        ('Mathematics', 'A1'), ('English Language', 'B3')}
 
 
 def test_neco_pages_show_neco_data_with_neco_links(app):
