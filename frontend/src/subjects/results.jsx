@@ -53,7 +53,7 @@ function pushRecent(termId, asgId, label) {
 }
 
 // Warn before leaving the page with unsaved edits.
-function useUnsavedGuard(dirty) {
+export function useUnsavedGuard(dirty) {
   useEffect(() => {
     if (!dirty) return undefined;
     const h = (e) => { e.preventDefault(); e.returnValue = ''; };

@@ -5,7 +5,7 @@ import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Head, Tiles, Menu, Blank } from '../subjects/results';
+import { Head, Tiles, Menu, Blank, Seg, Sheet, Bar, Avatar, usePhone, useUnsavedGuard } from '../subjects/results';
 
 const ORD = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
 
@@ -280,130 +280,350 @@ function EditResult({ d, notify }) {
   );
 }
 
-// ---- Bulk entry ------------------------------------------------------------
-function BulkEntry({ d, notify }) {
-  const nav = useNav();
-  const [scores, setScores] = useState(() => {
-    const m = {}; d.students.forEach((s) => { m[s.id] = s.total_score === '' ? '' : String(s.total_score); }); return m;
-  });
-  const [busy, setBusy] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault(); setBusy(true);
-    const fields = {};
-    d.students.forEach((s) => { if (scores[s.id] !== '') fields['score_' + s.id] = scores[s.id]; });
-    const r = await submitJson(d.submit_url, fields);
-    setBusy(false);
-    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save results.');
-  };
+// ---- Result entry (shared) ----------------------------------------------------
+// Teachers type the number of CORRECT answers per subject (English /60, others
+// /40); scores over 100 and the total over 400 are worked out as they type.
+const qOf = (d, subj) => (d.question_counts || {})[subj] || (/english/i.test(subj || '') ? 60 : 40);
+const toScore = (d, subj, c) => {
+  if (c === '' || c == null) return null;
+  const q = qOf(d, subj);
+  return Math.round((Math.max(0, Math.min(parseInt(c, 10) || 0, q)) / q) * 100);
+};
+const fromScore = (d, subj, sc) => (sc == null || sc === '' ? '' : String(Math.round((sc * qOf(d, subj)) / 100)));
+const totalOf = (d, subs) => subs.reduce((t, x) => t + (toScore(d, x.name, x.correct) || 0), 0);
+const anyTyped = (subs) => subs.some((x) => x.correct !== '');
+const over = (d, x) => x.correct !== '' && (parseInt(x.correct, 10) > qOf(d, x.name) || !/^\d+$/.test(x.correct));
+const short = (n) => ({ 'English Language': 'English', 'Mathematics': 'Maths', 'Christian Religious Studies': 'CRS',
+  'Islamic Religious Studies': 'IRS', 'Literature in English': 'Literature', 'Agricultural Science': 'Agric',
+  'Further Mathematics': 'Further Maths', 'Civic Education': 'Civic', 'Computer Studies': 'Computer' }[n] || n || 'Pick subject');
+const digitsOnly = (v) => v.replace(/[^0-9]/g, '').slice(0, 2);
+// Move focus to the next score box once a value can't take another digit.
+const full = (d, subj, v) => v.length >= 2 || (v !== '' && parseInt(v, 10) * 10 > qOf(d, subj));
+
+function ScoreBox({ d, x, onChange, cellProps, big, label }) {
+  const bad = over(d, x);
   return (
-    <>
-      <Head icon="fa-table-cells" title="Bulk Entry" sub={d.exam.display_name + ' · enter scores for many students'} />
-      <ExamNav d={d} active="bulk" />
-      {d.students.length ? (
-        <form onSubmit={submit}><div className="card">
-          <div className="card-header"><h3 className="card-title">SSS3 Students ({d.students.length})</h3></div>
-          <div className="card-body"><div className="table-responsive"><table className="table data-table">
-            <thead><tr><th>Student</th><th>Arm</th><th>Total Score</th><th>Status</th></tr></thead>
-            <tbody>{d.students.map((s) => (
-              <tr key={s.id}>
-                <td><strong>{s.full_name}</strong><div className="text-xs text-muted">{s.student_id}</div></td>
-                <td>{s.arm || '—'}</td>
-                <td><input type="number" className="form-control" style={{ width: 100 }} min="0" max="400" placeholder="0-400"
-                           value={scores[s.id]} onChange={(e) => setScores((m) => ({ ...m, [s.id]: e.target.value }))} /></td>
-                <td><span className={'badge ' + (s.entered ? 'badge-success' : 'badge-secondary')}>{s.entered ? 'Entered' : 'Pending'}</span></td>
-              </tr>
-            ))}</tbody>
-          </table></div>
-          <div className="mt-4"><button type="submit" className="btn btn-primary btn-lg" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save All Results</button></div>
-          </div></div>
-        </form>
-      ) : (
-        <div className="card"><div className="card-body"><Empty icon="fa-users" title="">
-          <p>No SSS3 students found for the current term.</p>
-          <p className="text-sm text-muted">Make sure students are enrolled in SSS3 for the active term.</p>
-          <a href={d.urls.add} className="btn btn-primary">Add Individual Result</a></Empty></div></div>
-      )}
-    </>
+    <span className={'mje-box' + (big ? ' big' : '') + (bad ? ' bad' : '') + (x.correct !== '' ? ' on' : '')}>
+      <input type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off" enterKeyHint="next"
+             aria-label={(label || short(x.name)) + ' correct answers out of ' + qOf(d, x.name)} placeholder="–"
+             value={x.correct} onChange={(e) => onChange(digitsOnly(e.target.value))} {...cellProps} />
+      <small>/{qOf(d, x.name)}</small>
+    </span>
   );
 }
 
-// ---- Add result ------------------------------------------------------------
+function SubjectPick({ d, value, onChange, locked, need }) {
+  return (
+    <label className={'mje-subj' + (locked ? ' locked' : '') + (need ? ' need' : '')}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Subject" disabled={locked}>
+        {!value && <option value="">Pick subject</option>}
+        {d.subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <span aria-hidden="true">{short(value)}{!locked && <i className="fas fa-chevron-down" />}</span>
+    </label>
+  );
+}
+
+// The four-subject card used on phones (bulk sheet) and on the one-student page.
+function EntryCard({ d, subs, setSubs, autoFocus }) {
+  const refs = useRef([]);
+  useEffect(() => { if (autoFocus && refs.current[0]) setTimeout(() => refs.current[0] && refs.current[0].focus(), 250); }, [autoFocus]);
+  const total = totalOf(d, subs);
+  const setSub = (i, patch) => setSubs(subs.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  return (
+    <div className="mje-card">
+      {subs.map((x, i) => (
+        <div key={i} className="mje-line">
+          <span className="mje-left">
+            <SubjectPick d={d} value={x.name} need={x.correct !== '' && !x.name} locked={i === 0 && x.name === d.compulsory_subject} onChange={(v) => setSub(i, { name: v })} />
+            <small className={'mje-sc' + (over(d, x) || (x.correct !== '' && !x.name) ? ' bad' : '')}>
+              {over(d, x) ? `Only ${qOf(d, x.name)} questions` : x.correct !== '' && !x.name ? 'Pick the subject' : x.correct !== '' ? `${toScore(d, x.name, x.correct)} / 100` : `out of ${qOf(d, x.name)} questions`}</small>
+          </span>
+          <ScoreBox d={d} x={x} big onChange={(v) => {
+            setSub(i, { correct: v });
+            if (full(d, x.name, v) && refs.current[i + 1]) refs.current[i + 1].focus();
+          }} cellProps={{ ref: (el) => { refs.current[i] = el; } }} />
+        </div>
+      ))}
+      <div className={'mje-total ' + (anyTyped(subs) ? jt(total) : '')}>
+        <span>Total</span><b>{anyTyped(subs) ? total : '—'}</b><small>/ {d.max_total || 400}</small>
+      </div>
+    </div>
+  );
+}
+
+const seedSubs = (d, s) => s.subjects.map((x) => ({ name: x.name, correct: fromScore(d, x.name, x.score) }));
+
+// ---- Bulk entry ------------------------------------------------------------
+function BulkEntry({ d, notify }) {
+  const nav = useNav();
+  const phone = usePhone();
+  const init = () => { const m = {}; d.students.forEach((s) => { m[s.id] = seedSubs(d, s); }); return m; };
+  const [rows, setRows] = useState(init);
+  const [totals, setTotals] = useState(() => { const m = {}; d.students.forEach((s) => { m[s.id] = s.total_score == null ? '' : String(s.total_score); }); return m; });
+  const [dirty, setDirty] = useState({});
+  const [saved, setSaved] = useState({});            // saved this visit (phone flow)
+  const [mode, setMode] = useState('subjects');
+  const [show, setShow] = useState(() => (d.students.some((s) => !s.entered) ? 'todo' : 'all'));
+  const [arm, setArm] = useState('');
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(null);          // phone: student id in the sheet
+  const [sheetErr, setSheetErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setRows(init()); setDirty({}); setSaved({}); }, [d.students]); // eslint-disable-line
+  const nDirty = Object.keys(dirty).length;
+  useUnsavedGuard(nDirty > 0);
+  const isDone = (s) => s.entered || saved[s.id];
+  const arms = [...new Set(d.students.map((s) => s.arm).filter(Boolean))];
+  const term = q.trim().toLowerCase();
+  const list = d.students.filter((s) => (!arm || s.arm === arm) && (!term || (s.full_name + ' ' + s.student_id).toLowerCase().includes(term))
+    && (show === 'all' || (show === 'todo' && !isDone(s)) || (show === 'done' && isDone(s))));
+  const nDone = d.students.filter(isDone).length;
+  const setRow = (id, subs) => { setRows((m) => ({ ...m, [id]: subs })); setDirty((m) => ({ ...m, [id]: true })); };
+  const setTotal = (id, v) => { setTotals((m) => ({ ...m, [id]: v })); setDirty((m) => ({ ...m, [id]: true })); };
+  const fieldsFor = (id) => {
+    const f = {};
+    if (mode === 'total') { f['score_' + id] = totals[id]; return f; }
+    rows[id].forEach((x, i) => { f[`subject${i + 1}_${id}`] = x.name; f[`subject${i + 1}_correct_${id}`] = x.correct; });
+    return f;
+  };
+  const rowBad = (id) => (mode === 'total' ? (totals[id] !== '' && (+totals[id] > (d.max_total || 400) || !/^\d+$/.test(totals[id])))
+    : rows[id].some((x) => over(d, x) || (x.correct !== '' && !x.name)));
+  const saveIds = async (ids) => {
+    const bad = ids.filter(rowBad);
+    if (bad.length) { setSheetErr('Fix the red box first — a number over the questions, or a score with no subject picked.'); notify('error', `Fix the red boxes first — a number over the questions, or a score with no subject picked (${bad.length} student${bad.length === 1 ? '' : 's'}).`); return false; }
+    const fields = {};
+    ids.forEach((id) => Object.assign(fields, fieldsFor(id)));
+    setBusy(true);
+    const r = await submitJson(d.submit_url, fields);
+    setBusy(false);
+    if (!r.ok) { setSheetErr(r.error || 'Could not save.'); notify('error', r.error || 'Could not save.'); return false; }
+    if (r.problems && r.problems.length) notify('error', r.message); else if (!phone) notify('success', r.message);
+    return true;
+  };
+  const saveAll = async (e) => {
+    if (e) e.preventDefault();
+    const ids = Object.keys(dirty).map(Number);
+    if (!ids.length) return;
+    if (await saveIds(ids)) { setDirty({}); nav.refresh(); }
+  };
+
+  // Desktop keyboard: Enter / ↓ next student, ↑ previous, ← → across subjects.
+  const grid = useRef(null);
+  const focusCell = (r, c) => { const el = grid.current && grid.current.querySelector(`[data-r="${r}"][data-c="${c}"]`); if (el) { el.focus(); el.select && el.select(); } };
+  const cols = mode === 'total' ? 1 : 4;
+  const onKey = (r, c) => (e) => {
+    if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); focusCell(r + 1, c); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); focusCell(r - 1, c); }
+    else if (e.key === 'ArrowRight' && e.target.selectionStart === e.target.value.length) { e.preventDefault(); if (c + 1 < cols) focusCell(r, c + 1); else focusCell(r + 1, 0); }
+    else if (e.key === 'ArrowLeft' && e.target.selectionStart === 0) { e.preventDefault(); if (c > 0) focusCell(r, c - 1); else focusCell(r - 1, cols - 1); }
+  };
+
+  // Phone: tap a student → sheet → Save & next.
+  const openIdx = open == null ? -1 : list.findIndex((s) => s.id === open);
+  const cur = openIdx >= 0 ? list[openIdx] : d.students.find((s) => s.id === open);
+  const nextAfter = (id) => { const i = list.findIndex((s) => s.id === id); const rest = [...list.slice(i + 1), ...list.slice(0, i)]; return (rest.find((s) => !isDone(s) && s.id !== id) || {}).id; };
+  useEffect(() => setSheetErr(''), [open]);
+  const saveAndNext = async () => {
+    const id = cur.id;
+    const typed = mode === 'total' ? totals[id] !== '' : anyTyped(rows[id]);
+    if (!typed) { const n = nextAfter(id); setOpen(n || null); return; }
+    if (!await saveIds([id])) return;
+    setSaved((m) => ({ ...m, [id]: true }));
+    setDirty((m) => { const n = { ...m }; delete n[id]; return n; });
+    const n = nextAfter(id);
+    notify('success', `${cur.full_name} saved.`);
+    if (n) setOpen(n); else { setOpen(null); nav.refresh(); }
+  };
+
+  const pct = d.students.length ? Math.round((nDone / d.students.length) * 100) : 0;
+  const head = (
+    <>
+      <Head icon="fa-table-cells" title="Enter results" sub={d.exam.display_name} />
+      <ExamNav d={d} active="bulk" />
+    </>
+  );
+  if (!d.students.length) {
+    return (<>{head}<Blank icon="fa-users" title="No SSS3 students this term">
+      <p>Enrol students in SSS3 for the active term, then come back.</p>
+      <a href={d.urls.add} className="rs-btn">Add one result instead</a></Blank></>);
+  }
+  return (
+    <div className={phone ? 'has-bar' : ''}>
+      {head}
+      <section className="rs-card mje-top">
+        <div className="mje-prog"><b>{nDone} of {d.students.length}</b><span>students entered</span>
+          <span className="mje-meter"><i style={{ width: pct + '%' }} /></span></div>
+        <Seg label="Enter" value={mode} onChange={(v) => { if (nDirty && !window.confirm('Switching loses what you have not saved. Continue?')) return; setDirty({}); setMode(v); }}
+             options={[{ value: 'subjects', label: phone ? 'Per subject' : 'Correct answers per subject', icon: 'fa-list-ol' }, { value: 'total', label: 'Total only', icon: 'fa-calculator' }]} />
+      </section>
+      <div className="mje-tools">
+        <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" placeholder="Find a student" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a student" /></label>
+        <Seg label="Show" value={show} onChange={setShow} options={[
+          { value: 'todo', label: 'To enter', count: d.students.length - nDone }, { value: 'done', label: 'Entered', count: nDone }, { value: 'all', label: 'All', count: d.students.length }]} />
+        {arms.length > 1 && (
+          <label className="rs-sel mje-arm"><span>Arm</span><select value={arm} onChange={(e) => setArm(e.target.value)}>
+            <option value="">All arms</option>{arms.map((a) => <option key={a}>{a}</option>)}</select></label>)}
+      </div>
+      {mode === 'subjects' && !phone && <p className="mje-hint"><i className="fas fa-keyboard" aria-hidden="true" /><span>Type the number of <b>correct answers</b> — the cursor jumps along by itself. <kbd>Enter</kbd> goes to the next student, arrow keys move around. English is out of 60, every other subject out of 40.</span></p>}
+
+      {!list.length ? (
+        <Blank icon={show === 'todo' ? 'fa-circle-check' : 'fa-users'} title={show === 'todo' ? 'Everyone is entered' : 'No students match'}>
+          {show === 'todo' && <button type="button" className="rs-btn" onClick={() => setShow('all')}>Show everyone</button>}</Blank>
+      ) : phone ? (
+        <div className="rs-card mje-plist">
+          {list.map((s) => {
+            const t = mode === 'total' ? totals[s.id] : (anyTyped(rows[s.id]) ? totalOf(d, rows[s.id]) : null);
+            return (
+              <button type="button" key={s.id} className={'mje-prow' + (isDone(s) ? ' done' : '')} onClick={() => setOpen(s.id)}>
+                <Avatar name={s.full_name} gender={s.gender} />
+                <span className="mje-pt"><b>{s.full_name}</b><small>{[s.student_id, s.arm].filter(Boolean).join(' · ')}</small></span>
+                {t != null && t !== '' ? <span className={'mje-ptot ' + jt(+t)}>{t}</span> : <span className="mje-pnone">Enter</span>}
+                <i className="fas fa-chevron-right" aria-hidden="true" />
+              </button>);
+          })}
+        </div>
+      ) : (
+        <form onSubmit={saveAll}>
+          <div className="rs-card mje-grid" ref={grid} role="table" aria-label="Results">
+            <div className="mje-gr mje-gh" role="row" data-mode={mode}>
+              <span role="columnheader">Student</span>
+              {mode === 'total' ? <span role="columnheader">Total /{d.max_total || 400}</span>
+                : [1, 2, 3, 4].map((n) => <span role="columnheader" key={n}>{n === 1 ? 'English' : `Subject ${n}`}</span>)}
+              {mode === 'subjects' && <span role="columnheader">Total</span>}
+            </div>
+            {list.map((s, r) => {
+              const subs = rows[s.id];
+              const t = totalOf(d, subs);
+              return (
+                <div key={s.id} role="row" data-mode={mode} className={'mje-gr' + (dirty[s.id] ? ' dirty' : '') + (rowBad(s.id) ? ' bad' : '')}>
+                  <span className="mje-who" role="cell"><b>{s.full_name}</b><small>{[s.student_id, s.arm].filter(Boolean).join(' · ')}{isDone(s) && !dirty[s.id] && <em className="ok"> · saved</em>}{dirty[s.id] && <em> · not saved</em>}</small></span>
+                  {mode === 'total' ? (
+                    <span role="cell" className={'mje-box' + (totals[s.id] !== '' ? ' on' : '') + (rowBad(s.id) ? ' bad' : '')}>
+                      <input type="text" inputMode="numeric" value={totals[s.id]} placeholder="–" aria-label={`${s.full_name} total`} data-r={r} data-c={0}
+                             onKeyDown={onKey(r, 0)} onFocus={(e) => e.target.select()} onChange={(e) => setTotal(s.id, e.target.value.replace(/[^0-9]/g, '').slice(0, 3))} />
+                      <small>/{d.max_total || 400}</small></span>
+                  ) : subs.map((x, c) => (
+                    <span role="cell" key={c} className="mje-cell">
+                      <SubjectPick d={d} value={x.name} need={x.correct !== '' && !x.name} locked={c === 0 && x.name === d.compulsory_subject}
+                                   onChange={(v) => setRow(s.id, subs.map((y, j) => (j === c ? { ...y, name: v } : y)))} />
+                      <ScoreBox d={d} x={x} label={`${s.full_name} ${short(x.name)}`}
+                        cellProps={{ 'data-r': r, 'data-c': c, onKeyDown: onKey(r, c), onFocus: (e) => e.target.select() }}
+                        onChange={(v) => { setRow(s.id, subs.map((y, j) => (j === c ? { ...y, correct: v } : y))); if (full(d, x.name, v)) { if (c < 3) focusCell(r, c + 1); else focusCell(r + 1, 0); } }} />
+                    </span>
+                  ))}
+                  {mode === 'subjects' && <span role="cell" className={'mje-tot ' + (anyTyped(subs) ? jt(t) : '')}>{anyTyped(subs) ? t : '—'}</span>}
+                </div>
+              );
+            })}
+          </div>
+          <Bar>
+            <span className="rs-bar-t"><b>{nDirty ? `${nDirty} unsaved` : 'All saved'}</b><small>{nDone}/{d.students.length} entered</small></span>
+            <button type="submit" className="rs-btn primary" disabled={busy || !nDirty}><i className="fas fa-floppy-disk" aria-hidden="true" />{busy ? 'Saving…' : 'Save results'}</button>
+          </Bar>
+        </form>
+      )}
+
+      {phone && cur && (
+        <Sheet title={cur.full_name} onClose={() => setOpen(null)}>
+          <div className="mje-sheet">
+            <p className="mje-sub">{[cur.student_id, cur.arm].filter(Boolean).join(' · ')}{openIdx >= 0 && ` · ${openIdx + 1} of ${list.length}`}</p>
+            {mode === 'total' ? (
+              <div className="mje-card"><div className="mje-line"><span className="mje-subj locked"><span>Total score</span></span>
+                <span className={'mje-box big' + (totals[cur.id] !== '' ? ' on' : '') + (rowBad(cur.id) ? ' bad' : '')}>
+                  <input type="text" inputMode="numeric" autoFocus value={totals[cur.id]} placeholder="–" aria-label="Total score"
+                         onChange={(e) => setTotal(cur.id, e.target.value.replace(/[^0-9]/g, '').slice(0, 3))} /><small>/{d.max_total || 400}</small></span></div></div>
+            ) : (
+              <EntryCard key={cur.id} d={d} subs={rows[cur.id]} setSubs={(v) => setRow(cur.id, v)} autoFocus />
+            )}
+            {sheetErr && <p className="mje-err" role="alert"><i className="fas fa-circle-exclamation" aria-hidden="true" />{sheetErr}</p>}
+            {!cur.has_profile_subjects && mode === 'subjects' && <p className="mje-note"><i className="fas fa-circle-info" aria-hidden="true" />No JAMB subjects on this student’s profile — pick them above.</p>}
+            <div className="mje-acts">
+              <button type="button" className="rs-btn" disabled={openIdx <= 0} onClick={() => setOpen(list[openIdx - 1].id)} aria-label="Previous student"><i className="fas fa-chevron-left" aria-hidden="true" /></button>
+              <button type="button" className="rs-btn primary" disabled={busy} onClick={saveAndNext}>
+                <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" />{busy ? 'Saving…' : 'Save & next'}</button>
+            </div>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+// ---- Add one result ----------------------------------------------------------
 function AddResult({ d, notify }) {
   const nav = useNav();
-  const qFor = (subj) => d.question_counts[subj] || 40;
-  const [studentId, setStudentId] = useState('');
-  const [rows, setRows] = useState([{ subject: d.compulsory_subject, correct: '' }, { subject: '', correct: '' },
-    { subject: '', correct: '' }, { subject: '', correct: '' }]);
-  const [addAnother, setAddAnother] = useState(false);
+  const blank = () => [{ name: d.compulsory_subject, correct: '' }, { name: '', correct: '' }, { name: '', correct: '' }, { name: '', correct: '' }];
+  const [sid, setSid] = useState('');
+  const [subs, setSubs] = useState(blank);
+  const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
-
-  const scoreOf = (r) => {
-    if (r.correct === '' || r.correct == null) return null;
-    const q = qFor(r.subject);
-    return Math.round((Math.max(0, Math.min(parseInt(r.correct, 10) || 0, q)) / q) * 100);
+  const [again, setAgain] = useState(true);
+  const stu = d.students.find((s) => String(s.id) === String(sid));
+  const pick = (id) => {
+    setSid(String(id));
+    const saved = ((d.subject_map || {})[id] || {}).jamb || [];
+    setSubs(blank().map((x, i) => ({ ...x, name: saved[i] || x.name })));
   };
-  const total = rows.reduce((t, r) => t + (scoreOf(r) || 0), 0);
-  const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
-
-  const onStudent = (v) => {
-    setStudentId(v);
-    const saved = (d.subject_map[v] || {}).jamb || [];
-    if (saved.length) setRows((rs) => rs.map((r, i) => ({ ...r, subject: saved[i] || r.subject })));
-  };
-
+  const term = q.trim().toLowerCase();
+  const matches = d.students.filter((s) => !term || (s.name + ' ' + s.student_id).toLowerCase().includes(term));
   const submit = async (e) => {
     e.preventDefault();
-    if (!studentId) { notify('error', 'Please select a student.'); return; }
+    if (!sid) { notify('error', 'Pick a student first.'); return; }
+    if (subs.some((x) => over(d, x))) { notify('error', 'A box is over its number of questions — fix the red one.'); return; }
+    if (!anyTyped(subs)) { notify('error', 'Type at least one subject’s correct answers.'); return; }
+    if (subs.some((x) => x.correct !== '' && !x.name)) { notify('error', 'Pick the subject for each score you typed.'); return; }
     setBusy(true);
-    const fields = { student_id: studentId, total_score: total, add_another: addAnother ? 'on' : '' };
-    rows.forEach((r, i) => { fields['subject' + (i + 1)] = r.subject; fields['subject' + (i + 1) + '_correct'] = r.correct; });
-    const res = await submitJson(d.submit_url, fields);
+    const fields = { student_id: sid, add_another: again ? 'on' : '' };
+    subs.forEach((x, i) => { fields['subject' + (i + 1)] = x.name; fields['subject' + (i + 1) + '_correct'] = x.correct; });
+    const r = await submitJson(d.submit_url, fields);
     setBusy(false);
-    if (res.ok) nav.go(res.redirect); else notify('error', res.error || 'Could not add the result.');
+    if (r.ok) { notify('success', `${stu.name}: ${totalOf(d, subs)} saved.`); setSid(''); setQ(''); setSubs(blank()); nav.go(r.redirect); }
+    else notify('error', r.error || 'Could not add the result.');
   };
-
+  const head = (<><Head icon="fa-keyboard" title="Enter one result" sub={d.exam ? d.exam.display_name : ''} /><ExamNav d={d} active="add" /></>);
   if (!d.students.length) {
-    return (<>
-      <Head icon="fa-keyboard" title="Add Result" />
-      <MjNav d={d} active="" />
-      <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><Empty icon="fa-user-slash" title="">
-        <p>All students already have results for this exam</p>
-        <a href={d.view_url} className="btn btn-primary">View Results</a></Empty></div></div>
-    </>);
+    return (<>{head}<Blank icon="fa-circle-check" title="Everyone has a result">
+      <p>All SSS3 students already have a result for this exam. Edit one from the results list.</p>
+      <a href={d.view_url} className="rs-btn primary">See results</a></Blank></>);
   }
   return (
     <>
-      <Head icon="fa-keyboard" title="Add Result" sub={d.exam ? d.exam.display_name : ''} />
-      <ExamNav d={d} active="add" />
-      <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><form onSubmit={submit}>
-        <div className="form-group"><label className="form-label">Student <span className="text-danger">*</span></label>
-          <select className="form-control" required value={studentId} onChange={(e) => onStudent(e.target.value)}>
-            <option value="">Select Student</option>{d.students.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
-        <hr className="my-4" /><h4 className="mb-2">Subject Scores</h4>
-        <div className="entry-hint"><i aria-hidden="true" className="fas fa-circle-info" />
-          <span>Enter the number of <strong>correct answers</strong> for each subject. We convert it to a score over 100 automatically — English is marked over 60 questions, every other subject over 40.</span></div>
-        {rows.map((r, i) => {
-          const q = qFor(r.subject); const sc = scoreOf(r);
-          return (
-            <div className="subject-row" key={i}>
-              <div className="field"><label>Subject {i + 1}{i === 0 && <span className="text-danger"> *</span>}</label>
-                <select className="form-control" required={i === 0} value={r.subject} onChange={(e) => setRow(i, 'subject', e.target.value)}>
-                  <option value="">Select Subject</option>{d.subjects.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-              <div className="field"><label>Correct <span className="qcount">(/{q})</span></label>
-                <input type="number" className="form-control" min="0" max={q} placeholder="0" value={r.correct} onChange={(e) => setRow(i, 'correct', e.target.value)} /></div>
-              <div className="field"><label>Score /100</label>
-                <div className={'converted' + (sc == null ? ' empty' : '')}>{sc == null ? '—' : sc}</div></div>
-            </div>
-          );
-        })}
-        <div className="total-box"><div><div className="total-label">Total Score</div>
-          <div><span className="total-value">{total}</span> <span className="total-max">/ {d.max_total}</span></div></div>
-          <i aria-hidden="true" className="fas fa-calculator" style={{ fontSize: 'var(--text-2xl)', opacity: 0.6 }} /></div>
-        <div className="form-check mb-4"><input type="checkbox" className="form-check-input" id="aa" checked={addAnother} onChange={(e) => setAddAnother(e.target.checked)} />
-          <label htmlFor="aa" className="form-check-label"> Add another result after saving</label></div>
-        <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Result</button>
-          <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
-      </form></div></div>
+      {head}
+      <form className="mje-one" onSubmit={submit}>
+        <section className="rs-card mje-pick">
+          <div className="rs-card-h"><h3><i className="fas fa-user-graduate" aria-hidden="true" />Student</h3>
+            <small className="rs-muted">{d.students.length} without a result{d.entered ? ` · ${d.entered} done` : ''}</small></div>
+          {stu ? (
+            <div className="mje-chosen"><Avatar name={stu.name} gender={stu.gender} />
+              <span><b>{stu.name}</b><small>{stu.student_id}</small></span>
+              <button type="button" className="rs-btn ghost sm" onClick={() => setSid('')}>Change</button></div>
+          ) : (
+            <>
+              <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+                <input type="search" autoFocus placeholder="Type a name or ID" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a student"
+                       onKeyDown={(e) => { if (e.key === 'Enter' && matches.length) { e.preventDefault(); pick(matches[0].id); } }} /></label>
+              <div className="mje-opts" role="listbox" aria-label="Students">
+                {matches.slice(0, 50).map((s) => (
+                  <button type="button" role="option" aria-selected="false" key={s.id} className="mje-opt" onClick={() => pick(s.id)}>
+                    <Avatar name={s.name} gender={s.gender} /><span><b>{s.name}</b><small>{s.student_id}</small></span></button>))}
+                {!matches.length && <p className="rs-muted rs-pad">No student matches “{q}”.</p>}
+              </div>
+            </>
+          )}
+        </section>
+        <section className={'rs-card mje-scores' + (stu ? '' : ' off')}>
+          <div className="rs-card-h"><h3><i className="fas fa-list-ol" aria-hidden="true" />Correct answers</h3>
+            <small className="rs-muted">English /60 · others /40</small></div>
+          <EntryCard key={sid || 'none'} d={d} subs={subs} setSubs={setSubs} autoFocus={!!stu} />
+          <label className="rs-check mje-again"><input type="checkbox" checked={again} onChange={(e) => setAgain(e.target.checked)} />Go straight to the next student after saving</label>
+          <div className="mje-acts">
+            <a href={d.bulk_url || d.view_url} className="rs-btn ghost"><i className="fas fa-table-cells" aria-hidden="true" /><span className="rs-hide-sm">Many students</span></a>
+            <button type="submit" className="rs-btn primary" disabled={busy || !stu}><i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" />{busy ? 'Saving…' : 'Save result'}</button>
+          </div>
+        </section>
+      </form>
     </>
   );
 }

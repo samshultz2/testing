@@ -513,7 +513,10 @@ def add_result(exam_id):
         'page': 'add_result',
         'exam': {'id': exam.id, 'display_name': exam.display_name,
                  'exam_date': exam.exam_date.strftime('%d %B %Y') if exam.exam_date else ''},
-        'students': [{'id': s.id, 'label': f'{s.full_name} ({s.student_id})'} for s in students],
+        'students': [{'id': s.id, 'label': f'{s.full_name} ({s.student_id})', 'name': s.full_name,
+                      'student_id': s.student_id, 'gender': s.gender or ''} for s in students],
+        'entered': len(existing_student_ids),
+        'bulk_url': url_for('mock_jamb.bulk_entry', exam_id=exam.id),
         'subjects': list(WAEC_SUBJECTS),
         'question_counts': question_count_map(WAEC_SUBJECTS),
         'compulsory_subject': COMPULSORY_SUBJECT,
@@ -522,6 +525,23 @@ def add_result(exam_id):
         'submit_url': url_for('mock_jamb.add_result', exam_id=exam.id),
         'view_url': url_for('mock_jamb.view_exam', exam_id=exam.id),
     })
+
+
+def _bulk_row(it):
+    """One student on the bulk-entry screen: saved result (if any) plus the
+    JAMB subjects on their profile, so the four subjects fill themselves."""
+    st, r = it['student'], it['existing_result']
+    saved = [s for s in (st.jamb_subject_list or []) if s]
+    subs = []
+    for n in range(1, 5):
+        name = getattr(r, f'subject{n}') if r else None
+        score = getattr(r, f'subject{n}_score') if r else None
+        if not name:
+            name = saved[n - 1] if len(saved) >= n else (COMPULSORY_SUBJECT if n == 1 else '')
+        subs.append({'name': name or '', 'score': score})
+    return {'id': st.id, 'full_name': st.full_name, 'student_id': st.student_id, 'arm': it['arm'],
+            'gender': st.gender or '', 'total_score': r.total_score if r else None,
+            'entered': bool(r), 'subjects': subs, 'has_profile_subjects': bool(saved)}
 
 
 @mock_jamb_bp.route('/exam/<int:exam_id>/results/bulk', methods=['GET', 'POST'])
@@ -565,54 +585,48 @@ def bulk_entry(exam_id):
         try:
             added = 0
             updated = 0
-            
+            problems = []
+            from utils.access_control import assert_exam_student
+
             def safe_int(val):
                 try:
-                    return int(val) if val else None
-                except Exception:
+                    return int(val) if val not in (None, '') else None
+                except (TypeError, ValueError):
                     return None
-            
+
             for student_data in students:
                 student = student_data['student']
-                score_key = f'score_{student.id}'
-                
-                total_score = request.form.get(score_key, type=int)
-                if total_score is None:
-                    continue
-                
-                if total_score < 0 or total_score > 400:
-                    continue
-                
+                sfx = f'_{student.id}'
+                has_subjects = any(request.form.get(f'subject{n}_correct{sfx}') not in (None, '') or
+                                   request.form.get(f'subject{n}_score{sfx}') not in (None, '')
+                                   for n in range(1, 5))
+                total_raw = request.form.get(f'score{sfx}')
+                if not has_subjects and total_raw in (None, ''):
+                    continue                                  # row not touched
+                assert_exam_student(student.id)               # own-arm only for SSS3 teachers
                 existing = student_data['existing_result']
-                
+                if has_subjects:
+                    # Correct answers per subject → scores over 100 → total.
+                    rows = _read_subject_scores(request.form, sfx)
+                    total_score = sum(r['score'] for r in rows if r['score'] is not None)
+                else:
+                    rows = None                               # total only: keep any subject breakdown
+                    total_score = safe_int(total_raw)
+                if total_score is None or total_score < 0 or total_score > MAX_TOTAL_SCORE:
+                    problems.append(student.full_name)
+                    continue
+                target = existing or MockJAMBResult(student_id=student.id, mock_exam_id=exam_id)
+                target.total_score = total_score
+                if rows is not None:
+                    for n, r in enumerate(rows, start=1):
+                        setattr(target, f'subject{n}', r['name'])
+                        setattr(target, f'subject{n}_score', r['score'])
                 if existing:
-                    existing.total_score = total_score
-                    existing.subject1 = request.form.get(f'subject1_{student.id}', '').strip() or None
-                    existing.subject1_score = safe_int(request.form.get(f'subject1_score_{student.id}'))
-                    existing.subject2 = request.form.get(f'subject2_{student.id}', '').strip() or None
-                    existing.subject2_score = safe_int(request.form.get(f'subject2_score_{student.id}'))
-                    existing.subject3 = request.form.get(f'subject3_{student.id}', '').strip() or None
-                    existing.subject3_score = safe_int(request.form.get(f'subject3_score_{student.id}'))
-                    existing.subject4 = request.form.get(f'subject4_{student.id}', '').strip() or None
-                    existing.subject4_score = safe_int(request.form.get(f'subject4_score_{student.id}'))
                     updated += 1
                 else:
-                    result = MockJAMBResult(
-                        student_id=student.id,
-                        mock_exam_id=exam_id,
-                        total_score=total_score,
-                        subject1=request.form.get(f'subject1_{student.id}', '').strip() or None,
-                        subject1_score=safe_int(request.form.get(f'subject1_score_{student.id}')),
-                        subject2=request.form.get(f'subject2_{student.id}', '').strip() or None,
-                        subject2_score=safe_int(request.form.get(f'subject2_score_{student.id}')),
-                        subject3=request.form.get(f'subject3_{student.id}', '').strip() or None,
-                        subject3_score=safe_int(request.form.get(f'subject3_score_{student.id}')),
-                        subject4=request.form.get(f'subject4_{student.id}', '').strip() or None,
-                        subject4_score=safe_int(request.form.get(f'subject4_score_{student.id}'))
-                    )
-                    db.session.add(result)
+                    db.session.add(target)
                     added += 1
-            
+
             db.session.commit()
             if added or updated:
                 from utils import automations
@@ -626,8 +640,12 @@ def bulk_entry(exam_id):
                             branch_id=exam.branch_id, category='success')
                     except Exception:
                         pass
-            return _ok(f'Results saved! Added: {added}, Updated: {updated}',
-                       url_for('mock_jamb.view_exam', exam_id=exam_id))
+            msg = (f'Saved {added + updated} result{"s" if added + updated != 1 else ""}'
+                   f' ({added} new, {updated} updated).') if (added or updated) else 'Nothing to save.'
+            if problems:
+                msg += f' Not saved (total must be 0–{MAX_TOTAL_SCORE}): {", ".join(problems[:5])}.'
+            return _ok(msg, url_for('mock_jamb.view_exam', exam_id=exam_id),
+                       added=added, updated=updated, problems=problems)
 
         except Exception as e:
             db.session.rollback()
@@ -636,10 +654,11 @@ def bulk_entry(exam_id):
     return _render({
         'page': 'bulk_entry',
         'exam': {'id': exam.id, 'display_name': exam.display_name},
-        'students': [{'id': it['student'].id, 'full_name': it['student'].full_name,
-                      'student_id': it['student'].student_id, 'arm': it['arm'],
-                      'total_score': it['existing_result'].total_score if it['existing_result'] else '',
-                      'entered': bool(it['existing_result'])} for it in students],
+        'students': [_bulk_row(it) for it in students],
+        'subjects': list(WAEC_SUBJECTS),
+        'question_counts': question_count_map(WAEC_SUBJECTS),
+        'compulsory_subject': COMPULSORY_SUBJECT,
+        'max_total': MAX_TOTAL_SCORE,
         'submit_url': url_for('mock_jamb.bulk_entry', exam_id=exam.id),
         'urls': {'view': url_for('mock_jamb.view_exam', exam_id=exam.id),
                  'add': url_for('mock_jamb.add_result', exam_id=exam.id)},
