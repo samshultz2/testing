@@ -2,117 +2,182 @@
 {% block title %}Merge Duplicate Students - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('main.students_list') }}">Students</a> / <span>Merge duplicates</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.dup-group{border:1px solid var(--border-color);border-radius:var(--radius-md,10px);margin-bottom:.75rem;background:var(--bg-card);overflow:hidden}
-.dup-group.picked{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
-.dup-head{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;padding:.55rem .8rem;background:var(--gray-50);border-bottom:1px solid var(--border-light)}
-.dup-head label{display:flex;gap:.5rem;align-items:center;margin:0;font-weight:600;cursor:pointer}
-.dup-members{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem;padding:.7rem .8rem}
-.dup-m{border:1px solid var(--border-light);border-radius:8px;padding:.55rem .7rem;display:flex;gap:.55rem;align-items:flex-start;cursor:pointer}
-.dup-m.keep{border-color:var(--success);background:rgba(25,135,84,.06)}
-.dup-m.drop{opacity:.85}
-.dup-m .nm{font-weight:600}
-.dup-m .meta{font-size:.78rem;color:var(--text-muted)}
-.dup-tag{display:inline-block;font-size:.68rem;font-weight:700;padding:.05rem .4rem;border-radius:5px;margin-left:.25rem}
-.dup-tag.caps{background:#fde68a;color:#78350f}
-.dup-tag.keep{background:#d1fae5;color:#065f46}
-.dup-tag.drop{background:#fee2e2;color:#991b1b}
-.dup-tag[hidden]{display:none}
-.dup-warn{padding:.45rem .8rem;background:#fff7ed;color:#9a3412;font-size:.82rem;border-bottom:1px solid var(--border-light)}
-.dup-chips{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.3rem}
-.dup-chips span{font-size:.7rem;background:var(--gray-100);border-radius:5px;padding:.05rem .35rem}
-.dup-bar{position:sticky;bottom:0;background:var(--bg-card);border-top:1px solid var(--border-color);padding:.6rem .8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;z-index:5}
+.dp{max-width:1240px;margin:0 auto}
+.dp-how{margin:0 0 1rem}
+.dp-how summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--primary);list-style:none;display:inline-flex;gap:.4rem;align-items:center}
+.dp-how summary::-webkit-details-marker{display:none}
+.dp-how[open] summary i{transform:rotate(90deg)}
+.dp-how summary i{transition:transform .15s;font-size:.75rem}
+.dp-how ul{margin:.6rem 0 0;padding-left:1.1rem;color:var(--text-secondary);font-size:.88rem;line-height:1.55}
+.dp-filter{display:flex;flex-wrap:wrap;gap:.6rem;align-items:flex-end;margin-bottom:1rem}
+.dp-filter .rs-sel{min-width:170px}
+.dp-search{flex:1;min-width:200px;display:flex;flex-direction:column;gap:.25rem}
+.dp-search span{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.dp-search input{height:44px;border:1.5px solid var(--border-color);border-radius:12px;padding:0 .8rem;font:inherit;background:var(--bg-card);color:var(--text-primary)}
+.dp-loose{display:inline-flex;align-items:center;gap:.5rem;height:44px;padding:0 .9rem;border:1.5px solid var(--border-color);border-radius:12px;font-weight:600;font-size:.88rem;cursor:pointer;background:var(--bg-card)}
+.dp-loose:has(input:checked){border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
+.dp-quick{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:0 0 .8rem}
+.dp-quick b{margin-right:auto;font-size:.95rem}
+.dp-list{display:flex;flex-direction:column;gap:.9rem}
+.dp-g{border:1.5px solid var(--border-color);border-radius:18px;background:var(--bg-card);overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.dp-g.picked{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}
+.dp-gh{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.dp-gh h3{margin:0;font-size:1rem;flex:1;min-width:10rem}
+.dp-score{font-size:.72rem;font-weight:800;padding:.2rem .55rem;border-radius:999px}
+.dp-score.hi{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.dp-score.lo{background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));color:var(--warning)}
+.dp-warn{display:flex;gap:.55rem;align-items:flex-start;padding:.6rem 1rem;background:color-mix(in srgb,var(--warning) 10%,var(--bg-card));color:color-mix(in srgb,var(--warning) 70%,var(--text-primary));font-size:.84rem;border-bottom:1px solid var(--border-light)}
+.dp-ms{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.7rem;padding:.9rem 1rem}
+.dp-m{position:relative;display:flex;flex-direction:column;gap:.5rem;padding:.8rem .9rem;border:1.5px solid var(--border-color);border-radius:14px;cursor:pointer;transition:border-color .15s,background .15s}
+.dp-m input{position:absolute;opacity:0;pointer-events:none}
+.dp-m:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.dp-m.keep{color:var(--text-primary);border-color:var(--success);background:color-mix(in srgb,var(--success) 6%,var(--bg-card))}
+.dp-m.drop{border-style:dashed}
+.dp-badge{align-self:flex-start;display:inline-flex;align-items:center;gap:.35rem;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.2rem .55rem;border-radius:999px}
+.dp-m.keep .dp-badge{background:var(--success);color:#fff}
+.dp-m.drop .dp-badge{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.dp-m .nm{font-weight:800;font-size:1rem;line-height:1.3}
+.dp-caps{font-size:.64rem;font-weight:800;padding:.08rem .4rem;border-radius:6px;background:color-mix(in srgb,var(--warning) 20%,var(--bg-card));color:color-mix(in srgb,var(--warning) 75%,var(--text-primary));margin-left:.3rem;vertical-align:middle}
+.dp-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:.2rem .8rem;margin:0;font-size:.84rem}
+.dp-kv dt{color:var(--text-muted)}
+.dp-kv dd{margin:0;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.dp-kv dd.diff{color:var(--danger)}
+.dp-kv dd.diff::after{content:' ≠';font-weight:800}
+.dp-chips{display:flex;flex-wrap:wrap;gap:.25rem}
+.dp-chips span{font-size:.72rem;padding:.12rem .45rem;border-radius:999px;background:var(--gray-100);color:var(--text-secondary)}
+.dp-chips span.t{background:none;padding-left:0;font-weight:700}
+.dp-hint{font-size:.74rem;color:var(--text-muted);margin-top:auto}
+.dp-m.keep .dp-hint{display:none}
+.dp-gf{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.7rem 1rem;border-top:1px solid var(--border-light);background:var(--gray-50,var(--gray-100))}
+.dp-pick{display:inline-flex;align-items:center;gap:.5rem;height:40px;padding:0 .85rem;border-radius:11px;border:1.5px solid var(--border-color);background:var(--bg-card);font-weight:700;font-size:.86rem;cursor:pointer}
+.dp-pick input{width:18px;height:18px;accent-color:var(--primary)}
+.dp-g.picked .dp-pick{border-color:var(--primary);color:var(--primary)}
+.dp-gf .sp{flex:1}
+.dp-bar{margin-top:1rem}
+@media (max-width:759px){
+  .dp{padding-bottom:6rem}
+  .dp-ms{grid-template-columns:minmax(0,1fr)}
+  .dp-filter .rs-sel{flex:1 1 0;min-width:0}
+  .dp-search{order:-1;flex:1 1 100%}
+  .dp-loose{flex:none}
+  .dp-filter .rs-sel select{width:100%}
+  .dp-gf .rs-btn,.dp-gf .dp-pick{flex:1;justify-content:center}
+  .dp-gf .sp{display:none}
+}
 </style>
 {% endblock %}
 {% block content %}
 <form method="post" action="{{ url_for('main.duplicate_not_same_reset') }}" id="dupResetForm" hidden
       data-confirm="Show every pair you marked as different pupils as possible duplicates again?">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"></form>
-<div class="page-header">
-  <div>
-    <h1>Merge Duplicate Students</h1>
-    <p class="text-muted text-sm">Students with the <strong>same surname</strong> whose other names are the closest match (capitals, spelling slips and a missing middle name are ignored — e.g. “ABDULWAHAB ILUEDO AKHTAR-OZOMOYA ISMAIL” and “Abdulwahab Ismail”). Brothers and sisters with different first names are not grouped. For each group choose the record to <strong>keep</strong> — everything saved for the others (WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees …) is moved onto it, any blank details (e.g. middle name) are copied across, and the other records are deleted.</p>
-    <p class="text-sm mb-0">Merged two different pupils by mistake? <a href="{{ url_for('main.move_class_records') }}"><i class="fas fa-right-left"></i> Move their class records back</a> (attendance, scores and enrolment).</p>
-    <p class="text-sm mb-0 mt-1">Two different pupils with similar names? Press <strong>Not the same person</strong> on their group and it won't be suggested again.
-      {% if not_dup_count %}<span class="text-muted">· {{ not_dup_count }} pair(s) already marked as different —</span>
-      <button type="submit" form="dupResetForm" class="btn btn-link btn-sm" style="padding:0;vertical-align:baseline">show them again</button>{% endif %}</p>
+<div class="rs dp">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-object-group" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Duplicate students</h1><p>Records that look like the same pupil. Pick the one to keep; the rest are merged into it.</p></div>
+    <div class="rs-head-a">
+      <a class="rs-btn" href="{{ url_for('main.move_class_records') }}"><i class="fas fa-right-left" aria-hidden="true"></i><span class="rs-hide-sm">Undo a wrong merge</span></a>
+    </div>
+  </header>
+
+  <details class="dp-how">
+    <summary><i class="fas fa-chevron-right" aria-hidden="true"></i> How matching and merging work</summary>
+    <ul>
+      <li>Grouped when the <b>surname is the same</b> and the other names closely match — capitals, spelling slips and a missing middle name are ignored (“ABDULWAHAB ILUEDO ISMAIL” and “Abdulwahab Ismail”). Brothers and sisters with different first names are not grouped.</li>
+      <li>Merging moves everything saved for the other records — WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees — onto the one you keep, fills its blank details (e.g. middle name), then deletes the others. The kept record keeps its own admission number.</li>
+      <li>Two different pupils with similar names? Press <b>Not the same person</b> and they won't be suggested again.{% if not_dup_count %} {{ not_dup_count }} pair(s) already marked as different — <button type="submit" form="dupResetForm" class="btn btn-link btn-sm" style="padding:0;vertical-align:baseline">show them again</button>.{% endif %}</li>
+      <li>Merged two different pupils by mistake? <a href="{{ url_for('main.move_class_records') }}">Move their class records back</a> (attendance, scores and enrolment).</li>
+    </ul>
+  </details>
+
+  <form method="get" class="dp-filter">
+    <label class="rs-sel"><span>Class</span>
+      <select name="class_id" data-autosubmit aria-label="Class">
+        <option value="">All classes</option>
+        {% for c in classes %}<option value="{{ c.id }}" {% if c.id == class_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+      </select></label>
+    <label class="dp-search"><span>Search</span><input type="search" name="q" value="{{ search }}" placeholder="Name or admission number" enterkeyhint="search"></label>
+    <label class="dp-loose"><input type="checkbox" name="loose" value="1" data-autosubmit {% if loose %}checked{% endif %}> Looser matching</label>
+  </form>
+
+  {% if not groups %}
+  <div class="rs-blank"><i class="fas fa-user-check" aria-hidden="true"></i><b>No duplicates found</b>
+    <p>No {% if class_id %}students in this class{% else %}students{% endif %} share a surname with closely matching other names.{% if not loose %} Try <a href="{{ url_for('main.duplicate_merge', class_id=class_id, q=search or none, loose=1) }}">looser matching</a>.{% endif %}</p>
+    {% if not_dup_count %}<p class="text-muted text-sm">{{ not_dup_count }} pair(s) already marked as different — <button type="submit" form="dupResetForm" class="btn btn-link btn-sm" style="padding:0;vertical-align:baseline">show them again</button>.</p>{% endif %}</div>
+  {% else %}
+  {% set caps_n = groups|selectattr('has_caps_dup')|list|length %}
+  {% set warned_n = groups|selectattr('warnings')|list|length %}
+  <div class="rs-tiles" style="margin-bottom:1rem">
+    <div class="rs-tile"><span class="l">Possible duplicates</span><span class="v">{{ groups|length }}</span><span class="s">group{{ 's' if groups|length != 1 }} of records</span></div>
+    <div class="rs-tile"><span class="l">ALL-CAPS copies</span><span class="v">{{ caps_n }}</span><span class="s">usually safe to merge</span></div>
+    <div class="rs-tile {{ 'bad' if warned_n }}"><span class="l">Check first</span><span class="v">{{ warned_n }}</span><span class="s">details disagree</span></div>
   </div>
-</div>
 
-<form method="get" class="card mb-3"><div class="card-body d-flex gap-2" style="flex-wrap:wrap;align-items:flex-end">
-  <div><label class="form-label" for="dupClass">Class</label>
-    <select id="dupClass" name="class_id" class="form-control" data-autosubmit style="min-width:180px">
-      <option value="">All classes</option>
-      {% for c in classes %}<option value="{{ c.id }}" {% if c.id == class_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
-    </select></div>
-  <div><label class="form-label" for="dupQ">Search</label>
-    <input id="dupQ" type="search" name="q" value="{{ search }}" class="form-control" placeholder="Name or ID"></div>
-  <label class="d-flex gap-2" style="align-items:center;margin:0 0 .45rem"><input type="checkbox" name="loose" value="1" data-autosubmit {% if loose %}checked{% endif %}> Looser matching (show weaker candidates)</label>
-  <button class="btn btn-secondary btn-sm" type="submit">Find</button>
-</div></form>
+  <form method="post" action="{{ url_for('main.duplicate_merge_run') }}" id="dupForm"
+        data-confirm="Merge the ticked groups? The records not kept are deleted after everything saved for them is moved to the kept student. This cannot be undone.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="class_id" value="{{ class_id or '' }}"><input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="loose" value="{{ '1' if loose else '' }}">
+    <div class="dp-quick">
+      <b>{{ groups|length }} group{{ 's' if groups|length != 1 }}</b>
+      {% if caps_n %}<button type="button" class="rs-btn sm" id="dupCaps"><i class="fas fa-font" aria-hidden="true"></i> Select ALL-CAPS copies ({{ caps_n }})</button>{% endif %}
+      <button type="button" class="rs-btn ghost sm" id="dupAll">Select all</button>
+      <button type="button" class="rs-btn ghost sm" id="dupNone">Clear</button>
+    </div>
 
-{% if not groups %}
-<div class="card"><div class="card-body"><div class="empty-state">
-  <i class="fas fa-user-check"></i><h3>No duplicates found</h3>
-  <p>No {% if class_id %}students in this class{% else %}students{% endif %} share a surname with closely matching other names.{% if not loose %} Try <a href="{{ url_for('main.duplicate_merge', class_id=class_id, q=search or none, loose=1) }}">looser matching</a>.{% endif %}</p>
-</div></div></div>
-{% else %}
-<form method="post" action="{{ url_for('main.duplicate_merge_run') }}" id="dupForm"
-      data-confirm="Merge the ticked groups? The records not kept are deleted after everything saved for them is moved to the kept student. This cannot be undone.">
-  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="class_id" value="{{ class_id or '' }}"><input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="loose" value="{{ '1' if loose else '' }}">
-  <div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;align-items:center">
-    <strong>{{ groups|length }} group(s) of possible duplicates</strong>
-    <button type="button" class="btn btn-sm btn-primary" id="dupCaps"><i class="fas fa-font"></i> Select all ALL-CAPS duplicates ({{ groups|selectattr('has_caps_dup')|list|length }})</button>
-    {% set _warned = groups|selectattr('warnings')|list|length %}
-    {% if _warned %}<span class="text-muted text-sm">{{ _warned }} group(s) flagged as possibly different students are not included.</span>{% endif %}
-    <button type="button" class="btn btn-sm btn-secondary" id="dupAll">Select all</button>
-    <button type="button" class="btn btn-sm btn-secondary" id="dupNone">Clear</button>
-  </div>
+    <div class="dp-list">
+    {% for g in groups %}
+      {% set dobs = g.members|map(attribute='student.date_of_birth')|reject('none')|unique|list %}
+      {% set genders = g.members|map(attribute='student.gender')|reject('none')|map('lower')|unique|list %}
+      {% set classes_ = g.members|map(attribute='class')|reject('none')|unique|list %}
+      <section class="dp-g" data-caps="{{ '1' if g.has_caps_dup else '0' }}" data-key="{{ g.key }}">
+        <div class="dp-gh">
+          <h3>{{ g.members[0].student.full_name }}{% if g.members|length > 2 %} <span class="text-muted">+{{ g.members|length - 1 }}</span>{% endif %}</h3>
+          <span class="dp-score {{ 'hi' if g.score >= 75 else 'lo' }}" title="How closely the names match">{{ g.score }}% name match</span>
+          <button type="submit" form="ns-{{ g.key }}" class="rs-btn ghost sm" title="These are different pupils — stop suggesting them"><i class="fas fa-user-slash" aria-hidden="true"></i> Not the same person</button>
+        </div>
+        {% if g.warnings %}<div class="dp-warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span>{{ g.warnings|join('; ') }}. Only merge if you're sure it's one person.</span></div>{% endif %}
+        <div class="dp-ms" role="radiogroup" aria-label="Record to keep">
+          {% for m in g.members %}{% set s = m.student %}
+          <label class="dp-m {{ 'keep' if m.id == g.keeper_id else 'drop' }}">
+            <input type="radio" name="keep_{{ g.key }}" value="{{ m.id }}" {% if m.id == g.keeper_id %}checked{% endif %} aria-label="Keep {{ s.full_name }}">
+            <span class="dp-badge"><i class="fas {{ 'fa-circle-check' if m.id == g.keeper_id else 'fa-arrow-right-to-bracket' }}" aria-hidden="true"></i> <span class="bt">{{ 'Keep' if m.id == g.keeper_id else 'Merge in & delete' }}</span></span>
+            <span class="nm">{{ s.full_name }}{% if m.all_caps %}<span class="dp-caps">ALL CAPS</span>{% endif %}</span>
+            <dl class="dp-kv">
+              <dt>Admission no.</dt><dd>{{ s.student_id }}</dd>
+              <dt>Class</dt><dd class="{{ 'diff' if classes_|length > 1 }}">{{ m.class or 'No current class' }}</dd>
+              <dt>Born</dt><dd class="{{ 'diff' if dobs|length > 1 and s.date_of_birth }}">{{ s.date_of_birth.strftime('%d %b %Y') if s.date_of_birth else 'Not set' }}</dd>
+              <dt>Gender</dt><dd class="{{ 'diff' if genders|length > 1 and s.gender }}">{{ s.gender or 'Not set' }}</dd>
+              {% if s.is_graduated %}<dt>Status</dt><dd>Graduated</dd>{% endif %}
+            </dl>
+            <span class="dp-chips"><span class="t">{{ m.total }} linked record{{ 's' if m.total != 1 }}</span>{% for label, n in m.summary %}<span>{{ label }} {{ n }}</span>{% endfor %}</span>
+            <span class="dp-hint">Tap to keep this one instead</span>
+          </label>
+          {% endfor %}
+        </div>
+        <div class="dp-gf">
+          <label class="dp-pick"><input type="checkbox" name="group" value="{{ g.key }}" class="dup-pick" aria-label="Select this group to merge"> Select</label>
+          <span class="sp"></span>
+          <button type="button" class="rs-btn danger sm" data-merge-one="{{ g.key }}"><i class="fas fa-object-group" aria-hidden="true"></i> Merge now</button>
+        </div>
+      </section>
+    {% endfor %}
+    </div>
 
+    <div class="rs-bar fixed dp-bar" id="dupBar">
+      <div class="rs-bar-t"><b id="dupCount">None selected</b><small>The kept record keeps its admission number. This cannot be undone.</small></div>
+      <button type="submit" class="rs-btn danger" id="dupGo" disabled><i class="fas fa-object-group" aria-hidden="true"></i> <span>Merge selected</span></button>
+    </div>
+  </form>
   {% for g in groups %}
-  <div class="dup-group" data-caps="{{ '1' if g.has_caps_dup else '0' }}">
-    <div class="dup-head">
-      <label><input type="checkbox" name="group" value="{{ g.key }}" class="dup-pick"> Merge this group</label>
-      <span class="text-muted text-sm">{{ g.members|length }} records · tick the one to keep</span>
-      <span class="dup-tag {{ 'keep' if g.score >= 75 else 'caps' }}" style="margin-left:auto" title="How closely the names match">{{ g.score }}% name match</span>
-      <button type="submit" form="ns-{{ g.key }}" class="btn btn-sm btn-secondary dup-ns" title="These are two different pupils — stop suggesting them"><i class="fas fa-user-slash"></i> Not the same person</button>
-    </div>
-    {% if g.warnings %}<div class="dup-warn"><i class="fas fa-triangle-exclamation"></i> {{ g.warnings|join('; ') }} — they may be two different students with the same name. Only merge if you're sure it's one person.</div>{% endif %}
-    <div class="dup-members">
-      {% for m in g.members %}{% set s = m.student %}
-      <label class="dup-m {{ 'keep' if m.id == g.keeper_id else 'drop' }}">
-        <input type="radio" name="keep_{{ g.key }}" value="{{ m.id }}" {% if m.id == g.keeper_id %}checked{% endif %} aria-label="Keep {{ s.full_name }}">
-        <span>
-          <span class="nm">{{ s.full_name }}</span>
-          {% if m.all_caps %}<span class="dup-tag caps">ALL CAPS</span>{% endif %}
-          <span class="dup-tag keep" {% if m.id != g.keeper_id %}hidden{% endif %}>KEEP</span>
-          <span class="dup-tag drop" {% if m.id == g.keeper_id %}hidden{% endif %}>MERGE &amp; DELETE</span>
-          <div class="meta">{{ s.student_id }}{% if m.class %} · {{ m.class }}{% else %} · no current class{% endif %}{% if s.date_of_birth %} · born {{ s.date_of_birth.strftime('%d %b %Y') }}{% endif %}{% if s.is_graduated %} · graduated{% endif %}</div>
-          <div class="dup-chips">
-            {% for label, n in m.summary %}<span>{{ label }} {{ n }}</span>{% endfor %}
-            <span>{{ m.total }} linked record(s)</span>
-          </div>
-        </span>
-      </label>
-      {% endfor %}
-    </div>
-  </div>
+  <form method="post" action="{{ url_for('main.duplicate_not_same') }}" id="ns-{{ g.key }}" hidden
+        data-confirm="Mark {{ g.members|map(attribute='student.full_name')|join(' and ') }} as different pupils? They won't be suggested as duplicates again.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="group" value="{{ g.key }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+  </form>
   {% endfor %}
-
-  <div class="dup-bar">
-    <button type="submit" class="btn btn-danger" id="dupGo" disabled><i class="fas fa-object-group"></i> <span>Merge selected</span></button>
-    <span class="text-muted text-sm">The kept record keeps its own admission number. This cannot be undone.</span>
-  </div>
-</form>
-{% for g in groups %}
-<form method="post" action="{{ url_for('main.duplicate_not_same') }}" id="ns-{{ g.key }}" hidden
-      data-confirm="Mark {{ g.members|map(attribute='student.full_name')|join(' and ') }} as different pupils? They won't be suggested as duplicates again.">
-  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="group" value="{{ g.key }}">
-  <input type="hidden" name="next" value="{{ request.full_path }}">
-</form>
-{% endfor %}
-{% endif %}
+  {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -121,30 +186,49 @@
   var form = document.getElementById('dupForm');
   if (!form) return;
   var go = document.getElementById('dupGo');
-  function picks() { return Array.prototype.slice.call(form.querySelectorAll('.dup-pick')); }
+  function picks() { return [].slice.call(form.querySelectorAll('.dup-pick')); }
   function sync() {
     var n = picks().filter(function (b) { return b.checked; }).length;
     go.disabled = n === 0;
     go.querySelector('span').textContent = n ? ('Merge ' + n + ' group' + (n === 1 ? '' : 's')) : 'Merge selected';
-    form.querySelectorAll('.dup-group').forEach(function (g) {
+    document.getElementById('dupCount').textContent = n ? (n + ' group' + (n === 1 ? '' : 's') + ' selected') : 'None selected';
+    form.querySelectorAll('.dp-g').forEach(function (g) {
       g.classList.toggle('picked', g.querySelector('.dup-pick').checked);
-      g.querySelectorAll('.dup-m').forEach(function (m) {
+      g.querySelectorAll('.dp-m').forEach(function (m) {
         var keep = m.querySelector('input[type=radio]').checked;
         m.classList.toggle('keep', keep); m.classList.toggle('drop', !keep);
-        m.querySelector('.dup-tag.keep').hidden = !keep;
-        m.querySelector('.dup-tag.drop').hidden = keep;
+        m.querySelector('.bt').textContent = keep ? 'Keep' : 'Merge in & delete';
+        var ic = m.querySelector('.dp-badge i');
+        ic.className = 'fas ' + (keep ? 'fa-circle-check' : 'fa-arrow-right-to-bracket');
       });
     });
   }
   form.addEventListener('change', sync);
-  document.getElementById('dupCaps').addEventListener('click', function () {
-    form.querySelectorAll('.dup-group').forEach(function (g) {
+  var caps = document.getElementById('dupCaps');
+  if (caps) caps.addEventListener('click', function () {
+    form.querySelectorAll('.dp-g').forEach(function (g) {
       g.querySelector('.dup-pick').checked = g.getAttribute('data-caps') === '1';
     });
     sync();
   });
   document.getElementById('dupAll').addEventListener('click', function () { picks().forEach(function (b) { b.checked = true; }); sync(); });
   document.getElementById('dupNone').addEventListener('click', function () { picks().forEach(function (b) { b.checked = false; }); sync(); });
+  // "Merge now" on one group: merge just that group (others are left as they are).
+  form.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-merge-one]'); if (!b) return;
+    var key = b.getAttribute('data-merge-one');
+    var g = form.querySelector('.dp-g[data-key="' + key + '"]');
+    var keep = g.querySelector('input[type=radio]:checked');
+    var name = keep ? keep.closest('.dp-m').querySelector('.nm').firstChild.textContent.trim() : '';
+    var ask = window.themedConfirm || function (m) { return Promise.resolve(window.confirm(m)); };
+    ask('Merge this group into ' + name + '? The other record(s) are deleted after everything saved for them moves across. This cannot be undone.').then(function (ok) {
+      if (!ok) return;
+      picks().forEach(function (p) { p.checked = p.value === key; });
+      sync();
+      form.removeAttribute('data-confirm');
+      form.submit();
+    });
+  });
   sync();
 })();
 </script>

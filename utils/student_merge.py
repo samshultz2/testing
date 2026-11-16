@@ -448,6 +448,8 @@ def find_groups(class_id=None, search=None, min_score=0.5):
             warn.append('These records are in different classes right now')
         if len(dobs) > 1:
             warn.append('These records have different dates of birth')
+        if len({(s.gender or '').strip().lower() for s in g if (s.gender or '').strip()}) > 1:
+            warn.append('These records have different genders')
         if len({bool(s.is_graduated) for s in g}) > 1:
             warn.append('One of these records has graduated and the other has not — '
                         'they may be two different pupils')

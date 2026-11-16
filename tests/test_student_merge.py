@@ -187,3 +187,21 @@ def test_name_similarity_rules():
     assert name_similarity(['osarogue', 'nora'], ['osargue', 'nora']) == 1.0
     assert name_similarity(['ada'], ['chidi']) == 0.0
     assert name_similarity(['ada'], ['adam']) == 0.0          # short names must match exactly
+
+
+def test_different_genders_are_flagged_as_possibly_two_pupils(app):
+    import uuid
+    from models import db, Branch, Student
+    from utils.student_merge import find_groups
+    tag = uuid.uuid4().hex[:5].upper()
+    with app.app_context():
+        bid = Branch.get_default().id
+        a = Student(student_id=f'G{tag}A', first_name='Tunde', surname=f'Zgen{tag}', gender='Male', is_active=True, branch_id=bid)
+        b = Student(student_id=f'G{tag}B', first_name='Tunde', surname=f'Zgen{tag}', gender='Female', is_active=True, branch_id=bid)
+        db.session.add_all([a, b]); db.session.commit()
+        ids = sorted([a.id, b.id])
+    from flask import session
+    with app.test_request_context():
+        session['role'] = 'super_admin'
+        g = [g for g in find_groups(search=f'Zgen{tag}') if sorted(m['id'] for m in g['members']) == ids]
+    assert g and 'These records have different genders' in g[0]['warnings']
