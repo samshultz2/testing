@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Teacher Assignments - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Assignments</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:860px;margin:0 auto}
 
@@ -84,6 +88,8 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('assign') }}
 {% set total_assignments = assignments_by_class.values() | map('length') | sum %}
 {% set ns = namespace(unassigned=0) %}
 {% for cc in classes %}{% if not assignments_by_class[cc.id] %}{% set ns.unassigned = ns.unassigned + 1 %}{% endif %}{% endfor %}
@@ -285,5 +291,6 @@
       }
   });
   </script>
+</div>
 </div>
 {% endblock %}

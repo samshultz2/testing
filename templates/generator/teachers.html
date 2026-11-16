@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Teachers - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teachers</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 /* Teachers page — avatar + metric-chip cards and a selectable-card pattern,
    matching the Generate page's visual language. Every color is a CSS
@@ -79,6 +83,8 @@
 {%- if parts -%}{{ (parts[0][0] + (parts[-1][0] if parts|length > 1 else ''))|upper }}{%- else -%}?{%- endif -%}
 {%- endmacro %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('teachers') }}
 <div class="th-head">
     <div>
         <div class="eyebrow"><i class="fas fa-graduation-cap"></i> {{ level|upper }} · Timetable Generator</div>
@@ -190,6 +196,7 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}

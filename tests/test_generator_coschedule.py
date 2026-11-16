@@ -598,8 +598,8 @@ def test_master_timetable_shows_coschedule_pair_when_other_arm_excluded(app):
     r_daisy = c.get(f'/generator/master-timetable?batch_id={batch_id}&day=0&period=1&arm=ZzSSS2O|ZzDaisyO')
     assert r_daisy.status_code == 200
     body_daisy = r_daisy.get_data(as_text=True)
-    assert '<strong>ZzSSS2O ZzDaisyO</strong>' in body_daisy
-    assert '<strong>ZzSSS2O ZzIrisO</strong>' not in body_daisy
+    assert '<span class="c">ZzSSS2O ZzDaisyO</span>' in body_daisy
+    assert '<span class="c">ZzSSS2O ZzIrisO</span>' not in body_daisy
     assert 'ZzLiteratureO / ZzAccountingO' in body_daisy
 
     # The checkbox panel lists both arms regardless of which slot is viewed.

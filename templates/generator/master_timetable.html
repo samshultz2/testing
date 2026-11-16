@@ -1,99 +1,75 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Master Timetable - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Master View</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <h1>Master Timetable</h1>
-</div>
+{% set arms = selected_arms|list %}
+<div class="gx">
+{{ gx_nav('timetables') }}
+{{ gx_sub('master', batch_id) }}
+<header class="rs-head">
+  <span class="rs-head-ic"><i class="fas fa-border-all" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>Whole school</h1><p>Who is teaching what, in every class, for one period.</p></div>
+  {% if batches %}
+  <div class="rs-head-a">
+    <form method="GET" class="gx-batchsel">
+      <input type="hidden" name="day" value="{{ selected_day }}"><input type="hidden" name="period" value="{{ selected_period }}">
+      <label class="rs-sel"><span>Timetable</span>
+        <select name="batch_id" data-autosubmit aria-label="Timetable batch">
+          {% for b in batches %}<option value="{{ b.batch_id }}" {{ 'selected' if batch_id == b.batch_id }}>{{ b.generated_at.strftime('%d %b %Y, %H:%M') }}</option>{% endfor %}
+        </select></label>
+    </form>
+  </div>
+  {% endif %}
+</header>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <form method="GET" class="filter-form">
-            <div class="form-group">
-                <label class="form-label">Batch</label>
-                <select name="batch_id" class="form-control">
-                    {% for batch in batches %}
-                    <option value="{{ batch.batch_id }}" {% if batch_id == batch.batch_id %}selected{% endif %}>
-                        #{{ batch.batch_id }} ({{ batch.generated_at.strftime('%d %b') }})
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Day</label>
-                <select name="day" class="form-control">
-                    {% for day in days %}
-                    <option value="{{ loop.index0 }}" {% if selected_day == loop.index0 %}selected{% endif %}>{{ day }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Period</label>
-                <select name="period" class="form-control">
-                    {% for p in range(1, periods_per_day + 1) %}
-                    {% if p != break_after_period %}
-                    <option value="{{ p }}" {% if selected_period == p %}selected{% endif %}>Period {{ p }}</option>
-                    {% endif %}
-                    {% endfor %}
-                </select>
-            </div>
-            {% if batch_arms %}
-            <div class="form-group" style="flex-basis: 100%;">
-                <label class="form-label">Include class-arms</label>
-                <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.4rem;">
-                    {% for a in batch_arms %}
-                    {% set token = a.class_name ~ '|' ~ a.arm_name %}
-                    <label class="checkbox-label" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); font-weight: normal;">
-                        <input type="checkbox" name="arm" value="{{ token }}" {% if not selected_arms or token in selected_arms %}checked{% endif %}>
-                        <span>{{ a.class_name }} {{ a.arm_name }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
-                <p class="text-muted text-sm" style="margin: 0.4rem 0 0;">Uncheck a combined class's other arm and its co-scheduled subject still shows, e.g. "Accounting / CRS", on the arm you kept.</p>
-            </div>
-            {% endif %}
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> View</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-{% if master_data %}
-<div class="card">
-    <div class="card-header">
-        <h3>{{ days[selected_day] }} - Period {{ selected_period }}</h3>
-    </div>
-    <div class="card-body" style="padding: 0;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Class</th>
-                    <th>Subject</th>
-                    <th>Teacher</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in master_data %}
-                <tr>
-                    <td><strong>{{ item.class_name }} {{ item.arm_name }}</strong></td>
-                    <td>{{ item.subject }}</td>
-                    <td>{{ item.teacher }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+{% if not batch_id %}
+<div class="rs-blank"><i class="fas fa-calendar-plus" aria-hidden="true"></i><b>No timetable yet</b><p>Generate a timetable first.</p>
+  <a class="rs-btn primary" href="{{ url_for('generator.generate_page') }}"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Generate</a></div>
 {% else %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-th"></i>
-            <h3>No Data</h3>
-            <p>Select a batch, day and period to view</p>
-        </div>
+<nav class="gtt-days gx-mdays" aria-label="Day">
+  {% for d in days %}<a href="{{ url_for('generator.master_timetable', batch_id=batch_id, day=loop.index0, period=selected_period, arm=arms) }}" aria-selected="{{ 'true' if selected_day == loop.index0 else 'false' }}"><span class="l">{{ d }}</span><span class="s">{{ d[:3] }}</span></a>{% endfor %}
+</nav>
+<nav class="gx-periods" aria-label="Period">
+  {% for p in range(1, periods_per_day + 1) %}
+  <a href="{{ url_for('generator.master_timetable', batch_id=batch_id, day=selected_day, period=p, arm=arms) }}" class="{{ 'on' if selected_period == p }}"{% if selected_period == p %} aria-current="true"{% endif %}><small>Period</small><b>{{ p }}</b></a>
+  {% if p == break_after_period %}<span class="gx-pbrk" aria-hidden="true"><i class="fas fa-mug-hot"></i></span>{% endif %}
+  {% endfor %}
+</nav>
+
+{% if batch_arms %}
+<details class="rs-card gx-armsel" {{ 'open' if arms }}>
+  <summary><i class="fas fa-filter" aria-hidden="true"></i> Classes shown <span class="rs-muted">{{ arms|length if arms else batch_arms|length }} of {{ batch_arms|length }}</span></summary>
+  <form method="GET">
+    <input type="hidden" name="batch_id" value="{{ batch_id }}"><input type="hidden" name="day" value="{{ selected_day }}"><input type="hidden" name="period" value="{{ selected_period }}">
+    <div class="rs-chips gx-arms">
+      {% for a in batch_arms %}{% set token = a.class_name ~ '|' ~ a.arm_name %}
+      <label class="gx-armck"><input type="checkbox" name="arm" value="{{ token }}" {{ 'checked' if not arms or token in arms }}> {{ a.class_name }} {{ a.arm_name }}</label>
+      {% endfor %}
     </div>
-</div>
+    <p class="rs-muted bx-small" style="margin:.5rem 0">Untick a combined class's other arm and its co-scheduled subject still shows, e.g. "Accounting / CRS", on the arm you kept.</p>
+    <button type="submit" class="rs-btn primary sm">Apply</button>
+  </form>
+</details>
 {% endif %}
+
+<section class="rs-card gx-now">
+  <div class="rs-card-h"><h3>{{ days[selected_day] }} · Period {{ selected_period }}</h3><span class="rs-muted">{{ master_data|length }} class{{ 'es' if master_data|length != 1 }}</span></div>
+  {% if master_data %}
+  <ul class="gx-mlist">
+    {% for item in master_data %}
+    <li><span class="c">{{ item.class_name }} {{ item.arm_name }}</span><span class="s"><b>{{ item.subject }}</b><small><i class="fas fa-user" aria-hidden="true"></i> {{ item.teacher }}</small></span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="rs-blank"><i class="fas fa-mug-hot" aria-hidden="true"></i><b>Nothing scheduled</b><p>No class has a lesson in this period.</p></div>
+  {% endif %}
+</section>
+{% endif %}
+</div>
 {% endblock %}

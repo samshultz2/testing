@@ -71,7 +71,7 @@ def test_apply_batch_fills_class_timetable(app):
     page = client.get(f'/generator/results/{ids["batch"]}').get_data(as_text=True)
     m = re.search(r'name="csrf-token" content="([0-9a-f]+)"', page)
     token = m.group(1)
-    assert 'Apply to Class Timetables' in page
+    assert 'Publish to class timetables' in page
 
     resp = client.post(f'/generator/results/{ids["batch"]}/apply',
                        data={'_csrf_token': token}, follow_redirects=False)

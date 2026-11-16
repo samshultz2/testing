@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Import Teachers - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.teachers_list') }}">Teachers</a> / <span>Import</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('teachers') }}
 <div class="page-header">
     <h1>Import Teachers from CSV</h1>
 </div>
@@ -45,5 +53,6 @@
 Mr. John Obi,TCH001,08012345678,john@school.com,6,30
 Mrs. Mary Ada,TCH002,08098765432,mary@school.com,5,25</pre>
     </div>
+</div>
 </div>
 {% endblock %}

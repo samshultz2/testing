@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Add Clash Rule - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> / <span>Add</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('rules') }}
 <div class="page-header">
     <h1><i class="fas fa-plus"></i> Add Subject Clash Rule</h1>
 </div>
@@ -132,4 +140,5 @@ document.getElementById('targetClass').addEventListener('change', function() {
     }
 });
 </script>
+</div>
 {% endblock %}

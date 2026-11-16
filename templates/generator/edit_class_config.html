@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}{{ class_config.class_name }} - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.classes_config') }}">Classes</a> / <span>{{ class_config.class_name }}</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('classes') }}
 <div class="page-header">
     <h1>{{ class_config.class_name }}</h1>
 </div>
@@ -117,5 +125,6 @@
         </form>
         {% endif %}
     </div>
+</div>
 </div>
 {% endblock %}

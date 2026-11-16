@@ -979,4 +979,20 @@ def _apply_batch(batch_id):
 
 __all__ = [_n for _n in dir() if not _n.startswith('__')]
 
+@generator_bp.context_processor
+def _gx_context():
+    """Shared bits for every generator page: the current level and a lazy
+    subject -> colour lookup used by the timetable component."""
+    def subject_colors():
+        if not hasattr(g, '_gx_colors'):
+            try:
+                g._gx_colors = {c.subject_id: c.color for c in GenSubjectConfig.query.filter_by(
+                    school_level=get_current_level(), branch_id=gen_bid()).all() if c.color}
+            except Exception:
+                db.session.rollback()
+                g._gx_colors = {}
+        return g._gx_colors
+    return {'gx_level': get_current_level(), 'gx_subject_colors': subject_colors}
+
+
 from . import teachers, subjects, structure, rules, generation, exports, api, subject_rules  # noqa: E402,F401  (registers routes)

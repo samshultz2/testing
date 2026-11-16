@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Timetable Generator - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Timetable Generator</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:1040px;margin:0 auto}
 
@@ -58,6 +62,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="gx">
 <div class="content-narrow">
   <div class="gi-head">
     <div class="ic"><i class="fas fa-calendar-days"></i></div>
@@ -145,5 +150,6 @@
       </div>
     </div>
   </div>
+</div>
 </div>
 {% endblock %}

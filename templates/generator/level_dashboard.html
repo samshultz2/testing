@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}{{ level_name }} Timetable - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <span>{{ level|upper }}</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:760px;margin:0 auto}
 
@@ -84,6 +88,8 @@
 {% endblock %}
 
 {% block content %}
+<div class="gx">
+{{ gx_nav('home') }}
 <div class="content-narrow">
   <div class="lvl-head">
     <span class="lvl-ic {{ level }}"><i class="fas fa-{% if level == 'jss' %}school{% else %}graduation-cap{% endif %}"></i></span>
@@ -222,5 +228,6 @@
         <i class="fas fa-chevron-right qarrow"></i></a>
     </div>
   </div>
+</div>
 </div>
 {% endblock %}

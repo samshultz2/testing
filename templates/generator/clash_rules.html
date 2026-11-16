@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Subject Clash Rules - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Clash Rules</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('rules') }}
 <div class="page-header">
     <h1><i class="fas fa-ban"></i> Subject Clash Rules</h1>
 </div>
@@ -407,5 +415,6 @@
         </ul>
         <p><strong>Example:</strong> SSS2 Lily's Chemistry must always be period 2 — Monday period 2, Wednesday period 2, whichever days it's scheduled, never any other period. Or SSS1 Rose's PE must land somewhere between periods 2 and 4. None of these change the subject's periods/week, just where in the day each one is allowed to fall — but a tight rule (a single fixed period, or a narrow range) on a subject that needs more periods/week than the class has available days can make the timetable infeasible, since each day can only offer so many matching slots.</p>
     </div>
+</div>
 </div>
 {% endblock %}

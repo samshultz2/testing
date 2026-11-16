@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Teacher Assignment Summary - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.teacher_assignments') }}">Teacher Assignments</a> / <span>Summary</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('assign') }}
 <div class="page-header">
     <h1>Teacher Assignment Summary</h1>
     <div class="page-header-actions">
@@ -40,4 +48,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

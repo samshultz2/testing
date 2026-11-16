@@ -1,0 +1,115 @@
+{# Shared pieces for every Timetable Generator page.
+
+   gx_nav(active)      — the section menu (tabs; scrolls sideways on phones).
+   gx_timetable(...)   — a week timetable: the full grid on laptops, day tabs
+                         with one day's periods as a list on phones.
+#}
+
+{% macro gx_nav(active) %}
+{% set L = gx_level|upper %}
+<nav class="sl-nav gx-nav" aria-label="Timetable generator">
+  {% for key, ep, ic, label in [
+      ('home', 'generator.level_dashboard', 'fa-gauge-high', L ~ ' home'),
+      ('teachers', 'generator.teachers_list', 'fa-chalkboard-user', 'Teachers'),
+      ('subjects', 'generator.subjects_config', 'fa-book', 'Subjects'),
+      ('classes', 'generator.classes_config', 'fa-school', 'Classes'),
+      ('assign', 'generator.teacher_assignments', 'fa-user-tag', 'Assignments'),
+      ('rules', 'generator.rules_config', 'fa-sliders', 'Rules'),
+      ('generate', 'generator.generate_page', 'fa-wand-magic-sparkles', 'Generate'),
+      ('timetables', 'generator.results_list', 'fa-table-cells', 'Timetables'),
+      ('reports', 'generator.reports_index', 'fa-chart-column', 'Reports')] %}
+  <a href="{{ url_for(ep, level=gx_level) if key == 'home' else url_for(ep) }}" class="{{ 'on' if active == key }}"{% if active == key %} aria-current="page"{% endif %}>
+    <i class="fas {{ ic }}" aria-hidden="true"></i><span>{{ label }}</span></a>
+  {% endfor %}
+</nav>
+{% endmacro %}
+
+{% macro gx_sub(active, batch_id=None) %}
+<nav class="sl-sub gx-sub" aria-label="Timetable views">
+  <a href="{{ url_for('generator.results_list') }}" class="{{ 'on' if active == 'list' }}"><i class="fas fa-layer-group" aria-hidden="true"></i> All timetables</a>
+  {% if batch_id %}<a href="{{ url_for('generator.view_results', batch_id=batch_id) }}" class="{{ 'on' if active == 'classes' }}"><i class="fas fa-school" aria-hidden="true"></i> By class</a>{% endif %}
+  <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) if batch_id else url_for('generator.teacher_timetable') }}" class="{{ 'on' if active == 'teacher' }}"><i class="fas fa-chalkboard-user" aria-hidden="true"></i> By teacher</a>
+  <a href="{{ url_for('generator.master_timetable', batch_id=batch_id) if batch_id else url_for('generator.master_timetable') }}" class="{{ 'on' if active == 'master' }}"><i class="fas fa-border-all" aria-hidden="true"></i> Whole school</a>
+</nav>
+{% endmacro %}
+
+{#- One cell's colour: the subject's own colour when set, else a calm default. -#}
+{% macro _cc(entry) -%}
+{%- set col = gx_subject_colors().get(entry.subject_id) if entry and entry.subject_id else None -%}
+{%- if col %} style="--c:{{ col }}"{% endif -%}
+{%- endmacro %}
+
+{#- grid: {day_index: {period: entry}}; who: 'teacher' shows the teacher under the
+    subject (class view), 'class' shows the class-arm (teacher view). -#}
+{% macro gx_timetable(grid, days, periods_per_day, break_after, who='teacher', title=None, actions=None) %}
+<div class="gtt" data-gtt>
+  {% if title or actions %}<div class="gtt-h">{% if title %}<h3>{{ title }}</h3>{% endif %}{% if actions %}<div class="gtt-a">{{ actions }}</div>{% endif %}</div>{% endif %}
+  <div class="gtt-days" role="tablist" aria-label="Day">
+    {% for d in days %}<button type="button" role="tab" data-day="{{ loop.index0 }}" aria-selected="false">{{ d[:3] }}</button>{% endfor %}
+  </div>
+  {# desktop grid #}
+  <div class="gtt-wrap">
+    <table class="gtt-grid">
+      <thead><tr><th class="p">#</th>{% for d in days %}<th>{{ d }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for p in range(1, periods_per_day + 1) %}
+        <tr>
+          <th class="p" scope="row">{{ p }}</th>
+          {% for di in range(days|length) %}{% set e = grid[di].get(p) if grid.get(di) is not none else None %}
+          <td>{% if e and e.subject %}<div class="gtt-c"{{ _cc(e) }}><b>{{ e.subject.short_name or e.subject.name }}</b>
+            <small>{% if who == 'class' %}{{ e.class_name }} {{ e.arm_name }}{% else %}{{ e.teacher.name if e.teacher else '' }}{% endif %}</small>
+            {% if e.is_locked %}<i class="fas fa-lock" aria-label="Locked"></i>{% endif %}</div>
+          {% else %}<span class="gtt-free">Free</span>{% endif %}</td>
+          {% endfor %}
+        </tr>
+        {% if p == break_after %}<tr class="gtt-brk"><th class="p"></th><td colspan="{{ days|length }}">Break</td></tr>{% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {# phone: one day at a time #}
+  {% for di in range(days|length) %}
+  <ol class="gtt-day" data-day="{{ di }}" aria-label="{{ days[di] }}">
+    {% for p in range(1, periods_per_day + 1) %}{% set e = grid[di].get(p) if grid.get(di) is not none else None %}
+    <li class="{{ 'free' if not (e and e.subject) }}"{{ _cc(e) }}><span class="n">{{ p }}</span>
+      {% if e and e.subject %}<span class="t"><b>{{ e.subject.name }}</b><small>{% if who == 'class' %}{{ e.class_name }} {{ e.arm_name }}{% else %}{{ e.teacher.name if e.teacher else 'No teacher' }}{% endif %}</small></span>{% if e.is_locked %}<i class="fas fa-lock" aria-label="Locked"></i>{% endif %}
+      {% else %}<span class="t"><small>Free</small></span>{% endif %}</li>
+    {% if p == break_after %}<li class="brk"><span class="n"></span><span class="t"><small>Break</small></span></li>{% endif %}
+    {% endfor %}
+  </ol>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{# The day-tab behaviour; include once per page that uses gx_timetable. #}
+{% macro gx_timetable_js() %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var today = (new Date().getDay() + 6) % 7;          // Mon = 0
+  var start = today < 5 ? today : 0;
+  function pick(root, d) {
+    root.setAttribute('data-show', d);
+    root.querySelectorAll('.gtt-days button').forEach(function (b) {
+      b.setAttribute('aria-selected', String(+b.getAttribute('data-day') === d));
+    });
+  }
+  document.querySelectorAll('[data-gtt]').forEach(function (root) {
+    pick(root, start);
+    root.querySelectorAll('.gtt-days button').forEach(function (b) {
+      b.addEventListener('click', function () { pick(root, +b.getAttribute('data-day')); });
+    });
+    // Swipe left / right between days on phones.
+    var x0 = null;
+    root.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    root.addEventListener('touchend', function (e) {
+      if (x0 === null) return;
+      var dx = e.changedTouches[0].clientX - x0; x0 = null;
+      if (Math.abs(dx) < 60) return;
+      var n = root.querySelectorAll('.gtt-days button').length;
+      var d = +root.getAttribute('data-show') + (dx < 0 ? 1 : -1);
+      if (d >= 0 && d < n) pick(root, d);
+    }, { passive: true });
+  });
+})();
+</script>
+{% endmacro %}

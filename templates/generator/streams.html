@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Streams - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Streams</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('classes') }}
 <div class="page-header">
     <h1>Streams</h1>
     {% if can_write_sub('timetable', 'generator_structure') %}<a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>{% endif %}
@@ -50,4 +58,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

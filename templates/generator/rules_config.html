@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Timetable Rules - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <span>Rules</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:860px;margin:0 auto}
 
@@ -81,6 +85,8 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('rules') }}
 <div class="content-narrow">
   <div class="rl-head">
     <div class="rl-ic"><i class="fas fa-cogs"></i></div>
@@ -347,4 +353,5 @@ function selectAllDaySepSubjects(checked) {
     });
 })();
 </script>
+</div>
 {% endblock %}

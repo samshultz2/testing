@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Per-Class Subject Config - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Class Subject Config</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('subjects') }}
 <div class="page-header">
     <h1>Per-Class Subject Configuration</h1>
 </div>
@@ -51,5 +59,6 @@
             <li>During generation, class-specific settings take priority over global defaults</li>
         </ol>
     </div>
+</div>
 </div>
 {% endblock %}

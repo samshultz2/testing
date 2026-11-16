@@ -326,7 +326,7 @@ def test_teacher_timetable_download_all_link_present(app):
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert 'print_all_teacher_timetables_pdf' in body or 'print-all-pdf' in body
-    assert 'Download All' in body
+    assert 'Download all' in body
 
 
 def test_teacher_timetable_defaults_to_active_batch_not_just_latest(app):

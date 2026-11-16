@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}{{ subject.name }} rules - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.subjects_config') }}">Timetable subjects</a> / <span>{{ subject.name }}</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .sr-card{max-width:900px}
 .sr-row{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;padding:.55rem 0;border-bottom:1px dashed var(--border-color)}
@@ -17,6 +21,8 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('subjects') }}
 <div class="page-header">
     <div>
         <h1>{{ subject.name }} <span class="pill">{{ level|upper }}</span></h1>
@@ -120,4 +126,5 @@ document.querySelectorAll('.usedef-chk').forEach(function(chk){
     });
 });
 </script>
+</div>
 {% endblock %}

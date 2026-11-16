@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Edit Subject - {{ level|upper }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <a href="{{ url_for('generator.subjects_config') }}">Subjects</a> / <span>Edit</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('subjects') }}
 <div class="page-header">
     <h1><i class="fas fa-edit"></i> Edit {{ level|upper }} Subject</h1>
 </div>
@@ -47,5 +55,6 @@
         </form>
         {% endif %}
     </div>
+</div>
 </div>
 {% endblock %}

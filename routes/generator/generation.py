@@ -1084,9 +1084,15 @@ def teacher_timetable():
 @login_required
 def master_timetable():
     batch_id = request.args.get('batch_id')
-    selected_day = request.args.get('day', type=int, default=0)
+    from datetime import date as _date
+    _wd = _date.today().weekday()
+    selected_day = request.args.get('day', type=int, default=_wd if _wd < 5 else 0)
     selected_period = request.args.get('period', type=int, default=1)
-    
+
+    if not batch_id:
+        from models import ActiveTimetableBatch
+        from utils.branch_scope import viewing_branch_id
+        batch_id = ActiveTimetableBatch.active_batch_id(viewing_branch_id(), get_current_level())
     if not batch_id:
         latest = GenTimetableResult.query.filter_by(branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
         if latest:

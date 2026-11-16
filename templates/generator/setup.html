@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Generator Setup - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Setup Guide</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('home') }}
 <div class="page-header">
     <div>
         <h1><i class="fas fa-list-check"></i> Timetable Generator — Setup Guide</h1>
@@ -42,5 +50,6 @@
         <div class="alert alert-success" style="margin-top:1rem;"><i class="fas fa-check"></i> You're ready — generate a timetable, review it, then apply it to the class timetables. Applying always backs up the current timetable first, so it can be restored.</div>
         {% endif %}
     </div>
+</div>
 </div>
 {% endblock %}

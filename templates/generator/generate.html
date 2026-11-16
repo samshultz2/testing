@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Generate Timetable - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Generate</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 /* Generate Timetables page — a compact "review + act" screen: a readiness
    banner up top, swipeable stat chips, rule chips, a selectable class grid
@@ -132,6 +136,8 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('generate') }}
 <div class="gen-head">
     <div class="eyebrow"><i class="fas fa-graduation-cap"></i> {{ level|upper }} · Timetable Generator</div>
     <h1><span class="ic"><i class="fas fa-wand-magic-sparkles"></i></span> Generate Timetables</h1>
@@ -350,4 +356,5 @@ document.addEventListener('DOMContentLoaded', syncSelectedMethod);
     if (form) form.addEventListener('submit', syncSelectedMethod);
 })();
 </script>
+</div>
 {% endblock %}

@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}{{ class_config.class_name }} Stream Subjects - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.classes_config') }}">Classes</a> / <a href="{{ url_for('generator.edit_class_config', class_id=class_config.id) }}">{{ class_config.class_name }}</a> / <span>Stream Subjects</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:860px;margin:0 auto}
 
@@ -66,6 +70,8 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('subjects') }}
 <div class="content-narrow">
   <a href="{{ url_for('generator.class_subjects_config', class_id=class_config.id) }}" class="cp-back">
     <i class="fas fa-arrow-left"></i> Back to {{ class_config.class_name }} Subjects
@@ -188,5 +194,6 @@
     </div>
   </div>
   {% endif %}
+</div>
 </div>
 {% endblock %}

@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Edit {{ class_name }} {{ arm_name }} - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.view_results', batch_id=batch_id) }}">Results</a> / <span>Edit</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('timetables') }}
 <div class="page-header">
     <h1>Edit {{ class_name }} {{ arm_name }}</h1>
 </div>
@@ -73,5 +81,6 @@
             <li>Check the <a href="{{ url_for('generator.clash_report', batch_id=batch_id) }}">Clash Report</a> after editing</li>
         </ul>
     </div>
+</div>
 </div>
 {% endblock %}

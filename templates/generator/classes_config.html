@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Classes - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Classes</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:860px;margin:0 auto}
 
@@ -51,6 +55,8 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="gx">
+{{ gx_nav('classes') }}
 <div class="content-narrow">
   <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="cl-back">
     <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
@@ -139,5 +145,6 @@
     </div>
   </div>
   {% endif %}
+</div>
 </div>
 {% endblock %}

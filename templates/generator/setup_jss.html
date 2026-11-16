@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Setup JSS Classes - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.classes_config') }}">Classes</a> / <span>Setup JSS</span>{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('home') }}
 <div class="page-header">
     <h1><i class="fas fa-magic"></i> Quick Setup: JSS Classes</h1>
 </div>
@@ -62,5 +70,6 @@
             <li class="mb-2"><strong>Generate</strong> - Select JSS classes when generating the timetable</li>
         </ol>
     </div>
+</div>
 </div>
 {% endblock %}

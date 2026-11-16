@@ -1,136 +1,107 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}View Timetables - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.results_list') }}">Results</a> / <span>{{ batch_id }}</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <h1>Timetables - Batch #{{ batch_id }}</h1>
-</div>
-
-<div class="page-header-actions mb-3">
-    <a href="{{ url_for('generator.print_results', batch_id=batch_id) }}" data-cache-bust class="btn btn-success"><i class="fas fa-print"></i> Print All</a>
-    <button type="button" class="btn btn-success" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-list-check"></i> Export / Print (choose paper size)…</button>
-    <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chalkboard-teacher"></i> Teacher View</a>
-    <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Reports</a>
-    {% if can_generate_timetable and can_write_sub('timetable', 'generator_results_manage') %}
-    <form method="POST" action="{{ url_for('generator.apply_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Publish this timetable into the class timetable views for the ACTIVE term? This replaces any existing entries for the classes it covers.">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-dark"><i class="fas fa-share-square"></i> Apply to Class Timetables</button>
-    </form>
-    {% endif %}
-    {% if can_write_sub('timetable', 'generator_results_delete') %}
-    <form method="POST" action="{{ url_for('generator.delete_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Delete this batch?">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
-    </form>
-    {% endif %}
-</div>
-
-<div class="card mb-3" id="print-select-panel" style="display: none;">
-    <div class="card-header"><h3><i class="fas fa-list-check"></i> Print / Export Selected Class-Arms</h3></div>
-    <div class="card-body">
-        <p class="text-muted mb-3">Pick which class-arms go into the document — e.g. for a combined class
-            that's co-scheduled (same periods, just a different elective per arm), include only one arm instead of
-            two near-identical tables. Applies to print and every export below.</p>
-        <form method="GET" action="{{ url_for('generator.print_results', batch_id=batch_id) }}" id="print-select-form">
-            <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
-                {% for key, tt in timetables.items() %}
-                <label class="checkbox-label" style="padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
-                    <input type="checkbox" name="arm" value="{{ tt.class_name }}|{{ tt.arm_name }}" checked>
-                    <span><strong>{{ tt.class_name }}</strong> {{ tt.arm_name }}</span>
-                </label>
-                {% endfor %}
-            </div>
-            <div class="page-header-actions mt-3" style="align-items: center;">
-                <label class="text-muted text-sm" style="display: flex; align-items: center; gap: 0.4rem;">Paper
-                    <select name="paper" id="paper-select" class="form-control form-control-sm" style="width: auto;">
-                        <option value="a4">A4</option>
-                        <option value="a3">A3</option>
-                    </select>
-                </label>
-                <label class="text-muted text-sm" id="layout-label" style="display: none; align-items: center; gap: 0.4rem;">Layout
-                    <select name="layout" id="layout-select" class="form-control form-control-sm" style="width: auto;">
-                        <option value="single">One day per page</option>
-                        <option value="packed">Optimized — 2 days per page</option>
-                    </select>
-                </label>
-            </div>
-            <input type="hidden" name="_cb" id="cache-bust-field" value="0">
-            <div class="page-header-actions mt-2">
-                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="true">Select All</button>
-                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="false">Deselect All</button>
-                <button type="submit" class="btn btn-success"><i class="fas fa-print"></i> Print Selected</button>
-                <button type="submit" formaction="{{ url_for('generator.export_results', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-download"></i> Excel (by Class)</button>
-                <button type="submit" formaction="{{ url_for('generator.export_results_by_day', batch_id=batch_id) }}" class="btn btn-primary"><i class="fas fa-calendar-day"></i> Excel (by Day)</button>
-                <button type="submit" formaction="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (by Day)</button>
-                <button type="submit" formaction="{{ url_for('generator.export_image', batch_id=batch_id) }}" class="btn btn-warning"><i class="fas fa-image"></i> Image (PNG)</button>
-            </div>
-            <p class="text-muted text-sm mt-1" style="margin-bottom: 0;">Paper size applies to the Excel and PDF
-                exports above (Image and Print use the browser's own paper setting). The "2 days per page" layout
-                is only offered on A3 — on A4 there isn't room to keep two days readable on one sheet.</p>
+<div class="gx">
+{{ gx_nav('timetables') }}
+{{ gx_sub('classes', batch_id) }}
+{% set first = (timetables.values()|list)[0] if timetables else None %}
+<header class="rs-head">
+  <span class="rs-head-ic"><i class="fas fa-table-cells" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>Class timetables</h1><p>{{ timetables|length }} class-arm{{ 's' if timetables|length != 1 }} · batch {{ batch_id }}</p></div>
+  <div class="rs-head-a">
+    <a href="{{ url_for('generator.print_results', batch_id=batch_id) }}" data-cache-bust class="rs-btn primary"><i class="fas fa-print" aria-hidden="true"></i><span class="rs-hide-sm">Print all</span></a>
+    <details class="gx-more">
+      <summary class="rs-btn" aria-label="More actions"><i class="fas fa-ellipsis" aria-hidden="true"></i><span class="rs-hide-sm">More</span></summary>
+      <div class="gx-more-pop" role="menu">
+        <button type="button" role="menuitem" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-file-export" aria-hidden="true"></i> Export or print chosen classes…</button>
+        <a role="menuitem" href="{{ url_for('generator.reports_index', batch_id=batch_id) }}"><i class="fas fa-chart-column" aria-hidden="true"></i> Reports for this timetable</a>
+        {% if can_generate_timetable and can_write_sub('timetable', 'generator_results_manage') %}
+        <form method="POST" action="{{ url_for('generator.apply_results', batch_id=batch_id) }}" data-confirm="Publish this timetable into the class timetable views for the ACTIVE term? This replaces any existing entries for the classes it covers.">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" role="menuitem"><i class="fas fa-share-from-square" aria-hidden="true"></i> Publish to class timetables</button>
         </form>
+        {% endif %}
+        {% if can_write_sub('timetable', 'generator_results_delete') %}
+        <form method="POST" action="{{ url_for('generator.delete_results', batch_id=batch_id) }}" data-confirm="Delete this batch?">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" role="menuitem" class="danger"><i class="fas fa-trash-can" aria-hidden="true"></i> Delete this timetable</button>
+        </form>
+        {% endif %}
+      </div>
+    </details>
+  </div>
+</header>
+
+<section class="rs-card" id="print-select-panel" style="display:none">
+  <div class="rs-card-h"><h3><i class="fas fa-file-export" aria-hidden="true"></i> Export or print chosen classes</h3></div>
+  <p class="rs-muted" style="margin:.2rem 0 .8rem">Pick which class-arms go into the document — e.g. for a combined class that's co-scheduled, include only one arm instead of two near-identical tables.</p>
+  <form method="GET" action="{{ url_for('generator.print_results', batch_id=batch_id) }}" id="print-select-form">
+    <div class="rs-chips gx-arms">
+      {% for key, tt in timetables.items() %}
+      <label class="rs-check gx-armck"><input type="checkbox" name="arm" value="{{ tt.class_name }}|{{ tt.arm_name }}" checked> {{ tt.class_name }} {{ tt.arm_name }}</label>
+      {% endfor %}
     </div>
-</div>
+    <div class="gx-exp-row">
+      <button type="button" class="rs-btn ghost sm" data-call="selectAllArms" data-args="true">Select all</button>
+      <button type="button" class="rs-btn ghost sm" data-call="selectAllArms" data-args="false">Clear</button>
+      <label class="rs-sel"><span>Paper</span><select name="paper" id="paper-select"><option value="a4">A4</option><option value="a3">A3</option></select></label>
+      <label class="rs-sel" id="layout-label" style="display:none"><span>Layout</span><select name="layout" id="layout-select"><option value="single">One day per page</option><option value="packed">2 days per page</option></select></label>
+    </div>
+    <input type="hidden" name="_cb" id="cache-bust-field" value="0">
+    <div class="gx-exp-row">
+      <button type="submit" class="rs-btn primary"><i class="fas fa-print" aria-hidden="true"></i> Print</button>
+      <button type="submit" formaction="{{ url_for('generator.export_results', batch_id=batch_id) }}" class="rs-btn"><i class="fas fa-file-excel" aria-hidden="true"></i> Excel by class</button>
+      <button type="submit" formaction="{{ url_for('generator.export_results_by_day', batch_id=batch_id) }}" class="rs-btn"><i class="fas fa-calendar-day" aria-hidden="true"></i> Excel by day</button>
+      <button type="submit" formaction="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="rs-btn"><i class="fas fa-file-pdf" aria-hidden="true"></i> PDF by day</button>
+      <button type="submit" formaction="{{ url_for('generator.export_image', batch_id=batch_id) }}" class="rs-btn"><i class="fas fa-image" aria-hidden="true"></i> Image</button>
+    </div>
+    <p class="rs-muted bx-small" style="margin:.4rem 0 0">Paper size applies to Excel and PDF. "2 days per page" is offered on A3 only.</p>
+  </form>
+</section>
+
+{% if timetables|length > 1 %}
+<nav class="gx-pick" aria-label="Class">
+  <a href="#all" data-arm="all">All</a>
+  {% for key, tt in timetables.items() %}<a href="#{{ key }}" data-arm="{{ key }}">{{ tt.class_name }} {{ tt.arm_name }}</a>{% endfor %}
+</nav>
+{% endif %}
 
 {% for key, tt in timetables.items() %}
-<div class="card mb-3">
-    <div class="card-header">
-        <h3>{{ tt.class_name }} {{ tt.arm_name }}</h3>
-        <div>
-            {% if can_write_sub('timetable', 'generator_results_manage') %}
-            <a href="{{ url_for('generator.edit_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" class="btn btn-primary btn-sm">
-                <i class="fas fa-edit"></i> Edit
-            </a>
-            {% endif %}
-            <a href="{{ url_for('generator.print_single_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" data-cache-bust class="btn btn-success btn-sm">
-                <i class="fas fa-print"></i> Print
-            </a>
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th style="width: 80px;">Period</th>
-                    {% for day in days %}
-                    <th>{{ day }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for period in range(1, periods_per_day + 1) %}
-                <tr>
-                    <td><strong>{{ period }}</strong></td>
-                    {% for day_idx in range(5) %}
-                    {% set entry = tt.grid[day_idx].get(period) %}
-                    <td style="text-align: center;">
-                        {% if entry and entry.subject %}
-                        <strong>{{ entry.subject.short_name or entry.subject.name }}</strong>
-                        {% if entry.teacher %}
-                        <br><small class="text-muted">{{ entry.teacher.name }}</small>
-                        {% endif %}
-                        {% if entry.is_locked %}<br><i class="fas fa-lock" style="font-size: 0.7rem; color: var(--text-muted);"></i>{% endif %}
-                        {% else %}
-                        <span class="text-muted">-</span>
-                        {% endif %}
-                    </td>
-                    {% endfor %}
-                </tr>
-                {% if period == break_after_period %}
-                <tr style="background: var(--border-color);">
-                    <td><strong>-</strong></td>
-                    {% for day in days %}
-                    <td style="text-align: center; color: var(--text-muted);"><em>BREAK</em></td>
-                    {% endfor %}
-                </tr>
-                {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+{% set acts %}
+  {% if can_write_sub('timetable', 'generator_results_manage') %}<a href="{{ url_for('generator.edit_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" class="rs-btn sm"><i class="fas fa-pen" aria-hidden="true"></i> Edit</a>{% endif %}
+  <a href="{{ url_for('generator.print_single_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" data-cache-bust class="rs-btn sm ghost"><i class="fas fa-print" aria-hidden="true"></i> Print</a>
+{% endset %}
+<div class="gx-tt" id="{{ key }}" data-arm="{{ key }}">
+  {{ gx_timetable(tt.grid, days, periods_per_day, break_after_period, 'teacher', tt.class_name ~ ' ' ~ tt.arm_name, acts) }}
 </div>
 {% endfor %}
+{{ gx_timetable_js() }}
 
 <script nonce="{{ csp_nonce }}">
+(function () {
+  var pick = document.querySelector('.gx-pick');
+  if (!pick) return;
+  function show(arm) {
+    pick.querySelectorAll('a').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-arm') === arm); });
+    document.querySelectorAll('.gx-tt').forEach(function (t) { t.hidden = !(arm === 'all' || t.getAttribute('data-arm') === arm); });
+  }
+  pick.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-arm]'); if (!a) return;
+    e.preventDefault(); show(a.getAttribute('data-arm'));
+    try { history.replaceState(null, '', '#' + a.getAttribute('data-arm')); } catch (x) {}
+  });
+  var h = (location.hash || '').slice(1);
+  var first = pick.querySelector('a[data-arm]:not([data-arm="all"])');
+  show(h && document.querySelector('.gx-tt[data-arm="' + h + '"]') || h === 'all' ? h : first.getAttribute('data-arm'));
+})();
+
 function toggleSection(id) {
     const el = document.getElementById(id);
     if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
@@ -164,4 +135,5 @@ if (printSelectFormEl) {
     });
 }
 </script>
+</div>
 {% endblock %}

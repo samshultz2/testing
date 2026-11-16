@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}{{ level|upper }} Subjects - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Subjects</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+
 <style>
 .content-narrow{max-width:860px;margin:0 auto}
 
@@ -75,6 +79,8 @@
 {% endblock %}
 
 {% block content %}
+<div class="gx">
+{{ gx_nav('subjects') }}
 {% set configured_count = subjects_data|selectattr('config')|list|length %}
 {% set total_count = subjects_data|length %}
 {% set category_badge = {'core':'badge-success','science':'badge-info','arts':'badge-primary','commercial':'badge-warning','vocational':'badge-secondary'} %}
@@ -226,5 +232,6 @@
     {% endif %}
   </div>
   {% endif %}
+</div>
 </div>
 {% endblock %}

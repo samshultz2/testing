@@ -1,7 +1,15 @@
 {% extends "base.html" %}
+{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
 {% block title %}Period Count Report - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Period Count</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="gx">
+{{ gx_nav('reports') }}
 <div class="page-header">
     <h1>Period Count Report</h1>
     <div class="page-header-actions">
@@ -67,5 +75,6 @@
         <span class="badge badge-info">Blue</span> = Over-assigned &nbsp;
         <span class="text-muted">-</span> = Not assigned
     </div>
+</div>
 </div>
 {% endblock %}
