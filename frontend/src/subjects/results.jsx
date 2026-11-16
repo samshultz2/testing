@@ -1244,3 +1244,119 @@ export function Affective({ d, notify }) {
     </div>
   );
 }
+
+// ---- Print a class's report cards ------------------------------------------
+// Pick the class, see at a glance who is ready (scores + both comments), tick
+// the students to print, then open one PDF (same layout as a single card) to
+// print, or download it.
+export function PrintAll({ d }) {
+  const nav = useNav();
+  const phone = usePhone();
+  const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, assignment_id: d.assignment_id, ...extra });
+  const pm = Number(d.pass_mark) || 50;
+  const all = d.students || [];
+  const ready = (s) => s.scored > 0 && s.teacher_comment && s.principal_comment;
+  const [picked, setPicked] = useState(() => new Set(all.filter((s) => s.scored > 0).map((s) => s.id)));
+  useEffect(() => { setPicked(new Set(all.filter((s) => s.scored > 0).map((s) => s.id))); }, [d.students]); // eslint-disable-line
+  const [show, setShow] = useState('all');
+  const [q, setQ] = useState('');
+  const noScores = all.filter((s) => !s.scored);
+  const noComment = all.filter((s) => s.scored && !(s.teacher_comment && s.principal_comment));
+  const partial = all.filter((s) => s.scored && d.n_subjects && s.scored < d.n_subjects);
+  const nReady = all.filter(ready).length;
+  const term = q.trim().toLowerCase();
+  const list = all.filter((s) => (!term || (s.full_name + ' ' + s.student_id).toLowerCase().includes(term))
+    && (show === 'all' || (show === 'ready' && ready(s)) || (show === 'attn' && !ready(s))));
+  const toggle = (id) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allShownOn = list.length > 0 && list.every((s) => picked.has(s.id));
+  const toggleShown = () => setPicked((p) => { const n = new Set(p); list.forEach((s) => (allShownOn ? n.delete(s.id) : n.add(s.id))); return n; });
+  const withScores = all.filter((s) => s.scored > 0);
+  const everyone = withScores.length > 0 && withScores.every((s) => picked.has(s.id)) && picked.size === withScores.length;
+  const pdf = (inline) => {
+    const ids = everyone ? '' : `&ids=${[...picked].join(',')}`;
+    return `${d.pdf_url}${ids}${inline ? '&inline=1' : ''}`;
+  };
+  const f = (d.nav && d.nav.flow) || {};
+  return (
+    <div className={'rs' + (phone && d.selected && all.length ? ' has-bar' : '')}>
+      <Head icon="fa-print" title="Print report cards" sub={subLine(d) || 'A whole class in one PDF'} />
+      <Picker d={d} go={go} />
+      {!d.selected ? (
+        <Blank icon="fa-hand-pointer" title="Choose a class"><p>Pick the term and class above. You’ll see who is ready, then print the whole class in one go.</p></Blank>
+      ) : !all.length ? (
+        <Blank icon="fa-users-slash" title="No students in this class"><p>Add students to {d.selected_label} first.</p></Blank>
+      ) : (
+        <>
+          <Tiles items={[
+            { label: 'Students', value: all.length, sub: d.n_subjects ? `${d.n_subjects} subjects` : '' },
+            { label: 'Ready to print', value: `${nReady}/${all.length}`, sub: 'Scores + both comments', tone: nReady === all.length ? 'good' : '' },
+            { label: 'No scores yet', value: noScores.length, sub: noScores.length ? 'Can’t be printed' : 'Everyone has results', tone: noScores.length ? 'bad' : 'good' },
+            { label: 'Missing comments', value: noComment.length, tone: noComment.length ? 'mid' : 'good' },
+          ]} />
+          {(noScores.length > 0 || noComment.length > 0 || partial.length > 0) && (
+            <section className="rs-card rpa-check">
+              <div className="rs-card-h"><h3><i className="fas fa-clipboard-check" aria-hidden="true" />Before you print</h3></div>
+              <ul>
+                {noScores.length > 0 && <li className="bad"><i className="fas fa-circle-xmark" aria-hidden="true" />
+                  <span><b>{noScores.length} student{noScores.length === 1 ? ' has' : 's have'} no scores</b> — their cards are left out.</span>
+                  {f.scores && <a href={f.scores} className="rs-btn sm ghost">Enter scores</a>}</li>}
+                {partial.length > 0 && <li className="mid"><i className="fas fa-triangle-exclamation" aria-hidden="true" />
+                  <span><b>{partial.length}</b> with scores in only some subjects.</span>
+                  {f.broadsheet && <a href={f.broadsheet} className="rs-btn sm ghost">Check broadsheet</a>}</li>}
+                {noComment.length > 0 && <li className="mid"><i className="fas fa-comment-slash" aria-hidden="true" />
+                  <span><b>{noComment.length}</b> missing a teacher or principal comment.</span>
+                  {f.comments && <a href={f.comments} className="rs-btn sm ghost">Write comments</a>}</li>}
+              </ul>
+            </section>
+          )}
+          <div className="rs-toolbar">
+            <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+              <input type="search" placeholder="Find a student" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a student" /></label>
+            <Seg label="Show" value={show} onChange={setShow} options={[
+              { value: 'all', label: 'All', count: all.length },
+              { value: 'ready', label: 'Ready', count: nReady },
+              { value: 'attn', label: phone ? 'To fix' : 'Needs attention', count: all.length - nReady }]} />
+          </div>
+          <section className="rs-card rpa-list">
+            <label className="rpa-all rs-check">
+              <input type="checkbox" checked={allShownOn} onChange={toggleShown} />
+              {allShownOn ? 'Untick' : 'Tick'} {list.length === all.length ? 'everyone' : `these ${list.length}`}
+              <small>{picked.size} of {all.length} chosen</small>
+            </label>
+            {list.map((s) => (
+              <div key={s.id} className={'rpa-row' + (picked.has(s.id) ? ' sel' : '') + (!s.scored ? ' off' : '')}>
+                <input type="checkbox" checked={picked.has(s.id)} disabled={!s.scored} onChange={() => toggle(s.id)} aria-label={'Include ' + s.full_name} />
+                <Avatar name={s.full_name} gender={s.gender} />
+                <div className="rpa-who"><b>{s.full_name}</b>
+                  <small>{s.student_id}{d.n_subjects ? ` · ${s.scored}/${d.n_subjects} subjects` : ''}</small>
+                  <span className="rpa-flags">
+                    {!s.scored && <em className="bad">No scores</em>}
+                    {s.scored > 0 && !s.teacher_comment && !s.principal_comment && <em className="mid">No comments</em>}
+                    {s.scored > 0 && !s.teacher_comment && s.principal_comment && <em className="mid">No teacher comment</em>}
+                    {s.scored > 0 && s.teacher_comment && !s.principal_comment && <em className="mid">No principal comment</em>}
+                    {ready(s) && <em className="good"><i className="fas fa-check" aria-hidden="true" /> Ready</em>}
+                  </span>
+                </div>
+                <div className="rpa-avg">
+                  {s.average != null ? <><b className={tone(s.average, pm)}>{fmtNum(s.average)}</b><small>{s.position ? `${ordinal(s.position)} in class` : 'average'}</small></> : <small>—</small>}
+                </div>
+                <div className="rpa-a">
+                  <a href={s.card_url} className="rs-btn sm ghost" aria-label={'View ' + s.full_name + '’s card'}><i className="fas fa-eye" aria-hidden="true" /><span className="rs-hide-sm">View</span></a>
+                  {s.scored > 0 && <a href={s.pdf_url} data-native="" className="rs-btn sm ghost" aria-label={'Download ' + s.full_name + '’s PDF'}><i className="fas fa-file-pdf" aria-hidden="true" /></a>}
+                </div>
+              </div>
+            ))}
+            {!list.length && <p className="rs-muted rs-pad">No students match.</p>}
+          </section>
+          <Bar>
+            <span className="rs-bar-t"><b>{picked.size} card{picked.size === 1 ? '' : 's'}</b><small>{everyone ? 'Whole class' : 'Chosen students'} · one per page</small></span>
+            <a href={picked.size ? pdf(false) : undefined} aria-disabled={!picked.size} data-native="" className={'rs-btn' + (picked.size ? '' : ' disabled')}>
+              <i className="fas fa-download" aria-hidden="true" /><span className="rs-hide-sm">Download PDF</span></a>
+            <a href={picked.size ? pdf(true) : undefined} aria-disabled={!picked.size} target="_blank" rel="noopener" data-native="" className={'rs-btn primary' + (picked.size ? '' : ' disabled')}>
+              <i className="fas fa-print" aria-hidden="true" />Print</a>
+          </Bar>
+        </>
+      )}
+    </div>
+  );
+}

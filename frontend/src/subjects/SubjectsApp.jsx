@@ -3,7 +3,7 @@ import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 import { canWrite } from '../lib/perms';
-import { Workflow, Scores, BulkEntry, Broadsheet, Affective, Comments } from './results';
+import { Workflow, Scores, BulkEntry, Broadsheet, Affective, Comments, PrintAll } from './results';
 import { Analytics, Institution, Teacher, SubjectScorecard } from './analytics';
 import { List, SubjectForm, BulkAdd, ClassSubjects, Assign, EditClassSubject } from './catalog';
 import { Explore } from './explore';
@@ -23,7 +23,7 @@ function fmtNum(v) {
 const SCREENS = { list: List, add: SubjectForm, edit: SubjectForm, bulk_add: BulkAdd,
   class_subjects: ClassSubjects, assign: Assign, edit_class_subject: EditClassSubject,
   scores: Scores, workflow: Workflow, bulk_entry: BulkEntry, broadsheet: Broadsheet,
-  affective: Affective, comments: Comments, analytics: Analytics, institution: Institution,
+  affective: Affective, comments: Comments, print_all: PrintAll, analytics: Analytics, institution: Institution,
   teacher: Teacher, subject: SubjectScorecard, explore: Explore, combine: Combine };
 
 export default function SubjectsApp({ data }) {

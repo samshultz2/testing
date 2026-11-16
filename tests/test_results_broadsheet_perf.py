@@ -97,3 +97,33 @@ def test_single_and_batch_pdf_share_layout(app):
         one = report_card_pdf(student, rc, term, 'School', active_traits(), RATING_LABELS).read()
         many = batch_report_cards_pdf([(student, rc, term)], 'School', active_traits(), RATING_LABELS).read()
     assert one[:5] == b'%PDF-' and many[:5] == b'%PDF-'
+
+
+def test_print_all_payload_flags_readiness(app):
+    """The print page lists every student with how many subjects are scored,
+    so a teacher sees who would be left out before printing."""
+    ids = _setup(app)
+    sid = _student(app, ids, 'PRA_ON')
+    _seed_score(app, sid, ids, 64)
+    empty = _student(app, ids, 'PRA_OFF')
+    c = _admin(app)
+    d = c.get(f"/subjects/report-cards/print-all?term_id={ids['term']}&assignment_id={ids['asg']}",
+              headers={'Accept': 'application/json', 'X-Requested-With': 'fetch'}).get_json()
+    assert d['page'] == 'print_all' and d['pdf_url']
+    rows = {s['id']: s for s in d['students']}
+    assert rows[sid]['scored'] >= 1 and rows[empty]['scored'] == 0
+    assert rows[sid]['pdf_url'].endswith(f"term_id={ids['term']}")
+
+
+def test_batch_pdf_subset_and_inline(app):
+    ids = _setup(app)
+    a = _student(app, ids, 'PRA_A'); _seed_score(app, a, ids, 70)
+    b = _student(app, ids, 'PRA_B'); _seed_score(app, b, ids, 50)
+    c = _admin(app)
+    base = f"/subjects/report-cards/pdf?term_id={ids['term']}&assignment_id={ids['asg']}"
+    whole = c.get(base)
+    one = c.get(base + f"&ids={a}&inline=1")
+    assert one.status_code == 200 and one.data[:5] == b'%PDF-'
+    assert 'inline' in one.headers.get('Content-Disposition', '')
+    assert 'attachment' in whole.headers.get('Content-Disposition', '')
+    assert len(one.data) < len(whole.data)

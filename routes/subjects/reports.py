@@ -1406,6 +1406,10 @@ def report_cards_pdf_batch():
                    .options(joinedload(StudentEnrollment.student))
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                    .join(Student).order_by(Student.surname, Student.first_name).all())
+    # Optional subset: ?ids=1,2,3 prints just the chosen students.
+    picked = {int(x) for x in (request.args.get('ids') or '').split(',') if x.strip().isdigit()}
+    if picked:
+        enrollments = [e for e in enrollments if e.student_id in picked]
     cards = []
     for e in enrollments:
         _, rc = build_report_card(e.student_id, term_id)
@@ -1421,7 +1425,9 @@ def report_cards_pdf_batch():
     from utils.audit import log_action
     log_action('results.report_cards_pdf', detail=f'{asg.display_name} {term.name}: {len(cards)} card(s)')
     name = f"{asg.display_name.replace(' ', '_')}_{term.name.replace(' ', '_')}_report_cards.pdf"
-    return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=name)
+    # ?inline=1 opens the PDF in the browser's viewer, ready to print.
+    return send_file(buf, mimetype='application/pdf', as_attachment=not request.args.get('inline'),
+                     download_name=name)
 
 
 @subjects_bp.route('/broadsheet/export')
@@ -1671,17 +1677,16 @@ def blank_score_sheet():
 @login_required
 @result_card_required
 def print_all_report_cards():
-    """Print all report cards for a class"""
+    """Print a class's report cards: pick the class, see who is ready (scores,
+    comments), choose students, then open one PDF to print or download it.
+    The PDF uses the same renderer as a single report card, so every printed
+    card looks exactly like the student's own report card."""
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
-    
     terms = session_terms()
-    
     if not term_id:
         active_term = get_active_term()
-        if active_term:
-            term_id = active_term.id
-    
+        term_id = active_term.id if active_term else None
     selected_term = db.session.get(Term, term_id) if term_id else None
 
     # A user may only print report cards for classes they can access.
@@ -1689,100 +1694,60 @@ def print_all_report_cards():
         flash('You do not have access to that class.', 'error')
         return redirect(url_for('subjects.print_all_report_cards', term_id=term_id))
 
-    assignments = []
-    if term_id:
-        assignments = strip_sss3_third_term(filter_classes_for_user(
-            ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id)
-
+    assignments = (strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else [])
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    if selected_assignment and selected_assignment.term_id != term_id:
+        selected_assignment = None
 
-    all_reports = []
-    
+    students = []
+    n_subjects = 0
     if selected_assignment and selected_term:
-        assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
-        pass_mark = SchoolSettings.get('pass_mark', 50)
-        
         class_subjects = ClassSubject.query.filter_by(
-            term_id=term_id,
-            class_id=selected_assignment.class_id,
-            is_active=True
-        ).filter(
-            (ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected_assignment.arm_id)
-        ).join(Subject).order_by(Subject.name).all()
-        
-        from sqlalchemy.orm import joinedload
+            term_id=term_id, class_id=selected_assignment.class_id, is_active=True
+        ).filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected_assignment.arm_id)).all()  # noqa: E711
+        n_subjects = len(class_subjects)
         enrollments = (StudentEnrollment.query
-                       .options(joinedload(StudentEnrollment.student))
                        .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                        .join(Student).order_by(Student.surname, Student.first_name).all())
-
-        # Every score for the class in one query, indexed by (student,
-        # class-subject, assessment) — was a query per student × subject, the
-        # main cost when printing a whole class.
-        cs_ids = [cs.id for cs in class_subjects]
         sids = [e.student_id for e in enrollments]
-        score_map = {}
-        if cs_ids and sids:
-            for s in StudentScore.query.filter(
-                    StudentScore.student_id.in_(sids),
-                    StudentScore.class_subject_id.in_(cs_ids)).all():
-                score_map[(s.student_id, s.class_subject_id, s.assessment_type_id)] = s.score
-
-        for enrollment in enrollments:
-            student = enrollment.student
-            subjects_data = []
-            total_score = 0
-            subjects_passed = 0
-            subjects_failed = 0
-
-            for cs in class_subjects:
-                subject_row = {
-                    'subject': cs.subject,
-                    'assessments': {},
-                    'total': 0,
-                    'grade': '-',
-                    'remark': '-'
-                }
-
-                subject_total = 0
-                for at in assessment_types:
-                    score = score_map.get((student.id, cs.id, at.id))
-                    subject_row['assessments'][at.id] = score
-                    if score:
-                        subject_total += score
-                
-                subject_row['total'] = subject_total
-                if subject_total > 0:
-                    subject_row['grade'] = GradeScale.get_grade(subject_total)
-                    subject_row['remark'] = GradeScale.get_remark(subject_total)
-                    total_score += subject_total
-                    
-                    if subject_total >= pass_mark:
-                        subjects_passed += 1
-                    else:
-                        subjects_failed += 1
-                
-                subjects_data.append(subject_row)
-            
-            average = round(total_score / len(class_subjects), 2) if class_subjects else 0
-            
-            all_reports.append({
-                'student': student,
-                'enrollment': enrollment,
-                'subjects': subjects_data,
-                'assessment_types': assessment_types,
-                'total_score': total_score,
-                'average': average,
-                'overall_grade': GradeScale.get_grade(average) if average else '-',
-                'subjects_passed': subjects_passed,
-                'subjects_failed': subjects_failed,
-                'total_subjects': len(class_subjects)
+        cs_ids = [cs.id for cs in class_subjects]
+        scored = {}
+        if sids and cs_ids:
+            for sid, cnt in (db.session.query(StudentScore.student_id,
+                                              db.func.count(db.func.distinct(StudentScore.class_subject_id)))
+                             .filter(StudentScore.student_id.in_(sids),
+                                     StudentScore.class_subject_id.in_(cs_ids),
+                                     StudentScore.score.isnot(None))
+                             .group_by(StudentScore.student_id).all()):
+                scored[sid] = cnt
+        summ = ({ts.student_id: ts for ts in TermSummary.query.filter(
+            TermSummary.term_id == term_id, TermSummary.student_id.in_(sids)).all()} if sids else {})
+        for e in enrollments:
+            st, ts = e.student, summ.get(e.student_id)
+            students.append({
+                'id': st.id, 'full_name': st.full_name, 'student_id': st.student_id or '',
+                'gender': st.gender or '',
+                'average': round(ts.average_score, 1) if ts and ts.average_score is not None else None,
+                'position': ts.position_in_class if ts else None,
+                'scored': scored.get(st.id, 0),
+                'teacher_comment': bool(ts and (ts.teacher_comment or '').strip()),
+                'principal_comment': bool(ts and (ts.principal_comment or '').strip()),
+                'card_url': url_for('subjects.student_report_card', student_id=st.id, term_id=term_id),
+                'pdf_url': url_for('subjects.report_card_pdf', student_id=st.id, term_id=term_id),
             })
-    
-    school_name = SchoolSettings.get('school_name', 'School Name')
-    
-    return render_template('subjects/print_all_report_cards.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        assignments=assignments, assignment_id=assignment_id, selected_assignment=selected_assignment,
-        all_reports=all_reports, school_name=school_name
-    )
+
+    return _render({
+        'page': 'print_all', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'assignment_id': assignment_id if selected_assignment else '',
+        'selected': bool(selected_assignment),
+        'selected_label': selected_assignment.display_name if selected_assignment else '',
+        'term_label': selected_term.full_name if selected_term else '',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'students': students, 'n_subjects': n_subjects,
+        'pass_mark': SchoolSettings.get('pass_mark', 50),
+        'self_url': url_for('subjects.print_all_report_cards'),
+        'pdf_url': (url_for('subjects.report_cards_pdf_batch', term_id=term_id, assignment_id=assignment_id)
+                    if selected_assignment else ''),
+    })
