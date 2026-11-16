@@ -325,8 +325,14 @@ export default function ViewApp({ initial }) {
     att && att.url && { href: att.url, icon: 'fa-calendar-check', label: 'Attendance profile' },
     canEditStudent && { onClick: graduate, icon: s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate',
                         label: s.is_graduated ? 'Undo graduation' : 'Mark as graduate' },
-    { href: urls.list, icon: 'fa-arrow-left', label: 'Back to students' },
   ];
+  // Native-style back: return to wherever we came from inside the app (a class
+  // roster, search, a result page …), else to the student list.
+  const goBack = () => {
+    let same = false;
+    try { same = !!document.referrer && new URL(document.referrer).origin === window.location.origin; } catch (e) { /* ignore */ }
+    if (same && window.history.length > 1) window.history.back(); else window.location.href = urls.list;
+  };
 
   // ── Quick facts strip (tap → jumps to the tab that explains it) ──
   const jamb = (d.jamb || {}).latest;
@@ -392,6 +398,9 @@ export default function ViewApp({ initial }) {
 
   return (
     <div className={'sv' + (phone ? ' sv-phone' : '')}>
+      <button type="button" className="nav-back" onClick={goBack} aria-label="Back">
+        <i className="fas fa-chevron-left" aria-hidden="true" /><span>Students</span>
+      </button>
       {/* ── Profile header ── */}
       <header className="sv-head">
         <div className="sv-band" aria-hidden="true" />
