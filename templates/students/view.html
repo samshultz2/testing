@@ -139,6 +139,25 @@
 .sv-link { font-size: .84rem; font-weight: 600; color: var(--primary); text-decoration: none; }
 .sv-link:hover { text-decoration: underline; }
 .sv-empty { color: var(--text-muted); margin: .6rem 0 .2rem; font-size: .9rem; }
+.sv-sibs { margin-top: .7rem; display: flex; flex-direction: column; gap: .6rem; }
+.sv-sibs-h { display: flex; gap: .55rem; align-items: flex-start; margin: 0; font-size: .88rem; color: var(--text-secondary); }
+.sv-sibs-h i { color: var(--primary); margin-top: .2rem; }
+.sv-sib { border: 1.5px dashed color-mix(in srgb, var(--primary) 40%, var(--border-color)); border-radius: 14px; padding: .75rem .85rem;
+  background: color-mix(in srgb, var(--primary) 4%, var(--bg-card)); }
+.sv-sib-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .5rem; }
+.sv-sib-h a { color: inherit; text-decoration: none; } .sv-sib-h a:hover strong { color: var(--primary); }
+.sv-sib-h .text-muted { font-size: .78rem; }
+.sv-sib-tag { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: .1rem .45rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 14%, var(--bg-card)); color: var(--success); }
+.sv-sib ul { list-style: none; margin: .5rem 0 .65rem; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+.sv-sib li { display: flex; justify-content: space-between; gap: .6rem; font-size: .86rem; }
+.sv-sib li span { color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-sib li b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sv-sib-a { display: flex; gap: .5rem; flex-wrap: wrap; }
+.sv-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; height: 40px; padding: 0 .9rem; border-radius: 11px;
+  border: 1.5px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.sv-btn.primary { flex: 1; background: var(--primary); border-color: var(--primary); color: #fff; }
+.sv-btn:disabled { opacity: .6; cursor: default; }
 .sv-empty .fa-circle-check { color: var(--success); }
 .sv-pill { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: .12rem .55rem; white-space: nowrap;
   background: var(--gray-100); color: var(--text-secondary); }

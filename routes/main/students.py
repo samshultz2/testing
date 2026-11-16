@@ -489,6 +489,47 @@ def api_student_view(student_id):
     return jsonify(_student_view_payload(student))
 
 
+def _sibling_pair_or_error(student_id, other_id):
+    """Both students, if the user may edit this one and see the other."""
+    perms = current_section_perms()
+    if not perms['subs'].get('edit', {}).get('write', False):
+        return None, None, ('You don\'t have permission to edit students.', 403)
+    student, err = _student_or_redirect(student_id)
+    other, err2 = _student_or_redirect(other_id) if not err else (None, None)
+    if err or err2 or student.id == other.id:
+        return None, None, ((err or err2 or ('', 'Pick a different student.'))[1], 403)
+    return student, other, None
+
+
+@main_bp.route('/students/<int:student_id>/contacts/copy-from/<int:other_id>', methods=['POST'])
+@login_required
+def copy_sibling_contacts(student_id, other_id):
+    """Copy a likely sibling's parent/guardian contacts onto this student."""
+    from utils.sibling_contacts import copy_contacts
+    student, other, err = _sibling_pair_or_error(student_id, other_id)
+    if err:
+        return jsonify({'ok': False, 'error': err[0]}), err[1]
+    added = copy_contacts(other, student)
+    db.session.commit()
+    log_action('student.contacts_copied',
+               detail=f'{added} contact(s) copied from {other.full_name} ({other.student_id}) '
+                      f'to {student.full_name} ({student.student_id})')
+    return jsonify({'ok': True, 'added': added})
+
+
+@main_bp.route('/students/<int:student_id>/not-sibling/<int:other_id>', methods=['POST'])
+@login_required
+def not_siblings(student_id, other_id):
+    """Stop suggesting this pupil's contacts: they aren't siblings."""
+    from utils.sibling_contacts import mark_not_siblings
+    student, other, err = _sibling_pair_or_error(student_id, other_id)
+    if err:
+        return jsonify({'ok': False, 'error': err[0]}), err[1]
+    mark_not_siblings(student.id, other.id)
+    log_action('student.not_siblings', detail=f'{student.full_name} / {other.full_name}')
+    return jsonify({'ok': True})
+
+
 @main_bp.route('/students/<int:student_id>/photo')
 @login_required
 def student_photo(student_id):

@@ -2389,6 +2389,20 @@ def _student_audit_history(sid, limit=50):
     return out
 
 
+def _sibling_suggestions(student):
+    try:
+        from utils.sibling_contacts import suggestions
+        out = suggestions(student)
+    except Exception:
+        db.session.rollback()
+        return []
+    for r in out:
+        r['url'] = url_for('main.view_student', student_id=r['id'])
+        r['copy_url'] = url_for('main.copy_sibling_contacts', student_id=student.id, other_id=r['id'])
+        r['not_url'] = url_for('main.not_siblings', student_id=student.id, other_id=r['id'])
+    return out
+
+
 def _student_view_payload(student):
     """Everything the student detail page shows, JSON-serialisable."""
     # Latest term first and, within a term, the class they're in NOW (a student
@@ -2448,6 +2462,8 @@ def _student_view_payload(student):
                     if student.has_medical and _can_medical() else None),
         'contacts': [{'name': c.name, 'is_primary': bool(c.is_primary),
                       'phone_number': c.phone_number, 'relationship': c.relationship} for c in contacts],
+        # No contacts yet: offer a same-surname pupil's (likely a sibling's).
+        'sibling_contacts': (_sibling_suggestions(student) if not contacts else []),
         'enrollments': [{'term': e.class_arm_assignment.term.name,
                          'session': (e.class_arm_assignment.term.session.name
                                      if e.class_arm_assignment.term.session else ''),

@@ -273,6 +273,7 @@ export default function ViewApp({ initial }) {
   const cur = (d.enrollments || [])[0];
   const curClass = cur ? [cur.class, cur.arm].filter(Boolean).join(' ') : '';
   const contacts = d.contacts || [];
+  const siblings = d.sibling_contacts || [];
   const primary = contacts.find((c) => c.is_primary) || contacts[0];
   const att = d.attendance;
   const asp = d.aspiration;
@@ -374,6 +375,34 @@ export default function ViewApp({ initial }) {
           ))}
         </ul>
       ) : <p className="sv-empty">No contacts added{canEditStudent ? ' — add a parent or guardian from Edit.' : '.'}</p>}
+      {!contacts.length && canEditStudent && siblings.length > 0 && (
+        <div className="sv-sibs">
+          <p className="sv-sibs-h"><i aria-hidden="true" className="fas fa-people-roof" />
+            <span><strong>Possible {siblings.length === 1 ? 'sibling' : 'siblings'}</strong> — same surname. Use their contacts?</span></p>
+          {siblings.map((sb) => (
+            <div className="sv-sib" key={sb.id}>
+              <div className="sv-sib-h">
+                <a href={sb.url}><strong>{sb.name}</strong></a>
+                <span className="text-muted">{sb.student_id}</span>
+                {sb.same_address && <span className="sv-sib-tag">Same address</span>}
+              </div>
+              <ul>
+                {sb.contacts.map((c, i) => (
+                  <li key={i}><span>{c.name || 'Contact'}{c.relationship ? ` · ${c.relationship}` : ''}</span><b>{c.phone_number}</b></li>
+                ))}
+              </ul>
+              <div className="sv-sib-a">
+                <button type="button" className="sv-btn primary" disabled={busy}
+                        onClick={() => run(sb.copy_url, {}, `Copied ${sb.contacts.length === 1 ? 'the contact' : sb.contacts.length + ' contacts'} from ${sb.name}.`)}>
+                  <i aria-hidden="true" className="fas fa-copy" /> Copy {sb.contacts.length === 1 ? 'contact' : 'contacts'}</button>
+                <button type="button" className="sv-btn" disabled={busy}
+                        onClick={() => run(sb.not_url, {}, `Got it — ${sb.name} won't be suggested again.`)}>
+                  Not siblings</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Section>
   );
 
