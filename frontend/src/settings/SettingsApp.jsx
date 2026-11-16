@@ -18,6 +18,24 @@ const SCREENS = {
   audit: Audit, ocr: Ocr,
 };
 
+// Native-app style back button on every settings page below the hub. Goes back
+// in history when we came from inside the app, else to the Settings hub.
+function BackBar() {
+  const nav = useNav();
+  const back = () => {
+    const st = window.history.state;
+    let sameSite = false;
+    try { sameSite = !!document.referrer && new URL(document.referrer).origin === window.location.origin; } catch (e) { /* ignore */ }
+    if ((st && st.spa) || sameSite) window.history.back();
+    else nav.go('/settings/');
+  };
+  return (
+    <button type="button" className="nav-back" onClick={back} aria-label="Back to Settings">
+      <i className="fas fa-chevron-left" aria-hidden="true" /><span>Settings</span>
+    </button>
+  );
+}
+
 export default function SettingsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
   const [msg, setMsg] = useState(null);
@@ -26,6 +44,7 @@ export default function SettingsApp({ data }) {
   return (
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
+        {d.page !== 'index' && <BackBar />}
         {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
         <Screen d={d} notify={notify} />
       </SectionShell>

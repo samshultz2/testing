@@ -16,12 +16,62 @@ const sTone = (v) => (v >= 70 ? 'a' : v >= 50 ? 'c' : v >= 40 ? 'd' : 'f');
 const SHORT = { 'English Language': 'English', 'Mathematics': 'Maths', 'General Mathematics': 'Maths', 'Christian Religious Studies': 'CRS',
   'Islamic Religious Studies': 'IRS', 'Literature in English': 'Literature', 'Agricultural Science': 'Agric', 'Further Mathematics': 'F. Maths',
   'Civic Education': 'Civic', 'Computer Studies': 'Computer', 'Data Processing': 'Data Proc.', 'Technical Drawing': 'Tech. Drawing',
-  'Food and Nutrition': 'Food & Nut.', 'Digital Technologies': 'Digital Tech', 'Livestock Farming': 'Livestock', 'Financial Accounting': 'Accounting' };
-const short = (n) => SHORT[n] || n || 'Pick subject';
+  'Food and Nutrition': 'Food & Nut.', 'Digital Technologies': 'Digital Tech', 'Livestock Farming': 'Livestock', 'Financial Accounting': 'Accounting',
+  // JSS3 BECE / Common Entrance
+  'English Studies': 'English', 'Basic Science': 'Basic Sci.', 'Basic Technology': 'Basic Tech.', 'National Values Education': 'NVE',
+  'Pre-Vocational Studies': 'PVS', 'Cultural and Creative Arts': 'CCA', 'Islamic Studies': 'IRS', 'Business Studies': 'Business',
+  'Basic Digital Literacy': 'Digital Lit.', 'Physical and Health Education': 'PHE', 'Security Education': 'Security Ed.',
+  'Home Economics': 'Home Econ.', 'Social Studies': 'Social St.', 'Basic Science and Technology': 'BST',
+  'Quantitative Reasoning': 'Quant.', 'Verbal Reasoning': 'Verbal', 'General Paper': 'Gen. Paper',
+  'Religion and National Values': 'RNV', 'Nigerian Language': 'Nig. Lang.' };
+const short = (n) => {
+  if (!n) return 'Pick subject';
+  if (SHORT[n]) return SHORT[n];
+  if (n.length <= 12) return n;
+  const caps = n.split(/\s+/).filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('');
+  return caps.length >= 2 ? caps : n.slice(0, 11) + '…';
+};
 const isEnglish = (n) => /english/i.test(n || '');
 const isMaths = (n) => /math/i.test(n || '') && !/further/i.test(n || '');
 
-function rulesFor(d) {
+// JSS3 BECE / Common Entrance: the board's own grade bands (A/B/C/P/F …),
+// or a score out of max that maps to a band.
+const KIND_TONE = { distinction: 'a', credit: 'c', pass: 'd', fail: 'f' };
+const bandOf = (d, g) => (d.bands || []).find((b) => b.grade === g);
+const gradeFromScore = (d, v) => {
+  if (v === '' || v == null || !d.bands) return '';
+  const pct = Math.max(0, Math.min(100, (+v / (d.max_subject || 100)) * 100));
+  const b = d.bands.find((x) => pct + 1e-9 >= +x.min);
+  return b ? b.grade : d.bands[d.bands.length - 1].grade;
+};
+const schoolTone = (d, g) => { const b = bandOf(d, g); return b ? KIND_TONE[b.kind] || '' : ''; };
+const isCredit = (d, g) => { const b = bandOf(d, g); return !!b && (b.kind === 'distinction' || b.kind === 'credit'); };
+
+function rulesFor(d, smode) {
+  if (d.exam === 'school' && smode === 'grade') {
+    const gs = d.grades || [];
+    return {
+      kind: 'grade', school: true,
+      hint: `Type the grade letter (${gs.join(', ')}) — the cursor moves on by itself.`,
+      clean: (v) => { const t = v.toUpperCase().replace(/[^A-Z]/g, ''); const last = t.slice(-1); return gs.includes(last) ? last : ''; },
+      full: (v) => gs.includes(v),
+      bad: (x) => (x.value !== '' && !gs.includes(x.value)) || (x.value !== '' && !x.name),
+      label: () => '',
+      tone: (v) => schoolTone(d, v),
+    };
+  }
+  if (d.exam === 'school') {
+    const mx = d.max_subject || 100;
+    return {
+      kind: 'score', school: true,
+      hint: `Type each subject’s score out of ${mx} — the grade is worked out and the cursor moves on by itself.`,
+      clean: (v) => v.replace(/[^0-9]/g, '').slice(0, String(mx).length),
+      full: (v) => v.length >= String(mx).length || (v.length === String(mx).length - 1 && +v * 10 > mx),
+      bad: (x) => x.value !== '' && (+x.value > mx || !x.name),
+      label: () => '/' + mx,
+      tone: (v) => (v === '' ? '' : schoolTone(d, gradeFromScore(d, v))),
+    };
+  }
   if (d.exam === 'jamb') {
     return {
       kind: 'score',
@@ -30,6 +80,7 @@ function rulesFor(d) {
       full: (v) => v.length >= 3 || (v.length === 2 && +v > 10),
       bad: (x) => x.value !== '' && (+x.value > 100 || (!x.name)),
       label: () => '/100',
+      tone: (v) => (v === '' ? '' : sTone(+v)),
     };
   }
   return {
@@ -48,10 +99,20 @@ function rulesFor(d) {
     full: (v) => !!GRADE_NUM[v],
     bad: (x) => (x.value !== '' && !GRADE_NUM[x.value]) || (x.value !== '' && !x.name),
     label: () => '',
+    tone: (v) => gTone(v),
   };
 }
 
-function summary(d, subs) {
+function summary(d, subs, smode) {
+  if (d.exam === 'school') {
+    const eff = subs.filter((x) => x.name).map((x) => ({ name: x.name, g: smode === 'score' ? (x.value !== '' ? gradeFromScore(d, x.value) : x.grade) : x.value }))
+      .filter((x) => x.g);
+    if (!eff.length) return null;
+    const cr = eff.filter((x) => isCredit(d, x.g));
+    const five = cr.length >= (d.benchmark || 5) && cr.some((x) => isEnglish(x.name)) && cr.some((x) => isMaths(x.name));
+    const total = smode === 'score' ? subs.reduce((t, x) => t + (x.value !== '' ? +x.value : 0), 0) : null;
+    return { n: eff.length, credits: cr.length, five, total };
+  }
   if (d.exam === 'jamb') {
     const typed = subs.filter((x) => x.value !== '');
     return typed.length ? typed.reduce((t, x) => t + (+x.value || 0), 0) : null;
@@ -75,25 +136,26 @@ function SubjectPick({ d, value, onChange, locked, need, wide }) {
           </>
         ) : d.subjects.map((s) => <option key={s} value={s}>{s}</option>)}
       </select>
-      <span aria-hidden="true">{wide ? (value || 'Pick subject') : short(value)}{!locked && <i className="fas fa-chevron-down" />}</span>
+      <span aria-hidden="true" title={value || undefined}><em>{wide ? (value || 'Pick subject') : short(value)}</em>{!locked && <i className="fas fa-chevron-down" />}</span>
     </label>
   );
 }
 
 function ValueBox({ d, R, x, onChange, inputProps, big, label }) {
-  const tone = R.kind === 'grade' ? gTone(x.value) : (x.value !== '' ? sTone(+x.value) : '');
+  const tone = x.value !== '' ? R.tone(x.value) : '';
+  const ph = R.school && R.kind === 'score' && x.value === '' && x.grade ? x.grade : '–';
   return (
     <span className={'xe-box' + (big ? ' big' : '') + (R.bad(x) ? ' bad' : '') + (x.value !== '' ? ' on t-' + tone : '')}>
       <input type="text" inputMode={R.kind === 'grade' ? 'text' : 'numeric'} autoComplete="off" autoCapitalize="characters" spellCheck="false"
-             enterKeyHint="next" placeholder="–" aria-label={label} value={x.value}
+             enterKeyHint="next" placeholder={ph} aria-label={label} value={x.value}
              onChange={(e) => onChange(R.clean(e.target.value, x.value))} {...inputProps} />
-      {R.label() && <small>{R.label()}</small>}
+      {R.label() && <small>{R.school && x.value !== '' ? gradeFromScore(d, x.value) : R.label()}</small>}
     </span>
   );
 }
 
 // Phone sheet / one-student card.
-function Card({ d, R, subs, setSubs, autoFocus }) {
+function Card({ d, R, subs, setSubs, autoFocus, smode, extra }) {
   const refs = useRef([]);
   const rows = useRef([]);
   useEffect(() => { if (autoFocus && R.kind === 'score' && refs.current[0]) setTimeout(() => refs.current[0] && refs.current[0].focus(), 250); }, [autoFocus]); // eslint-disable-line
@@ -105,7 +167,7 @@ function Card({ d, R, subs, setSubs, autoFocus }) {
       if (subs[k].name && el) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
     }
   };
-  const sm = summary(d, subs);
+  const sm = summary(d, subs, smode);
   // Grades: show the student's subjects plus one "add a subject" slot; empty
   // slots beyond that stay hidden so there is nothing to tap by mistake.
   const firstBlank = R.kind === 'grade' ? subs.findIndex((x) => !x.name) : -1;
@@ -125,32 +187,63 @@ function Card({ d, R, subs, setSubs, autoFocus }) {
                       inputProps={{ ref: (el) => { refs.current[i] = el; } }}
                       onChange={(v) => { setSub(i, { value: v }); if (R.full(v)) next(i); }} />
           ) : (
-            <div className="xe-pad" role="radiogroup" aria-label={`${x.name || 'Subject'} grade`}>
+            <div className="xe-pad" role="radiogroup" aria-label={`${x.name || 'Subject'} grade`} style={{ gridTemplateColumns: `repeat(${d.grades.length}, minmax(0, 1fr))` }}>
               {d.grades.map((g) => (
-                <button type="button" key={g} role="radio" aria-checked={x.value === g} className={'t-' + gTone(g) + (x.value === g ? ' on' : '')}
+                <button type="button" key={g} role="radio" aria-checked={x.value === g} className={'t-' + R.tone(g) + (x.value === g ? ' on' : '')}
+                        title={R.school ? (bandOf(d, g) || {}).label : undefined}
                         onClick={() => { setSub(i, { value: x.value === g ? '' : g }); if (x.value !== g) next(i); }}>{g}</button>))}
             </div>
           )}
         </div>
       )))}
-      {d.exam === 'jamb' ? (
+      {d.exam === 'school' ? (
+        <div className={'xe-total' + (sm ? (sm.five ? ' t-a' : ' t-d') : '')}>
+          {sm ? <><span>{sm.n} subject{sm.n === 1 ? '' : 's'}{sm.total != null ? ` · total ${sm.total}` : ''}</span><b>{sm.credits}</b><small>credits{sm.five ? ` · ${d.benchmark}+ incl. English & Maths ✓` : ` · need ${d.benchmark} incl. English & Maths`}</small></>
+            : <span>No {smode === 'score' ? 'scores' : 'grades'} yet</span>}
+        </div>
+      ) : d.exam === 'jamb' ? (
         <div className={'xe-total' + (sm != null ? ' t-' + jTone(sm) : '')}><span>Total</span><b>{sm == null ? '—' : sm}</b><small>/ {d.max_total}</small></div>
       ) : (
         <div className={'xe-total' + (sm ? (sm.five ? ' t-a' : ' t-d') : '')}>
           {sm ? <><span>{sm.n} subject{sm.n === 1 ? '' : 's'}</span><b>{sm.credits}</b><small>credits{sm.five ? ' · 5 incl. English & Maths ✓' : ''}</small></> : <span>No grades yet</span>}
         </div>
       )}
+      {extra}
     </div>
   );
 }
 
-const clone = (subs) => subs.map((x) => ({ ...x }));
+// Candidate sitting details for JSS3 / Basic 6 exams.
+function CandFields({ d, c, set }) {
+  const f = (k) => (e) => set({ ...c, [k]: e.target.value });
+  return (
+    <details className="xe-cand" open={!!(c.exam_number || c.total_score || c.placement || c.remarks)}>
+      <summary><i className="fas fa-id-card" aria-hidden="true" />Exam number, total &amp; {d.level === 'basic6' ? 'admission' : 'placement'}</summary>
+      <div className="xe-cand-g">
+        <label className="rs-sel"><span>Exam number</span><input value={c.exam_number} onChange={f('exam_number')} autoComplete="off" /></label>
+        <label className="rs-sel"><span>Total score{d.cutoff ? ` (cut-off ${d.cutoff})` : ''}</span><input inputMode="decimal" value={c.total_score} onChange={f('total_score')} /></label>
+        <label className="rs-sel"><span>{d.outcome_label}</span><input value={c.placement} onChange={f('placement')} /></label>
+        <label className="rs-sel"><span>Admitted?</span><select value={c.admitted} onChange={f('admitted')}><option value="">Not known</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+        <label className="rs-sel xe-cand-w"><span>Remarks</span><input value={c.remarks} onChange={f('remarks')} /></label>
+      </div>
+    </details>
+  );
+}
+
+const clone = (subs, d, smode) => subs.map((x) => (d && d.exam === 'school'
+  ? { ...x, value: smode === 'score' ? (x.score == null ? '' : String(x.score)) : (x.grade || '') }
+  : { ...x }));
 
 export default function EntryApp({ data }) {
   const [d, setD] = useState(data);
-  const R = rulesFor(d);
+  const [smode, setSmode] = useState(() => (data.exam === 'school' && data.students.some((s) => s.subjects.some((x) => x.score != null)) ? 'score' : 'grade'));
+  const R = rulesFor(d, smode);
   const phone = usePhone();
-  const init = () => { const m = {}; d.students.forEach((s) => { m[s.id] = clone(s.subjects); }); return m; };
+  const init = () => { const m = {}; d.students.forEach((s) => { m[s.id] = clone(s.subjects, d, smode); }); return m; };
+  const initC = () => { const m = {}; d.students.forEach((s) => { if (s.cand) m[s.id] = { ...s.cand }; }); return m; };
+  const [cand, setCand] = useState(initC);
+  const [candDirty, setCandDirty] = useState({});
+  const setC = (id, v) => { setCand((m) => ({ ...m, [id]: v })); setCandDirty((m) => ({ ...m, [id]: true })); setDirty((m) => ({ ...m, [id]: true })); };
   const initT = () => { const m = {}; d.students.forEach((s) => { m[s.id] = s.total || ''; }); return m; };
   const [rows, setRows] = useState(init);
   const [totals, setTotals] = useState(initT);
@@ -165,7 +258,7 @@ export default function EntryApp({ data }) {
   const [open, setOpen] = useState(null);
   const [sheetErr, setSheetErr] = useState('');
   const [one, setOne] = useState(d.preselect ? String(d.preselect) : '');
-  useEffect(() => { setRows(init()); setTotals(initT()); setDirty({}); setSaved({}); }, [d]); // eslint-disable-line
+  useEffect(() => { setRows(init()); setTotals(initT()); setCand(initC()); setCandDirty({}); setDirty({}); setSaved({}); }, [d, smode]); // eslint-disable-line
   const nDirty = Object.keys(dirty).length;
   useUnsavedGuard(nDirty > 0);
   const notify = (tone, text) => setMsg({ tone, text });
@@ -196,6 +289,22 @@ export default function EntryApp({ data }) {
   const fieldsFor = (ids) => {
     const f = { bulk: '1', exam_year: d.year, sids: ids.map(String) };
     ids.forEach((id) => {
+      if (d.exam === 'school') {
+        const subs = rows[id];
+        f['subj_' + id] = subs.map((x) => x.name);
+        if (smode === 'score') {
+          f['score_' + id] = subs.map((x) => (x.name ? x.value : ''));
+          f['grade_' + id] = subs.map((x) => (x.name && x.value === '' ? (x.grade || '') : ''));
+        } else {
+          f['grade_' + id] = subs.map((x) => (x.name ? x.value : ''));
+          f['score_' + id] = subs.map((x) => (x.name && x.value && x.value === x.grade && x.score != null ? String(x.score) : ''));
+        }
+        if (candDirty[id] && cand[id]) {
+          f['cand_' + id] = '1';
+          Object.entries(cand[id]).forEach(([k, v]) => { f[`${k}_${id}`] = v; });
+        }
+        return;
+      }
       if (d.exam === 'jamb') {
         if (totalOnly) { f['total_' + id] = totals[id]; return; }
         rows[id].forEach((x, i) => { f[`subject${i + 1}_${id}`] = x.name; f[`subject${i + 1}_score_${id}`] = x.value; });
@@ -210,6 +319,7 @@ export default function EntryApp({ data }) {
     const bad = ids.filter(rowBad);
     if (bad.length) {
       const t = d.exam === 'jamb' ? 'Fix the red boxes — a score over 100, a score with no subject, or the same subject twice.'
+        : d.exam === 'school' ? `Fix the red boxes — ${smode === 'score' ? `a score over ${d.max_subject}` : 'an unknown grade'}, a result with no subject, or the same subject twice.`
         : 'Fix the red boxes — a grade with no subject, or the same subject twice.';
       setSheetErr(t); notify('error', t); return false;
     }
@@ -221,12 +331,14 @@ export default function EntryApp({ data }) {
     if (!quiet) notify('success', r.message);
     setSaved((m) => { const n = { ...m }; ids.forEach((id) => { n[id] = true; }); return n; });
     setDirty((m) => { const n = { ...m }; ids.forEach((id) => { delete n[id]; }); return n; });
+    setCandDirty((m) => { const n = { ...m }; ids.forEach((id) => { delete n[id]; }); return n; });
     return true;
   };
 
   // ---- desktop grid keyboard ----
   const grid = useRef(null);
   const nCols = d.exam === 'jamb' ? (totalOnly ? 1 : 4) : Math.max(...d.students.map((s) => s.subjects.length), d.slots || 9);
+  const gridKind = d.exam === 'school' && smode === 'score' ? 'score' : R.kind;
   const focusCell = (r, c) => { const el = grid.current && grid.current.querySelector(`[data-r="${r}"][data-c="${c}"]`); if (el) { el.focus(); el.select && el.select(); } };
   const onKey = (r, c) => (e) => {
     if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); focusCell(r + 1, c); }
@@ -247,7 +359,7 @@ export default function EntryApp({ data }) {
   const cur = d.students.find((s) => s.id === open);
   useEffect(() => setSheetErr(''), [open]);
   const nextAfter = (id) => { const i = list.findIndex((s) => s.id === id); const rest = [...list.slice(i + 1), ...list.slice(0, i)]; return (rest.find((s) => !isDone(s) && s.id !== id) || {}).id; };
-  const typedFor = (id) => (d.exam === 'jamb' && totalOnly ? totals[id] !== '' : rows[id].some((x) => x.value !== ''));
+  const typedFor = (id) => (d.exam === 'jamb' && totalOnly ? totals[id] !== '' : rows[id].some((x) => x.value !== '') || !!candDirty[id]);
   const saveAndNext = async () => {
     const id = cur.id;
     if (typedFor(id) || dirty[id]) { if (!await save([id], true)) return; notify('success', `${cur.name} saved.`); }
@@ -274,19 +386,22 @@ export default function EntryApp({ data }) {
     : Array.from({ length: nCols }, (_, i) => `${i + 1}`);
 
   return (
-    <div className={'xe xe-' + R.kind + (phone && mode === 'many' && !open ? ' has-bar' : '')}>
+    <div className={'xe xe-' + gridKind + (d.exam === 'school' ? ' xe-school' : '') + (phone && mode === 'many' && !open ? ' has-bar' : '')}>
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
       <section className="rs-card xe-top">
         <div className="xe-prog"><b>{nDone} of {d.students.length}</b><span>students have {d.board} results</span>
           <span className="xe-meter"><i style={{ width: pct + '%' }} /></span></div>
         <label className="rs-sel xe-year"><span>Session</span>
           <select value={d.year} onChange={(e) => changeYear(e.target.value)}>
-            {d.sessions.map((s) => <option key={s.year} value={s.year}>{s.label} ({d.board} {s.year})</option>)}</select></label>
+            {d.sessions.map((s) => <option key={s.year} value={s.year}>{s.label === String(s.year) ? `${d.board} ${s.year}` : `${s.label} (${d.board} ${s.year})`}</option>)}</select></label>
         <Seg label="Enter for" value={mode} onChange={setMode} options={[{ value: 'many', label: 'Many students', icon: 'fa-table-cells' }, { value: 'one', label: 'One student', icon: 'fa-user' }]} />
+        {d.exam === 'school' && (
+          <Seg label="Enter as" value={smode} onChange={(v) => { if (v === smode) return; if (nDirty && !window.confirm('Switching loses what you have not saved. Continue?')) return; setSmode(v); }}
+               options={[{ value: 'grade', label: `Grades (${(d.grades || []).join(' ')})`, icon: 'fa-medal' }, { value: 'score', label: `Scores /${d.max_subject}`, icon: 'fa-hashtag' }]} />)}
       </section>
 
       {!d.students.length ? (
-        <Blank icon="fa-users" title="No SSS3 students"><p>Enrol students in SSS3 for the active term, then come back.</p></Blank>
+        <Blank icon="fa-users" title={`No ${d.class_label || 'SSS3'} students`}><p>Enrol students in {d.class_label || 'SSS3'} for the active term, then come back.</p></Blank>
       ) : mode === 'one' ? (
         <form className="xe-one" onSubmit={saveOne}>
           <section className="rs-card xe-pick">
@@ -314,7 +429,8 @@ export default function EntryApp({ data }) {
           <section className={'rs-card xe-scores' + (oneStu ? '' : ' off')}>
             <div className="rs-card-h"><h3><i className={'fas ' + (R.kind === 'grade' ? 'fa-medal' : 'fa-list-ol')} aria-hidden="true" />{R.kind === 'grade' ? 'Grades' : 'Scores'}</h3>
               <small className="rs-muted">{R.kind === 'grade' ? 'Tap a grade for each subject' : 'Each subject out of 100'}</small></div>
-            {oneStu ? <Card key={oneStu.id} d={d} R={R} subs={rows[oneStu.id]} setSubs={(v) => setRow(oneStu.id, v)} autoFocus />
+            {oneStu ? <Card key={oneStu.id} d={d} R={R} smode={smode} subs={rows[oneStu.id]} setSubs={(v) => setRow(oneStu.id, v)} autoFocus
+              extra={d.exam === 'school' && cand[oneStu.id] && <CandFields d={d} c={cand[oneStu.id]} set={(v) => setC(oneStu.id, v)} />} />
               : <p className="rs-muted rs-pad">Pick a student first.</p>}
             {oneStu && !oneStu.has_profile_subjects && <p className="xe-note"><i className="fas fa-circle-info" aria-hidden="true" />No {d.board} subjects on this student’s profile — the usual subjects are filled in; change any that differ.</p>}
             <div className="xe-acts">
@@ -340,13 +456,14 @@ export default function EntryApp({ data }) {
           ) : phone ? (
             <div className="rs-card xe-plist">
               {list.map((s) => {
-                const sm = d.exam === 'jamb' && totalOnly ? (totals[s.id] || null) : summary(d, rows[s.id]);
+                const sm = d.exam === 'jamb' && totalOnly ? (totals[s.id] || null) : summary(d, rows[s.id], smode);
                 return (
                   <button type="button" key={s.id} className={'xe-prow' + (isDone(s) ? ' done' : '')} onClick={() => setOpen(s.id)}>
                     <Avatar name={s.name} gender={s.gender} />
                     <span className="xe-pt"><b>{s.name}</b><small>{[s.student_id, s.stream].filter(Boolean).join(' · ')}</small></span>
                     {sm == null ? <span className="xe-pnone">Enter</span>
                       : d.exam === 'jamb' ? <span className={'xe-ptot t-' + jTone(+sm)}>{sm}</span>
+                        : d.exam === 'school' ? <span className={'xe-ptot ' + (sm.five ? 't-a' : 't-d')}>{sm.credits}<small> cr</small></span>
                         : <span className={'xe-ptot ' + (sm.five ? 't-a' : 't-d')}>{sm.credits}<small> cr</small></span>}
                     <i className="fas fa-chevron-right" aria-hidden="true" />
                   </button>);
@@ -359,11 +476,11 @@ export default function EntryApp({ data }) {
                 <div className="xe-gr xe-gh" role="row">
                   <span role="columnheader">Student</span>
                   {colsHead.map((h, i) => <span role="columnheader" key={i}>{h}</span>)}
-                  <span role="columnheader">{d.exam === 'jamb' ? (totalOnly ? '' : 'Total') : 'Credits'}</span>
+                  <span role="columnheader">{d.exam === 'jamb' ? (totalOnly ? '' : 'Total') : d.exam === 'school' && smode === 'score' ? 'Credits · total' : 'Credits'}</span>
                 </div>
                 {list.map((s, r) => {
                   const subs = rows[s.id];
-                  const sm = summary(d, subs);
+                  const sm = summary(d, subs, smode);
                   return (
                     <div key={s.id} role="row" className={'xe-gr' + (dirty[s.id] ? ' dirty' : '') + (rowBad(s.id) ? ' bad' : '')}>
                       <span className="xe-who" role="cell"><b>{s.name}</b>
@@ -384,8 +501,9 @@ export default function EntryApp({ data }) {
                       {d.exam === 'jamb' ? (
                         !totalOnly && <span role="cell" className={'xe-sum' + (sm != null ? ' t-' + jTone(sm) : '')}>{sm == null ? '—' : sm}</span>
                       ) : (
-                        <span role="cell" className={'xe-sum' + (sm ? (sm.five ? ' t-a' : ' t-d') : '')} title={sm ? (sm.five ? '5 credits including English and Maths' : 'Not yet 5 credits including English and Maths') : ''}>
-                          {sm ? <>{sm.credits}{sm.five && <i className="fas fa-check" aria-hidden="true" />}</> : '—'}</span>
+                        <span role="cell" className={'xe-sum' + (sm ? (sm.five ? ' t-a' : ' t-d') : '')}
+                              title={sm ? `${sm.credits} credit${sm.credits === 1 ? '' : 's'}${sm.five ? ' including English and Maths' : ''}` : ''}>
+                          {sm ? <>{sm.credits}{sm.five && <i className="fas fa-check" aria-hidden="true" />}{sm.total != null && <small className="xe-sum-t">{sm.total}</small>}</> : '—'}</span>
                       )}
                     </div>
                   );
@@ -408,7 +526,8 @@ export default function EntryApp({ data }) {
               <div className="xe-card"><div className="xe-line"><span className="xe-subj wide locked"><span>Total score</span></span>
                 <span className={'xe-box big' + (totals[cur.id] !== '' ? ' on' : '')}>
                   <input type="text" inputMode="numeric" autoFocus value={totals[cur.id]} placeholder="–" aria-label="Total score" onChange={(e) => setTotal(cur.id, e.target.value)} /><small>/400</small></span></div></div>
-            ) : <Card key={cur.id} d={d} R={R} subs={rows[cur.id]} setSubs={(v) => setRow(cur.id, v)} autoFocus />}
+            ) : <Card key={cur.id} d={d} R={R} smode={smode} subs={rows[cur.id]} setSubs={(v) => setRow(cur.id, v)} autoFocus
+              extra={d.exam === 'school' && cand[cur.id] && <CandFields d={d} c={cand[cur.id]} set={(v) => setC(cur.id, v)} />} />}
             {sheetErr && <p className="xe-err" role="alert"><i className="fas fa-circle-exclamation" aria-hidden="true" />{sheetErr}</p>}
             <div className="xe-acts">
               <button type="button" className="rs-btn" disabled={openIdx <= 0} onClick={() => setOpen(list[openIdx - 1].id)} aria-label="Previous student"><i className="fas fa-chevron-left" aria-hidden="true" /></button>

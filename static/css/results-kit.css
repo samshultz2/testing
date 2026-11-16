@@ -2383,3 +2383,15 @@ span.sj-teacher{cursor:default}
 .xe-line.xe-add{grid-template-columns:auto minmax(0,1fr) auto;border-style:dashed;color:var(--primary)}
 .xe-line.xe-add .xe-subj.wide{color:var(--primary)}
 .xe-line.xe-add small{color:var(--text-muted);font-size:.74rem}
+.xe-school .xe-gr{grid-template-columns:minmax(170px,1.4fr) repeat(var(--xe-cols),minmax(80px,1fr)) 70px}
+.xe-sum-t{display:block;font-size:.66rem;color:var(--text-muted);font-weight:700;margin-left:.2rem}
+.xe-cand{border:1px solid var(--border-color);border-radius:14px;padding:.2rem .9rem;margin-top:.3rem}
+.xe-cand summary{cursor:pointer;padding:.6rem 0;font-weight:700;font-size:.88rem;display:flex;gap:.5rem;align-items:center;color:var(--text-secondary)}
+.xe-cand summary i{color:var(--primary)}
+.xe-cand-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;padding-bottom:.8rem}
+.xe-cand-g .rs-sel input,.xe-cand-g .rs-sel select{width:100%;height:42px;border:1.5px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:16px;padding:0 .6rem}
+.xe-cand-w{grid-column:1/-1}
+@media(max-width:420px){.xe-cand-g{grid-template-columns:minmax(0,1fr)}}
+.xe-subj>span em{font-style:normal;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xe-subj.wide>span em{white-space:normal}
+.xe-subj>span i{flex:none}

@@ -279,18 +279,19 @@ def test_entered_students_are_hidden_from_add_and_grid(app):
            'subject[]': ['Mathematics'], 'score[]': ['60'], 'grade[]': ['']})
     import re
 
-    def listed(html):
-        m = re.search(r'var STUDENTS = (\[.*?\]);', html)
-        return {r['id'] for r in json.loads(m.group(1))} if m else set()
-    html = c.get('/jss3-exams/state/add?year=2039').get_data(as_text=True)
-    assert todo in listed(html) and done not in listed(html) and 'Already entered (1)' in html
-    # Another exam body or year still lists them.
-    assert done in listed(c.get('/jss3-exams/federal/add?year=2039').get_data(as_text=True))
-    assert done in listed(c.get('/jss3-exams/state/add?year=2040').get_data(as_text=True))
-    # Opening them via Edit keeps them selectable, with their saved scores.
-    html = c.get(f'/jss3-exams/state/add?year=2039&student_id={done}').get_data(as_text=True)
-    assert done in listed(html)
-    assert 'EXISTING = {"Mathematics"' in html
+    def todo_ids(url):
+        d = c.get(url, headers={'X-Requested-With': 'fetch'}).get_json()
+        return {r['id'] for r in d['students'] if not r['entered']}, d
+    ids, d = todo_ids('/jss3-exams/state/add?year=2039')
+    assert todo in ids and done not in ids                     # entered → "Entered", not "To enter"
+    # Another exam body or year still lists them as to-do.
+    assert done in todo_ids('/jss3-exams/federal/add?year=2039')[0]
+    assert done in todo_ids('/jss3-exams/state/add?year=2040')[0]
+    # Opening them via Edit preselects them, with their saved scores.
+    _, d = todo_ids(f'/jss3-exams/state/add?year=2039&student_id={done}')
+    assert d['preselect'] == done
+    row = next(r for r in d['students'] if r['id'] == done)
+    assert any(x['name'] == 'Mathematics' and x['score'] == 60 for x in row['subjects'])
     # Grid: hidden by default, back with ?show=all.
     grid = c.get('/jss3-exams/state/grid?year=2039').get_data(as_text=True)
     assert f'exam_number_{todo}' in grid and f'exam_number_{done}' not in grid and 'are hidden' in grid
@@ -452,8 +453,8 @@ def test_exam_report_offers_buttons_for_missing_results(app):
     assert f'/jss3-exams/state/add?student_id={sid}' in html
     assert f'/jss3-exams/federal/add?student_id={sid}' not in html
     # The button lands on the Add page with the student chosen.
-    page = c.get(f'/jss3-exams/state/add?student_id={sid}&year={year}').get_data(as_text=True)
-    assert f'var PRESELECT = {sid}' in page
+    d = c.get(f'/jss3-exams/state/add?student_id={sid}&year={year}', headers={'X-Requested-With': 'fetch'}).get_json()
+    assert d['preselect'] == sid
 
 
 def test_waec_and_jamb_add_dropdowns_are_searchable(app):
@@ -617,3 +618,36 @@ def test_compare_page_exports_state_vs_federal_as_pdf_and_image(app):
         with app.app_context():
             RateLimitHit.query.filter(RateLimitHit.id > top).delete(synchronize_session=False)
             db.session.commit()
+
+
+def test_school_exam_bulk_entry_grades_scores_and_candidate(app):
+    """New entry page: many candidates at once, grade or score per subject,
+    candidate details; cleared subjects removed; bad rows reported."""
+    from models.models_school_exams import SchoolExamCandidate
+    c = _admin(app)
+    a, _ = _student(app, 'Bulkse')
+    b, _ = _student(app, 'Bulkse2')
+    for sid in (a, b):
+        _enroll(app, 'Basic 6', 0, sid) if False else _enroll(app, 'JSS3', 3, sid)
+    H = {'X-Requested-With': 'fetch'}
+    r = c.post('/jss3-exams/state/add', headers=H, data={
+        '_csrf_token': auth_csrf(c), 'bulk': '1', 'exam_year': 2061, 'sids': [a, b],
+        f'subj_{a}': ['English Studies', 'Mathematics', 'Basic Science'], f'score_{a}': ['72', '', ''],
+        f'grade_{a}': ['', 'C', ''], f'cand_{a}': '1', f'exam_number_{a}': 'BE123', f'total_score_{a}': '',
+        f'placement_{a}': 'SSS1 Science', f'admitted_{a}': 'yes', f'remarks_{a}': '',
+        f'subj_{b}': ['Mathematics', 'Mathematics'], f'score_{b}': ['50', '60'], f'grade_{b}': ['', '']}).get_json()
+    assert r['ok'] and r['added'] == 1 and r['problems']
+    with app.app_context():
+        got = {x.subject: (x.score, x.grade) for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=2061)}
+        assert got == {'English Studies': (72, 'A'), 'Mathematics': (None, 'C')}
+        cand = SchoolExamCandidate.query.filter_by(student_id=a, exam_year=2061, body='state').one()
+        assert cand.exam_number == 'BE123' and cand.admitted is True
+    # Clearing Maths removes it.
+    r = c.post('/jss3-exams/state/add', headers=H, data={
+        '_csrf_token': auth_csrf(c), 'bulk': '1', 'exam_year': 2061, 'sids': [a],
+        f'subj_{a}': ['English Studies', 'Mathematics'], f'score_{a}': ['72', ''], f'grade_{a}': ['', '']}).get_json()
+    assert r['updated'] == 1
+    with app.app_context():
+        assert {x.subject for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=2061)} == {'English Studies'}
+    d = c.get('/jss3-exams/state/add?year=2061', headers=H).get_json()
+    assert d['exam'] == 'school' and d['grades'] and d['benchmark'] and d['bands'][0]['grade'] == 'A'

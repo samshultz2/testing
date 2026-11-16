@@ -182,3 +182,48 @@ window.copyText = window.copyText || function (text) {
     }
   });
 })();
+
+
+// ---- "‹ Settings" back button on pages opened from the Settings hub ---------
+// Pages the hub links to that live elsewhere in the app (users, exam subjects,
+// payments …) get the same native-style back button as Settings' own pages.
+(function () {
+  var KEY = 'navBack';
+  var store = window.sessionStorage;
+  function read() { try { return JSON.parse(store.getItem(KEY) || 'null'); } catch (e) { return null; } }
+  function write(v) { try { if (v) store.setItem(KEY, JSON.stringify(v)); else store.removeItem(KEY); } catch (e) { /* private mode */ } }
+  var hub = /^\/settings\/?$/;
+  document.addEventListener('click', function (e) {
+    if (!hub.test(location.pathname)) return;
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a || !a.closest('.sx-grid, .sx-pulse') || !a.hasAttribute('data-native')) return;
+    try {
+      var u = new URL(a.href, location.href);
+      if (u.origin === location.origin && !hub.test(u.pathname)) {
+        write({ path: u.pathname, back: location.pathname + location.search, label: 'Settings' });
+      }
+    } catch (x) { /* ignore */ }
+  }, true);
+  function render() {
+    var m = read();
+    if (!m) return;
+    if (m.path !== location.pathname) {
+      if (!hub.test(location.pathname)) write(null);     // wandered elsewhere: forget
+      return;
+    }
+    if (document.querySelector('.nav-back')) return;
+    var host = document.getElementById('mainContent');
+    if (!host) return;
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'nav-back'; b.setAttribute('aria-label', 'Back to ' + m.label);
+    b.innerHTML = '<i class="fas fa-chevron-left" aria-hidden="true"></i><span></span>';
+    b.querySelector('span').textContent = m.label;
+    b.addEventListener('click', function () {
+      var same = false;
+      try { same = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch (x) { /* ignore */ }
+      if (same && history.length > 1) history.back(); else location.href = m.back;
+    });
+    host.insertBefore(b, host.firstChild);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render); else render();
+})();

@@ -115,7 +115,15 @@ export function useSection(initial) {
     }
   }, []);
 
+  // One tap can reach go() twice — a link's own onClick plus SectionShell's
+  // delegated handler (it runs first, so it can't see the link handled it) —
+  // which pushed two history entries and made Back need two presses. Drop a
+  // repeat request for the same URL within half a second.
+  const lastGo = useRef({ url: '', t: 0 });
   const go = useCallback(async (url, opts = {}) => {
+    const now = Date.now();
+    if (url === lastGo.current.url && now - lastGo.current.t < 500) return;
+    lastGo.current = { url, t: now };
     const ok = await load(url, { push: !opts.replace, replace: opts.replace, keepScroll: opts.keepScroll });
     if (!ok) window.location = url;   // cross-section / non-JSON / not cached offline
   }, [load]);

@@ -216,11 +216,19 @@ def make_blueprint(level):
     @bp.route('/<body>/add', methods=['GET', 'POST'])
     @login_required
     def add_result(body):
+        """Enter results — many candidates (keyboard grid / phone sheets) or one
+        at a time — a grade or a score per subject, plus each candidate's exam
+        number, total, placement and remarks. Saves as JSON (fetch)."""
+        from flask import jsonify
         _body_or_404(body)
         scheme = get_scheme(level, body)
         students = svc.level_students(level)
         allowed = {s.id for s in students}
+        fetch = request.headers.get('X-Requested-With') == 'fetch'
+        if request.method == 'POST' and request.form.get('bulk'):
+            return _bulk_save(scheme, allowed, request.form.get('exam_year', type=int))
         if request.method == 'POST':
+            # Classic single-student form post (kept for older links / scripts).
             sid = request.form.get('student_id', type=int)
             year = request.form.get('exam_year', type=int)
             if not sid or not year:
@@ -237,52 +245,136 @@ def make_blueprint(level):
                     and not any((v or '').strip() for v in cand.values()):
                 flash('Enter at least one score or grade before saving.', 'warning')
                 return redirect(url_for(f'{bp_name}.add_result', body=body, student_id=sid, year=year))
-            try:
-                n = svc.save_student_results(scheme, sid, year, rows, candidate=cand, replace=True)
-                db.session.commit()
-            except Exception as e:  # pragma: no cover — surfaced to the user
-                db.session.rollback()
-                flash(f'Could not save: {e}', 'error')
-                return redirect(url_for(f'{bp_name}.add_result', body=body, student_id=sid))
+            n = svc.save_student_results(scheme, sid, year, rows, candidate=cand, replace=True)
+            db.session.commit()
             st = db.session.get(Student, sid)
             log_action(f'{bp_name}.save', detail=f'{scheme.exam_name} {year}: {n} subject(s)', target=st)
             flash(f'Saved {n} {scheme.exam_name} result{"s" if n != 1 else ""} for {st.full_name}.', 'success')
-            # "Save & next": straight on to the next candidate still without results.
             if request.form.get('next') == '1':
                 done = svc.entered_ids(level, body, year, allowed)
                 rest = [s for s in students if s.id not in done]
                 if rest:
                     return redirect(url_for(f'{bp_name}.add_result', body=body, student_id=rest[0].id, year=year))
-                flash(f'Every {L["class_label"]} candidate now has {scheme.exam_name} {year} results.', 'success')
                 return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
             return redirect(url_for(f'{bp_name}.student', body=body, student_id=sid, year=year))
 
         sid = request.args.get('student_id', type=int)
         year = request.args.get('year', type=int) or _default_year(svc.years_for(level, body))
-        existing, cand = {}, None
-        if sid and sid in allowed:
-            existing = {r.subject: r for r in SchoolExamResult.query.filter_by(
-                student_id=sid, level=level, body=body, exam_year=year).all()}
-            cand = SchoolExamCandidate.query.filter_by(
-                student_id=sid, level=level, body=body, exam_year=year).first()
-        subjects = list(scheme.subjects) + [s for s in existing if s not in scheme.subjects]
-        # Only offer students still without results for this exam + year; the
-        # student opened via an Edit link stays so their results can be changed.
-        done = svc.entered_ids(level, body, year, allowed)
-        pick = [s for s in students if s.id not in done or s.id == sid]
-        arms = svc.student_arm_map(level, [s.id for s in students])
-        row = lambda s: {'id': s.id, 'name': s.full_name, 'sid': s.student_id or '', 'arm': arms.get(s.id) or ''}
-        done_rows = [dict(row(s), edit_url=url_for(f'{bp_name}.add_result', body=body, student_id=s.id, year=year))
-                     for s in students if s.id in done and s.id != sid]
-        cand_d = {k: getattr(cand, k) for k in ('exam_number', 'centre', 'total_score', 'placement',
-                                                 'admitted', 'remarks')} if cand else {}
-        return render_template('school_exams/add_result.html', **_ctx(
-            level, bp_name, body, students=pick, student_id=sid if sid in allowed else None, year=year,
-            existing=existing, cand=cand, subjects=subjects,
-            hidden_entered=len(done - {sid}), roster_total=len(students),
-            student_rows=[row(s) for s in pick], done=done_rows,
-            existing_rows={k: {'score': r.score, 'grade': r.grade} for k, r in existing.items()},
-            cand_d=cand_d, years=sorted(set(svc.years_for(level, body)) | {_date.today().year, _date.today().year - 1})))
+        payload = _entry_payload(scheme, body, students, year, sid if sid in allowed else None)
+        if fetch:
+            return jsonify(payload)
+        return render_template('school_exams/add_result.html', **_ctx(level, bp_name, body, entry=payload, year=year))
+
+    def _entry_payload(scheme, body, students, year, preselect):
+        from collections import Counter
+        ids = [s.id for s in students]
+        res, cands = {}, {}
+        if ids:
+            for r in SchoolExamResult.query.filter(SchoolExamResult.student_id.in_(ids), SchoolExamResult.level == level,
+                                                   SchoolExamResult.body == body, SchoolExamResult.exam_year == year).all():
+                res.setdefault(r.student_id, {})[r.subject] = r
+            for c in SchoolExamCandidate.query.filter(SchoolExamCandidate.student_id.in_(ids), SchoolExamCandidate.level == level,
+                                                      SchoolExamCandidate.body == body, SchoolExamCandidate.exam_year == year).all():
+                cands[c.student_id] = c
+        # Default subjects: what most candidates already entered this year sat,
+        # else the scheme's list (its core subjects come first).
+        freq = Counter(sub for got in res.values() for sub in got)
+        common = [x for x, n in freq.most_common() if n * 2 >= max(1, len(res))]
+        default = ([x for x in scheme.subjects if x in common] + [x for x in common if x not in scheme.subjects]) \
+            if len(res) >= 3 and common else list(scheme.subjects[:10] if len(scheme.subjects) > 12 else scheme.subjects)
+        arms = svc.student_arm_map(level, ids)
+        rows = []
+        for s in students:
+            got = res.get(s.id, {})
+            order = [x for x in scheme.subjects if x in got] + [x for x in got if x not in scheme.subjects]
+            for x in default:
+                if x not in order and not got:
+                    order.append(x)
+            n = max(len(order) + 2, len(default) + 2)
+            subs = [{'name': x, 'score': (None if x not in got or got[x].score is None else
+                                          (int(got[x].score) if float(got[x].score).is_integer() else got[x].score)),
+                     'grade': got[x].grade if x in got else ''} for x in order]
+            subs += [{'name': '', 'score': None, 'grade': ''}] * (n - len(subs))
+            c = cands.get(s.id)
+            rows.append({'id': s.id, 'name': s.full_name, 'student_id': s.student_id or '', 'gender': s.gender or '',
+                         'stream': arms.get(s.id) or '', 'entered': bool(got or c), 'subjects': subs,
+                         'has_profile_subjects': True,
+                         'cand': {'exam_number': (c.exam_number or '') if c else '', 'total_score': (
+                             '' if not c or c.total_score is None else (int(c.total_score) if float(c.total_score).is_integer() else c.total_score)),
+                             'placement': (c.placement or '') if c else '', 'remarks': (c.remarks or '') if c else '',
+                             'admitted': '' if not c or c.admitted is None else ('yes' if c.admitted else 'no')}})
+        years = sorted(set(svc.years_for(level, body)) | {_date.today().year, _date.today().year - 1, year}, reverse=True)
+        return {'exam': 'school', 'board': scheme.exam_name, 'level': level, 'class_label': L['class_label'],
+                'year': year, 'sessions': [{'year': y, 'label': str(y)} for y in years],
+                'students': rows, 'subjects': list(scheme.subjects), 'offered': [],
+                'bands': [{'grade': b['grade'], 'label': b.get('label', ''), 'kind': b.get('kind', ''), 'min': b.get('min', 0)}
+                          for b in scheme.bands],
+                'grades': scheme.grades, 'max_subject': scheme.max_score, 'benchmark': scheme.benchmark_credits,
+                'cutoff': scheme.cutoff, 'outcome_label': L.get('outcome_label', 'Placement'),
+                'preselect': preselect or '', 'slots': max(len(default) + 2, 8),
+                'save_url': url_for(f'{bp_name}.add_result', body=body),
+                'self_url': url_for(f'{bp_name}.add_result', body=body),
+                'list_url': url_for(f'{bp_name}.dashboard', body=body, year=year)}
+
+    def _bulk_save(scheme, allowed, year):
+        from flask import jsonify
+        if not year:
+            return jsonify({'ok': False, 'error': 'Pick the exam year.'}), 400
+        added = updated = 0
+        problems = []
+        done = svc.entered_ids(level, scheme.body, year, allowed)
+        for raw in request.form.getlist('sids'):
+            try:
+                sid = int(raw)
+            except ValueError:
+                continue
+            st = db.session.get(Student, sid)
+            if sid not in allowed or not st:
+                problems.append(f'#{sid}')
+                continue
+            subs = request.form.getlist(f'subj_{sid}')
+            scores = request.form.getlist(f'score_{sid}')
+            grades = request.form.getlist(f'grade_{sid}')
+            rows, names, bad = [], [], False
+            for i, sb in enumerate(subs):
+                sb = (sb or '').strip()
+                sc = (scores[i] if i < len(scores) else '').strip()
+                gr = (grades[i] if i < len(grades) else '').strip().upper()
+                if not (sc or gr):
+                    continue
+                if not sb or sb in names or (gr and not scheme.band_for_grade(gr)):
+                    bad = True
+                    break
+                if sc:
+                    try:
+                        v = float(sc)
+                    except ValueError:
+                        bad = True
+                        break
+                    if not 0 <= v <= scheme.max_score:
+                        bad = True
+                        break
+                names.append(sb)
+                rows.append((sb, sc or None, gr or None))
+            if bad:
+                problems.append(st.full_name)
+                continue
+            cand = None
+            if request.form.get(f'cand_{sid}'):
+                cand = {k: request.form.get(f'{k}_{sid}') for k in
+                        ('exam_number', 'total_score', 'placement', 'admitted', 'remarks')}
+            svc.save_student_results(scheme, sid, year, rows, candidate=cand, replace=True)
+            if sid in done:
+                updated += 1
+            else:
+                added += 1
+        db.session.commit()
+        log_action(f'{bp_name}.entry', detail=f'{scheme.exam_name} {year}: {added} added, {updated} updated')
+        n = added + updated
+        msg = f'Saved {scheme.exam_name} results for {n} candidate{"s" if n != 1 else ""}.' if n else 'Nothing to save.'
+        if problems:
+            msg += ' Not saved — check their boxes: ' + ', '.join(problems[:5]) + '.'
+        return jsonify({'ok': True, 'message': msg, 'added': added, 'updated': updated, 'problems': problems})
 
     # ------------------------------------------------------------------ #
     # Grid entry (whole class at once)
