@@ -29,11 +29,11 @@ def test_summary_filters_narrow_to_a_category(app):
 def test_overview_page_renders_for_admin(app):
     c = _admin(app)
     r = c.get('/finance/overview')
-    assert r.status_code == 200
-    body = r.get_data(as_text=True)
-    for marker in ('Financial Overview', 'Total Revenue', 'Total Expenses', 'Net',
-                   'Revenue by Source', 'Recent transactions', 'Sync existing data'):
-        assert marker in body
+    assert r.status_code == 200 and 'fin-app' in r.get_data(as_text=True)
+    d = c.get('/finance/overview', headers={'Accept': 'application/json', 'X-Requested-With': 'fetch'}).get_json()
+    assert d['page'] == 'overview' and d['sync_url'] and d['export_url']
+    for k in ('revenue', 'expense', 'net', 'by_source', 'by_branch', 'trend', 'recent'):
+        assert k in d['ledger']
 
 
 def test_overview_export_csv(app):
@@ -46,7 +46,7 @@ def test_overview_export_csv(app):
 def test_ledger_sync_is_idempotent(app):
     c = _admin(app)
     page = c.get('/finance/overview').get_data(as_text=True)
-    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', page).group(1)
+    tok = re.search(r'csrf-token" content="([0-9a-f]+)"', page).group(1)
     r = c.post('/finance/ledger/sync', data={'_csrf_token': tok}, follow_redirects=False)
     assert r.status_code in (302, 303)                       # backfilled, redirect to overview
     # a second sync adds nothing (idempotent)
@@ -63,3 +63,15 @@ def test_overview_hidden_from_non_finance_user(app):
         s['role'] = 'teacher'                                # no finance module by default
     r = c.get('/finance/overview', follow_redirects=False)
     assert r.status_code in (302, 303) and '/finance' not in (r.headers.get('Location') or '')
+
+
+def test_branch_totals_keep_income_and_spending_apart(app):
+    """By-branch rows used to add spending onto income; now each is separate."""
+    from utils import finance_ledger as L
+    with app.app_context():
+        s = L.summary({'branch_ids': []})
+        for r in s['by_branch']:
+            assert {'revenue', 'expense'} <= set(r)
+            assert round(r['revenue'] - r['expense'], 2) == r['total']
+        assert round(sum(r['revenue'] for r in s['by_branch']), 2) == s['revenue']
+        assert round(sum(m['revenue'] for m in s['trend']), 2) <= s['revenue'] + 0.01

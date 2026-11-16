@@ -71,9 +71,10 @@ def test_accounting_page_renders_for_admin(app):
         s['role'] = 'super_admin'
     r = c.get('/finance/accounting')
     assert r.status_code == 200
-    body = r.get_data(as_text=True)
-    for m in ('Income Statement', 'Balance Sheet', 'Trial Balance', 'Cash Flow', 'Chart of Accounts'):
-        assert m in body
+    d = c.get('/finance/accounting', headers={'Accept': 'application/json', 'X-Requested-With': 'fetch'}).get_json()
+    assert d['page'] == 'accounting'
+    for m in ('income_statement', 'balance_sheet', 'trial_balance', 'cash_flow', 'chart_of_accounts'):
+        assert m in d['statements']
 
 
 def test_accounting_export_xlsx(app):

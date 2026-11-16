@@ -34,7 +34,7 @@ const NAV = [
   ['structure', 'fa-table-list', 'Fee setup'],
   ['reports', 'fa-chart-column', 'Reports'],
 ];
-const ACTIVE = { edit_payment: 'payments', statement: 'defaulters', items: 'structure', collections: 'reports' };
+const ACTIVE = { edit_payment: 'payments', statement: 'defaulters', items: 'structure', collections: 'reports', overview: 'reports', accounting: 'reports' };
 function FNav({ d }) {
   const u = d.nav || {};
   const active = ACTIVE[d.page] || d.page;
@@ -56,7 +56,7 @@ function SubNav({ d, items }) {
 const setupNav = (d) => <SubNav d={d} items={[['structure', d.nav.structure, 'Fee structure'], ['items', d.nav.items, 'Fee items'],
   ['billing_tools', d.nav.billing_tools, 'Charges & penalties', true], ['installments', d.nav.installments, 'Installments', true]]} />;
 const reportNav = (d) => <SubNav d={d} items={[['reports', d.nav.reports, 'Term summary'], ['collections', d.nav.collections, 'Collections'],
-  ['overview', d.nav.overview, 'Ledger', true], ['accounting', d.nav.accounting, 'Accounting', true]]} />;
+  ['overview', d.nav.overview, 'Ledger'], ['accounting', d.nav.accounting, 'Accounting']]} />;
 
 function moreItems(d) {
   const u = d.nav || {};
@@ -64,8 +64,8 @@ function moreItems(d) {
     { heading: 'More finance' },
     u.search && { icon: 'fa-magnifying-glass', label: 'Find a payment or student', href: u.search, native: true },
     u.collections && { icon: 'fa-calendar-day', label: 'Collections day-book', href: u.collections },
-    u.overview && { icon: 'fa-book', label: 'Ledger & multi-term overview', href: u.overview, native: true },
-    u.accounting && { icon: 'fa-scale-balanced', label: 'Accounting', href: u.accounting, native: true },
+    u.overview && { icon: 'fa-book', label: 'Ledger & multi-term overview', href: u.overview },
+    u.accounting && { icon: 'fa-scale-balanced', label: 'Accounting', href: u.accounting },
     u.billing_tools && { icon: 'fa-wand-magic-sparkles', label: 'Extra charges & penalties', href: u.billing_tools, native: true },
     u.installments && { icon: 'fa-calendar-check', label: 'Installment plans', href: u.installments, native: true },
     u.items && { icon: 'fa-tags', label: 'Fee items', href: u.items },
@@ -1021,9 +1021,303 @@ function EditPayment({ d, notify }) {
   );
 }
 
+// ---- Ledger + Accounting: shared filter bar --------------------------------
+// Period chips inline; everything else in one "Filters" sheet so the bar stays
+// one line on a phone. Active filters show as removable chips. Saved views are
+// kept per browser (they're just the query string).
+const PERIODS = (() => {
+  const t = new Date(); const day = 864e5;
+  return [
+    ['all', 'All time', '', ''],
+    ['month', 'This month', iso(new Date(t.getFullYear(), t.getMonth(), 1)), iso(t)],
+    ['30', 'Last 30 days', iso(new Date(t - 29 * day)), iso(t)],
+    ['year', 'This year', iso(new Date(t.getFullYear(), 0, 1)), iso(t)],
+  ];
+})();
+function qsOf(sel) {
+  const p = new URLSearchParams();
+  (sel.branch || []).forEach((b) => p.append('branch', b));
+  ['session_id', 'term_id', 'from', 'to', 'source', 'method', 'direction'].forEach((k) => { if (sel[k]) p.set(k, sel[k]); });
+  return p.toString();
+}
+const VIEWS_KEY = (k) => 'finViews:' + k;
+const loadViews = (k) => { try { return JSON.parse(localStorage.getItem(VIEWS_KEY(k))) || {}; } catch (e) { return {}; } };
+const saveViews = (k, v) => { try { localStorage.setItem(VIEWS_KEY(k), JSON.stringify(v)); } catch (e) { /* private mode */ } };
+
+function LedgerFilters({ d, viewsKey, full }) {
+  const nav = useNav();
+  const sel = d.sel || {};
+  const o = d.opts || {};
+  const apply = (next) => { const q = qsOf(next); nav.go(q ? `${d.self_url}?${q}` : d.self_url); };
+  const set = (patch) => apply({ ...sel, ...patch });
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(sel);
+  const [views, setViews] = useState(() => loadViews(viewsKey));
+  useEffect(() => setDraft(sel), [d]); // eslint-disable-line react-hooks/exhaustive-deps
+  const period = PERIODS.find((p) => p[2] === (sel.from || '') && p[3] === (sel.to || ''));
+  const nameOf = (list, id, key = 'name') => ((list || []).find((x) => String(x.id) === String(id)) || {})[key] || id;
+  const active = [
+    ...(sel.branch || []).map((b) => ['branch', b, nameOf(o.branches, b)]),
+    sel.session_id && ['session_id', '', nameOf(o.sessions, sel.session_id)],
+    sel.term_id && ['term_id', '', nameOf(o.terms, sel.term_id)],
+    !period && (sel.from || sel.to) && ['dates', '', `${sel.from || '…'} → ${sel.to || '…'}`],
+    full && sel.source && ['source', '', sel.source[0].toUpperCase() + sel.source.slice(1)],
+    full && sel.method && ['method', '', sel.method],
+    full && sel.direction && ['direction', '', sel.direction === 'in' ? 'Income only' : 'Spending only'],
+  ].filter(Boolean);
+  const drop = ([k, v]) => {
+    if (k === 'branch') set({ branch: (sel.branch || []).filter((b) => String(b) !== String(v)) });
+    else if (k === 'dates') set({ from: '', to: '' });
+    else set({ [k]: '' });
+  };
+  const cur = qsOf(sel);
+  const viewNames = Object.keys(views).sort();
+  const saveView = () => {
+    const name = (window.prompt('Name this view (e.g. “This term, POS only”):') || '').trim();
+    if (!name) return;
+    const v = { ...views, [name]: cur }; setViews(v); saveViews(viewsKey, v);
+  };
+  const delView = (name) => { const v = { ...views }; delete v[name]; setViews(v); saveViews(viewsKey, v); };
+  const dset = (k) => (e) => setDraft((x) => ({ ...x, [k]: e.target.value }));
+  const toggleBranch = (id) => setDraft((x) => {
+    const b = (x.branch || []).map(String); const s = String(id);
+    return { ...x, branch: b.includes(s) ? b.filter((y) => y !== s) : [...b, s] };
+  });
+  return (
+    <section className="rs-pick fl-bar">
+      <div className="fl-row">
+        <Chips label="Period" value={period ? period[0] : ''} onChange={(v) => { const p = PERIODS.find((x) => x[0] === v); set({ from: p[2], to: p[3] }); }}
+          items={PERIODS.map((p) => ({ value: p[0], label: p[1] }))} />
+        <button type="button" className={'rs-btn' + (active.length ? ' on ghost' : '')} onClick={() => setOpen(true)}>
+          <i className="fas fa-sliders" aria-hidden="true" />Filters{active.length ? <em className="fl-n">{active.length}</em> : null}</button>
+      </div>
+      {(active.length > 0 || viewNames.length > 0) && (
+        <div className="fl-row fl-active">
+          {active.map((a, i) => (
+            <button type="button" key={i} className="rs-chip on fl-x" onClick={() => drop(a)} aria-label={'Remove ' + a[2]}>{a[2]}<i className="fas fa-xmark" aria-hidden="true" /></button>))}
+          {active.length > 1 && <button type="button" className="rs-btn ghost sm" onClick={() => apply({})}>Clear all</button>}
+          {viewNames.map((n) => (
+            <button type="button" key={n} className={'rs-chip fl-view' + (views[n] === cur ? ' on' : '')} onClick={() => nav.go(views[n] ? `${d.self_url}?${views[n]}` : d.self_url)}>
+              <i className="fas fa-bookmark" aria-hidden="true" />{n}</button>))}
+        </div>
+      )}
+      {open && (
+        <Sheet title="Filters" onClose={() => setOpen(false)}>
+          <form className="fn-sheet" onSubmit={(e) => { e.preventDefault(); setOpen(false); apply(draft); }}>
+            {d.is_central && (o.branches || []).length > 1 && (
+              <div><span className="fn-lbl">Branches <small>(none ticked = all)</small></span>
+                <div className="rs-chips fl-wrap">{o.branches.map((b) => (
+                  <button type="button" key={b.id} className={'rs-chip' + ((draft.branch || []).map(String).includes(String(b.id)) ? ' on' : '')} onClick={() => toggleBranch(b.id)}>{b.name}</button>))}</div></div>)}
+            <div className="fl-2">
+              <label className="rs-sel"><span>Session</span><select value={draft.session_id || ''} onChange={dset('session_id')}><option value="">All sessions</option>{(o.sessions || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+              <label className="rs-sel"><span>Term</span><select value={draft.term_id || ''} onChange={dset('term_id')}><option value="">All terms</option>{(o.terms || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+              <label className="rs-sel"><span>From</span><input type="date" value={draft.from || ''} onChange={dset('from')} /></label>
+              <label className="rs-sel"><span>To</span><input type="date" value={draft.to || ''} onChange={dset('to')} /></label>
+              {full && <label className="rs-sel"><span>Source</span><select value={draft.source || ''} onChange={dset('source')}><option value="">All sources</option>{(o.sources || []).map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}</select></label>}
+              {full && <label className="rs-sel"><span>Method</span><select value={draft.method || ''} onChange={dset('method')}><option value="">All methods</option>{(o.methods || []).map((m) => <option key={m}>{m}</option>)}</select></label>}
+            </div>
+            {full && <Seg label="Show" value={draft.direction || ''} onChange={(v) => setDraft((x) => ({ ...x, direction: v }))}
+              options={[{ value: '', label: 'Both' }, { value: 'in', label: 'Income' }, { value: 'out', label: 'Spending' }]} />}
+            <button className="rs-btn primary wide"><i className="fas fa-check" aria-hidden="true" />Show results</button>
+            <div className="fl-views">
+              <span className="fn-lbl">Saved views</span>
+              {viewNames.length ? viewNames.map((n) => (
+                <div key={n} className="fl-vrow"><i className="fas fa-bookmark" aria-hidden="true" /><span>{n}</span>
+                  <button type="button" className="fn-x" onClick={() => delView(n)} aria-label={'Delete view ' + n}><i className="fas fa-trash-can" aria-hidden="true" /></button></div>))
+                : <p className="rs-muted">Save filters you use often to reach them in one tap.</p>}
+              <button type="button" className="rs-btn ghost sm" disabled={!cur} onClick={saveView}><i className="fas fa-bookmark" aria-hidden="true" />Save current filters</button>
+            </div>
+          </form>
+        </Sheet>
+      )}
+    </section>
+  );
+}
+
+function useTrendChart(ref, rows) {
+  useEffect(() => {
+    if (!ref.current || !window.Chart || !rows.length) return undefined;
+    const pal = chartPalette();
+    window.Chart.defaults.color = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#666';
+    const c = new window.Chart(ref.current, {
+      type: 'bar',
+      data: { labels: rows.map((x) => x.label), datasets: [
+        { label: 'Income', data: rows.map((x) => x.revenue), backgroundColor: pal.green, borderRadius: 4, maxBarThickness: 26 },
+        { label: 'Spending', data: rows.map((x) => x.expense), backgroundColor: pal.rose, borderRadius: 4, maxBarThickness: 26 }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10 } }, tooltip: { callbacks: { label: (x) => ` ${x.dataset.label}: ${naira(x.raw)}` } } },
+        scales: { y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,.13)' }, ticks: { callback: (v) => nairaShort(v) } }, x: { grid: { display: false } } } },
+    });
+    return () => c.destroy();
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '');
+function Ledger({ d, notify }) {
+  const nav = useNav();
+  const L = d.ledger || {};
+  const ref = useRef();
+  useTrendChart(ref, L.trend || []);
+  const [q, setQ] = useState('');
+  const [all, setAll] = useState(false);
+  const phone = window.matchMedia && window.matchMedia('(max-width: 759px)').matches;
+  const qs = qsOf(d.sel || {});
+  const exp = (fmt) => `${d.export_url}?${qs}${qs ? '&' : ''}${fmt ? 'format=' + fmt : ''}`;
+  const sync = async () => {
+    if (!await confirm({ title: 'Sync existing records?', message: 'Adds any older payments, expenses and sales that are not in the ledger yet. Safe to run more than once.', confirmText: 'Sync now' })) return;
+    const r = await submitJson(d.sync_url, {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Sync failed.');
+  };
+  const margin = L.revenue ? Math.round((L.net / L.revenue) * 100) : 0;
+  const branches = (L.by_branch || []);
+  const term = q.trim().toLowerCase();
+  const recent = (L.recent || []).filter((t) => !term || [t.category, t.source, t.method, t.branch, t.description, t.reference].join(' ').toLowerCase().includes(term));
+  const more = [
+    canWrite(d, 'overview_export') && { icon: 'fa-file-csv', label: 'Export CSV', href: exp(''), native: true },
+    canWrite(d, 'overview_export') && { icon: 'fa-file-excel', label: 'Export Excel', href: exp('xlsx'), native: true },
+    canWrite(d, 'overview_sync') && { icon: 'fa-rotate', label: 'Sync existing records', onClick: sync },
+  ];
+  return (
+    <Shell d={d} icon="fa-book" title="Ledger" sub="All income and spending, across terms and branches" sub2={reportNav(d)}
+      actions={more.some(Boolean) && <Menu label="Export" items={more} />}>
+      <LedgerFilters d={d} viewsKey="overview" full />
+      <Tiles items={[
+        { label: 'Income', value: nairaShort(L.revenue), sub: naira(L.revenue), tone: 'good' },
+        { label: 'Spending', value: nairaShort(L.expense), sub: naira(L.expense), tone: L.expense ? 'bad' : '' },
+        { label: L.net >= 0 ? 'Surplus' : 'Deficit', value: nairaShort(L.net), sub: L.revenue ? `${margin}% of income kept` : '—', tone: L.net >= 0 ? 'good' : 'bad' },
+        { label: 'Transactions', value: num(L.count).toLocaleString(), sub: 'in this view' },
+      ]} />
+      <section className="rs-card fl-strip">
+        <span className="fl-strip-h"><i className="fas fa-hand-holding-dollar" aria-hidden="true" />Collected</span>
+        {[['Today', L.today], ['This week', L.week], ['This month', L.month], ['This year', L.year]].map(([l, v]) => (
+          <span key={l} className="fl-cell"><small>{l}</small><b>{nairaShort(v)}</b></span>))}
+      </section>
+      <div className="fn-grid2 wide">
+        <Card icon="fa-chart-column" title="Month by month">
+          <div className="fn-chart">{(L.trend || []).length ? <canvas ref={ref} aria-label="Income and spending by month" role="img" /> : <Blank icon="fa-chart-column" title="Nothing recorded in this view" />}</div>
+        </Card>
+        <Card icon="fa-arrow-trend-up" title="Income by source"><BarList rows={(L.by_source || []).map((r) => ({ name: r.key || 'Other', amount: r.total }))} colorful empty="No income in this view." /></Card>
+      </div>
+      <div className="fn-grid2">
+        <Card icon="fa-arrow-trend-down" title="Spending by category"><BarList rows={(L.by_expense || []).map((r) => ({ name: r.key || 'Other', amount: r.total }))} colorful empty="No spending in this view." /></Card>
+        <Card icon="fa-wallet" title="Income by payment method"><BarList rows={(L.by_method || []).map((r) => ({ name: r.key || 'Not set', amount: r.total, count: r.count }))} colorful empty="No income in this view." extra={(r) => ` · ${r.count}`} /></Card>
+      </div>
+      {d.is_central && branches.length > 1 && (
+        <Card flush icon="fa-code-branch" title="By branch">
+          <div className="fn-list">{branches.map((b) => (
+            <div className="fn-row" key={String(b.key)}>
+              <span className="fl-bic"><i className="fas fa-code-branch" aria-hidden="true" /></span>
+              <div className="fn-row-t"><strong>{b.label}</strong><span>Income {naira(b.revenue)} · Spending {naira(b.expense)}</span>
+                <Meter value={b.revenue} max={Math.max(...branches.map((x) => x.revenue), 1)} /></div>
+              <b className={'fn-amt ' + (b.total >= 0 ? 'good' : 'bad')}>{naira(b.total)}<small>{b.total >= 0 ? 'surplus' : 'deficit'}</small></b>
+            </div>))}</div>
+        </Card>
+      )}
+      <Card flush icon="fa-list" title="Latest transactions" right={(L.recent || []).length > 5 && (
+        <label className="rs-search fl-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter these" aria-label="Filter latest transactions" /></label>)}>
+        {recent.length ? (
+          <div className="fn-list cols">{(phone && !all && !term ? recent.slice(0, 8) : recent).map((t, i) => {
+            const isIn = t.direction === 'in';
+            const rev = t.amount < 0;
+            return (
+              <div className="fn-row" key={i}>
+                <span className={'fl-dir ' + (rev ? 'rev' : isIn ? 'in' : 'out')} aria-hidden="true"><i className={'fas ' + (rev ? 'fa-rotate-left' : isIn ? 'fa-arrow-down' : 'fa-arrow-up')} /></span>
+                <div className="fn-row-t"><strong>{t.category || cap(t.source)}{rev && <small> · reversal</small>}</strong>
+                  <span>{[t.date, cap(t.source), t.method, d.is_central && t.branch !== '—' ? t.branch : ''].filter(Boolean).join(' · ')}</span></div>
+                <b className={'fn-amt ' + (rev ? '' : isIn ? 'good' : 'bad')}>{isIn && !rev ? '+' : '−'}{naira(Math.abs(t.amount))}</b>
+              </div>);
+          })}</div>
+        ) : <Blank icon="fa-list" title={(L.recent || []).length ? 'No matches' : 'No transactions in this view'} />}
+        {phone && !all && !term && recent.length > 8 && <button type="button" className="rs-btn ghost wide fl-more" onClick={() => setAll(true)}>Show {recent.length - 8} more</button>}
+        {canWrite(d, 'overview_export') && (L.count || 0) > (L.recent || []).length && (
+          <p className="rs-muted fn-pad fl-foot">Showing the latest {(L.recent || []).length} of {num(L.count).toLocaleString()}. <a href={exp('xlsx')} data-native>Export all to Excel</a></p>)}
+      </Card>
+    </Shell>
+  );
+}
+
+// ---- Accounting statements ----------------------------------------------------
+const STMTS = [
+  ['pl', 'Profit & loss', 'fa-scale-unbalanced'], ['bs', 'Balance sheet', 'fa-scale-balanced'],
+  ['cf', 'Cash flow', 'fa-money-bill-transfer'], ['tb', 'Trial balance', 'fa-table-cells'], ['coa', 'Accounts', 'fa-list-ol'],
+];
+function StLine({ name, amount, kind, tone }) {
+  return <div className={'st-l' + (kind ? ' ' + kind : '')}><span>{name}</span><b className={tone || ''}>{amount == null ? '' : naira(amount)}</b></div>;
+}
+function StGroup({ title, rows, total, totalLabel, empty }) {
+  return (
+    <div className="st-g">
+      <div className="st-h">{title}</div>
+      {rows.length ? rows.map((r, i) => <StLine key={i} name={r.name} amount={r.amount} />) : <div className="st-l muted"><span>{empty || 'Nothing recorded'}</span></div>}
+      {totalLabel && <StLine name={totalLabel} amount={total} kind="sub" />}
+    </div>
+  );
+}
+function Balanced({ ok }) {
+  return <span className={'fn-pill ' + (ok ? 'good' : 'bad')}><i className={'fas ' + (ok ? 'fa-check' : 'fa-triangle-exclamation')} aria-hidden="true" />{ok ? 'Balanced' : 'Not balanced'}</span>;
+}
+function Accounting({ d }) {
+  const s = d.statements || {};
+  const pl = s.income_statement || {}; const bs = s.balance_sheet || {}; const cf = s.cash_flow || {}; const tb = s.trial_balance || {};
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem('fin:stmt') || 'pl'; } catch (e) { return 'pl'; } });
+  const pick = (v) => { setTab(v); try { localStorage.setItem('fin:stmt', v); } catch (e) { /* ignore */ } };
+  const qs = qsOf(d.sel || {});
+  const opex = pl.operating_expense || pl.expense || [];
+  const typeTone = { Asset: 'info', Equity: '', Income: 'good', Expense: 'bad', Liability: 'mid' };
+  return (
+    <Shell d={d} icon="fa-scale-balanced" title="Accounting" sub="Statements built automatically from every payment, sale and expense" sub2={reportNav(d)}
+      actions={canWrite(d, 'accounting_export') && <a href={`${d.export_url}${qs ? '?' + qs : ''}`} className="rs-btn" data-native download><i className="fas fa-file-excel" aria-hidden="true" /><span>Export statements</span></a>}>
+      <LedgerFilters d={d} viewsKey="accounting" />
+      <Tiles items={[
+        { label: 'Income', value: nairaShort(pl.total_income), sub: naira(pl.total_income), tone: 'good' },
+        { label: 'Expenses', value: nairaShort(pl.total_expense), sub: naira(pl.total_expense), tone: pl.total_expense ? 'bad' : '' },
+        { label: pl.net >= 0 ? 'Net surplus' : 'Net deficit', value: nairaShort(pl.net), sub: naira(pl.net), tone: pl.net >= 0 ? 'good' : 'bad' },
+        { label: 'Cash & bank', value: nairaShort(bs.total_assets), sub: bs.balanced && tb.balanced ? 'Books balance' : 'Check trial balance', tone: bs.balanced && tb.balanced ? '' : 'bad' },
+      ]} />
+      <div className="st-tabs"><Seg label="Statement" value={tab} onChange={pick} options={STMTS.map(([v, l, ic]) => ({ value: v, label: l, icon: ic }))} /></div>
+      <section className="rs-card st">
+        {tab === 'pl' && <>
+          <div className="st-top"><h3>Profit &amp; loss</h3><small>Income earned and money spent in this view</small></div>
+          <StGroup title="Income" rows={pl.income || []} totalLabel="Total income" total={pl.total_income} empty="No income recorded" />
+          {num(pl.cogs) > 0 && <div className="st-g"><StLine name="Cost of goods sold" amount={-pl.cogs} /><StLine name="Gross profit" amount={pl.gross_profit} kind="sub" /></div>}
+          <StGroup title={num(pl.cogs) > 0 ? 'Operating expenses' : 'Expenses'} rows={opex} totalLabel="Total expenses" total={pl.total_expense} empty="No expenses recorded" />
+          <StLine name={pl.net >= 0 ? 'Net surplus' : 'Net deficit'} amount={pl.net} kind="net" tone={pl.net >= 0 ? 'good' : 'bad'} />
+        </>}
+        {tab === 'bs' && <>
+          <div className="st-top"><h3>Balance sheet</h3><Balanced ok={bs.balanced} /></div>
+          <StGroup title="Assets" rows={bs.assets || []} totalLabel="Total assets" total={bs.total_assets} />
+          <StGroup title="Equity" rows={bs.equity || []} totalLabel="Total equity" total={bs.total_equity} />
+          <p className="st-note"><i className="fas fa-circle-info" aria-hidden="true" />Cash-basis: unpaid fees are not counted as assets until they are paid.</p>
+        </>}
+        {tab === 'cf' && <>
+          <div className="st-top"><h3>Cash flow</h3><small>Money in and out</small></div>
+          <StGroup title="Cash in" rows={cf.inflows || []} totalLabel="Total in" total={cf.total_in} />
+          <StGroup title="Cash out" rows={cf.outflows || []} totalLabel="Total out" total={cf.total_out} />
+          <StLine name="Net cash movement" amount={cf.net_change} kind="net" tone={cf.net_change >= 0 ? 'good' : 'bad'} />
+        </>}
+        {tab === 'tb' && <>
+          <div className="st-top"><h3>Trial balance</h3><Balanced ok={tb.balanced} /></div>
+          <div className="st-tb" role="table" aria-label="Trial balance">
+            <div className="st-tr th" role="row"><span role="columnheader">Account</span><span role="columnheader">Debit</span><span role="columnheader">Credit</span></div>
+            {(tb.accounts || []).map((a) => (
+              <div className="st-tr" role="row" key={a.code}><span role="cell"><small>{a.code}</small>{a.name}</span>
+                <b role="cell">{num(a.debit) ? naira(a.debit) : ''}</b><b role="cell">{num(a.credit) ? naira(a.credit) : ''}</b></div>))}
+            <div className="st-tr tot" role="row"><span role="cell">Total</span><b role="cell">{naira(tb.total_debit)}</b><b role="cell">{naira(tb.total_credit)}</b></div>
+          </div>
+        </>}
+        {tab === 'coa' && <>
+          <div className="st-top"><h3>Chart of accounts</h3><small>{(s.chart_of_accounts || []).length} accounts</small></div>
+          <div className="st-coa">{(s.chart_of_accounts || []).map((a) => (
+            <div key={a.code} className="st-l"><span><small className="st-code">{a.code}</small>{a.name}</span><span className={'fn-pill ' + (typeTone[a.type] || '')}>{a.type}</span></div>))}</div>
+        </>}
+      </section>
+    </Shell>
+  );
+}
+
 const SCREENS = { dashboard: Dashboard, collections: Collections, items: Items, structure: Structure,
   payments: Payments, record_payment: RecordPayment, statement: Statement, defaulters: Defaulters,
-  expenses: Expenses, reports: Reports, edit_payment: EditPayment };
+  expenses: Expenses, reports: Reports, edit_payment: EditPayment, overview: Ledger, accounting: Accounting };
 
 export default function FinanceApp({ data }) {
   const { data: d, go, refresh } = useSection(data);

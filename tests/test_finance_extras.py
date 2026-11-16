@@ -45,18 +45,19 @@ def test_search_short_query_asks_for_more(app):
     assert 'at least two characters' in body
 
 
-# --- saved-view widget is present on the filter bars ------------------------
-def test_saved_views_widget_on_overview_and_accounting(app):
+# --- overview / accounting carry the filter choices the React filter bar needs -
+def test_filter_payload_on_overview_and_accounting(app):
     c = _admin(app)
-    for url in ('/finance/overview', '/finance/accounting'):
-        body = c.get(url).get_data(as_text=True)
-        assert 'data-views-key' in body and 'Saved views' in body
+    for url in ('/finance/overview?method=Cash', '/finance/accounting'):
+        d = c.get(url, headers={'Accept': 'application/json', 'X-Requested-With': 'fetch'}).get_json()
+        assert {'branches', 'sessions', 'terms'} <= set(d['opts']) and 'sel' in d
+    assert c.get('/finance/overview?method=Cash', headers={'Accept': 'application/json', 'X-Requested-With': 'fetch'}).get_json()['sel']['method'] == 'Cash'
 
 
 # --- keyboard-shortcut scaffolding is shipped -------------------------------
 def test_finance_header_ships_shortcut_map(app):
     c = _admin(app)
-    body = c.get('/finance/overview').get_data(as_text=True)
+    body = c.get('/finance/search').get_data(as_text=True)
     assert 'fin-nav-urls' in body and 'finKbdHelp' in body
 
 

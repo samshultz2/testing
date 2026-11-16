@@ -554,6 +554,42 @@ def _group(q, col, direction=None):
     return [{'key': r[0], 'total': round(float(r[1] or 0), 2), 'count': int(r[2])} for r in rows]
 
 
+def _branch_split(base, label):
+    from models import FinanceTransaction as F
+    rev = {r['key']: r for r in _group(base, F.branch_id, REVENUE)}
+    exp = {r['key']: r for r in _group(base, F.branch_id, EXPENSE)}
+    rows = []
+    for k in set(rev) | set(exp):
+        r, e = rev.get(k, {}), exp.get(k, {})
+        rows.append({'key': k, 'revenue': r.get('total', 0), 'expense': e.get('total', 0),
+                     'total': round(r.get('total', 0) - e.get('total', 0), 2),
+                     'count': r.get('count', 0) + e.get('count', 0)})
+    return sorted(label(rows), key=lambda x: -x['revenue'])
+
+
+def _monthly_trend(base, months=12):
+    """Revenue and spending per calendar month for the last ``months`` months
+    that have activity inside the filtered set (oldest first)."""
+    from sqlalchemy import func
+    from models import FinanceTransaction as F
+    rows = (base.with_entities(F.occurred_on, F.direction, func.coalesce(func.sum(F.amount), 0))
+            .group_by(F.occurred_on, F.direction).all())
+    buckets = {}
+    for day, direction, amt in rows:
+        if not day:
+            continue
+        key = (day.year, day.month)
+        b = buckets.setdefault(key, {'revenue': 0.0, 'expense': 0.0})
+        b['revenue' if direction == REVENUE else 'expense'] += float(amt or 0)
+    out = []
+    for (y, m) in sorted(buckets)[-months:]:
+        import calendar
+        b = buckets[(y, m)]
+        out.append({'label': f'{calendar.month_abbr[m]} {str(y)[2:]}', 'revenue': round(b['revenue'], 2),
+                    'expense': round(b['expense'], 2)})
+    return out
+
+
 def summary(filters):
     """Everything the finance overview needs, computed from the ledger."""
     import datetime as dt
@@ -576,7 +612,7 @@ def summary(filters):
     year_start = today.replace(month=1, day=1)
     month_start = today.replace(day=1)
 
-    recent = (base.order_by(F.occurred_on.desc(), F.id.desc()).limit(15).all())
+    recent = (base.order_by(F.occurred_on.desc(), F.id.desc()).limit(25).all())
     return {
         'revenue': revenue, 'expense': expense, 'net': round(revenue - expense, 2),
         'count': base.count(),
@@ -585,7 +621,10 @@ def summary(filters):
         'by_source': sorted(_group(base, F.category, REVENUE), key=lambda r: -r['total']),
         'by_expense': sorted(_group(base, F.category, EXPENSE), key=lambda r: -r['total']),
         'by_method': sorted(_group(base, F.method, REVENUE), key=lambda r: -r['total']),
-        'by_branch': label_branch(_group(base, F.branch_id)),
+        # Revenue and spending per branch, kept apart (they used to be summed
+        # together, which overstated every branch's figure).
+        'by_branch': _branch_split(base, label_branch),
+        'trend': _monthly_trend(base),
         'by_module': _group(base, F.source_module),
         'recent': [{
             'date': (t.occurred_on.strftime('%d %b %Y') if t.occurred_on else ''),

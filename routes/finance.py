@@ -1333,6 +1333,21 @@ def _overview_filters():
     }
 
 
+def _filters_payload(filters):
+    """The applied filters + choices, for the overview / accounting filter bar."""
+    from utils import finance_ledger as L
+    from utils.branch_scope import is_central
+    args = request.args
+    return {
+        'opts': L.filter_options(), 'is_central': is_central(),
+        'sel': {'branch': [b for b in filters['branch_ids'] if b and b > 0] if is_central() else [],
+                'session_id': args.get('session_id', ''), 'term_id': args.get('term_id', ''),
+                'from': args.get('from', ''), 'to': args.get('to', ''),
+                'source': args.get('source', ''), 'method': args.get('method', ''),
+                'direction': args.get('direction', '')},
+    }
+
+
 @finance_bp.route('/overview')
 @login_required
 def overview():
@@ -1340,15 +1355,14 @@ def overview():
     source and expense across the platform, filterable by branch/session/term/
     date/source/method, with a multi-branch owner view."""
     from utils import finance_ledger as L
-    from utils.branch_scope import is_central
     filters = _overview_filters()
-    return render_template('finance/overview.html',
-                           d=L.summary(filters), opts=L.filter_options(),
-                           sel=request.args, is_central=is_central(),
-                           selected_branches=set(filters['branch_ids']),
-                           nav=_nav_urls(),
-                           export_url=url_for('finance.overview_export'),
-                           sync_url=url_for('finance.ledger_sync'))
+    return _render({
+        'page': 'overview', 'nav': _nav_urls(), 'ledger': L.summary(filters),
+        **_filters_payload(filters),
+        'self_url': url_for('finance.overview'),
+        'export_url': url_for('finance.overview_export'),
+        'sync_url': url_for('finance.ledger_sync'),
+    })
 
 
 @finance_bp.route('/overview/export')
@@ -1381,9 +1395,8 @@ def ledger_sync():
     the ledger. Idempotent — safe to run repeatedly."""
     from utils import finance_ledger as L
     added = L.backfill()
-    flash(f'Ledger synced — {added} existing record(s) added.'
-          if added else 'Ledger already up to date — nothing to add.', 'success')
-    return redirect(url_for('finance.overview'))
+    return _ok(f'Ledger synced — {added} existing record(s) added.'
+               if added else 'Ledger already up to date — nothing to add.', url_for('finance.overview'))
 
 
 @finance_bp.route('/search')
@@ -1459,14 +1472,13 @@ def accounting():
     """Trial Balance, Income Statement (P&L), Balance Sheet, Cash Flow and Chart
     of Accounts — all auto-derived from the ledger, filterable like the overview."""
     from utils import finance_accounting as A
-    from utils.branch_scope import is_central
     filters = _overview_filters()
-    return render_template('finance/accounting.html',
-                           s=A.all_statements(filters), sel=request.args,
-                           is_central=is_central(), opts=_accounting_options(),
-                           selected_branches=set(filters['branch_ids']),
-                           nav=_nav_urls(),
-                           export_url=url_for('finance.accounting_export'))
+    return _render({
+        'page': 'accounting', 'nav': _nav_urls(), 'statements': A.all_statements(filters),
+        **_filters_payload(filters),
+        'self_url': url_for('finance.accounting'),
+        'export_url': url_for('finance.accounting_export'),
+    })
 
 
 def _accounting_options():
