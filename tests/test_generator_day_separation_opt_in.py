@@ -207,3 +207,24 @@ def test_subject_rules_page_checkbox_is_unchecked_by_default_and_unrelated_save_
     with app.app_context():
         cfg = GenSubjectConfig.query.filter_by(subject_id=subj_id, school_level='sss').first()
         assert cfg.day_separation_exempt is False
+
+
+def test_saving_rules_does_not_turn_unconfigured_subjects_into_scheduled_ones(app):
+    """The Rules page records day-separation on a GenSubjectConfig row; for a
+    subject that had none, that row must not be active (an active row reads
+    as "4 periods a week" and the generator would schedule the subject)."""
+    with app.app_context():
+        b = Branch(name='ZzDaySepNoSchedule', code=None)
+        db.session.add(b); db.session.flush(); bid = b.id
+        s1 = GenSubject(branch_id=bid, name='ZzNotSetUp', school_level='sss')
+        db.session.add(s1); db.session.flush(); sid = s1.id
+        db.session.commit()
+    c = _scoped_to_branch(_admin(app), bid)
+    _post(c, '/generator/rules/save', periods_per_day='8', break_after_period='5', day_start='8:00',
+          period_minutes='40', break_minutes='30', max_consecutive='3',
+          day_separation_enabled='on', day_separation_day_a='0', day_separation_day_b='4',
+          **{'day_separation_subjects[]': str(sid)})
+    with app.app_context():
+        cfg = GenSubjectConfig.query.filter_by(subject_id=sid, school_level='sss').first()
+        assert cfg is not None and cfg.day_separation_exempt is False
+        assert cfg.is_active is False

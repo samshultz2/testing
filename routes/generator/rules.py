@@ -96,8 +96,13 @@ def save_rules():
             if cfg:
                 cfg.day_separation_exempt = exempt
             else:
+                # Inactive: this row only records the day-separation choice. An
+                # active row would also count as "4 periods a week" (the column
+                # default) and quietly put a never-configured subject on every
+                # timetable. Saving Subject Settings switches it on for real.
                 db.session.add(GenSubjectConfig(subject_id=subject.id, school_level=level,
-                                                branch_id=gen_bid(), day_separation_exempt=exempt))
+                                                branch_id=gen_bid(), day_separation_exempt=exempt,
+                                                is_active=False))
 
         db.session.commit()
         flash('Rules saved!', 'success')

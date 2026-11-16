@@ -73,7 +73,7 @@ def test_assignments_listed_alphabetically_by_subject_within_a_class(app):
     # the per-class accordion — search only the latter (starting at the bulk
     # action bar that immediately precedes it), or a passing test wouldn't
     # mean anything.
-    body = body.split('Remove Selected')[1]
+    body = body.split(f'<h3>Zz{tag}</h3>')[1].split('</section>')[0]
 
     apple_idx = body.index(f'Zz{tag}Apple')
     mango_idx = body.index(f'Zz{tag}Mango')

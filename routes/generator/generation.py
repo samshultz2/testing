@@ -42,6 +42,12 @@ def _notify_generation_result(success, *, message, detail='', batch_id=None, cat
         pass
 
 
+def _assignments_back():
+    """Back to the assignments page on the class the user was working in."""
+    cid = request.form.get('return_class', type=int) or request.form.get('class_config_id', type=int)
+    return redirect(url_for('generator.teacher_assignments', **({'class': cid} if cid else {})))
+
+
 @generator_bp.route('/assignments')
 @login_required
 def teacher_assignments():
@@ -62,9 +68,66 @@ def teacher_assignments():
             .options(contains_eager(GenTeacherAssignment.subject), joinedload(GenTeacherAssignment.teacher))
             .order_by(GenSubject.name)
             .all())
+
+    # Per class: one row per subject it takes (or already has a teacher for),
+    # one cell per arm with whoever teaches it there. A cell with nobody is a
+    # gap the generator can't fill; two different teachers is a conflict --
+    # the generator would silently use only one of them.
+    need = _required_periods(level)
+    subj_by_id = {s.id: s for s in subjects}
+    grids, gaps_total, clash_total, cells_total = {}, 0, 0, 0
+    for cc in classes:
+        arms = cc.arm_list or ['']
+        rows = {}
+        for arm in arms:
+            for sid, periods in need.get((cc.class_name, arm), {}).items():
+                rows.setdefault(sid, {})[arm] = periods
+        for a in assignments_by_class[cc.id]:
+            rows.setdefault(a.subject_id, {})
+        out, gaps, clashes = [], 0, 0
+        own = {a.subject_id: a.subject for a in assignments_by_class[cc.id]}
+        for sid, per_arm in rows.items():
+            subj = subj_by_id.get(sid) or own.get(sid)   # keep a since-deactivated subject removable
+            if not subj:
+                continue
+            cells = []
+            for arm in arms:
+                who = [a for a in assignments_by_class[cc.id]
+                       if a.subject_id == sid and (a.arm_name is None or a.arm_name == arm)]
+                taken = arm in per_arm
+                state = ('clash' if len({a.teacher_id for a in who}) > 1 else 'ok' if who
+                         else 'gap' if taken else 'none')
+                gaps += state == 'gap'
+                clashes += state == 'clash'
+                cells_total += taken
+                cells.append({'arm': arm, 'who': who, 'state': state, 'periods': per_arm.get(arm)})
+            out.append({'subject': subj, 'cells': cells,
+                        'periods': max([p for p in per_arm.values() if p] or [0])})
+        out.sort(key=lambda r: r['subject'].name.lower())
+        grids[cc.id] = {'arms': arms, 'rows': out, 'gaps': gaps, 'clashes': clashes}
+        gaps_total += gaps
+        clash_total += clashes
+
+    # Each teacher's planned weekly load, to pick someone with room to spare.
+    # (Worked out from the same period rules as the reports, so a subject
+    # with only its general periods set still counts.)
+    load = {}
+    for cc in classes:
+        for a in assignments_by_class[cc.id]:
+            for arm in ([a.arm_name] if a.arm_name else (cc.arm_list or [''])):
+                load[a.teacher_id] = load.get(a.teacher_id, 0) + (need.get((cc.class_name, arm), {}).get(a.subject_id) or 0)
+    teacher_subjects = {}
+    for ts in GenTeacherSubject.query.filter(GenTeacherSubject.teacher_id.in_([t.id for t in teachers] or [-1])).all():
+        teacher_subjects.setdefault(ts.teacher_id, []).append(ts.subject_id)
+    current = request.args.get('class', type=int)
+    if current not in grids:
+        current = next((c.id for c in classes if grids[c.id]['gaps'] or grids[c.id]['clashes']),
+                       classes[0].id if classes else None)
     return render_template('generator/teacher_assignments.html',
         classes=classes, teachers=teachers, subjects=subjects,
-        assignments_by_class=assignments_by_class, level=level
+        assignments_by_class=assignments_by_class, level=level,
+        grids=grids, gaps_total=gaps_total, clash_total=clash_total, cells_total=cells_total,
+        load=load, current_class=current, teacher_subjects=teacher_subjects
     )
 
 
@@ -130,7 +193,7 @@ def add_teacher_assignment():
 
         if not all([teacher_id, subject_id, class_config_id]):
             flash('Teacher, subject, and class are required.', 'error')
-            return redirect(url_for('generator.teacher_assignments'))
+            return _assignments_back()
 
         teacher = db.session.get(GenTeacher, teacher_id)
         subject = db.session.get(GenSubject, subject_id)
@@ -176,7 +239,7 @@ def add_teacher_assignment():
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('generator.teacher_assignments'))
+    return _assignments_back()
 
 
 @generator_bp.route('/assignments/<int:assignment_id>/delete', methods=['POST'])
@@ -190,7 +253,7 @@ def delete_teacher_assignment(assignment_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('generator.teacher_assignments'))
+    return _assignments_back()
 
 
 @generator_bp.route('/assignments/bulk-delete', methods=['POST'])
@@ -201,7 +264,7 @@ def bulk_delete_teacher_assignments():
     ids = [int(v) for v in request.form.getlist('assignment_ids[]') if v.isdigit()]
     if not ids:
         flash('No assignments selected.', 'error')
-        return redirect(url_for('generator.teacher_assignments'))
+        return _assignments_back()
     try:
         # Skip (rather than 404/403 the whole batch on) any id the current
         # user can't touch — a stale checkbox from a branch switch mid-page
@@ -225,7 +288,7 @@ def bulk_delete_teacher_assignments():
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('generator.teacher_assignments'))
+    return _assignments_back()
 
 
 @generator_bp.route('/generate')

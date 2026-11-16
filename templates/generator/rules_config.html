@@ -1,356 +1,181 @@
 {% extends "base.html" %}
-{% from "generator/_gx.html" import gx_nav, gx_sub, gx_timetable, gx_timetable_js with context %}
+{% from "generator/_gx.html" import gx_nav with context %}
 {% block title %}Timetable Rules - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <span>Rules</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <link rel="stylesheet" href="{{ bundle_url('css/generator.css') }}">
-
-<style>
-.content-narrow{max-width:860px;margin:0 auto}
-
-.badge{display:inline-flex;align-items:center;gap:.3em;padding:.3em .65em;font-size:.72rem;font-weight:700;border-radius:999px;border:1px solid rgba(15,23,42,.06)}
-
-.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
-  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none;cursor:pointer}
-.btn-ghost:hover{border-color:var(--primary);color:var(--primary);text-decoration:none !important}
-
-/* ---- page head ---- */
-.rl-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:.4rem;flex-wrap:wrap}
-.rl-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
-.rl-head-txt{flex:1 1 10rem;min-width:0}
-.rl-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
-.rl-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
-.rl-level{font-weight:700;color:var(--text-primary)}
-
-/* ---- section cards ---- */
-.rl-sec{margin-top:1.4rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
-.rl-sec-head{display:flex;align-items:center;gap:.6rem;padding:1rem 1.1rem;border-bottom:1px solid var(--border-light)}
-.rl-sec-ic{width:30px;height:30px;border-radius:9px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0}
-.rl-sec-head h2{margin:0;font-size:.94rem;font-weight:700}
-.rl-sec-body{padding:1.1rem}
-.rl-sec-body > p{margin:0 0 1rem;color:var(--text-muted);font-size:.84rem}
-
-.rl-fields{display:grid;grid-template-columns:1fr;gap:1rem}
-@media(min-width:520px){.rl-fields.cols-2{grid-template-columns:1fr 1fr}}
-@media(min-width:620px){.rl-fields.cols-3{grid-template-columns:repeat(3,1fr)}}
-.rl-field label{display:block;font-size:.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:.4rem}
-.rl-field input[type="number"], .rl-field input[type="time"]{width:100%;padding:.55rem .65rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);
-  background:var(--bg-card);color:var(--text-primary);font-size:.88rem;font-family:inherit}
-.rl-hint{font-size:.76rem;color:var(--text-muted);margin-top:.35rem}
-.rl-end-preview{margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--border-light);font-size:.86rem;color:var(--text-secondary)}
-.rl-end-preview b{color:var(--text-primary);font-size:1rem}
-
-/* ---- toggle rows ---- */
-.rl-toggle-row{display:flex;gap:.9rem;padding:.9rem 0;border-bottom:1px solid var(--border-light)}
-.rl-toggle-row:last-child{border-bottom:none}
-.tgl{position:relative;display:inline-block;width:36px;height:21px;flex:none;margin-top:.1rem}
-.tgl input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
-.tgl .trk{position:absolute;inset:0;background:var(--gray-300);border-radius:999px;transition:background .15s;pointer-events:none}
-.tgl .trk::before{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
-.tgl input:checked + .trk{background:var(--primary)}
-.tgl input:checked + .trk::before{transform:translateX(15px)}
-.rl-toggle-txt b{display:block;font-size:.88rem;font-weight:600}
-.rl-toggle-txt span{display:block;font-size:.78rem;color:var(--text-muted);margin-top:.2rem;line-height:1.5}
-.rl-toggle-txt a{color:var(--primary)}
-
-.rl-subpanel{margin-top:.9rem;padding:1rem;background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md)}
-.rl-daypick{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;max-width:420px;margin-bottom:1rem}
-.rl-daypick label{display:block;font-size:.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:.35rem}
-.rl-daypick select{width:100%;padding:.5rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.85rem}
-.rl-chip-acts{display:flex;gap:.5rem;margin-bottom:.6rem}
-.rl-subj-chips{display:flex;flex-wrap:wrap;gap:.5rem}
-.rl-schip{position:relative;display:inline-flex;cursor:pointer}
-.rl-schip input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
-.rl-schip span{display:inline-flex;align-items:center;padding:.4rem .8rem;border-radius:999px;border:1.5px solid var(--border-color);
-  background:var(--bg-card);color:var(--text-secondary);font-size:.8rem;font-weight:600}
-.rl-schip input:checked + span{background:var(--primary);border-color:var(--primary);color:#fff}
-
-.rl-maxc{display:flex;align-items:center;gap:.8rem}
-.rl-maxc input{width:90px;padding:.55rem .65rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.88rem}
-
-/* ---- per-class exceptions ---- */
-.rl-exc-list{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem}
-.rl-exc-row{display:flex;align-items:center;gap:.7rem;padding:.7rem .85rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--gray-50);flex-wrap:wrap}
-.rl-exc-row .main{flex:1;min-width:0;font-size:.85rem}
-.rl-exc-row .main b{font-weight:600}
-.rl-exc-row form{display:inline}
-.rl-add-form{display:grid;grid-template-columns:1fr;gap:.8rem;padding-top:1rem;border-top:1px solid var(--border-light)}
-@media(min-width:560px){.rl-add-form{grid-template-columns:1fr 1fr 1fr auto;align-items:end}}
-.rl-add-form label{display:block;font-size:.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:.35rem}
-.rl-add-form select{width:100%;padding:.55rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.85rem}
-
-.rl-save{margin-top:1.4rem;padding:1rem 1.1rem;background:var(--bg-card);border:1px solid var(--border-color);
-  border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}
-</style>
 {% endblock %}
 {% block content %}
-<div class="gx">
+{% set can_edit = can_write_sub('timetable', 'generator_rules') %}
+{% macro stepper(name, value, lo, hi, id=None) -%}
+<span class="gxs-step"><button type="button" data-step="-1" aria-label="Less">−</button><input type="number" name="{{ name }}" id="{{ id or name }}" value="{{ value }}" min="{{ lo }}" max="{{ hi }}" inputmode="numeric"><button type="button" data-step="1" aria-label="More">+</button></span>
+{%- endmacro %}
+<div class="gx gxs">
 {{ gx_nav('rules') }}
-<div class="content-narrow">
-  <div class="rl-head">
-    <div class="rl-ic"><i class="fas fa-cogs"></i></div>
-    <div class="rl-head-txt">
-      <h1>Timetable Rules</h1>
-      <p>Constraints for generation — these apply to <span class="rl-level">{{ 'Junior Secondary (JSS)' if level == 'jss' else 'Senior Secondary (SSS)' }}</span>. Switch level in the menu to configure the other.</p>
-    </div>
+<header class="rs-head">
+  <span class="rs-head-ic"><i class="fas fa-sliders" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>Timetable rules</h1><p>How the {{ 'JSS' if level == 'jss' else 'SSS' }} timetable is built. JSS and SSS keep separate rules — switch level from its home page.</p></div>
+</header>
+
+<form method="POST" action="{{ url_for('generator.save_rules') }}" id="rulesForm" class="gxs-cols">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="gxs-main">
+    <section class="rs-card gxs-sec">
+      <h2><i class="fas fa-clock" aria-hidden="true"></i> School Day Timing</h2>
+      <div class="gxs-grid">
+        <label class="gxs-f"><span>Periods a day</span>{{ stepper('periods_per_day', rules.get('periods_per_day', '8'), 4, 12) }}</label>
+        <label class="gxs-f"><span>Break after period</span>{{ stepper('break_after_period', rules.get('break_after_period', '4'), 1, 11) }}</label>
+        <label class="gxs-f"><span>Day starts</span><input type="time" name="day_start" id="day_start" value="{{ day_start_hhmm }}"></label>
+        <label class="gxs-f"><span>Period length (min)</span>{{ stepper('period_minutes', rules.get('period_minutes', '40'), 20, 120) }}</label>
+        <label class="gxs-f"><span>Break length (min)</span>{{ stepper('break_minutes', rules.get('break_minutes', '30'), 0, 120) }}</label>
+        <div class="gxs-f gxs-end"><span>Day ends</span><b id="end_time_preview">{{ end_time }}</b></div>
+      </div>
+      <div class="gxs-day" id="dayStrip" aria-label="The school day" role="img"></div>
+    </section>
+
+    <section class="rs-card gxs-sec">
+      <h2><i class="fas fa-shuffle" aria-hidden="true"></i> Spreading lessons</h2>
+      <label class="gxs-t"><span class="t"><b>No subject twice on the same day</b><small>A class won't get the same subject twice in one day.</small></span>
+        <span class="tgl"><input type="checkbox" name="no_repeat_same_day" {% if rules.get('no_repeat_same_day', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span></label>
+      <label class="gxs-t"><span class="t"><b>Spread subjects across the week</b><small>Try to put each subject's periods on different days.</small></span>
+        <span class="tgl"><input type="checkbox" name="distribute_evenly" {% if rules.get('distribute_evenly', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span></label>
+      <label class="gxs-t"><span class="t"><b>A subject opens the day at most once a week</b><small>If Geography takes Monday's first period, it won't get another day's first period that week. Turn off if a class can't fit.</small></span>
+        <span class="tgl"><input type="checkbox" name="first_period_no_repeat" {% if rules.get('first_period_no_repeat', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span></label>
+      <div class="gxs-t gxs-tn"><span class="t"><b>Most periods in a row for a teacher</b><small>Before they must get a free period.</small></span>{{ stepper('max_consecutive', rules.get('max_consecutive', '3'), 1, 6) }}</div>
+      <a class="gxs-link" href="{{ url_for('generator.subjects_config') }}"><span class="t"><b>Not first period, not last period, morning or afternoon</b><small>Set per subject in Subject Settings.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+    </section>
+
+    <section class="rs-card gxs-sec">
+      <h2><i class="fas fa-calendar-minus" aria-hidden="true"></i> Keep apart two days</h2>
+      <label class="gxs-t"><span class="t"><b>Never on both of two days</b><small>e.g. Physics can be on Monday or Friday, but not both in the same week. Other days are free.</small></span>
+        <span class="tgl"><input type="checkbox" name="day_separation_enabled" id="day_separation_enabled" {% if rules.get('day_separation_enabled', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span></label>
+      <div class="gxs-sub" id="day_separation_days">
+        <div class="gxs-pair">
+          {% for side, key, dflt in [('A', 'day_separation_day_a', 0), ('B', 'day_separation_day_b', 4)] %}
+          <div class="gxs-daypick" role="radiogroup" aria-label="Day {{ side }}"><span class="lbl">Day {{ side }}</span>
+            <div class="gg-seg">{% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}<label><input type="radio" name="{{ key }}" value="{{ loop.index0 }}" {{ 'checked' if rules.get(key, dflt|string)|int == loop.index0 }}><span>{{ d[:3] }}</span></label>{% endfor %}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <p class="gxs-err" id="dayPairErr" hidden><i class="fas fa-circle-exclamation" aria-hidden="true"></i> Pick two different days.</p>
+        {% if subjects %}
+        <div class="gxs-subjh"><span class="lbl">Apply to</span>
+          <button type="button" class="rs-btn ghost sm" data-call="selectAllDaySepSubjects" data-args="true">All</button>
+          <button type="button" class="rs-btn ghost sm" data-call="selectAllDaySepSubjects" data-args="false">None</button></div>
+        <div class="rl-subj-chips gxs-chips">
+          {% for subject in subjects %}
+          <label class="rl-schip">
+            <input type="checkbox" name="day_separation_subjects[]" value="{{ subject.id }}" {% if subject.id in day_separation_subject_ids %}checked{% endif %}>
+            <span>{{ subject.name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="rs-muted bx-small">A subject taught every school day can't follow this — leave it unticked, or add a class exception below. For one class's own day pair, use <a href="{{ url_for('generator.clash_rules_list') }}">Clash rules</a>.</p>
+        {% endif %}
+        <label class="gxs-t"><span class="t"><b>If generation fails, find which class to exempt</b><small>Re-tries a failed run with one class at a time left out of this rule, and tells you which one would make it work. Adds a few seconds per class to a failed run.</small></span>
+          <span class="tgl"><input type="checkbox" name="day_separation_auto_probe" {% if rules.get('day_separation_auto_probe', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span></label>
+      </div>
+    </section>
   </div>
 
-  <form method="POST" action="{{ url_for('generator.save_rules') }}">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-
-    <div class="rl-sec">
-      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-sliders"></i></span><h2>General Settings</h2></div>
-      <div class="rl-sec-body">
-        <div class="rl-fields cols-2">
-          <div class="rl-field">
-            <label>Periods per day</label>
-            <input type="number" name="periods_per_day" id="periods_per_day" value="{{ rules.get('periods_per_day', '8') }}" min="4" max="12">
-            <div class="rl-hint">Total number of periods in a school day</div>
-          </div>
-          <div class="rl-field">
-            <label>Break after period</label>
-            <input type="number" name="break_after_period" id="break_after_period" value="{{ rules.get('break_after_period', '4') }}" min="2" max="6">
-            <div class="rl-hint">Break/recess comes after this period number</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="rl-sec">
-      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-clock"></i></span><h2>School Day Timing</h2></div>
-      <div class="rl-sec-body">
-        <p>When the {{ 'JSS' if level == 'jss' else 'SSS' }} day starts and how long periods and break last. The dismissal time is worked out from these — JSS and SSS can start and end at different times.</p>
-        <div class="rl-fields cols-3">
-          <div class="rl-field">
-            <label>Day start time</label>
-            <input type="time" name="day_start" id="day_start" value="{{ day_start_hhmm }}">
-            <div class="rl-hint">When the first period begins</div>
-          </div>
-          <div class="rl-field">
-            <label>Period length (min)</label>
-            <input type="number" name="period_minutes" id="period_minutes" value="{{ rules.get('period_minutes', '40') }}" min="20" max="120">
-          </div>
-          <div class="rl-field">
-            <label>Break length (min)</label>
-            <input type="number" name="break_minutes" id="break_minutes" value="{{ rules.get('break_minutes', '30') }}" min="0" max="120">
-          </div>
-        </div>
-        <div class="rl-end-preview">Day ends at <b id="end_time_preview">{{ end_time }}</b> <span style="color:var(--text-muted)">(computed)</span></div>
-      </div>
-    </div>
-
-    <div class="rl-sec">
-      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-ban"></i></span><h2>Scheduling Constraints</h2></div>
-      <div class="rl-sec-body" style="padding-top:.2rem;padding-bottom:.2rem">
-        <div class="rl-toggle-row">
-          <span class="tgl"><input type="checkbox" name="no_repeat_same_day" {% if rules.get('no_repeat_same_day', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
-          <div class="rl-toggle-txt"><b>No subject repeat on same day</b><span>A subject should not appear twice on the same day for a class</span></div>
-        </div>
-        <div class="rl-toggle-row">
-          <span class="tgl"><input type="checkbox" name="distribute_evenly" {% if rules.get('distribute_evenly', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
-          <div class="rl-toggle-txt"><b>Distribute subjects evenly across week</b><span>Try to spread each subject across different days</span></div>
-        </div>
-        <div class="rl-toggle-row">
-          <span class="tgl"><input type="checkbox" name="first_period_no_repeat" {% if rules.get('first_period_no_repeat', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
-          <div class="rl-toggle-txt"><b>A subject can open the day (period 1) on at most one day a week</b>
-            <span>e.g. if Geography takes SSS2 Lily's Monday period 1, it won't also be given Wednesday's period 1 that week. On by default — if this ever makes a class's load impossible to fit, turn it off here and generate again.</span></div>
-        </div>
-        <div class="rl-toggle-row" style="flex-direction:column">
-          <div style="display:flex;gap:.9rem">
-            <span class="tgl"><input type="checkbox" name="day_separation_enabled" id="day_separation_enabled" {% if rules.get('day_separation_enabled', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
-            <div class="rl-toggle-txt"><b>Keep subjects off two named days together</b>
-              <span>e.g. with Monday/Friday picked below, Physics for SSS1 Rose can be on Monday or Friday but never both in the same week — still free on every other day. Off by
-                default for every subject — tick which subjects it should apply to below (unticked subjects are unaffected, no need to visit each one's own Subject Settings), or use
-                <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> for a custom day-pair on just one class instead. If a ticked subject is taught every school day, this pairing is
-                impossible to honour for it — untick it here if generation ever reports that.</span></div>
-          </div>
-          <div class="rl-subpanel" id="day_separation_days">
-            <div class="rl-daypick">
-              <div><label>Day A</label>
-                <select name="day_separation_day_a">
-                  {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
-                  <option value="{{ loop.index0 }}" {% if rules.get('day_separation_day_a', '0')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div><label>Day B</label>
-                <select name="day_separation_day_b">
-                  {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
-                  <option value="{{ loop.index0 }}" {% if rules.get('day_separation_day_b', '4')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            {% if subjects %}
-            <label style="display:block;font-size:.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:.5rem">Apply to these subjects</label>
-            <div class="rl-chip-acts">
-              <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="true">Select All</button>
-              <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="false">Clear All</button>
-            </div>
-            <div class="rl-subj-chips">
-              {% for subject in subjects %}
-              <label class="rl-schip">
-                <input type="checkbox" name="day_separation_subjects[]" value="{{ subject.id }}" {% if subject.id in day_separation_subject_ids %}checked{% endif %}>
-                <span>{{ subject.name }}</span>
-              </label>
-              {% endfor %}
-            </div>
-            {% endif %}
-            <div class="rl-toggle-row" style="border:none;padding-top:1rem;padding-bottom:0">
-              <span class="tgl"><input type="checkbox" name="day_separation_auto_probe" {% if rules.get('day_separation_auto_probe', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
-              <div class="rl-toggle-txt"><b>If generation fails, automatically test which class exemption would fix it</b>
-                <span>When a run fails for a reason that isn't a single obvious cause, re-try it with one class at a time temporarily exempted from this rule (short re-solve
-                  each) and report which exemption, if any, would actually make it solvable — e.g. "exempting Accounting for SSS1 would work" — instead of you finding that out by
-                  trial and error through Per-Class Exceptions below. Adds extra time to a failed run (a handful of seconds per class checked); turn it off if you'd rather generation fail
-                  fast and diagnose it yourself.</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="rl-sec">
-      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-user-clock"></i></span><h2>Teacher Load</h2></div>
-      <div class="rl-sec-body">
-        <div class="rl-field" style="max-width:220px">
-          <label>Max consecutive periods (per teacher)</label>
-          <div class="rl-maxc"><input type="number" name="max_consecutive" value="{{ rules.get('max_consecutive', '3') }}" min="1" max="6"></div>
-          <div class="rl-hint">Maximum consecutive periods a teacher can take without a break</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="rl-sec">
-      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-circle-info"></i></span><h2>Period Restrictions</h2></div>
-      <div class="rl-sec-body">
-        <p style="margin-bottom:.6rem">These are configured per subject, in Subject Settings: <b>Not First Period</b>, <b>Not Last Period</b>, and <b>Preferred Time</b> (Morning/Afternoon/Any).</p>
-        <a href="{{ url_for('generator.subjects_config') }}" class="btn-ghost">
-          <i class="fas fa-cog"></i> Go to Subject Settings
-        </a>
-      </div>
-    </div>
-
-    <div class="rl-save">
-      {% if can_write_sub('timetable', 'generator_rules') %}<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rules</button>{% endif %}
-    </div>
-  </form>
-
-  {% if subjects and classes %}
-  <div class="rl-sec">
-    <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-layer-group"></i></span><h2>Day-Separation: Per-Class Exceptions</h2></div>
-    <div class="rl-sec-body">
-      <p>The subject checklist above decides day-separation for a subject across <em>every</em> class. Use this to override that for one specific class — e.g. Physics is on for every class except SSS1 Rose.</p>
-
-      {% if day_separation_class_overrides %}
-      <div class="rl-exc-list">
-        {% for ov in day_separation_class_overrides %}
-        <div class="rl-exc-row">
-          <span class="main"><b>{{ ov.subject_name }}</b> — {{ ov.class_name }}</span>
-          {% if ov.exempt %}
-          <span class="badge badge-secondary">Exempt (off)</span>
-          {% else %}
-          <span class="badge badge-primary">Included (on)</span>
-          {% endif %}
-          {% if can_write_sub('timetable', 'generator_rules') %}
-          <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="subject_id" value="{{ ov.subject_id }}">
-            <input type="hidden" name="class_id" value="{{ ov.class_config_id }}">
-            <input type="hidden" name="choice" value="inherit">
-            <button type="submit" class="btn-ghost">Remove</button>
-          </form>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <p class="rl-hint" style="margin-bottom:1rem">No per-class exceptions yet.</p>
-      {% endif %}
-
-      {% if can_write_sub('timetable', 'generator_rules') %}
-      <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" class="rl-add-form">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div>
-          <label>Subject</label>
-          <select name="subject_id" required>
-            {% for subject in subjects %}<option value="{{ subject.id }}">{{ subject.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Class</label>
-          <select name="class_id" required>
-            {% for cc in classes %}<option value="{{ cc.id }}">{{ cc.class_name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>For this class</label>
-          <select name="choice" required>
-            <option value="include">Apply rule (included)</option>
-            <option value="exempt">Exempt (off)</option>
-          </select>
-        </div>
-        <div><button type="submit" class="btn btn-secondary">Add Exception</button></div>
-      </form>
-      {% endif %}
-    </div>
+  {% if can_edit %}
+  <div class="rs-bar gxs-bar" id="gxsBar">
+    <div class="rs-bar-t"><b id="gxsBarT">All rules saved</b><small id="gxsBarS">Changes apply to the next timetable you generate.</small></div>
+    <button type="submit" class="rs-btn primary" id="gxsSave" disabled><i class="fas fa-check" aria-hidden="true"></i> Save</button>
   </div>
   {% endif %}
-</div>
+</form>
 
-<script nonce="{{ csp_nonce }}">
-// Live dismissal-time preview: mirrors utils/generator_times.day_end_time()
-// and utils/timeutil.format_clock() (time_format from the server: 12h/24h).
-(function () {
-    var TIME_FORMAT = {{ time_format|tojson }};
-    var ids = ['day_start', 'period_minutes', 'break_minutes', 'periods_per_day', 'break_after_period'];
-    var out = document.getElementById('end_time_preview');
-    function formatClock(h, m) {
-        h = ((h % 24) + 24) % 24;
-        if (TIME_FORMAT === '12h') {
-            var period = h < 12 ? 'AM' : 'PM';
-            var h12 = h % 12; if (h12 === 0) h12 = 12;
-            return h12 + ':' + (m < 10 ? '0' + m : m) + ' ' + period;
-        }
-        return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
-    }
-    function recompute() {
-        var ds = (document.getElementById('day_start').value || '08:20').split(':');
-        var sh = parseInt(ds[0], 10), sm = parseInt(ds[1], 10);
-        var plen = parseInt(document.getElementById('period_minutes').value, 10);
-        var blen = parseInt(document.getElementById('break_minutes').value, 10);
-        var ppd = parseInt(document.getElementById('periods_per_day').value, 10);
-        var ba = parseInt(document.getElementById('break_after_period').value, 10);
-        if ([sh, sm, plen, ppd].some(isNaN)) return;
-        if (isNaN(blen)) blen = 0;
-        var total = sh * 60 + sm + ppd * plen;
-        if (!isNaN(ba) && ba > 0 && ba < ppd) total += blen;
-        var h = Math.floor(total / 60) % 24, m = total % 60;
-        out.textContent = formatClock(h, m);
-    }
-    ids.forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.addEventListener('input', recompute);
-    });
-})();
-</script>
+{% if subjects and classes %}
+<section class="rs-card gxs-sec gxs-exc">
+  <h2><i class="fas fa-layer-group" aria-hidden="true"></i> Class exceptions to “keep apart”</h2>
+  <p class="rs-muted">Override the subject choice above for one class — e.g. Physics is kept apart everywhere except SSS1.</p>
+  {% if day_separation_class_overrides %}
+  <ul class="gxs-excl">
+    {% for ov in day_separation_class_overrides %}
+    <li><span class="t"><b>{{ ov.subject_name }}</b><small>{{ ov.class_name }}</small></span>
+      <span class="gxr-pill {{ 'warn' if ov.exempt else 'ok' }}">{{ 'Exempt (off)' if ov.exempt else 'Included (on)' }}</span>
+      {% if can_edit %}
+      <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="subject_id" value="{{ ov.subject_id }}">
+        <input type="hidden" name="class_id" value="{{ ov.class_config_id }}"><input type="hidden" name="choice" value="inherit">
+        <button type="submit" class="rs-btn ghost sm" aria-label="Remove exception for {{ ov.subject_name }}, {{ ov.class_name }}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="rs-muted bx-small">No class exceptions yet.</p>
+  {% endif %}
+  {% if can_edit %}
+  <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" class="gxs-excf">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <label class="rs-sel"><span>Subject</span><select name="subject_id" required>{% for subject in subjects %}<option value="{{ subject.id }}">{{ subject.name }}</option>{% endfor %}</select></label>
+    <label class="rs-sel"><span>Class</span><select name="class_id" required>{% for cc in classes %}<option value="{{ cc.id }}">{{ cc.class_name }}</option>{% endfor %}</select></label>
+    <label class="rs-sel"><span>For this class</span><select name="choice" required><option value="exempt">Exempt (off)</option><option value="include">Apply rule (on)</option></select></label>
+    <button type="submit" class="rs-btn"><i class="fas fa-plus" aria-hidden="true"></i> Add exception</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
 
 <script nonce="{{ csp_nonce }}">
 function selectAllDaySepSubjects(checked) {
-    document.querySelectorAll('input[name="day_separation_subjects[]"]').forEach(function (cb) { cb.checked = checked; });
+  document.querySelectorAll('input[name="day_separation_subjects[]"]').forEach(function (cb) { cb.checked = checked; });
+  document.getElementById('rulesForm').dispatchEvent(new Event('change', { bubbles: true }));
 }
 (function () {
-    var dayA = document.querySelector('select[name="day_separation_day_a"]');
-    var dayB = document.querySelector('select[name="day_separation_day_b"]');
-    var form = document.getElementById('day_separation_enabled') && document.getElementById('day_separation_enabled').closest('form');
-    if (!dayA || !dayB || !form) return;
-    form.addEventListener('submit', function (e) {
-        var enabled = document.getElementById('day_separation_enabled').checked;
-        if (enabled && dayA.value === dayB.value) {
-            e.preventDefault();
-            alert('Day A and Day B must be different days for the day-separation rule.');
-        }
-    });
+  var form = document.getElementById('rulesForm'); if (!form) return;
+  var TIME_FORMAT = {{ time_format|tojson }};
+  var $ = function (id) { return document.getElementById(id); };
+  function clock(t) {
+    var h = Math.floor(t / 60) % 24, m = t % 60;
+    if (TIME_FORMAT === '12h') { var p = h < 12 ? 'am' : 'pm', h12 = h % 12 || 12; return h12 + ':' + ('0' + m).slice(-2) + p; }
+    return ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2);
+  }
+  // Steppers
+  form.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-step]'); if (!b) return;
+    var inp = b.parentNode.querySelector('input'), v = (parseInt(inp.value, 10) || 0) + +b.getAttribute('data-step');
+    v = Math.max(+inp.min, Math.min(+inp.max, v)); inp.value = v;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  // Live day strip + end time (mirrors utils/generator_times.day_end_time)
+  function draw() {
+    var ds = ($('day_start').value || '08:20').split(':'), t = (+ds[0]) * 60 + (+ds[1]);
+    var plen = +$('period_minutes').value || 40, blen = +$('break_minutes').value || 0;
+    var ppd = +$('periods_per_day').value || 8, ba = +$('break_after_period').value || 0;
+    $('break_after_period').max = Math.max(1, ppd - 1);
+    var strip = $('dayStrip'); strip.innerHTML = '';
+    for (var p = 1; p <= ppd; p++) {
+      var el = document.createElement('div'); el.className = 'p';
+      el.innerHTML = '<b>' + p + '</b><small>' + clock(t) + '</small>'; strip.appendChild(el); t += plen;
+      if (p === ba && ba < ppd && blen) { var br = document.createElement('div'); br.className = 'brk';
+        br.innerHTML = '<i class="fas fa-mug-hot" aria-hidden="true"></i><small>' + clock(t) + '</small>'; strip.appendChild(br); t += blen; }
+    }
+    $('end_time_preview').textContent = clock(t);
+    strip.setAttribute('aria-label', ppd + ' periods, break after period ' + ba + ', ends ' + clock(t));
+  }
+  // Day-separation panel follows its switch; A and B must differ
+  function sep() {
+    var on = $('day_separation_enabled').checked; $('day_separation_days').hidden = !on;
+    var a = form.querySelector('[name=day_separation_day_a]:checked'), b = form.querySelector('[name=day_separation_day_b]:checked');
+    var same = on && a && b && a.value === b.value; $('dayPairErr').hidden = !same; return !same;
+  }
+  // Unsaved-changes bar
+  var start = new URLSearchParams(new FormData(form)).toString();
+  function dirty() {
+    var d = new URLSearchParams(new FormData(form)).toString() !== start, save = $('gxsSave'); if (!save) return;
+    save.disabled = !d; $('gxsBar').classList.toggle('dirty', d);
+    $('gxsBarT').textContent = d ? 'Unsaved changes' : 'All rules saved';
+  }
+  form.addEventListener('input', function () { draw(); sep(); dirty(); });
+  form.addEventListener('change', function () { draw(); sep(); dirty(); });
+  form.addEventListener('submit', function (e) { if (!sep()) { e.preventDefault(); $('dayPairErr').scrollIntoView({ block: 'center' }); } else start = new URLSearchParams(new FormData(form)).toString(); });
+  window.addEventListener('beforeunload', function (e) { if ($('gxsSave') && !$('gxsSave').disabled) { e.preventDefault(); e.returnValue = ''; } });
+  draw(); sep(); dirty();
 })();
 </script>
 </div>

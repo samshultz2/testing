@@ -42,17 +42,15 @@ def _fixture(app):
 
 
 def test_assignments_page_uses_chip_checkboxes_not_native_multiselect(app):
+    _fixture(app)
     c = _admin(app)
     html = c.get('/generator/assignments').get_data(as_text=True)
-    assert 'id="armChips"' in html
-    # The checkboxes are built client-side (one per arm from the class-arms
-    # API): the server-rendered page carries the JS that builds them, not the
-    # checkboxes themselves — the old native multiselect is gone.
-    assert "label.className = 'arm-chip'" in html
-    assert "input.name = 'arm_names[]'" in html
+    # Arm chips are checkboxes in the assign sheet (one group per class,
+    # rendered server-side) -- the old native multiselect is gone.
+    assert 'class="gxa-armchips"' in html
+    assert 'type="checkbox" name="arm_names[]"' in html
     assert '<select name="arm_names[]"' not in html
     assert 'id="armSelect"' not in html
-    assert '<select' not in html.split('id="armChips"')[1].split('<script')[0]
 
 
 def test_class_arms_api_still_feeds_the_chip_builder(app):
@@ -74,7 +72,11 @@ def test_submitting_two_arm_checkboxes_creates_one_assignment_each(app):
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert '2 assignment(s) added!' in body
-    assert 'Gold' in body and 'Bronze' in body and 'Silver' not in body
+    from models import GenTeacherAssignment
+    with app.app_context():
+        arms = sorted(a.arm_name for a in GenTeacherAssignment.query.filter_by(
+            teacher_id=tid, subject_id=sid, class_config_id=cid, is_active=True))
+    assert arms == ['Bronze', 'Gold']
 
 
 def test_leaving_all_chips_unchecked_means_all_arms(app):
