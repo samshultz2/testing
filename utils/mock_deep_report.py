@@ -156,6 +156,57 @@ def deep_pdf(data):
                          _tbl(['Candidate', 'Result', 'Recommended action'], rows,
                               [W * 0.28, W * 0.14, W * 0.58], {0: 'LEFT', 2: 'LEFT'})]))
 
+    # ---- Mock WAEC action sections (since last mock / borderline / gaps / missing)
+    pg = data.get('progress')
+    if pg:
+        dt = pg.get('five_delta')
+        block = [Paragraph(f"Since {pdf_escape(pg['prev_name'])} ({pg['compared']} sat both)", hh),
+                 Paragraph(f"5 credits incl. English &amp; Maths: <b>{_val(pg['five_now'])}%</b> "
+                           f"(was {_val(pg['five_before'])}%{'' if dt is None else f', {dt:+} pts'}) · "
+                           f"average credits {_val(pg['avg_credits_now'])} (was {_val(pg['avg_credits_before'])}) · "
+                           f"{len(pg['gained'])} newly reached the line · {len(pg['lost'])} fell below it.", body)]
+        rows = ([['Fell below the line', pdf_escape(x['name']), f"{x['credits_before']} → {x['credits']}"] for x in pg['lost']]
+                + [['Newly reached the line', pdf_escape(x['name']), str(x['credits'])] for x in pg['gained']]
+                + [['Biggest drop', pdf_escape(x['name']), f"{x['credits_before']} → {x['credits']} ({x['d_credits']:+})"] for x in pg['dropped']]
+                + [['Most improved', pdf_escape(x['name']), f"{x['credits_before']} → {x['credits']} ({x['d_credits']:+})"] for x in pg['improved']])
+        if rows:
+            block.append(_tbl(['Change', 'Candidate', 'Credits'], rows[:40], [W * 0.3, W * 0.45, W * 0.25], {0: 'LEFT', 1: 'LEFT'}))
+        elems.append(KeepTogether(block))
+        if pg.get('subjects'):
+            rows = [[pdf_escape(x['subject']), f"{x['before']}%", f"{x['now']}%", f"{x['delta']:+}"] for x in pg['subjects']]
+            elems.append(KeepTogether([Paragraph('Credit rate by subject, then → now', hh),
+                         _tbl(['Subject', 'Before', 'Now', 'Change'], rows, [W * 0.4, W * 0.2, W * 0.2, W * 0.2], {0: 'LEFT'})]))
+
+    bl = data.get('borderline')
+    if bl and bl.get('entries'):
+        rows = [[pdf_escape(x['subject']), str(x['count']), (f"+{x['unlocks']}" if x['unlocks'] else '—'),
+                 pdf_escape(', '.join(f"{st['name']} ({int(round(st['score']))}, +{int(round(st['need']))})" if st['score'] is not None
+                                      else f"{st['name']} ({st['grade']})" for st in x['students'])[:600])]
+                for x in bl['subjects']]
+        elems.append(Paragraph('Borderline — the cheapest credits to win (40–49, D7/E8)', hh))
+        elems.append(Paragraph(f"{bl['entries']} result(s) sit just under the credit line. If they all crossed, the 5-credits-incl.-"
+                               f"English-&amp;-Maths rate would go from <b>{_val(bl['rate_now'])}%</b> to <b>{_val(bl['rate_if_all'])}%</b> "
+                               f"({bl['qualified_now']} → {bl['qualified_if_all']} students).", body))
+        elems.append(_tbl(['Subject', 'Borderline', 'Extra 5-credit', 'Candidates (score, marks needed)'], rows,
+                          [W * 0.2, W * 0.12, W * 0.14, W * 0.54], {0: 'LEFT', 3: 'LEFT'}))
+
+    gp = data.get('gaps')
+    if gp and gp.get('total'):
+        rows = []
+        for key, lab in [('english', 'Missing English only'), ('maths', 'Missing Maths only'),
+                         ('both', 'Missing both English & Maths'), ('count', 'Has both, too few credits')]:
+            if gp[key]:
+                rows.append([lab, str(len(gp[key])), pdf_escape(', '.join(f"{x['name']} ({x['credits']})" for x in gp[key])[:600])])
+        elems.append(KeepTogether([Paragraph(f"Why {gp['total']} candidate(s) don't yet have 5 credits incl. English &amp; Maths", hh),
+                     _tbl(['Group', 'Count', 'Candidates (credits)'], rows, [W * 0.26, W * 0.1, W * 0.64], {0: 'LEFT', 2: 'LEFT'})]))
+
+    ms = data.get('missing')
+    if ms and (ms.get('no_result') or ms.get('partial')):
+        rows = ([['No result in this mock', pdf_escape(x['name']), pdf_escape(x['admission_no'])] for x in ms['no_result']]
+                + [['Registered subject(s) not graded', pdf_escape(x['name']), pdf_escape(', '.join(x['missing']))] for x in ms['partial']])
+        elems.append(KeepTogether([Paragraph('Missing results — the rates above leave these out', hh),
+                     _tbl(['Issue', 'Candidate', 'Details'], rows[:60], [W * 0.28, W * 0.32, W * 0.4], {0: 'LEFT', 1: 'LEFT', 2: 'LEFT'})]))
+
     # Recommendations
     recs = data.get('recommendations') or {}
     tone_hex = {'positive': '#0D6A4E', 'negative': '#B43A2E', 'warning': '#9A7B0A', 'insight': '#1F6FB2'}
@@ -453,6 +504,36 @@ def deep_xlsx(data):
             seg_rows.append([band, x['name'], x['metric'], x['note']])
     if seg_rows:
         sheet('Students', ['Segment', 'Candidate', 'Result', 'Note'], seg_rows)
+
+    pg = data.get('progress')
+    if pg:
+        rows = ([['Fell below 5 credits + core', x['name'], x['credits_before'], x['credits'], None] for x in pg['lost']]
+                + [['Newly reached 5 credits + core', x['name'], None, x['credits'], None] for x in pg['gained']]
+                + [['Biggest drop', x['name'], x['credits_before'], x['credits'], x['d_mean']] for x in pg['dropped']]
+                + [['Most improved', x['name'], x['credits_before'], x['credits'], x['d_mean']] for x in pg['improved']])
+        ws2 = sheet('Since last mock', ['Change', 'Candidate', f"Credits ({pg['prev_name']})", 'Credits now', 'Mean change'], rows)
+        ws2.append([])
+        ws2.append(['5 credits incl. Eng & Maths %', pg['five_before'], pg['five_now'], pg['five_delta']])
+        ws2.append(['Average credits', pg['avg_credits_before'], pg['avg_credits_now']])
+        if pg.get('subjects'):
+            sheet('Subject change', ['Subject', 'Credit % before', 'Credit % now', 'Change'],
+                  [[x['subject'], x['before'], x['now'], x['delta']] for x in pg['subjects']])
+    bl = data.get('borderline')
+    if bl and bl.get('entries'):
+        sheet('Borderline', ['Subject', 'Extra 5-credit students', 'Candidate', 'Score', 'Grade', 'Marks needed'],
+              [[x['subject'], x['unlocks'], st['name'], st['score'], st['grade'], st['need']]
+               for x in bl['subjects'] for st in x['students']])
+    gp = data.get('gaps')
+    if gp and gp.get('total'):
+        labs = {'english': 'Missing English only', 'maths': 'Missing Maths only',
+                'both': 'Missing both English & Maths', 'count': 'Has both, too few credits'}
+        sheet('Why short', ['Group', 'Candidate', 'Credits'],
+              [[labs[k], x['name'], x['credits']] for k in ('english', 'maths', 'both', 'count') for x in gp[k]])
+    ms = data.get('missing')
+    if ms and (ms.get('no_result') or ms.get('partial')):
+        sheet('Missing results', ['Issue', 'Candidate', 'Details'],
+              [['No result in this mock', x['name'], x['admission_no']] for x in ms['no_result']]
+              + [['Registered subject(s) not graded', x['name'], ', '.join(x['missing'])] for x in ms['partial']])
 
     recs = data.get('recommendations') or {}
     rec_rows = []

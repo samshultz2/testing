@@ -390,3 +390,25 @@ def test_waec_deep_page_shows_new_sections(app):
             _wx(app, m, sid, dict({s: 60 for s in FIVE}, Physics=45))
     html = _admin(app).get(f'/mock-waec/exam/{m2}/deep').get_data(as_text=True)
     assert 'Borderline' in html and 'Why ' in html and 'Since First Mock WAEC' in html
+
+
+def test_waec_deep_exports_include_action_sections(app):
+    import io as _io
+    from openpyxl import load_workbook
+    ssid = _fresh_session_term(app)
+    ids = _students(app, 2)
+    m1 = _wx_exam(app, ssid, 1)
+    m2 = _wx_exam(app, ssid, 2)
+    for m in (m1, m2):
+        for sid in ids:
+            _wx(app, m, sid, dict({s: 60 for s in FIVE}, Mathematics=45))
+    c = _admin(app)
+    x = c.get(f'/mock-waec/exam/{m2}/deep/export?format=excel')
+    assert x.status_code == 200
+    wb = load_workbook(_io.BytesIO(x.data))
+    assert {'Since last mock', 'Borderline', 'Why short'} <= set(wb.sheetnames)
+    p = c.get(f'/mock-waec/exam/{m2}/deep/export?format=pdf')
+    assert p.status_code == 200 and p.data[:5] == b'%PDF-'
+    import fitz
+    text = ''.join(pg.get_text() for pg in fitz.open(stream=p.data, filetype='pdf'))
+    assert 'Borderline' in text and 'Since First Mock WAEC' in text and "don't yet have 5 credits" in text
