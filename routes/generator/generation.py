@@ -275,7 +275,21 @@ def generate_page():
                            'hint': 'A core subject with no one assigned to teach it.',
                            'url': url_for('generator.teacher_assignments'), 'cta': 'Assign'})
     
+    # Solver time choices: never offer more than the server actually allows
+    # (runs are clamped to SOLVER_MAX_SECONDS so they can't outlive a worker).
+    from config import Config
+    cap = int(getattr(Config, 'SOLVER_MAX_SECONDS', 90))
+
+    def _label(sec):
+        if sec < 60:
+            return f'{sec} sec'
+        m, r = divmod(sec, 60)
+        return f'{m} min' + (f' {r} s' if r else '')
+    limits = sorted({x for x in (30, 60, cap) if 5 <= x <= cap})
+    time_limits = [{'value': x, 'label': _label(x), 'best': x == cap} for x in limits]
+
     return render_template('generator/generate.html',
+        time_limits=time_limits, solver_cap=cap, solver_cap_label=_label(cap),
         classes=classes, rules=rules, issues=issues[:15], level=level,
         teachers_count=GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count(),
         subjects_count=GenSubjectConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count(),

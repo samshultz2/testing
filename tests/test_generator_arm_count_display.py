@@ -110,8 +110,8 @@ def test_generate_page_shows_real_arm_count_not_stale_field(app):
 
     c = _scoped_to_branch(_admin(app), bid)
     body = c.get('/generator/generate').get_data(as_text=True)
-    assert '5 arm(s): Rose, Lily, Iris, Daisy, Violet' in body
-    assert '4 arm(s)' not in body
+    assert '5 arms · Rose, Lily, Iris, Daisy, Violet' in body
+    assert '4 arms' not in body
 
 
 def test_classes_config_and_class_subjects_pages_show_real_arm_count(app):
@@ -160,5 +160,23 @@ def test_generate_page_time_limit_label_matches_its_options():
     with open(path, encoding='utf-8') as f:
         html = f.read()
     assert 'Time Limit (seconds)' not in html
-    assert '<label class="form-label">Time Limit</label>' in html
-    assert '5 minutes (recommended)' in html
+    assert 'Time Limit' in html
+    assert 'time_limits' in html   # options come from the server's real cap
+
+
+def test_generate_page_never_offers_more_time_than_the_server_allows(app, monkeypatch):
+    """Solver runs are clamped to SOLVER_MAX_SECONDS, so the page must not
+    offer longer limits (it used to offer 3/5/10 minutes against a 90s cap)."""
+    from config import Config
+    monkeypatch.setattr(Config, 'SOLVER_MAX_SECONDS', 90)
+    from routes.generator.generation import generate_page  # noqa: F401  (route import)
+    import re
+    bid = _seed_branch(app, 'Cap')
+    with app.app_context():
+        db.session.add(GenClassConfig(branch_id=bid, class_name='ZzCapClass', school_level='sss',
+                                      num_arms=1, arm_names='A'))
+        db.session.commit()
+    body = _scoped_to_branch(_admin(app), bid).get('/generator/generate').get_data(as_text=True)
+    offered = [int(v) for v in re.findall(r'name="time_limit" value="(\d+)"', body)]
+    assert offered and max(offered) == 90
+    assert 'value="300"' not in body and 'value="600"' not in body
