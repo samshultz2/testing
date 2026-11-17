@@ -71,6 +71,21 @@ def index():
 # EXAM MANAGEMENT
 # =============================================================================
 
+def _parse_end_date(raw, start):
+    """Optional last-paper date: None when blank, unreadable or the same day as
+    the start (a one-day exam), False when it falls before the start."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        end = datetime.strptime(raw, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+    if start and end < start:
+        return False
+    return None if start and end == start else end
+
+
 @mock_waec_bp.route('/exam/create', methods=['GET', 'POST'])
 @login_required
 @csrf_protect
@@ -100,13 +115,19 @@ def create_exam():
                 flash('Invalid date format.', 'error')
                 return redirect(url_for('mock_waec.create_exam'))
 
+            end_date = _parse_end_date(request.form.get('end_date'), exam_date)
+            if end_date is False:
+                flash('The last paper can\'t be before the first paper.', 'error')
+                return redirect(url_for('mock_waec.create_exam'))
+
             session_obj = db.session.get(AcademicSession, session_id)
             if not name:
                 ordinals = {1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth'}
                 name = f"{ordinals.get(exam_number, str(exam_number))} Mock WAEC {session_obj.name}"
 
             exam = MockWAECExam(name=name, exam_number=exam_number, session_id=session_id,
-                                exam_date=exam_date, description=description, branch_id=new_branch_id)
+                                exam_date=exam_date, end_date=end_date,
+                                description=description, branch_id=new_branch_id)
             db.session.add(exam)
             db.session.commit()
             flash(f'{exam.display_name} created.', 'success')
@@ -135,6 +156,11 @@ def edit_exam(exam_id):
                 exam.exam_date = datetime.strptime(d, '%Y-%m-%d').date()
             except ValueError:
                 pass
+        end_date = _parse_end_date(request.form.get('end_date'), exam.exam_date)
+        if end_date is False:
+            flash('The last paper can\'t be before the first paper.', 'error')
+            return redirect(url_for('mock_waec.edit_exam', exam_id=exam.id))
+        exam.end_date = end_date
         exam.description = (request.form.get('description') or '').strip()
         exam.is_completed = bool(request.form.get('is_completed'))
         db.session.commit()

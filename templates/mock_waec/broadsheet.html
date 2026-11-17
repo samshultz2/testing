@@ -22,7 +22,7 @@
 {% block content %}
 {% set has = bs and bs.rows %}
 <div class="rs bx">
-  {% call bx_head('fa-table-list', 'Broadsheet', exam.display_name ~ ' · ' ~ exam.name ~ (' · ' ~ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '')) %}
+  {% call bx_head('fa-table-list', 'Broadsheet', exam.display_name ~ ' · ' ~ exam.name ~ (' · ' ~ exam.date_label(long=True) if exam.exam_date else '')) %}
     <details class="bx-menu">
       <summary class="rs-btn ghost" aria-label="Download"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></summary>
       <div class="bx-menu-pop" role="menu">

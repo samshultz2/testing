@@ -84,7 +84,8 @@ class MockWAECExam(db.Model):
     name = db.Column(db.String(100), nullable=False)
     exam_number = db.Column(db.Integer, nullable=False)
     session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=False)
-    exam_date = db.Column(db.Date, nullable=False)
+    exam_date = db.Column(db.Date, nullable=False)       # first paper (start of the exam)
+    end_date = db.Column(db.Date)                         # last paper; blank = one day
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))   # owning branch (scoping)
     is_active = db.Column(db.Boolean, default=True)
     is_completed = db.Column(db.Boolean, default=False)
@@ -106,6 +107,20 @@ class MockWAECExam(db.Model):
     def display_name(self):
         ordinals = {1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth'}
         return f"{ordinals.get(self.exam_number, f'{self.exam_number}th')} Mock WAEC"
+
+    def date_label(self, long=False):
+        """'3 Mar 2026', or a range like '3 – 14 Mar 2026' / '28 Feb – 6 Mar 2026'."""
+        a, b = self.exam_date, self.end_date
+        m = '%B' if long else '%b'
+        if not a:
+            return ''
+        if not b or b <= a:
+            return a.strftime(f'%d {m} %Y').lstrip('0')
+        if (a.year, a.month) == (b.year, b.month):
+            return f"{a.day} – {b.strftime(f'%d {m} %Y').lstrip('0')}"
+        if a.year == b.year:
+            return f"{a.strftime(f'%d {m}').lstrip('0')} – {b.strftime(f'%d {m} %Y').lstrip('0')}"
+        return f"{a.strftime(f'%d {m} %Y').lstrip('0')} – {b.strftime(f'%d {m} %Y').lstrip('0')}"
 
     @property
     def student_count(self):

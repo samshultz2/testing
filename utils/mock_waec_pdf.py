@@ -456,7 +456,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
         last = gi == len(groups) - 1
         sub = f'{exam.display_name} — Broadsheet'
         if _opt(opts, 'exam_date') and exam.exam_date:
-            sub += f' · {exam.exam_date.strftime("%d %b %Y")}'
+            sub += f' · {exam.date_label()}'
         if len(groups) > 1:
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
@@ -683,7 +683,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
     for gi, group in enumerate(groups):
         sub = f'{exam.display_name} — Recording Sheet'
         if _opt(opts, 'exam_date') and exam.exam_date:
-            sub += f' · {exam.exam_date.strftime("%d %b %Y")}'
+            sub += f' · {exam.date_label()}'
         if len(groups) > 1:
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)

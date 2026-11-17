@@ -597,7 +597,8 @@ def deep_analytics(kind, exam_id, allowed_ids=None):
     meta = {
         'kind': kind, 'exam_id': exam.id, 'exam_name': exam.display_name,
         'full_name': exam.name,
-        'exam_date': exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '',
+        'exam_date': (exam.date_label(long=True) if hasattr(exam, 'date_label')
+                      else exam.exam_date.strftime('%d %B %Y') if exam.exam_date else ''),
         'session_name': exam.session.name if exam.session else '',
         'generated_at': datetime.datetime.now().strftime('%d %b %Y, %H:%M'),
         'empty': False,

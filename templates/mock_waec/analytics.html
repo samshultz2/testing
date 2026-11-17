@@ -17,7 +17,7 @@
 
 {% block content %}
 <div class="rs bx">
-  {% call bx_head('fa-chart-column', 'Analytics', exam.display_name ~ ' · ' ~ exam.name ~ (' · ' ~ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '')) %}
+  {% call bx_head('fa-chart-column', 'Analytics', exam.display_name ~ ' · ' ~ exam.name ~ (' · ' ~ exam.date_label(long=True) if exam.exam_date else '')) %}
     <a href="{{ url_for('mock_waec.deep', exam_id=exam.id) }}" class="rs-btn ghost"><i class="fas fa-brain" aria-hidden="true"></i><span class="rs-hide-sm">Deep analytics</span></a>
   {% endcall %}
   <div class="no-print">{{ mw_exam_nav(exam, 'analytics') }}</div>

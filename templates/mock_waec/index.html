@@ -43,7 +43,7 @@
           <span class="mw-no">{{ e.exam_number }}</span>
           <a class="n" href="{{ url_for('mock_waec.add_result', exam_id=e.id) if derived_exam else url_for('mock_waec.view_exam', exam_id=e.id) }}">
             <b>{{ e.display_name }}</b>
-            <small>{{ e.name }} · {{ e.exam_date.strftime('%d %b %Y') if e.exam_date else 'no date' }} · {% if derived_exam %}{{ arm_counts.get(e.id, 0) }}{% else %}{{ e.student_count }}{% endif %} students</small>
+            <small>{{ e.name }} · {{ e.date_label() or 'no date' }} · {% if derived_exam %}{{ arm_counts.get(e.id, 0) }}{% else %}{{ e.student_count }}{% endif %} students</small>
           </a>
           {% if e.is_completed %}<span class="sl-pill good">Completed</span>{% else %}<span class="sl-pill mid">In progress</span>{% endif %}
           <span class="a">

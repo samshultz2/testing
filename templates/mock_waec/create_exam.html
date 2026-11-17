@@ -35,10 +35,17 @@
                 <label class="form-label">Name</label>
                 <input type="text" name="name" class="form-control" value="{{ exam.name if exam else '' }}" placeholder="Auto-generated if left blank">
             </div>
-            <div class="form-group">
-                <label class="form-label">Exam date <span class="text-danger">*</span></label>
-                <input type="date" name="exam_date" class="form-control" value="{{ exam.exam_date.isoformat() if exam and exam.exam_date else '' }}" {{ '' if exam else 'required' }}>
+            <div class="mw-dates">
+                <div class="form-group">
+                    <label class="form-label" for="mwStart">First paper <span class="text-danger">*</span></label>
+                    <input type="date" id="mwStart" name="exam_date" class="form-control" value="{{ exam.exam_date.isoformat() if exam and exam.exam_date else '' }}" {{ '' if exam else 'required' }}>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="mwEnd">Last paper</label>
+                    <input type="date" id="mwEnd" name="end_date" class="form-control" value="{{ exam.end_date.isoformat() if exam and exam.end_date else '' }}" min="{{ exam.exam_date.isoformat() if exam and exam.exam_date else '' }}">
+                </div>
             </div>
+            <small class="text-muted mw-dates-help">The days the exam runs, from the first paper to the last. Leave "Last paper" blank if it all takes place on one day. Reports show the dates as a range.</small>
             <div class="form-group">
                 <label class="form-label">Description</label>
                 <textarea name="description" class="form-control" rows="2">{{ exam.description if exam else '' }}</textarea>
@@ -57,4 +64,15 @@
     </div>
 </div>
 </div>
+<style>
+.mw-dates{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.mw-dates .form-group{margin-bottom:.35rem}
+.mw-dates-help{display:block;margin:0 0 1rem}
+@media (max-width:420px){.mw-dates{grid-template-columns:1fr}}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function(){var a=document.getElementById('mwStart'),b=document.getElementById('mwEnd');if(!a||!b)return;
+function sync(){b.min=a.value||'';if(a.value&&b.value&&b.value<a.value)b.value='';}
+a.addEventListener('change',sync);sync();})();
+</script>
 {% endblock %}
