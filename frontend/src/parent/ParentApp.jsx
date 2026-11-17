@@ -1,210 +1,303 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { csrfToken } from '../lib/api';
 import { NavCtx, useSection } from '../lib/section';
 import { ErrorBoundary } from '../components/ui';
 
 const money = (n) => '₦' + Math.round(Number(n) || 0).toLocaleString();
+const initials = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+const TABS = [
+  { k: 'home', label: 'Home', icon: 'fa-house' },
+  { k: 'results', label: 'Results', icon: 'fa-file-lines' },
+  { k: 'fees', label: 'Fees', icon: 'fa-wallet' },
+  { k: 'more', label: 'More', icon: 'fa-grip' },
+];
+const gradeTone = (g) => {
+  const c = (g || '').toUpperCase()[0];
+  return c === 'A' ? 'a' : c === 'B' ? 'b' : c === 'C' ? 'c' : c === 'D' || c === 'E' || c === 'P' ? 'd' : c === 'F' ? 'f' : '';
+};
 
-function Home({ d, go }) {
-  const [flashes, setFlashes] = useState(d.flashes || []);
-  const [amount, setAmount] = useState(d.bill ? Math.round(d.bill.balance) : 0);
-  const r = d.report;
-  const owing = d.bill && d.bill.balance > 0.005;
+function tabFromHash() {
+  const h = (window.location.hash || '').slice(1);
+  return TABS.some((t) => t.k === h) ? h : 'home';
+}
 
-  const onTerm = (e) => go(`${d.urls.self}?term_id=${e.target.value}`);
-  const onChild = (e) => { if (e.target.value) go(e.target.value); };
-
+function Header({ d }) {
+  const sibs = d.siblings || [];
   return (
-    <>
-      <div className="top"><div className="wrap">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.7rem', minWidth: 0 }}>
-          {d.school && d.school.logo_url ? (
-            <img src={d.school.logo_url} alt="" style={{ width: 42, height: 42, borderRadius: 10, objectFit: 'contain', background: '#fff', padding: 3, flex: 'none' }} />
-          ) : null}
-          <div style={{ minWidth: 0 }}>
-            {d.school && d.school.name ? <p style={{ fontWeight: 600, opacity: 1, fontSize: '.8rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>{d.school.name}</p> : null}
-            <h1 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.student.full_name}</h1>
-            <p>{d.student.student_id}{d.student.class_name ? ` · ${d.student.class_name}` : ''}</p>
+    <header className="pp-top">
+      <div className="pp-wrap">
+        <div className="pp-school">
+          {d.school && d.school.logo_url
+            ? <img src={d.school.logo_url} alt="" />
+            : <span className="pp-school-ic" aria-hidden="true"><i className="fas fa-school" /></span>}
+          <span>{(d.school && d.school.name) || 'Parent portal'}</span>
+          <a className="pp-out" href={d.urls.logout} aria-label="Sign out"><i aria-hidden="true" className="fas fa-right-from-bracket" /><span> Sign out</span></a>
+        </div>
+        <div className="pp-child">
+          <span className="pp-av" aria-hidden="true">{initials(d.student.full_name)}</span>
+          <div className="pp-child-t">
+            <h1>{d.student.full_name}</h1>
+            <p>{[d.student.class_name, d.student.student_id].filter(Boolean).join(' · ')}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
-          {d.siblings.length > 1 && (
-            <select onChange={onChild} value="" style={{ padding: '.4rem', borderRadius: 8, border: 'none' }}>
-              {d.siblings.map((s) => (
-                <option key={s.id} value={s.is_current ? '' : s.switch_url}>{s.full_name}</option>
-              ))}
-            </select>
-          )}
-          <a className="logout" href={d.urls.logout}><i aria-hidden="true" className="fas fa-right-from-bracket" /> Sign out</a>
-        </div>
-      </div></div>
-
-      <div className="wrap">
-        {flashes.map((f, i) => (
-          <div key={i} className={`flash flash-${f.category}`} onClick={() => setFlashes(flashes.filter((_, j) => j !== i))}>{f.message}</div>
-        ))}
-
-        <div className="termbar">
-          <label className="muted" htmlFor="term">Term:</label>
-          <select id="term" value={d.term_id || ''} onChange={onTerm}>
-            {d.terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </div>
-
-        <div className="cards">
-          <div className="card">
-            <h3>Fees — Balance</h3>
-            {d.bill ? (
-              <>
-                <div className={`big ${owing ? 'owe' : 'ok'}`}>{money(d.bill.balance)}</div>
-                <p className="muted">Billed {money(d.bill.payable)} · Paid {money(d.bill.paid)}</p>
-                {owing && d.pay_enabled && (
-                  <form method="POST" action={d.urls.pay} style={{ marginTop: '.7rem' }}>
-                    <input type="hidden" name="_csrf_token" value={csrfToken()} />
-                    <input type="hidden" name="term_id" value={d.term_id || ''} />
-                    <label className="muted" style={{ fontSize: '.75rem' }}>Amount to pay (₦)</label>
-                    <input type="number" name="amount" min="100" step="50" value={amount}
-                      onChange={(e) => setAmount(e.target.value)} className="form-control" style={{ margin: '.2rem 0 .4rem' }} />
-                    <button type="submit" className="pay-btn"><i aria-hidden="true" className="fas fa-credit-card" /> Pay fees online</button>
-                  </form>
-                )}
-                {owing && !d.pay_enabled && (
-                  <p className="muted" style={{ marginTop: '.6rem', fontSize: '.8rem' }}>
-                    <i aria-hidden="true" className="fas fa-circle-info" /> Online payment isn’t set up for this school yet. Please pay at the school office.
-                  </p>
-                )}
-                {!owing && <p className="ok" style={{ marginTop: '.5rem', fontSize: '.85rem' }}><i aria-hidden="true" className="fas fa-check-circle" /> Fees fully paid.</p>}
-              </>
-            ) : <p className="muted">No fee record for this term.</p>}
-          </div>
-          <div className="card">
-            <h3>Attendance</h3>
-            {d.attendance != null ? <><div className="big">{d.attendance}%</div><p className="muted">This term</p></>
-              : <p className="muted">Not available yet.</p>}
-          </div>
-          {r && (
-            <div className="card">
-              <h3>Position</h3>
-              <div className="big pos">{r.position || '—'}</div>
-              <p className="muted">Average {r.average} · {r.overall_grade}</p>
-            </div>
-          )}
-        </div>
-
-        {d.aspiration && (
-          <div className="sec">
-            <h2>University aspiration</h2>
-            <div className="card">
-              <h3>{d.aspiration.course || 'Target course'}{d.aspiration.university ? ' — ' + d.aspiration.university : ''}</h3>
-              {d.aspiration.department && <p className="muted">{d.aspiration.department}</p>}
-              {d.aspiration.status_label && (
-                <p style={{ margin: '.4rem 0' }}>
-                  <span className={'badge ' + ({ ON_TRACK: 'badge-success', CLOSE: 'badge-warning', OFF_TRACK: 'badge-danger' }[d.aspiration.status] || '')}>
-                    {d.aspiration.status_label}
-                  </span>
-                </p>
-              )}
-              {d.aspiration.target != null && d.aspiration.projected != null && (
-                <p className="muted">Projected JAMB {d.aspiration.projected} of target {d.aspiration.target}
-                  {d.aspiration.gap != null && d.aspiration.gap > 0 ? ` · ${d.aspiration.gap} to go` : ' · target met'}</p>
-              )}
-              {d.aspiration.admission_status && (
-                <p className="muted">Admission: <strong>{d.aspiration.admission_status}</strong>
-                  {d.aspiration.admitted_university ? ` — ${d.aspiration.admitted_university}` : ''}
-                  {d.aspiration.admitted_course ? ` (${d.aspiration.admitted_course})` : ''}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {(d.urls.cbt_portal || d.urls.result_checker) && (
-          <div className="sec">
-            <h2>More for {(d.student.full_name || '').split(' ')[0] || 'this student'}</h2>
-            <div className="hub-links">
-              {d.urls.cbt_portal && (
-                <a className="hub-link" href={d.urls.cbt_portal} data-native>
-                  <span className="hub-ic"><i aria-hidden="true" className="fas fa-laptop-code" /></span>
-                  <span className="hub-body"><strong>Take a CBT exam</strong><span>Sign in to any online test scheduled for today</span></span>
-                  <i aria-hidden="true" className="fas fa-arrow-right hub-go" />
-                </a>
-              )}
-              {d.urls.result_checker && (
-                <a className="hub-link" href={d.urls.result_checker} data-native>
-                  <span className="hub-ic"><i aria-hidden="true" className="fas fa-ticket" /></span>
-                  <span className="hub-body"><strong>Check a result with a scratch card</strong><span>Enter a card PIN to view a released exam result</span></span>
-                  <i aria-hidden="true" className="fas fa-arrow-right hub-go" />
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="sec">
-          <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.5rem', flexWrap: 'wrap' }}>Results
-            {r && <a href={d.urls.report_pdf} className="pdf-link"><i aria-hidden="true" className="fas fa-file-pdf" /> Download PDF</a>}
-          </h2>
-          {r ? (
-            <>
-              <p className="muted" style={{ fontSize: 'var(--text-xs)', marginTop: '-.4rem' }}><i aria-hidden="true" className="fas fa-wifi" /> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>
-              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-              <table style={{ minWidth: 480 }}>
-                <thead><tr><th>Subject</th>{r.assessment_types.map((at) => <th key={at.id}>{at.label}</th>)}<th>Total</th><th>Grade</th><th>Remark</th></tr></thead>
-                <tbody>
-                  {r.subjects.map((row, i) => (
-                    <tr key={i}>
-                      <td>{row.name}</td>
-                      {r.assessment_types.map((at) => <td key={at.id}>{row.assessments[String(at.id)] != null ? row.assessments[String(at.id)] : '–'}</td>)}
-                      <td><strong>{row.total}</strong></td><td>{row.grade}</td><td>{row.remark}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
-              {r.affective.length > 0 && (
-                <>
-                  <h2 style={{ marginTop: '1.2rem' }}>Behaviour</h2>
-                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                  <table style={{ minWidth: 320 }}>
-                    <thead><tr><th>Trait</th><th>Rating</th></tr></thead>
-                    <tbody>
-                      {r.affective.map((a, i) => <tr key={i}><td>{a.label}</td><td>{a.rating}/5 · {a.rating_label}</td></tr>)}
-                    </tbody>
-                  </table>
-                  </div>
-                </>
-              )}
-              {(r.teacher_comment || r.principal_comment) && (
-                <>
-                  <p style={{ marginTop: '.8rem' }}><strong>Form teacher:</strong> {r.teacher_comment || '—'}</p>
-                  <p><strong>Principal:</strong> {r.principal_comment || '—'}</p>
-                </>
-              )}
-            </>
-          ) : d.needs_card ? (
-            <div style={{ textAlign: 'center', padding: '1rem .5rem' }}>
-              <div style={{ fontSize: '2rem', color: '#334155', marginBottom: '.4rem' }}><i aria-hidden="true" className="fas fa-lock" /></div>
-              <p style={{ fontWeight: 600, marginBottom: '.3rem' }}>This term's result is ready.</p>
-              <p className="muted" style={{ marginBottom: '.8rem' }}>Unlock it with a scratch card from the school. Once unlocked, it stays available here on the portal.</p>
-              <a href={d.urls.result_checker} className="pay-btn" style={{ display: 'inline-block', width: 'auto', padding: '.6rem 1.2rem', textDecoration: 'none' }}>
-                <i aria-hidden="true" className="fas fa-ticket" /> Unlock with scratch card
-              </a>
-            </div>
-          ) : (
-            <p className="muted">Results for this term are not yet available. Please check back after the school has released them.</p>
-          )}
-        </div>
-
-        {d.announcements.length > 0 && (
-          <div className="sec">
-            <h2>Announcements</h2>
-            {d.announcements.map((a, i) => (
-              <div className="ann" key={i}>{a.is_pinned && <span className="badge">Pinned</span>} <strong>{a.title}</strong>
-                <div className="muted">{a.body}</div></div>
-            ))}
-          </div>
+        {sibs.length > 1 && (
+          <nav className="pp-kids" aria-label="Your children">
+            {sibs.map((s) => s.is_current
+              ? <span key={s.id} className="on" aria-current="page"><span className="pp-av sm" aria-hidden="true">{initials(s.full_name)}</span>{s.full_name}</span>
+              : <a key={s.id} href={s.switch_url}><span className="pp-av sm" aria-hidden="true">{initials(s.full_name)}</span>{s.full_name}</a>)}
+          </nav>
         )}
       </div>
+    </header>
+  );
+}
+
+function Terms({ d, go }) {
+  if (!d.terms || d.terms.length < 2) return null;
+  return (
+    <div className="pp-terms" role="radiogroup" aria-label="Term">
+      {d.terms.map((t) => (
+        <button key={t.id} type="button" role="radio" aria-checked={t.id === d.term_id} className={t.id === d.term_id ? 'on' : ''}
+                onClick={() => t.id !== d.term_id && go(`${d.urls.self}?term_id=${t.id}${window.location.hash}`)}>{t.name}</button>
+      ))}
+    </div>
+  );
+}
+
+function Flashes({ d }) {
+  const [list, setList] = useState(d.flashes || []);
+  if (!list.length) return null;
+  return list.map((f, i) => (
+    <div key={i} role="status" className={`pp-flash ${f.category}`}>
+      <i aria-hidden="true" className={'fas ' + (f.category === 'success' ? 'fa-circle-check' : f.category === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info')} />
+      <span>{f.message}</span>
+      <button type="button" aria-label="Dismiss" onClick={() => setList(list.filter((_, j) => j !== i))}><i aria-hidden="true" className="fas fa-xmark" /></button>
+    </div>
+  ));
+}
+
+function ResultState({ d }) {
+  if (d.report) return null;
+  if (d.needs_card) {
+    return (
+      <div className="pp-card pp-locked">
+        <span className="ic"><i aria-hidden="true" className="fas fa-lock" /></span>
+        <div><b>This term's result is ready</b><p>Unlock it once with a scratch card from the school. After that it stays here for you.</p></div>
+        <a href={d.urls.result_checker} className="pp-btn primary" data-native><i aria-hidden="true" className="fas fa-ticket" /> Unlock with scratch card</a>
+      </div>
+    );
+  }
+  return (
+    <div className="pp-card pp-empty"><i aria-hidden="true" className="fas fa-hourglass-half" />
+      <p>Results for this term aren't out yet. They'll appear here once the school releases them.</p></div>
+  );
+}
+
+function Home({ d, setTab }) {
+  const r = d.report, b = d.bill;
+  const owing = b && b.balance > 0.005;
+  return (
+    <>
+      <div className="pp-tiles">
+        <button type="button" className={'pp-tile ' + (b ? (owing ? 'bad' : 'good') : '')} onClick={() => setTab('fees')}>
+          <span className="l">Fee balance</span>
+          <span className="v">{b ? money(b.balance) : '—'}</span>
+          <span className="s">{b ? (owing ? `of ${money(b.payable)} owed` : 'Fully paid') : 'No fee record'}</span>
+        </button>
+        <div className="pp-tile">
+          <span className="l">Attendance</span>
+          <span className="v">{d.attendance != null ? `${d.attendance}%` : '—'}</span>
+          <span className="s">{d.attendance != null ? 'this term' : 'not recorded yet'}</span>
+        </div>
+        <button type="button" className="pp-tile" onClick={() => setTab('results')}>
+          <span className="l">{r ? 'Position' : 'Results'}</span>
+          <span className="v">{r ? (r.position || '—') : (d.needs_card ? 'Ready' : '—')}</span>
+          <span className="s">{r ? `average ${r.average} · ${r.overall_grade}` : (d.needs_card ? 'tap to unlock' : 'not released yet')}</span>
+        </button>
+      </div>
+      {!r && <ResultState d={d} />}
+      {r && (
+        <button type="button" className="pp-card pp-go" onClick={() => setTab('results')}>
+          <span className="ic good"><i aria-hidden="true" className="fas fa-file-circle-check" /></span>
+          <span className="t"><b>Report card is ready</b><small>{r.subjects.length} subjects · average {r.average}</small></span>
+          <i aria-hidden="true" className="fas fa-chevron-right" />
+        </button>
+      )}
+      {d.announcements.length > 0 && (
+        <section className="pp-card">
+          <h2><i aria-hidden="true" className="fas fa-bullhorn" /> From the school</h2>
+          <ul className="pp-ann">
+            {d.announcements.slice(0, 3).map((a, i) => (
+              <li key={i}>{a.is_pinned && <span className="pp-pin">Pinned</span>}<b>{a.title}</b><p>{a.body}</p></li>
+            ))}
+          </ul>
+          {d.announcements.length > 3 && <button type="button" className="pp-link" onClick={() => setTab('more')}>See all {d.announcements.length}</button>}
+        </section>
+      )}
     </>
+  );
+}
+
+function Results({ d }) {
+  const r = d.report;
+  if (!r) return <ResultState d={d} />;
+  return (
+    <>
+      <div className="pp-card pp-sum">
+        <div><span className="l">Position</span><b>{r.position || '—'}</b></div>
+        <div><span className="l">Average</span><b>{r.average}</b></div>
+        <div><span className="l">Grade</span><b>{r.overall_grade || '—'}</b></div>
+        <a href={r && d.urls.report_pdf} className="pp-btn" data-native><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+      </div>
+      <section className="pp-card flush">
+        <h2 className="pad"><i aria-hidden="true" className="fas fa-book-open" /> Subjects</h2>
+        <ul className="pp-subj">
+          {r.subjects.map((row, i) => (
+            <li key={i}>
+              <div className="h"><b>{row.name}</b><span className={'pp-grade ' + gradeTone(row.grade)}>{row.grade || '–'}</span><strong>{row.total}</strong></div>
+              <div className="parts">
+                {r.assessment_types.map((at) => (
+                  <span key={at.id}><small>{at.label}</small>{row.assessments[String(at.id)] != null ? row.assessments[String(at.id)] : '–'}</span>
+                ))}
+                {row.remark && <em>{row.remark}</em>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {r.affective.length > 0 && (
+        <section className="pp-card">
+          <h2><i aria-hidden="true" className="fas fa-hand-holding-heart" /> Behaviour</h2>
+          <ul className="pp-traits">
+            {r.affective.map((a, i) => (
+              <li key={i}><span>{a.label}</span>
+                <span className="dots" aria-label={`${a.rating} of 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= a.rating ? 'on' : ''} />)}</span>
+                <small>{a.rating_label}</small></li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {(r.teacher_comment || r.principal_comment) && (
+        <section className="pp-card">
+          <h2><i aria-hidden="true" className="fas fa-comment-dots" /> Comments</h2>
+          {r.teacher_comment && <blockquote><small>Form teacher</small>{r.teacher_comment}</blockquote>}
+          {r.principal_comment && <blockquote><small>Principal</small>{r.principal_comment}</blockquote>}
+        </section>
+      )}
+      <p className="pp-tip"><i aria-hidden="true" className="fas fa-wifi" /> Once opened, this page works offline, and the PDF can be saved to your phone.</p>
+    </>
+  );
+}
+
+function Fees({ d }) {
+  const b = d.bill;
+  const [amount, setAmount] = useState(b ? Math.round(b.balance) : 0);
+  if (!b) return <div className="pp-card pp-empty"><i aria-hidden="true" className="fas fa-receipt" /><p>No fee record for this term.</p></div>;
+  const owing = b.balance > 0.005;
+  const pct = b.payable ? Math.min(100, Math.round((b.paid / b.payable) * 100)) : 100;
+  const presets = owing ? [...new Set([Math.round(b.balance), Math.round(b.balance / 2)].filter((v) => v >= 100))] : [];
+  return (
+    <>
+      <div className={'pp-card pp-bal ' + (owing ? 'owe' : 'ok')}>
+        <span className="l">{owing ? 'Outstanding balance' : 'Fees fully paid'}</span>
+        <b>{money(b.balance)}</b>
+        <div className="bar" role="img" aria-label={`${pct}% paid`}><i style={{ width: pct + '%' }} /></div>
+        <div className="row"><span>Paid {money(b.paid)}</span><span>Billed {money(b.payable)}</span></div>
+      </div>
+      {owing && d.pay_enabled && (
+        <form className="pp-card pp-pay" method="POST" action={d.urls.pay}>
+          <h2><i aria-hidden="true" className="fas fa-credit-card" /> Pay online</h2>
+          <input type="hidden" name="_csrf_token" value={csrfToken()} />
+          <input type="hidden" name="term_id" value={d.term_id || ''} />
+          <div className="presets">
+            {presets.map((v) => (
+              <button type="button" key={v} className={Number(amount) === v ? 'on' : ''} onClick={() => setAmount(v)}>
+                {v === Math.round(b.balance) ? 'Full balance' : 'Half'}<b>{money(v)}</b></button>
+            ))}
+          </div>
+          <label className="pp-amt"><span>Amount (₦)</span>
+            <input type="number" inputMode="numeric" name="amount" min="100" step="50" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
+          <button type="submit" className="pp-btn primary wide" disabled={!(Number(amount) >= 100)}>
+            <i aria-hidden="true" className="fas fa-lock" /> Pay {Number(amount) >= 100 ? money(amount) : ''} securely</button>
+          <small className="pp-muted">You'll be taken to the payment page and brought back here. Your receipt appears once it's confirmed.</small>
+        </form>
+      )}
+      {owing && !d.pay_enabled && (
+        <div className="pp-card pp-note"><i aria-hidden="true" className="fas fa-circle-info" /><span>Online payment isn't set up for this school yet. Please pay at the school office or by the school's bank details.</span></div>
+      )}
+    </>
+  );
+}
+
+function More({ d }) {
+  const a = d.aspiration;
+  const first = (d.student.full_name || '').split(' ').slice(-1)[0] || 'your child';
+  return (
+    <>
+      <section className="pp-card flush">
+        <h2 className="pad"><i aria-hidden="true" className="fas fa-grip" /> More for {first}</h2>
+        <div className="pp-links">
+          {d.urls.result_checker && <a href={d.urls.result_checker} data-native><span className="ic"><i aria-hidden="true" className="fas fa-ticket" /></span><span className="t"><b>Check a result with a scratch card</b><small>Enter a card PIN to view a released result</small></span><i aria-hidden="true" className="fas fa-chevron-right" /></a>}
+          {d.urls.cbt_portal && <a href={d.urls.cbt_portal} data-native><span className="ic"><i aria-hidden="true" className="fas fa-laptop-code" /></span><span className="t"><b>Take a CBT exam</b><small>Sign in to an online test scheduled for today</small></span><i aria-hidden="true" className="fas fa-chevron-right" /></a>}
+          <a href={d.urls.logout}><span className="ic"><i aria-hidden="true" className="fas fa-right-from-bracket" /></span><span className="t"><b>Sign out</b><small>Leave the parent portal on this device</small></span><i aria-hidden="true" className="fas fa-chevron-right" /></a>
+        </div>
+      </section>
+      {a && (
+        <section className="pp-card">
+          <h2><i aria-hidden="true" className="fas fa-graduation-cap" /> University goal</h2>
+          <b className="pp-goal">{a.course || 'Target course'}{a.university ? ` — ${a.university}` : ''}</b>
+          {a.department && <p className="pp-muted">{a.department}</p>}
+          {a.status_label && <span className={'pp-pill ' + ({ ON_TRACK: 'good', CLOSE: 'mid', OFF_TRACK: 'bad' }[a.status] || '')}>{a.status_label}</span>}
+          {a.target != null && a.projected != null && (
+            <p className="pp-muted">Projected JAMB {a.projected} against a target of {a.target}{a.gap != null && a.gap > 0 ? ` · ${a.gap} to go` : ' · target met'}</p>)}
+          {a.admission_status && <p className="pp-muted">Admission: <b>{a.admission_status}</b>{a.admitted_university ? ` — ${a.admitted_university}` : ''}{a.admitted_course ? ` (${a.admitted_course})` : ''}</p>}
+        </section>
+      )}
+      {d.announcements.length > 0 && (
+        <section className="pp-card">
+          <h2><i aria-hidden="true" className="fas fa-bullhorn" /> Announcements</h2>
+          <ul className="pp-ann">{d.announcements.map((x, i) => <li key={i}>{x.is_pinned && <span className="pp-pin">Pinned</span>}<b>{x.title}</b><p>{x.body}</p></li>)}</ul>
+        </section>
+      )}
+    </>
+  );
+}
+
+function Shell({ d, go }) {
+  const [tab, setTabState] = useState(tabFromHash);
+  const setTab = (k) => {
+    setTabState(k);
+    try { window.history.replaceState(null, '', '#' + k); } catch (e) { /* ignore */ }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  useEffect(() => {
+    const on = () => setTabState(tabFromHash());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  const owing = d.bill && d.bill.balance > 0.005;
+  const badge = { fees: owing ? '!' : null, results: d.needs_card ? '•' : null };
+  return (
+    <div className="pp">
+      <Header d={d} />
+      <nav className="pp-tabs" aria-label="Sections">
+        <div className="pp-wrap">
+          {TABS.map((t) => (
+            <button key={t.k} type="button" className={tab === t.k ? 'on' : ''} aria-current={tab === t.k ? 'page' : undefined} onClick={() => setTab(t.k)}>
+              <i aria-hidden="true" className={'fas ' + t.icon} /><span>{t.label}</span>{badge[t.k] && <em aria-hidden="true">{badge[t.k]}</em>}
+            </button>
+          ))}
+        </div>
+      </nav>
+      <main className="pp-wrap pp-main">
+        <Flashes d={d} />
+        {tab !== 'more' && <Terms d={d} go={go} />}
+        {tab === 'home' && <Home d={d} setTab={setTab} />}
+        {tab === 'results' && <Results d={d} />}
+        {tab === 'fees' && <Fees key={d.term_id} d={d} />}
+        {tab === 'more' && <More d={d} />}
+      </main>
+    </div>
   );
 }
 
@@ -212,7 +305,7 @@ export default function ParentApp({ data }) {
   const { data: d, go } = useSection(data);
   return (
     <NavCtx.Provider value={{ go, refresh: () => go(window.location.href, { replace: true }) }}>
-      <ErrorBoundary><Home d={d} go={go} /></ErrorBoundary>
+      <ErrorBoundary><Shell d={d} go={go} /></ErrorBoundary>
     </NavCtx.Provider>
   );
 }
