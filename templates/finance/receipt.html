@@ -25,6 +25,9 @@
 .rc-stamp{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.3rem .7rem;border-radius:8px;border:2px solid;transform:rotate(-3deg)}
 .rc-stamp.full{color:var(--success);border-color:var(--success);background:color-mix(in srgb,var(--success) 8%,transparent)}
 .rc-stamp.part{color:var(--warning);border-color:var(--warning);background:color-mix(in srgb,var(--warning) 8%,transparent)}
+.rc-for{margin:0 0 1rem;padding:.7rem .9rem;border-radius:14px;border:1px dashed var(--border-color)}
+.rc-for>small{display:block;color:var(--text-muted);font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
+.rc-for .rc-kv{margin:0}
 .rc-amt{text-align:center;padding:1.1rem;border-radius:16px;background:color-mix(in srgb,var(--success) 9%,var(--bg-card));margin-bottom:1rem}
 .rc-amt small{display:block;color:var(--text-muted);font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
 .rc-amt b{display:block;font-size:2.2rem;line-height:1.15;font-family:var(--font-display,inherit);color:var(--success);font-variant-numeric:tabular-nums;margin:.2rem 0}
@@ -128,6 +131,16 @@
           {% if payment.reference %}<dt>Reference</dt><dd class="ref">{{ payment.reference }}</dd>{% endif %}
           {% if term_payments|length > 1 %}<dt>Instalment</dt><dd>{{ idx }} of {{ term_payments|length }} this term</dd>{% endif %}
         </dl>
+        {% if payment.items %}
+        <div class="rc-for">
+          <small>Paid for</small>
+          <dl class="rc-kv">
+            {% for it in payment.items %}<dt>{{ it.fee_item.name if it.fee_item else 'Fee item' }}</dt><dd>{{ it.amount|naira }}</dd>{% endfor %}
+            {% set rest = payment.amount - (payment.items|sum(attribute='amount')) %}
+            {% if rest > 0.005 %}<dt>Toward the rest of the bill</dt><dd>{{ rest|naira }}</dd>{% endif %}
+          </dl>
+        </div>
+        {% endif %}
 
         {% if bill.billed %}
         <div class="rc-prog" role="img" aria-label="{{ paid_pct|int }}% of the term's fees paid">

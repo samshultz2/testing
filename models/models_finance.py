@@ -73,9 +73,26 @@ class FeePayment(db.Model):
 
     student = db.relationship('Student', backref=db.backref('fee_payments', lazy='dynamic'))
     term = db.relationship('Term')
+    # What the payment was for, when the payer chose particular fee items
+    # (e.g. only WAEC registration). Empty = paid toward the bill as a whole.
+    items = db.relationship('FeePaymentItem', backref='payment', lazy='select',
+                            cascade='all, delete-orphan', order_by='FeePaymentItem.id')
 
     def __repr__(self):
         return f'<FeePayment {self.student_id} t{self.term_id}: {self.amount}>'
+
+
+class FeePaymentItem(db.Model):
+    """The part of a payment set against one fee item."""
+    __tablename__ = 'fee_payment_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    payment_id = db.Column(db.Integer, db.ForeignKey('fee_payments.id', ondelete='CASCADE'),
+                           nullable=False, index=True)
+    fee_item_id = db.Column(db.Integer, db.ForeignKey('fee_items.id'), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False)
+
+    fee_item = db.relationship('FeeItem')
 
 
 class FeeDiscount(db.Model):

@@ -23,7 +23,7 @@ from .models import (
     GenDaySeparationRule, GenPeriodPlacementRule, ActiveTimetableBatch
 )
 from .models_contributions import ContributionSettings, ContributionPayment, ContributionExpense
-from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
+from .models_finance import (FeeItem, FeeStructure, FeePayment, FeePaymentItem, FeeDiscount,
                              ExpenseCategory, Expense, FinanceTransaction, AdditionalCharge, InstallmentPlan)
 from .models_comms import MessageTemplate, Message, MessageRecipient, Announcement, Notification, RecipientGroup, AnnouncementAck, CommAttachment, NotificationPreference, PushSubscription
 from .models_school_exams import SchoolExamConfig, SchoolExamResult, SchoolExamCandidate
@@ -94,7 +94,7 @@ __all__ = [
     'GenSubjectClashRule', 'GenCombinedClassRule', 'GenCoScheduleRule', 'GenCoScheduleRuleMember',
     'GenDaySeparationRule', 'GenPeriodPlacementRule', 'ActiveTimetableBatch',
     'ContributionSettings', 'ContributionPayment', 'ContributionExpense',
-    'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
+    'FeeItem', 'FeeStructure', 'FeePayment', 'FeePaymentItem', 'FeeDiscount',
     'ExpenseCategory', 'Expense', 'FinanceTransaction', 'AdditionalCharge', 'InstallmentPlan',
     'MessageTemplate', 'Message', 'MessageRecipient', 'Announcement', 'Notification', 'RecipientGroup', 'AnnouncementAck', 'CommAttachment',
     'Conversation', 'ConversationMember', 'ChatMessage',

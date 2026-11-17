@@ -374,7 +374,8 @@ function BillCard({ bill, structureUrl, statementUrl, compact }) {
   }
   return (
     <div className="fn-bill">
-      {!compact && bill.lines.map((l, i) => <div className="fn-line" key={i}><span>{l.name}</span><span>{naira(l.amount)}</span></div>)}
+      {!compact && bill.lines.map((l, i) => (
+        <div className="fn-line" key={i}><span>{l.name}{l.paid > 0 && <small className="fn-line-sub">{l.left > 0.005 ? `${naira(l.paid)} paid · ${naira(l.left)} left` : 'Paid in full'}</small>}</span><span>{naira(l.amount)}</span></div>))}
       <div className="fn-line sub"><span>Total billed</span><span>{naira(bill.billed)}</span></div>
       {bill.discount > 0 && <div className="fn-line"><span>Discount / waiver</span><span>− {naira(bill.discount)}</span></div>}
       <div className="fn-line"><span>Already paid</span><span className="good">{naira(bill.paid)}</span></div>
@@ -393,6 +394,18 @@ function PayDesk({ d, notify }) {
   const [busy, setBusy] = useState(false);
   const [more, setMore] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  // "What's it for?" — the whole bill, or particular fee items.
+  const lines = (bill && bill.lines) || [];
+  const [forWhat, setForWhat] = useState('bill');
+  const [pick, setPick] = useState({});            // {fee_item_id: amount string}
+  const picked = Object.entries(pick).filter(([, v]) => num(v) > 0);
+  const pickTotal = picked.reduce((t, [, v]) => t + num(v), 0);
+  const toggleItem = (l) => setPick((p) => {
+    const n = { ...p };
+    if (n[l.id] !== undefined) delete n[l.id]; else n[l.id] = String(l.left > 0.005 ? l.left : l.amount);
+    return n;
+  });
+  useEffect(() => { if (forWhat === 'items') set('amount', pickTotal > 0 ? String(Math.round(pickTotal * 100) / 100) : ''); }, [pickTotal, forWhat]);
   const amt = num(f.amount);
   const quick = [bal > 0 && ['Full balance', bal], bal > 0 && ['Half', Math.round(bal / 2)], [null, 10000], [null, 20000], [null, 50000]]
     .filter(Boolean).filter(([l, v], i, arr) => v > 0 && arr.findIndex((x) => x[1] === v) === i);
@@ -400,8 +413,10 @@ function PayDesk({ d, notify }) {
     if (e) e.preventDefault();
     if (!(amt > 0)) { notify('error', 'Enter a positive amount.'); return; }
     if (bal > 0 && amt > bal + 0.005 && !await confirm(`₦${amt.toLocaleString()} is more than the balance (${naira(bal)}). Record it anyway?`)) return;
+    if (forWhat === 'items' && !picked.length) { notify('error', 'Tick at least one fee item, or choose "Whole bill".'); return; }
     setBusy(true);
-    const r = await submitJson(d.submit_url, { ...f, student_id: s.id, term_id: d.term_id });
+    const items = forWhat === 'items' ? JSON.stringify(picked.map(([id, v]) => ({ id: +id, amount: num(v) }))) : '';
+    const r = await submitJson(d.submit_url, { ...f, items, student_id: s.id, term_id: d.term_id });
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
@@ -421,12 +436,42 @@ function PayDesk({ d, notify }) {
 
       <form id="fnPayForm" className="rs-card fn-form" onSubmit={submit}>
         <div className="rs-card-h"><h3><i className="fas fa-money-bill-wave" aria-hidden="true" />Payment</h3>{bal <= 0.005 && <span className="fn-pill good">Fully paid</span>}</div>
-        <label className="fn-big"><span>₦</span>
-          <input type="number" inputMode="decimal" min="0" step="50" required value={f.amount} onChange={(e) => set('amount', e.target.value)} aria-label="Amount in naira" placeholder="0" />
+        {lines.length > 0 && (
+          <>
+            <div className="fn-lbl">What’s it for?</div>
+            <Seg value={forWhat} onChange={(v) => { setForWhat(v); if (v === 'bill') { setPick({}); set('amount', bal > 0 ? String(bal) : ''); } }} label="What the payment is for"
+              options={[{ value: 'bill', label: 'Whole bill', icon: 'fa-file-invoice' }, { value: 'items', label: 'Choose items', icon: 'fa-list-check' }]} />
+          </>
+        )}
+        {forWhat === 'items' && (
+          <div className="fn-items" role="group" aria-label="Fee items">
+            {lines.map((l) => {
+              const on = pick[l.id] !== undefined;
+              const done = l.left <= 0.005;
+              return (
+                <div key={l.id} className={'fn-item' + (on ? ' on' : '') + (done ? ' done' : '')}>
+                  <label className="fn-item-t">
+                    <input type="checkbox" checked={on} onChange={() => toggleItem(l)} />
+                    <span><b>{l.name}</b><small>{done ? `Paid in full · ${naira(l.amount)}` : l.paid > 0 ? `${naira(l.left)} left of ${naira(l.amount)}` : naira(l.amount)}</small></span>
+                  </label>
+                  {on && (
+                    <label className="fn-item-amt"><span>₦</span>
+                      <input type="number" inputMode="decimal" min="0" step="50" value={pick[l.id]} aria-label={`Amount for ${l.name}`}
+                        onChange={(e) => setPick((p) => ({ ...p, [l.id]: e.target.value }))} /></label>
+                  )}
+                </div>);
+            })}
+            {bill.general_paid > 0 && <p className="fn-note"><i className="fas fa-circle-info" aria-hidden="true" /> {naira(bill.general_paid)} was paid earlier toward the bill as a whole, not a particular item.</p>}
+          </div>
+        )}
+        <label className={'fn-big' + (forWhat === 'items' ? ' locked' : '')}><span>₦</span>
+          <input type="number" inputMode="decimal" min="0" step="50" required value={f.amount} readOnly={forWhat === 'items'} onChange={(e) => set('amount', e.target.value)} aria-label="Amount in naira" placeholder="0" />
         </label>
-        <div className="fn-quick">{quick.map(([l, v]) => (
-          <button type="button" key={v} className={'rs-chip' + (amt === v ? ' on' : '')} onClick={() => set('amount', String(v))}>{l ? <>{l} <small>{nairaShort(v)}</small></> : nairaShort(v)}</button>))}
-        </div>
+        {forWhat === 'items'
+          ? <p className="fn-after">{picked.length ? `${picked.length} item${picked.length === 1 ? '' : 's'}: ${picked.map(([id]) => (lines.find((l) => String(l.id) === id) || {}).name).join(', ')}` : 'Tick the items being paid for.'}</p>
+          : <div className="fn-quick">{quick.map(([l, v]) => (
+            <button type="button" key={v} className={'rs-chip' + (amt === v ? ' on' : '')} onClick={() => set('amount', String(v))}>{l ? <>{l} <small>{nairaShort(v)}</small></> : nairaShort(v)}</button>))}
+          </div>}
         {bal > 0 && amt > 0 && <p className="fn-after">Balance after this payment: <b className={bal - amt > 0.005 ? 'bad' : 'good'}>{naira(Math.max(bal - amt, 0))}</b>{amt > bal + 0.005 && <> · <b className="mid">{naira(amt - bal)} overpaid</b></>}</p>}
         <div className="fn-lbl">Method</div>
         <Seg value={f.method} onChange={(v) => set('method', v)} label="Payment method"

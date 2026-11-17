@@ -165,6 +165,21 @@
 .fl-bar{gap:.55rem}
 .fl-row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
 .fl-row>.rs-chips{flex:1;min-width:0}
+.fn-items{display:flex;flex-direction:column;gap:.45rem;margin:.2rem 0 .7rem}
+.fn-item{display:flex;align-items:center;gap:.6rem;border:1.5px solid var(--border-color);border-radius:12px;padding:.55rem .7rem;background:var(--bg-card)}
+.fn-item.on{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--bg-card))}
+.fn-item.done:not(.on){opacity:.6}
+.fn-item-t{display:flex;align-items:center;gap:.65rem;flex:1;min-width:0;cursor:pointer;margin:0}
+.fn-item-t input{width:20px;height:20px;flex:none;accent-color:var(--primary)}
+.fn-item-t span{display:flex;flex-direction:column;min-width:0}
+.fn-item-t b{font-size:.92rem}
+.fn-item-t small{color:var(--text-muted);font-size:.76rem}
+.fn-item-amt{display:flex;align-items:center;gap:.25rem;margin:0;flex:none}
+.fn-item-amt span{color:var(--text-muted);font-weight:700}
+.fn-item-amt input{width:118px;height:38px;border:1.5px solid var(--border-color);border-radius:10px;padding:0 .55rem;font:inherit;font-weight:700;text-align:right;background:var(--bg-card);color:var(--text-primary)}
+.fn-note{margin:.2rem 0 0;font-size:.78rem;color:var(--text-muted)}
+.fn-big.locked input{color:var(--text-secondary)}
+.fn-line-sub{display:block;font-size:.72rem;color:var(--text-muted)}
 .fn-ca{display:flex;flex-direction:column;gap:.55rem;width:100%}
 .fn-ca-step{display:flex;align-items:flex-start;gap:.6rem}
 .fn-ca-l{flex:none;width:3.2rem;padding-top:.5rem;font-size:.7rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
@@ -222,6 +237,9 @@
   .fn-ca-step{flex-direction:column;gap:.25rem}
   .fn-ca-l{padding-top:0;width:auto}
   .fn-ca .rs-chips{flex-wrap:wrap;overflow:visible;margin:0;padding:0}
+  .fn-item{flex-wrap:wrap}
+  .fn-item-amt{margin-left:calc(20px + .65rem)}
+  .fn-item-amt input{width:140px}
   .fl-row>.rs-btn{width:100%}
   .fl-strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}
   .fl-strip-h{grid-column:1/-1}

@@ -77,9 +77,11 @@ def student_bill(student_id, term_id):
             .filter(FeePayment.student_id == student_id,
                     FeePayment.term_id == term_id).scalar()) or 0.0
     charges, credits = student_charges(student_id, term_id)
+    item_paid = item_payments(student_id, term_id)
 
     payable = max(billed + charges - discount - credits, 0)
     return {
+        'item_paid': item_paid,       # {fee_item_id: paid toward that item}
         'class_id': class_id,
         'arm_id': arm_id,
         'lines': lines,
@@ -91,6 +93,17 @@ def student_bill(student_id, term_id):
         'payable': payable,
         'balance': payable - paid,
     }
+
+
+def item_payments(student_id, term_id):
+    """{fee_item_id: amount} paid toward particular fee items this term (from
+    payments where the payer chose what they were paying for)."""
+    from models import FeePaymentItem
+    rows = (db.session.query(FeePaymentItem.fee_item_id, func.coalesce(func.sum(FeePaymentItem.amount), 0.0))
+            .join(FeePayment, FeePayment.id == FeePaymentItem.payment_id)
+            .filter(FeePayment.student_id == student_id, FeePayment.term_id == term_id)
+            .group_by(FeePaymentItem.fee_item_id).all())
+    return {iid: float(v or 0) for iid, v in rows}
 
 
 def student_charges(student_id, term_id):

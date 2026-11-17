@@ -129,6 +129,22 @@ def receipt_pdf(payment, bill, school):
     el.append(amt)
     el.append(Spacer(1, 8))
 
+    items = list(getattr(payment, 'items', None) or [])
+    if items:
+        el.append(Paragraph('Paid for', label))
+        prow = [row(it.fee_item.name if it.fee_item else 'Fee item', _naira(it.amount)) for it in items]
+        rest = (payment.amount or 0) - sum(it.amount for it in items)
+        if rest > 0.005:
+            prow.append(row('Toward the rest of the bill', _naira(rest)))
+        pt = Table(prow, colWidths=[None, 40 * mm])
+        pt.setStyle(TableStyle([
+            ('LINEBELOW', (0, 0), (-1, -2), 0.4, colors.HexColor('#eef2f7')),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ]))
+        el.append(pt)
+        el.append(Spacer(1, 8))
+
     summ = [
         row('Total billed (term)', _naira(bill.get('billed'))),
     ]

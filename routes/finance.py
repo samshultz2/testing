@@ -15,7 +15,7 @@ from utils.web_exports import xlsx_response, csv_response, formula_guard
 from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 
 from models import (
-    db, FeeItem, FeeStructure, FeePayment, FeeDiscount, ExpenseCategory, Expense,
+    db, FeeItem, FeeStructure, FeePayment, FeePaymentItem, FeeDiscount, ExpenseCategory, Expense,
     Student, Term, SchoolClass, ClassArm, StudentEnrollment,
     ClassArmAssignment, AdditionalCharge, InstallmentPlan,
 )
@@ -56,10 +56,45 @@ def _is_admin():
     return is_admin()
 
 
+def _payment_items(raw, student_id, term_id, amount):
+    """Parse the optional ``items`` field ([{"id": fee_item_id, "amount": n}, ...])
+    into [(fee_item_id, amount)]. Items must be on the student's bill for the
+    term and add up to no more than the payment; anything left over is paid
+    toward the bill as a whole. Returns (split, error)."""
+    import json
+    if not raw:
+        return [], None
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return [], 'Could not read the fee items chosen.'
+    from utils.finance import student_placement, structure_items
+    cid, aid = student_placement(student_id, term_id)
+    allowed = {it.id for it, _ in structure_items(term_id, cid, aid)} if cid else set()
+    split = {}
+    for d in data if isinstance(data, list) else []:
+        try:
+            iid, amt = int(d.get('id')), round(float(d.get('amount')), 2)
+        except (TypeError, ValueError, AttributeError):
+            return [], 'Could not read the fee items chosen.'
+        if iid not in allowed:
+            return [], 'One of the chosen fee items is not on this student\'s bill.'
+        if amt > 0:
+            split[iid] = split.get(iid, 0) + amt
+    if sum(split.values()) > (amount or 0) + 0.01:
+        return [], 'The amounts for the chosen items add up to more than the payment.'
+    return list(split.items()), None
+
+
 def _bill_json(bill):
     if not bill:
         return None
-    return {'lines': [{'name': it.name, 'amount': amt} for it, amt in bill['lines']],
+    ip = bill.get('item_paid') or {}
+    lines = [{'id': it.id, 'name': it.name, 'amount': amt, 'paid': round(ip.get(it.id, 0.0), 2),
+              'left': round(max(amt - ip.get(it.id, 0.0), 0), 2)} for it, amt in bill['lines']]
+    return {'lines': lines,
+            # Paid toward the bill as a whole (not tied to an item).
+            'general_paid': round(max(bill['paid'] - sum(ip.values()), 0), 2),
             'billed': bill['billed'], 'discount': bill['discount'], 'paid': bill['paid'],
             'payable': bill['payable'], 'balance': bill['balance'],
             'class_id': bill['class_id'], 'arm_id': bill['arm_id']}
@@ -588,6 +623,12 @@ def record_payment():
         if stu:
             require_branch_access(stu.branch_id)    # no recording fees across branches
         payment.branch_id = stu.branch_id if stu else None
+        # Optional split across fee items ("only WAEC registration for now").
+        split, err = _payment_items(request.form.get('items'), student_id, term_id, amount)
+        if err:
+            return _err(err, url_for('finance.record_payment', term_id=term_id, student_id=student_id))
+        for iid, amt in split:
+            payment.items.append(FeePaymentItem(fee_item_id=iid, amount=amt))
         db.session.add(payment)
         db.session.commit()
         from utils import query_cache
