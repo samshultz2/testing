@@ -98,3 +98,14 @@ def test_check_portal_password_still_verifies_old_cost_hashes(app):
         assert s.portal_password_hash.startswith('scrypt:32768:8:1$')
         assert s.check_portal_password('legacyPassword')
         assert not s.check_portal_password('wrongPassword')
+
+
+def test_new_passwords_list_has_copy_buttons_for_id_and_password(app):
+    sid, student_id = _make_student(app, 'PW_COPY')
+    c, tok = _central_admin(app)
+    html = c.post('/cbt/passwords', data={
+        'action': 'generate', 'student_id': sid, 'output': 'html', '_csrf_token': tok}).get_data(as_text=True)
+    pin = _PIN_RE.search(html).group(1)
+    assert f'data-copy-text="{student_id}"' in html          # Student ID copy button
+    assert f'data-copy-text="{pin}"' in html                 # password copy button
+    assert 'class="pw-glist' in html                         # vertical list, not a wide table
