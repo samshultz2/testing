@@ -17,6 +17,8 @@
 .rs-btn.primary:hover{filter:brightness(1.07);color:#fff}
 .rs-btn.success{background:var(--success);border-color:var(--success);color:#fff}
 .rs-btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.rs-btn.ghost.danger{background:var(--bg-card);border-color:color-mix(in srgb,var(--danger) 45%,var(--border-color));color:var(--danger)}
+.rs-btn.ghost.danger:hover{background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));border-color:var(--danger)}
 .rs-btn.ghost.on{border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--bg-card))}
 .rs-btn.sm{height:34px;padding:0 .8rem;font-size:.82rem;border-radius:10px}
 .rs-btn.wide{width:100%}

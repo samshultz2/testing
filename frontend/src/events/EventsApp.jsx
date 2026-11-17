@@ -56,7 +56,7 @@ function EventDetail({ d, ev, onClose, onEdit, notify }) {
         {ev.description && <p className="ev-desc">{ev.description}</p>}
         {ev.created_by && <small className="cm-mute">Added by {ev.created_by}</small>}
         <div className="cm-sheet-f">
-          {canWrite(d, 'delete') && <button type="button" className="rs-btn ghost danger" onClick={del}><i className="fas fa-trash" aria-hidden="true" /><span className="rs-hide-sm"> Delete</span></button>}
+          {canWrite(d, 'delete') && <button type="button" className="rs-btn ghost danger" onClick={del}><i className="fas fa-trash" aria-hidden="true" /> Delete</button>}
           {canWrite(d, 'create') && <button type="button" className="rs-btn ghost" onClick={dup}><i className="fas fa-copy" aria-hidden="true" /> Copy</button>}
           {canWrite(d, 'edit') && <button type="button" className="rs-btn primary" onClick={onEdit}><i className="fas fa-pen" aria-hidden="true" /> Edit</button>}
         </div>
