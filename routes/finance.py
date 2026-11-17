@@ -693,7 +693,12 @@ def receipt(payment_id):
         'phone': SchoolSettings.get('school_phone', ''),
         'motto': SchoolSettings.get('school_motto', ''),
     }
-    return render_template('finance/receipt.html', payment=payment, bill=bill, school=school)
+    # Every payment this student made for the term, so the receipt shows where
+    # this one sits (e.g. "2nd of 3 instalments").
+    term_payments = (FeePayment.query.filter_by(student_id=payment.student_id, term_id=payment.term_id)
+                     .order_by(FeePayment.payment_date, FeePayment.id).all()) if payment.student_id else [payment]
+    return render_template('finance/receipt.html', payment=payment, bill=bill, school=school,
+                           term_payments=term_payments)
 
 
 @finance_bp.route('/payments/<int:payment_id>/receipt.pdf')

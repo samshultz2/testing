@@ -95,3 +95,25 @@ def test_receipt_pdf_draws_the_naira_sign(app):
                     if ch['c'] == '₦':
                         assert 'Helvetica' not in span['font']
     doc.close()
+
+
+def test_receipt_page_has_back_button_stamp_and_term_payments(app):
+    from datetime import date
+    from models import FeePayment, AcademicSession, Term, Student
+    with app.app_context():
+        s = Student(student_id='RCPTPG', first_name='Page', surname='Rcpt', gender='Male', is_active=True)
+        db.session.add(s); db.session.flush()
+        sess = AcademicSession.query.first() or AcademicSession(name='PG 24/25', is_active=True)
+        db.session.add(sess); db.session.flush()
+        term = Term.query.filter_by(session_id=sess.id, term_number=1).first() or Term(
+            session_id=sess.id, term_number=1, name='First Term')
+        db.session.add(term); db.session.flush()
+        p1 = FeePayment(student_id=s.id, term_id=term.id, amount=1000, payment_date=date(2026, 9, 1), method='Cash', receipt_no='PG-1')
+        p2 = FeePayment(student_id=s.id, term_id=term.id, amount=2500, payment_date=date(2026, 9, 9), method='POS', receipt_no='PG-2', reference='TX99')
+        db.session.add_all([p1, p2]); db.session.commit(); pid = p2.id
+    html = _admin(app).get(f'/finance/payments/{pid}/receipt').get_data(as_text=True)
+    assert 'id="rcBack"' in html and '/finance/payments' in html          # back button
+    assert '₦2,500.00' in html and 'TX99' in html
+    assert 'Instalment' in html and '2 of 2 this term' in html
+    assert 'Payments this term' in html and 'PG-1' not in html or '/receipt' in html
+    assert ('Paid in full' in html) or ('Part payment' in html)

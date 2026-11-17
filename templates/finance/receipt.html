@@ -1,85 +1,220 @@
 {% extends "base.html" %}
 {% block title %}Receipt {{ payment.receipt_no }} - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <span>Receipt</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('finance.dashboard') }}">Finance</a> / <a href="{{ url_for('finance.payments_list') }}">Payments</a> / <span>{{ payment.receipt_no }}</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.receipt{max-width:560px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
-.receipt .r-head{text-align:center;padding:1.4rem 1.2rem .9rem;border-bottom:2px dashed var(--border-color)}
-.receipt .r-head h2{margin:0;font-family:var(--font-display)}
-.receipt .r-head .motto{font-size:.8rem;color:var(--text-muted);font-style:italic}
-.receipt .r-head .addr{font-size:.8rem;color:var(--text-muted);margin-top:.2rem}
-.receipt .r-title{text-align:center;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.6rem;background:var(--gray-50)}
-.receipt .r-body{padding:1.2rem}
-.r-row{display:flex;justify-content:space-between;padding:.45rem 0;border-bottom:1px solid var(--border-light);font-size:.92rem}
-.r-row .k{color:var(--text-muted)}
-.r-amount{text-align:center;margin:1rem 0;padding:1rem;background:var(--success-light, #e6f7ef);border-radius:var(--radius-md)}
-.r-amount .big{font-size:1.8rem;font-weight:800;font-family:var(--font-display);color:var(--success)}
-.r-foot{display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-muted);padding-top:1rem;margin-top:.5rem}
-@media print{
-    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .sidebar,.top-header,.topbar,.bottom-nav,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none !important}
-    .main-content,.content-area,body{margin:0 !important;padding:0 !important;width:100% !important;background:#fff !important}
-    .page-content{padding:0 !important}
-    .receipt{border:1px solid #cbd5e1;box-shadow:none;max-width:520px;margin:8mm auto;break-inside:avoid}
-    .receipt .r-title{background:#f1f5f9 !important}
+.rc{max-width:1040px;margin:0 auto}
+.rc-top{display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem}
+.rc-top .nav-back{margin:0}
+.rc-top .sp{flex:1}
+.rc-cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:1.2rem;align-items:start}
+/* the paper */
+.rc-paper{position:relative;background:var(--bg-card);border:1px solid var(--border-color);border-radius:18px;box-shadow:0 10px 30px rgba(15,23,42,.06);overflow:hidden}
+.rc-paper::after{content:'';position:absolute;left:0;right:0;bottom:0;height:10px;background:radial-gradient(circle at 8px -2px,transparent 7px,var(--bg-body,var(--gray-100)) 8px) repeat-x;background-size:16px 10px}
+.rc-head{display:flex;align-items:center;gap:.9rem;padding:1.3rem 1.4rem 1rem;border-bottom:2px dashed var(--border-color)}
+.rc-logo{width:56px;height:56px;border-radius:14px;object-fit:contain;background:#fff;flex:none}
+.rc-logo.ph{display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:1.3rem;background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.rc-school{flex:1;min-width:0}
+.rc-school h2{margin:0;font-size:1.15rem;line-height:1.25}
+.rc-school small{display:block;color:var(--text-muted);font-size:.8rem;line-height:1.4}
+.rc-school .br{color:var(--primary);font-weight:700;font-size:.8rem}
+.rc-body{padding:1.1rem 1.4rem 1.6rem}
+.rc-title{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.9rem}
+.rc-title b{font-size:.78rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)}
+.rc-stamp{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.3rem .7rem;border-radius:8px;border:2px solid;transform:rotate(-3deg)}
+.rc-stamp.full{color:var(--success);border-color:var(--success);background:color-mix(in srgb,var(--success) 8%,transparent)}
+.rc-stamp.part{color:var(--warning);border-color:var(--warning);background:color-mix(in srgb,var(--warning) 8%,transparent)}
+.rc-amt{text-align:center;padding:1.1rem;border-radius:16px;background:color-mix(in srgb,var(--success) 9%,var(--bg-card));margin-bottom:1rem}
+.rc-amt small{display:block;color:var(--text-muted);font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.rc-amt b{display:block;font-size:2.2rem;line-height:1.15;font-family:var(--font-display,inherit);color:var(--success);font-variant-numeric:tabular-nums;margin:.2rem 0}
+.rc-amt span{color:var(--text-secondary);font-size:.85rem}
+.rc-kv{display:grid;grid-template-columns:auto minmax(0,1fr);margin:0}
+.rc-kv dt,.rc-kv dd{padding:.55rem 0;border-bottom:1px solid var(--border-light);font-size:.92rem}
+.rc-kv dt{color:var(--text-muted);padding-right:1rem}
+.rc-kv dd{margin:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+.rc-kv dd.ref{font-family:ui-monospace,Menlo,monospace;font-size:.85rem}
+.rc-prog{margin:1.1rem 0 .4rem}
+.rc-prog .bar{height:10px;border-radius:999px;background:var(--gray-100);overflow:hidden}
+.rc-prog .bar i{display:block;height:100%;border-radius:inherit;background:var(--success)}
+.rc-prog .lbl{display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-muted);margin-top:.35rem}
+.rc-sum dd.bal{font-size:1.05rem}
+.rc-sum dd.bal.owe{color:var(--danger)}.rc-sum dd.bal.ok{color:var(--success)}
+.rc-notes{margin:.9rem 0 0;padding:.7rem .85rem;border-radius:12px;background:var(--gray-50,var(--gray-100));font-size:.88rem;color:var(--text-secondary);white-space:pre-wrap}
+.rc-foot{display:flex;justify-content:space-between;gap:1rem;margin-top:1.2rem;font-size:.8rem;color:var(--text-muted)}
+/* side */
+.rc-side{display:flex;flex-direction:column;gap:1rem;position:sticky;top:1rem}
+.rc-acts{display:flex;flex-direction:column;gap:.5rem}
+.rc-acts .rs-btn{justify-content:flex-start;height:44px}
+.rc-hist{list-style:none;margin:0;padding:0}
+.rc-hist li a{display:flex;align-items:center;gap:.6rem;padding:.6rem .2rem;border-top:1px solid var(--border-light);color:inherit;text-decoration:none;font-size:.88rem}
+.rc-hist li:first-child a{border-top:0}
+.rc-hist li a.on{font-weight:800;color:var(--primary)}
+.rc-hist .n{width:22px;height:22px;border-radius:50%;background:var(--gray-100);display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;flex:none}
+.rc-hist li a.on .n{background:var(--primary);color:#fff}
+.rc-hist .d{flex:1;color:var(--text-muted)}
+.rc-hist b{font-variant-numeric:tabular-nums}
+.rc-more{position:relative}
+.rc-more>summary{list-style:none;cursor:pointer}.rc-more>summary::-webkit-details-marker{display:none}
+.rc-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:230px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.14);padding:.4rem;display:flex;flex-direction:column}
+.rc-pop a,.rc-pop button{display:flex;gap:.6rem;align-items:center;padding:.65rem .7rem;border:0;border-radius:9px;background:none;font:inherit;font-size:.9rem;color:var(--text-primary);text-decoration:none;text-align:left;cursor:pointer}
+.rc-pop a:hover,.rc-pop button:hover{background:var(--gray-100)}
+.rc-pop i{width:18px;color:var(--text-muted)}
+.rc-bar{display:none}
+@media(max-width:899px){
+  .rc{padding-bottom:6rem}
+  .rc-cols{grid-template-columns:minmax(0,1fr)}
+  .rc-side{position:static}
+  .rc-side .rc-acts-card{display:none}
+  .rc-bar{display:flex}
+  .rc-pop{position:fixed;left:.6rem;right:.6rem;top:auto;bottom:calc(.6rem + env(safe-area-inset-bottom));min-width:0;border-radius:18px}
+  .rc-head,.rc-body{padding-left:1rem;padding-right:1rem}
+  .rc-amt b{font-size:1.9rem}
 }
-/* window.print() is unreliable on mobile/PWA, so only offer the in-page Print
-   button on wider screens; phones use Download PDF (then print/share the file). */
-.print-desktop{display:none}
-@media(min-width:768px){.print-desktop{display:inline-flex}}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sidebar,.top-header,.topbar,.bottom-nav,.breadcrumb,.no-print,.sidebar-overlay,.rc-side,.rc-top,.rc-bar{display:none !important}
+  .main-content,.content-area,body,.page-content{margin:0 !important;padding:0 !important;width:100% !important;background:#fff !important}
+  .rc-cols{display:block}
+  .rc-paper{max-width:540px;margin:8mm auto;box-shadow:none;border:1px solid #cbd5e1}
+  .rc-paper::after{display:none}
+}
 </style>
 {% endblock %}
+
 {% block content %}
-<div class="page-header no-print">
-    <h1>Receipt</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('finance.receipt_pdf', payment_id=payment.id) }}" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
-        <button data-print class="btn btn-secondary print-desktop"><i class="fas fa-print"></i> Print</button>
-        {% set pc = payment.student.parent_contacts.filter_by(is_primary=True).first() or payment.student.parent_contacts.first() %}
-        {% if pc and pc.phone_number %}
-        {% set wamsg = 'Receipt ' ~ payment.receipt_no ~ ': ' ~ payment.student.full_name ~ ' — ' ~ (payment.amount|naira) ~ ' paid for ' ~ payment.term.full_name ~ '. Outstanding balance: ' ~ (bill.balance|naira) ~ '. — ' ~ school.name %}
-        <a href="https://wa.me/{{ pc.phone_number|wa_intl }}?text={{ wamsg|urlencode }}" target="_blank" rel="noopener" class="btn btn-success"><i class="fab fa-whatsapp"></i> Send to parent</a>
+{% set st = payment.student %}
+{% set br = st.branch if st else None %}
+{% set addr = (br.address if br and br.address else school.address) %}
+{% set phone = (br.phone if br and br.phone else school.phone) %}
+{% set pc = (st.parent_contacts.filter_by(is_primary=True).first() or st.parent_contacts.first()) if st else None %}
+{% set wamsg = 'Receipt ' ~ payment.receipt_no ~ ': ' ~ (st.full_name if st else '') ~ ' — ' ~ (payment.amount|naira) ~ ' paid for ' ~ (payment.term.full_name if payment.term else '') ~ '. Outstanding balance: ' ~ (bill.balance|naira) ~ '. — ' ~ school.name %}
+{% set wa_url = ('https://wa.me/' ~ (pc.phone_number|wa_intl) ~ '?text=' ~ (wamsg|urlencode)) if (pc and pc.phone_number) else '' %}
+{% set paid_pct = ((bill.paid / bill.billed * 100) if bill.billed else 100)|round(0) %}
+{% set full = bill.balance <= 0 %}
+{% set idx = (term_payments|map(attribute='id')|list).index(payment.id) + 1 if payment in term_payments else 1 %}
+
+<div class="rc">
+  <div class="rc-top no-print">
+    <a class="nav-back" id="rcBack" href="{{ url_for('finance.payments_list') }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Back</a>
+    <span class="sp"></span>
+  </div>
+
+  <div class="rc-cols">
+    <article class="rc-paper" aria-label="Receipt {{ payment.receipt_no }}">
+      <div class="rc-head">
+        {% if school_brand and school_brand.logo_url %}<img class="rc-logo" src="{{ school_brand.logo_url }}" alt="">
+        {% else %}<span class="rc-logo ph" aria-hidden="true">{{ (school.name or 'S')[:1] }}</span>{% endif %}
+        <div class="rc-school">
+          <h2>{{ school.name }}</h2>
+          {% if br %}<span class="br">{{ br.name }} Branch</span>{% endif %}
+          {% if school.motto %}<small><em>{{ school.motto }}</em></small>{% endif %}
+          {% if addr %}<small>{{ addr }}</small>{% endif %}
+          {% if phone %}<small>{{ phone }}</small>{% endif %}
+        </div>
+      </div>
+      <div class="rc-body">
+        <div class="rc-title"><b>Fee payment receipt</b>
+          <span class="rc-stamp {{ 'full' if full else 'part' }}">{{ 'Paid in full' if full else 'Part payment' }}</span></div>
+
+        <div class="rc-amt"><small>Amount paid</small><b>{{ payment.amount|naira }}</b>
+          <span>{{ payment.payment_date.strftime('%A, %d %B %Y') }} · {{ payment.method }}</span></div>
+
+        <dl class="rc-kv">
+          <dt>Receipt no.</dt><dd>{{ payment.receipt_no }}</dd>
+          <dt>Student</dt><dd>{{ st.full_name if st else 'Deleted student' }}</dd>
+          <dt>Student ID</dt><dd>{{ st.student_id if st else '—' }}</dd>
+          <dt>Term</dt><dd>{{ payment.term.full_name if payment.term else '—' }}</dd>
+          {% if payment.reference %}<dt>Reference</dt><dd class="ref">{{ payment.reference }}</dd>{% endif %}
+          {% if term_payments|length > 1 %}<dt>Instalment</dt><dd>{{ idx }} of {{ term_payments|length }} this term</dd>{% endif %}
+        </dl>
+
+        {% if bill.billed %}
+        <div class="rc-prog" role="img" aria-label="{{ paid_pct|int }}% of the term's fees paid">
+          <div class="bar"><i style="width:{{ [paid_pct, 100]|min }}%"></i></div>
+          <div class="lbl"><span>{{ paid_pct|int }}% of term fees paid</span><span>{{ bill.paid|naira }} of {{ bill.billed|naira }}</span></div>
+        </div>
         {% endif %}
-        <a href="{{ url_for('finance.edit_payment', payment_id=payment.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
-        <a href="{{ url_for('finance.record_payment', term_id=payment.term_id) }}" class="btn btn-secondary"><i class="fas fa-plus"></i> New Payment</a>
-    </div>
-</div>
+        <dl class="rc-kv rc-sum">
+          <dt>Total billed (term)</dt><dd>{{ bill.billed|naira }}</dd>
+          {% if bill.discount %}<dt>Discount / waiver</dt><dd>− {{ bill.discount|naira }}</dd>{% endif %}
+          <dt>Total paid to date</dt><dd>{{ bill.paid|naira }}</dd>
+          <dt>Outstanding balance</dt><dd class="bal {{ 'owe' if bill.balance > 0 else 'ok' }}">{{ bill.balance|naira }}</dd>
+        </dl>
+        {% if payment.notes %}<p class="rc-notes">{{ payment.notes }}</p>{% endif %}
+        <div class="rc-foot"><span>Received by: {{ payment.received_by or '__________' }}</span><span>{{ app_name }}</span></div>
+      </div>
+    </article>
 
-<div class="receipt">
-    <div class="r-head">
-        <h2>{{ school.name }}</h2>
-        {% set br = payment.student.branch if payment.student else None %}
-        {% if br %}<div class="branch-name" style="font-weight:600;">{{ br.name }} Branch</div>{% endif %}
-        {% if school.motto %}<div class="motto">{{ school.motto }}</div>{% endif %}
-        {% set addr = (br.address if br and br.address else school.address) %}
-        {% set phone = (br.phone if br and br.phone else school.phone) %}
-        {% if addr %}<div class="addr">{{ addr }}{% if phone %} · {{ phone }}{% endif %}</div>{% endif %}
-    </div>
-    <div class="r-title">Fee Payment Receipt</div>
-    <div class="r-body">
-        <div class="r-row"><span class="k">Receipt No.</span><span><strong>{{ payment.receipt_no }}</strong></span></div>
-        <div class="r-row"><span class="k">Date</span><span>{{ payment.payment_date.strftime('%d %B %Y') }}</span></div>
-        <div class="r-row"><span class="k">Student</span><span>{{ payment.student.full_name }}</span></div>
-        <div class="r-row"><span class="k">Student ID</span><span>{{ payment.student.student_id }}</span></div>
-        <div class="r-row"><span class="k">Term</span><span>{{ payment.term.full_name }}</span></div>
-        <div class="r-row"><span class="k">Method</span><span>{{ payment.method }}{% if payment.reference %} · {{ payment.reference }}{% endif %}</span></div>
-
-        <div class="r-amount">
-            <div class="text-muted text-sm">Amount Paid</div>
-            <div class="big">{{ payment.amount|naira }}</div>
+    <aside class="rc-side no-print">
+      <section class="rs-card rc-acts-card">
+        <div class="rc-acts">
+          <a href="{{ url_for('finance.receipt_pdf', payment_id=payment.id) }}" class="rs-btn primary"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</a>
+          {% if pc and pc.phone_number %}
+          <a href="https://wa.me/{{ pc.phone_number|wa_intl }}?text={{ wamsg|urlencode }}" target="_blank" rel="noopener" class="rs-btn"><i class="fab fa-whatsapp" aria-hidden="true"></i> Send to parent</a>
+          {% endif %}
+          <button type="button" class="rs-btn" data-print><i class="fas fa-print" aria-hidden="true"></i> Print</button>
+          <a href="{{ url_for('finance.edit_payment', payment_id=payment.id) }}" class="rs-btn ghost"><i class="fas fa-pen" aria-hidden="true"></i> Edit payment</a>
+          <a href="{{ url_for('finance.record_payment', term_id=payment.term_id) }}" class="rs-btn ghost"><i class="fas fa-plus" aria-hidden="true"></i> New payment</a>
+          {% if st %}<a href="{{ url_for('finance.statement', student_id=st.id) }}" class="rs-btn ghost"><i class="fas fa-file-invoice" aria-hidden="true"></i> Student statement</a>{% endif %}
         </div>
+      </section>
+      {% if term_payments|length > 1 %}
+      <section class="rs-card">
+        <div class="rs-card-h"><h3>Payments this term</h3></div>
+        <ul class="rc-hist">
+          {% for p in term_payments %}
+          <li><a href="{{ url_for('finance.receipt', payment_id=p.id) }}" class="{{ 'on' if p.id == payment.id }}"{% if p.id == payment.id %} aria-current="page"{% endif %}>
+            <span class="n">{{ loop.index }}</span><span class="d">{{ p.payment_date.strftime('%d %b %Y') }}</span><b>{{ p.amount|naira }}</b></a></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+    </aside>
+  </div>
 
-        <div class="r-row"><span class="k">Total billed (term)</span><span>{{ bill.billed|naira }}</span></div>
-        {% if bill.discount %}<div class="r-row"><span class="k">Discount / waiver</span><span>− {{ bill.discount|naira }}</span></div>{% endif %}
-        <div class="r-row"><span class="k">Total paid to date</span><span>{{ bill.paid|naira }}</span></div>
-        <div class="r-row"><span class="k">Outstanding balance</span><span><strong style="color:{{ 'var(--danger)' if bill.balance > 0 else 'var(--success)' }};">{{ bill.balance|naira }}</strong></span></div>
-
-        {% if payment.notes %}<div class="r-row"><span class="k">Notes</span><span>{{ payment.notes }}</span></div>{% endif %}
-
-        <div class="r-foot">
-            <span>Received by: {{ payment.received_by or '__________' }}</span>
-            <span>{{ app_name }}</span>
-        </div>
-    </div>
+  <div class="rs-bar fixed rc-bar no-print">
+    <a href="{{ url_for('finance.receipt_pdf', payment_id=payment.id) }}" class="rs-btn primary" style="flex:1;justify-content:center"><i class="fas fa-file-pdf" aria-hidden="true"></i> PDF</a>
+    <button type="button" class="rs-btn" id="rcShare" style="flex:1;justify-content:center"><i class="fas fa-share-nodes" aria-hidden="true"></i> Share</button>
+    <details class="rc-more">
+      <summary class="rs-btn" aria-label="More"><i class="fas fa-ellipsis" aria-hidden="true"></i></summary>
+      <div class="rc-pop" role="menu">
+        {% if pc and pc.phone_number %}<a role="menuitem" href="https://wa.me/{{ pc.phone_number|wa_intl }}?text={{ wamsg|urlencode }}" target="_blank" rel="noopener"><i class="fab fa-whatsapp" aria-hidden="true"></i> Send to parent on WhatsApp</a>{% endif %}
+        <a role="menuitem" href="{{ url_for('finance.edit_payment', payment_id=payment.id) }}"><i class="fas fa-pen" aria-hidden="true"></i> Edit payment</a>
+        <a role="menuitem" href="{{ url_for('finance.record_payment', term_id=payment.term_id) }}"><i class="fas fa-plus" aria-hidden="true"></i> New payment</a>
+        {% if st %}<a role="menuitem" href="{{ url_for('finance.statement', student_id=st.id) }}"><i class="fas fa-file-invoice" aria-hidden="true"></i> Student statement</a>{% endif %}
+      </div>
+    </details>
+  </div>
 </div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  // Back: return to wherever you came from in the app (payments, a student,
+  // search …); opened directly, fall back to the payments list.
+  var back = document.getElementById('rcBack');
+  back.addEventListener('click', function (e) {
+    var same = false;
+    try { same = !!document.referrer && new URL(document.referrer).origin === location.origin && new URL(document.referrer).pathname !== location.pathname; } catch (x) {}
+    if (same && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+  // The More menu closes on a tap outside it or Escape (on phones it covers its own button).
+  var more = document.querySelector('.rc-more');
+  if (more) {
+    document.addEventListener('click', function (e) { if (more.open && !e.target.closest('.rc-pop') && !e.target.closest('.rc-more > summary')) more.open = false; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') more.open = false; });
+  }
+  // Share: the phone's share sheet (WhatsApp, SMS, email …) with the receipt
+  // summary and PDF link; falls back to WhatsApp to the parent, then copy.
+  var share = document.getElementById('rcShare');
+  var text = {{ wamsg|tojson }}, pdf = location.origin + {{ url_for('finance.receipt_pdf', payment_id=payment.id)|tojson }};
+  var wa = {{ wa_url|tojson }};
+  share.addEventListener('click', function () {
+    if (navigator.share) { navigator.share({ title: 'Receipt {{ payment.receipt_no }}', text: text }).catch(function () {}); return; }
+    if (wa) { window.open(wa, '_blank', 'noopener'); return; }
+    (window.copyText ? window.copyText(text) : navigator.clipboard.writeText(text));
+  });
+})();
+</script>
 {% endblock %}
+
+
