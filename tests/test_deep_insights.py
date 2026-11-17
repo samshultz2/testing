@@ -257,7 +257,7 @@ def test_neco_insights(app, seeded):
         assert DI.value_added(YEAR, model=NECOResult)['enough']
     c = _admin(app)
     html = c.get('/results/analytics/insights?board=neco&year=%d' % YEAR).get_data(as_text=True)
-    assert 'Deeper Insights — NECO %d' % YEAR in html and 'BECE (JSS3) → NECO' in html
+    assert 'Deeper insights' in html and 'NECO %d ·' % YEAR in html and 'BECE (JSS3) → NECO' in html
     assert 'NECO SSCE %d' % YEAR in html and 'Freeze' not in html      # freezing is WAEC-only
     assert 'class="on">NECO' in html.replace("class=\"on\"", 'class="on"') or '>NECO</a>' in html
     hub = c.get('/results/analytics?year=%d' % YEAR).get_data(as_text=True)
@@ -297,7 +297,7 @@ def test_jss3_and_basic_insights(app, seeded):
         assert ('jss3', 'JSS3 BECE') in IE.choices()
     c = _admin(app)
     html = c.get('/results/analytics/insights?board=jss3&year=%d' % YEAR).get_data(as_text=True)
-    assert 'Deeper Insights — BECE %d' % YEAR in html and 'Common Entrance (Basic 5/6) → BECE' in html
+    assert 'Deeper insights' in html and 'BECE %d ·' % YEAR in html and 'Common Entrance (Basic 5/6) → BECE' in html
     assert 'Mock → real accuracy' not in html and 'At-risk SSS3' not in html and 'Weakest topics' not in html
     assert 'Ps by subject' in html and 'JSS3 BECE</a>' in html
     html = c.get('/results/analytics/insights?board=basic6&year=%d' % (YEAR - 3)).get_data(as_text=True)

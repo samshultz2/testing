@@ -663,7 +663,7 @@ def test_entry_lists_only_the_sessions_cohort(app):
     old, _ = _student(app, 'Cohortold')
     _enroll(app, 'JSS3', 3, old)                       # makes sure the JSS3 class exists
     with app.app_context():
-        ssn = AcademicSession(name='2070/2071', is_active=False)
+        ssn = AcademicSession(name='2080/2081', is_active=False)
         db.session.add(ssn); db.session.flush()
         t = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=False)
         db.session.add(t); db.session.flush()
@@ -674,11 +674,11 @@ def test_entry_lists_only_the_sessions_cohort(app):
         db.session.add(StudentEnrollment(student_id=cur, class_arm_assignment_id=caa.id, is_active=True))
         db.session.commit()
     tok = auth_csrf(c)
-    # 'old' has results only for another year and wasn't in the 2070/2071 class.
-    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': old, 'exam_year': 2068,
+    # 'old' has results only for another year and wasn't in the 2080/2081 class.
+    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': old, 'exam_year': 2078,
            'subject[]': ['Mathematics'], 'score[]': ['60'], 'grade[]': ['']})
     H = {'X-Requested-With': 'fetch'}
-    ids = {s['id'] for s in c.get('/jss3-exams/state/add?year=2071', headers=H).get_json()['students']}
+    ids = {s['id'] for s in c.get('/jss3-exams/state/add?year=2081', headers=H).get_json()['students']}
     assert cur in ids and old not in ids
-    ids68 = {s['id'] for s in c.get('/jss3-exams/state/add?year=2068', headers=H).get_json()['students']}
+    ids68 = {s['id'] for s in c.get('/jss3-exams/state/add?year=2078', headers=H).get_json()['students']}
     assert old in ids68 and cur not in ids68

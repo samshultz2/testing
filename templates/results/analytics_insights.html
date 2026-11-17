@@ -15,8 +15,13 @@
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 
 <style>
-.ix-nav{position:sticky;top:0;z-index:4;background:var(--bg-body,var(--bg-card));display:flex;gap:.35rem;flex-wrap:wrap;padding:.5rem 0;margin-bottom:.5rem;border-bottom:1px solid var(--border-color)}
-.ix-nav a{font-size:.78rem;font-weight:600;padding:.3rem .65rem;border-radius:999px;background:var(--gray-50);color:var(--text-primary);text-decoration:none;border:1px solid var(--border-light)}
+.ix-nav{position:sticky;top:calc(var(--header-height,60px) + 8px);z-index:20;display:flex;gap:.3rem;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:.45rem;margin:0 0 1rem;border-radius:14px;background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--border-color)}
+.ix-nav::-webkit-scrollbar{display:none}
+.ix-nav a.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.ax [id]{scroll-margin-top:calc(var(--header-height,60px) + 70px)}
+.ix-note{display:flex;gap:.5rem;align-items:flex-start;font-size:.84rem;color:var(--text-muted);margin:0 0 .8rem}
+.ix-year{margin:0}.ix-year .rs-sel{min-width:110px}
+.ix-nav a{flex:none;white-space:nowrap;font-size:.8rem;font-weight:600;padding:.38rem .75rem;border-radius:999px;background:var(--gray-50);color:var(--text-primary);text-decoration:none;border:1px solid var(--border-light)}
 .ix-nav a:hover{border-color:var(--primary);color:var(--primary)}
 .ix-sec{scroll-margin-top:4rem;margin-top:1.4rem}
 .ix-sec>h2{font-size:1.1rem;font-weight:700;display:flex;gap:.5rem;align-items:center;margin:0 0 .25rem}
@@ -63,8 +68,8 @@
 .risk-col ul{list-style:none;margin:0;padding:0;font-size:.8rem;max-height:14rem;overflow:auto}
 .risk-col li{padding:.3rem 0;border-bottom:1px solid var(--border-light)}
 .risk-col li small{display:block;color:var(--text-muted)}
-.ix-board{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border-color);border-radius:10px;padding:3px;gap:2px;background:var(--gray-50)}
-.ix-board a{padding:.3rem .8rem;border-radius:7px;font-size:.8rem;font-weight:700;color:var(--text-muted);text-decoration:none}
+.ix-board{display:flex;width:max-content;max-width:100%;overflow-x:auto;scrollbar-width:none;margin:0 0 1rem;border:1px solid var(--border-color);border-radius:10px;padding:3px;gap:2px;background:var(--gray-50)}
+.ix-board a{flex:none;white-space:nowrap;padding:.45rem .9rem;border-radius:7px;font-size:.8rem;font-weight:700;color:var(--text-muted);text-decoration:none}
 .ix-board a.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .note{font-size:.75rem;color:var(--text-muted);margin-top:.5rem}
 </style>
@@ -72,23 +77,16 @@
 
 {% block content %}
 <div class="rs bx bx-legacy ax">
-<div class="page-header">
-  <div>
-    <h1>Deeper Insights{% if year %} — {{ board_name }} {{ year }}{% endif %}</h1>
-    <p class="text-muted text-sm">Every rate shows how many students it is based on and a likely range; groups under 10 are marked “small group”, and gaps say whether they are a real difference or could be chance.</p>
-  </div>
-  <div class="page-header-actions no-print">
-    <form method="GET" class="d-flex gap-2 align-center">
-      {% if choices|length > 1 %}
-      <div class="ix-board" role="group" aria-label="Exam">
-        {% for k, label in choices %}<a href="{{ url_for('results.analytics_insights', board=k if k != 'waec' else None) }}" class="{{ 'on' if board == k }}">{{ label }}</a>{% endfor %}
-      </div>
-      {% endif %}
+<header class="rs-head ix-head">
+  <span class="rs-head-ic"><i class="fas fa-lightbulb" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>Deeper insights</h1><p>{% if year %}{{ board_name }} {{ year }} · {% endif %}what's behind the results, with how sure each figure is.</p></div>
+  <div class="rs-head-a no-print">
+    <form method="GET" class="ix-year">
       {% if board != 'waec' %}<input type="hidden" name="board" value="{{ board }}">{% endif %}
-      <label class="form-label mb-0" for="ixYear">Year</label>
-      <select id="ixYear" name="year" class="form-control" style="max-width:130px" data-autosubmit>
-        {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
-      </select>
+      <label class="rs-sel"><span>Year</span>
+        <select id="ixYear" name="year" data-autosubmit aria-label="Year">
+          {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select></label>
     </form>
     {% if year and board == 'waec' and can_write_sub('external_exams', 'analytics_recompute') %}
     <form method="POST" action="{{ url_for('results.analytics_freeze_year') }}" class="d-inline"
@@ -96,19 +94,24 @@
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="year" value="{{ year }}">
       {% if frozen %}<input type="hidden" name="action" value="unfreeze">
-      <button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-lock-open"></i> Unfreeze {{ year }}</button>
-      {% else %}<button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-lock"></i> Freeze {{ year }} numbers</button>{% endif %}
+      <button class="rs-btn" type="submit"><i class="fas fa-lock-open" aria-hidden="true"></i><span class="rs-hide-sm"> Unfreeze {{ year }}</span></button>
+      {% else %}<button class="rs-btn" type="submit" aria-label="Freeze {{ year }} numbers"><i class="fas fa-lock" aria-hidden="true"></i><span class="rs-hide-sm"> Freeze {{ year }} numbers</span></button>{% endif %}
     </form>
     {% endif %}
-    <a href="{{ url_for('results.analytics_hub', year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
   </div>
-</div>
+</header>
+{% if choices|length > 1 %}
+<nav class="ix-board" aria-label="Exam">
+  {% for k, label in choices %}<a href="{{ url_for('results.analytics_insights', board=k if k != 'waec' else None) }}" class="{{ 'on' if board == k }}"{% if board == k %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+</nav>
+{% endif %}
 {{ ax_nav('insights') }}
 {% if frozen %}<div class="alert alert-info"><i class="fas fa-lock"></i> {{ year }} headline numbers were frozen{% if frozen._frozen_at %} on {{ frozen._frozen_at.strftime('%d %b %Y') }}{% endif %}{% if frozen._frozen_by %} by {{ frozen._frozen_by }}{% endif %}. Year comparisons use those figures.</div>{% endif %}
 
 {% if not year %}
 <div class="card"><div class="card-body">{{ empty('No ' ~ board_name ~ ' results yet — insights appear once a year of results is entered.') }}</div></div>
 {% else %}
+<p class="ix-note"><i class="fas fa-circle-info" aria-hidden="true"></i> Every rate shows how many students it is based on and a likely range. Groups under 10 are marked “small group”, and gaps say whether they are a real difference or could be chance.</p>
 <nav class="ix-nav no-print" aria-label="Sections">
   <a href="#health">Data health</a>{% if exam.has_mocks %}<a href="#risk">At-risk this week</a>{% endif %}<a href="#va">Value added</a>
   <a href="#near">Near credit</a>{% if exam.has_mocks %}<a href="#mock">Mock accuracy</a>{% endif %}{% if exam.earlier %}<a href="#bece">{{ exam.earlier[0].split(' (')[0] }} → {{ board_name }}</a>{% endif %}
@@ -360,4 +363,22 @@
 {% endif %}
 {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var links = [].slice.call(document.querySelectorAll('.ix-nav a'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var byId = {}; links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      links.forEach(function (a) { a.classList.remove('on'); });
+      var a = byId[e.target.id]; if (a) { a.classList.add('on'); a.scrollIntoView({ block: 'nearest', inline: 'center' }); }
+    });
+  }, { rootMargin: '-35% 0px -60% 0px' });
+  Object.keys(byId).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+})();
+</script>
 {% endblock %}

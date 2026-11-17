@@ -3,6 +3,38 @@
 {% block page_title %}Analytics · {{ scheme.exam_name }} {{ year }}{% endblock %}
 {% block crumb %} / <span>Analytics</span>{% endblock %}
 
+{% block page_css %}
+<style>
+.ax-jump{position:sticky;top:calc(var(--header-height,60px) + 8px);z-index:20;display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none;margin:0 0 1rem;padding:.45rem;border-radius:14px;background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--border-color)}
+.ax-jump::-webkit-scrollbar{display:none}
+.ax-jump a{flex:none;padding:.4rem .8rem;border-radius:999px;font-size:.82rem;font-weight:600;color:var(--text-secondary);text-decoration:none;white-space:nowrap}
+.ax-jump a:hover{background:var(--gray-100)}
+.ax-jump a.on{background:var(--sx-accent);color:#fff}
+.ax-sec{scroll-margin-top:calc(var(--header-height,60px) + 70px)}
+.ax-head .sx-kpi .v{font-size:1.9rem}
+.ax-more{margin:-.3rem 0 1rem}
+.ax-more>summary{cursor:pointer;list-style:none;display:inline-flex;gap:.45rem;align-items:center;font-weight:700;font-size:.88rem;color:var(--sx-accent);padding:.3rem 0 .6rem}
+.ax-more>summary::-webkit-details-marker{display:none}
+.ax-more>summary i{transition:transform .15s;font-size:.72rem}
+.ax-more[open]>summary i{transform:rotate(90deg)}
+.ax-more .sx-kpis{margin-bottom:0}
+.ax-scards{display:none;list-style:none;margin:0;padding:0 .8rem .8rem}
+.ax-scards li a{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.7rem;align-items:center;padding:.7rem 0;border-top:1px solid var(--border-light);color:inherit;text-decoration:none}
+.ax-scards .r{width:26px;height:26px;border-radius:50%;background:var(--gray-100);display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:.78rem}
+.ax-scards .t{display:flex;flex-direction:column;gap:.15rem;min-width:0}
+.ax-scards .t em{font-style:normal;font-size:.66rem;font-weight:800;text-transform:uppercase;padding:.05rem .35rem;border-radius:6px;background:color-mix(in srgb,var(--sx-credit) 15%,var(--bg-card));color:var(--sx-credit)}
+.ax-scards .t small{color:var(--text-muted);font-size:.74rem}
+.ax-scards .v{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15}
+.ax-scards .v b{font-size:1.1rem}.ax-scards .v small{font-size:.7rem;color:var(--text-muted)}
+@media(max-width:759px){
+  #ax-subjects .table-responsive{display:none}
+  .ax-scards{display:block}
+  .ax-jump{margin-left:-6px;margin-right:-6px}
+  .sx-chart{height:220px}
+}
+</style>
+{% endblock %}
+
 {% block sx_content %}
 {% set k = stats.kpis %}
 {% if not k.candidates %}
@@ -14,12 +46,19 @@
 {% else %}
 
 {# ---------------- Headline KPIs ---------------- #}
-<div class="sx-kpis wide">
+<nav class="ax-jump" aria-label="Jump to">
+<a href="#ax-grades">Grades</a><a href="#ax-subjects">Subjects</a><a href="#ax-core">Core & credits</a><a href="#ax-groups">Arms & gender</a><a href="#ax-trend">Trend</a><a href="#ax-school">School vs exam</a><a href="#ax-cands">Candidates</a>{% if stats.placements %}<a href="#ax-placement">Placement</a>{% endif %}
+</nav>
+<div class="sx-kpis ax-head">
   <div class="sx-kpi"><div class="l">Candidates</div><div class="v">{{ k.candidates }}</div><div class="s">{{ k.entries }} entries · {{ stats.subjects|length }} subjects</div></div>
-  <div class="sx-kpi"><div class="l">Average score</div><div class="v">{{ pct(k.avg_pct) }}</div><div class="s">{% if k.sd_pct is not none %}spread ±{{ k.sd_pct }}{% else %}grades only{% endif %}</div></div>
   <div class="sx-kpi"><div class="l">Avg credits / candidate</div><div class="v">{{ k.avg_credits }}</div><div class="s">grade points {{ k.avg_points }} / {{ scheme.bands|length }}</div></div>
   <div class="sx-kpi"><div class="l">Credit in Eng &amp; Maths</div><div class="v">{{ k.core_credit_rate }}%</div><div class="s">{{ k.core_credit }} candidate(s)</div></div>
   <div class="sx-kpi"><div class="l">Met benchmark</div><div class="v">{{ k.benchmark_rate }}%</div><div class="s">{{ scheme.benchmark_credits }}+ credits incl. Eng &amp; Maths</div></div>
+</div>
+<details class="ax-more" open>
+  <summary><i class="fas fa-chevron-right" aria-hidden="true"></i> More figures</summary>
+  <div class="sx-kpis wide">
+  <div class="sx-kpi"><div class="l">Average score</div><div class="v">{{ pct(k.avg_pct) }}</div><div class="s">{% if k.sd_pct is not none %}spread ±{{ k.sd_pct }}{% else %}grades only{% endif %}</div></div>
   <div class="sx-kpi"><div class="l">Passed every subject</div><div class="v">{{ k.all_pass_rate }}%</div><div class="s">{{ k.all_pass }} candidate(s)</div></div>
   <div class="sx-kpi"><div class="l">Subject distinction rate</div><div class="v">{{ k.subject_distinction_rate }}%</div><div class="s">{{ k.with_distinction }} with ≥1 distinction</div></div>
   <div class="sx-kpi"><div class="l">Subject credit rate</div><div class="v">{{ k.subject_credit_rate }}%</div><div class="s">credit or better</div></div>
@@ -27,10 +66,11 @@
   <div class="sx-kpi"><div class="l">Average total</div><div class="v">{{ k.avg_total if k.avg_total is not none else '—' }}</div><div class="s">{% if k.highest_total is not none %}high {{ k.highest_total }} · low {{ k.lowest_total }}{% else %}no totals{% endif %}</div></div>
   <div class="sx-kpi"><div class="l">Above cut-off</div><div class="v">{{ (k.cutoff_rate ~ '%') if k.cutoff_known else '—' }}</div><div class="s">{% if scheme.cutoff is not none %}cut-off {{ scheme.cutoff|round(1) }}{% else %}<a href="{{ url_for(bp ~ '.settings', body=body) }}">set a cut-off</a>{% endif %}</div></div>
   <div class="sx-kpi"><div class="l">Admitted / placed</div><div class="v">{{ (k.admission_rate ~ '%') if k.admission_known else '—' }}</div><div class="s">{{ k.admitted }} of {{ k.admission_known }} known</div></div>
-</div>
+  </div>
+</details>
 
 {# ---------------- Distribution ---------------- #}
-<div class="sx-grid wide-left">
+<div class="sx-grid wide-left ax-sec" id="ax-grades">
   <div class="card"><div class="card-header"><h3><i class="fas fa-chart-column"></i> Grade distribution (all entries)</h3></div>
     <div class="card-body">{{ kind_legend() }}<div class="sx-chart"><canvas role="img" aria-label="Grade distribution" data-sx-chart='{{ ch.grade_dist(stats)|tojson|forceescape }}'></canvas></div></div></div>
   <div class="card"><div class="card-header"><h3><i class="fas fa-chart-pie"></i> Outcome mix</h3></div>
@@ -41,7 +81,7 @@
 </div>
 
 {# ---------------- Subjects ---------------- #}
-<div class="card mb-3" id="subjects">
+<div class="card mb-3 ax-sec" id="ax-subjects"><span id="subjects"></span>
   <div class="card-header"><h3><i class="fas fa-book-open"></i> Subject performance</h3></div>
   <div class="card-body">
     {{ kind_legend() }}
@@ -70,10 +110,20 @@
     {% endfor %}
     </tbody>
   </table></div>
+  <ul class="ax-scards">
+    {% for r in stats.subjects %}
+    <li><a href="{{ url_for(bp ~ '.subject', body=body, subject=r.subject, year=year) }}">
+      <span class="r">{{ r.rank }}</span>
+      <span class="t"><b>{{ r.subject }}{% if r.core %} <em>core</em>{% endif %}</b>{{ kind_meter(r) }}
+        <small>{{ r.entries }} entries · mean {{ pct(r.mean_pct) }} · pass {{ r.pass_rate }}%</small></span>
+      <span class="v"><b>{{ r.credit_rate }}%</b><small>credit</small>{% if r.credit_delta is defined %}<small>{{ delta(r.credit_delta) }}</small>{% endif %}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
 </div>
 
 {# ---------------- Core subjects + histograms ---------------- #}
-<div class="sx-grid two">
+<div class="sx-grid two ax-sec" id="ax-core">
   <div class="card"><div class="card-header"><h3><i class="fas fa-star"></i> Core subjects (English &amp; Mathematics)</h3></div>
     <div class="card-body">
       {% if stats.core %}
@@ -94,7 +144,7 @@
 {% endif %}
 
 {# ---------------- Arm / gender ---------------- #}
-<div class="sx-grid two">
+<div class="sx-grid two ax-sec" id="ax-groups">
   {% for title, icon, groups in [('Class arms', 'fa-door-open', stats.by_arm), ('Gender', 'fa-venus-mars', stats.by_gender)] %}
   <div class="card"><div class="card-header"><h3><i class="fas {{ icon }}"></i> By {{ title|lower }}</h3></div>
     <div class="card-body">
@@ -109,7 +159,7 @@
 </div>
 
 {# ---------------- Trends ---------------- #}
-<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-chart-line"></i> Year-on-year trend</h3></div>
+<div class="card mb-3 ax-sec" id="ax-trend"><div class="card-header"><h3><i class="fas fa-chart-line"></i> Year-on-year trend</h3></div>
   <div class="card-body">
     {% if trend|length > 1 %}
     <div class="sx-grid two" style="margin-bottom:0">
@@ -124,7 +174,7 @@
   </div></div>
 
 {# ---------------- Internal vs external ---------------- #}
-<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-arrows-left-right"></i> School assessment vs {{ scheme.exam_name }}</h3></div>
+<div class="card mb-3 ax-sec" id="ax-school"><div class="card-header"><h3><i class="fas fa-arrows-left-right"></i> School assessment vs {{ scheme.exam_name }}</h3></div>
   <div class="card-body">
   {% if ive %}
     <div class="sx-kpis">
@@ -148,7 +198,7 @@
   </div></div>
 
 {# ---------------- Candidates ---------------- #}
-<div class="sx-grid two">
+<div class="sx-grid two ax-sec" id="ax-cands">
   {% for title, icon, rows in [('Top candidates', 'fa-trophy', stats.top), ('Need most support', 'fa-hands-helping', stats.struggling)] %}
   <div class="card"><div class="card-header"><h3><i class="fas {{ icon }}"></i> {{ title }}</h3></div>
     <div class="table-responsive"><table class="data-table"><thead><tr><th>Pos</th><th>Candidate</th><th class="num">D / C / P / F</th><th class="num">Avg %</th></tr></thead><tbody>
@@ -158,10 +208,31 @@
 </div>
 
 {% if stats.placements %}
-<div class="card"><div class="card-header"><h3><i class="fas fa-school"></i> {{ L.outcome_label }}</h3></div>
+<div class="card ax-sec" id="ax-placement"><div class="card-header"><h3><i class="fas fa-school"></i> {{ L.outcome_label }}</h3></div>
   <div class="table-responsive"><table class="data-table"><thead><tr><th>Placement</th><th class="num">Candidates</th><th class="num">Share</th></tr></thead><tbody>
   {% for name, n in stats.placements %}<tr><td>{{ name }}</td><td class="num">{{ n }}</td><td class="num">{{ (n / k.candidates * 100)|round(1) }}%</td></tr>{% endfor %}
   </tbody></table></div></div>
 {% endif %}
 {% endif %}
+{% endblock %}
+
+{% block page_js %}
+{{ super() }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var more = document.querySelector('.ax-more');
+  if (more && window.matchMedia('(max-width: 759px)').matches) more.open = false;
+  var links = [].slice.call(document.querySelectorAll('.ax-jump a'));
+  if (!links.length || !('IntersectionObserver' in window)) return;
+  var byId = {}; links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      links.forEach(function (a) { a.classList.remove('on'); });
+      var a = byId[e.target.id]; if (a) { a.classList.add('on'); a.scrollIntoView({ block: 'nearest', inline: 'center' }); }
+    });
+  }, { rootMargin: '-35% 0px -60% 0px' });
+  Object.keys(byId).forEach(function (id) { var el = document.getElementById(id); if (el) io.observe(el); });
+})();
+</script>
 {% endblock %}
