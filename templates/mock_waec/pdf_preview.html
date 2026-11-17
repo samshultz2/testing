@@ -171,8 +171,8 @@
 
         <section class="pv-sec">
           <h4><i class="fas fa-list-check" aria-hidden="true"></i> Include in the PDF <span class="n" id="optN"></span></h4>
-          {% for param, label in (options or [('title', '“COMPETENCE RESULT” heading')]) %}
-          <label class="pv-sw"><span>{{ label }}</span><input type="checkbox" class="pdf-opt" data-param="{{ param }}" checked><span class="t"></span></label>
+          {% for o in (options or [('title', '“COMPETENCE RESULT” heading')]) %}{% set on = o[2] if o|length > 2 else true %}
+          <label class="pv-sw"><span>{{ o[1] }}</span><input type="checkbox" class="pdf-opt" data-param="{{ o[0] }}" data-default="{{ 1 if on else 0 }}"{% if on %} checked{% endif %}><span class="t"></span></label>
           {% endfor %}
         </section>
       </div>
@@ -213,7 +213,11 @@
 
   function build(extra) {
     var p = [];
-    opts.forEach(function (o) { if (!o.checked) p.push(o.dataset.param + '=0'); });
+    opts.forEach(function (o) {
+      // Send only what differs from the server's default for that option.
+      var def = o.dataset.default !== '0';
+      if (o.checked !== def) p.push(o.dataset.param + '=' + (o.checked ? '1' : '0'));
+    });
     if (subjBoxes.length) {
       p.push('subjects=' + subjBoxes.filter(function (b) { return b.checked; })
         .map(function (b) { return encodeURIComponent(b.value); }).join(','));

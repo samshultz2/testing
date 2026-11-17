@@ -1212,9 +1212,14 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              'change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row')
 
 
+# Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
+_PDF_FLAGS_OFF = ('change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row')
+
+
 def _pdf_opts():
     from utils.name_display import name_opts
-    out = {f: request.args.get(f, '1') != '0' for f in _PDF_FLAGS}
+    out = {f: request.args.get(f, '0' if f in _PDF_FLAGS_OFF else '1') not in ('0', '')
+           for f in _PDF_FLAGS}
     out['name_fmt'] = name_opts(request.args)   # chosen name parts (None = default)
     return out
 
@@ -1249,10 +1254,11 @@ _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'S
                     ('arm_col', 'Class arm column'), ('credits', 'Credits column'),
                     ('average', 'Average column'), ('position', 'Position column'),
                     ('subjects_sat', 'Subjects sat column'), ('remark', 'Remark column'),
-                    ('change', 'Change since last mock column'), ('readiness', 'Readiness status column'),
-                    ('borderline', 'Shade borderline scores (45–49)'),
-                    ('teacher_row', 'Subject teacher row'), ('absent_row', 'No. absent row'),
-                    ('grade_counts', 'Number at each grade (A1–F9) rows'),
+                    ('change', 'Change since last mock column', False),
+                    ('readiness', 'Readiness status column', False),
+                    ('borderline', 'Shade borderline scores (45–49)', False),
+                    ('teacher_row', 'Subject teacher row', False), ('absent_row', 'No. absent row', False),
+                    ('grade_counts', 'Number at each grade (A1–F9) rows', False),
                     ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
                     ('sig_hod_arts', 'HOD (Arts/Humanities) signature'),
                     ('watermark_name', 'Watermark — school name'),

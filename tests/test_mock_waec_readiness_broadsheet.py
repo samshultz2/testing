@@ -89,14 +89,16 @@ def _xlsx(c, url):
 def test_excel_follows_the_switches(app):
     (m1, m2), a, b = _setup(app)
     c = _admin(app)
-    rows = _xlsx(c, f'/mock-waec/exam/{m2}/broadsheet/export')
+    plain = _xlsx(c, f'/mock-waec/exam/{m2}/broadsheet/export')       # extras are off by default
+    assert 'Readiness' not in plain[0] and 'No. with A1' not in [x for r in plain for x in r]
+    rows = _xlsx(c, f'/mock-waec/exam/{m2}/broadsheet/export?change=1&readiness=1&borderline=1&absent_row=1&grade_counts=1&teacher_row=1')
     head = rows[0]
     assert 'Readiness' in head and any(h.startswith('Credits ± First') for h in head)
     flat = [x for r in rows for x in r]
     assert 'ABS' in flat and 'No. with A1' in flat and 'No. absent' in flat and '−2' in flat
-    rows = _xlsx(c, f'/mock-waec/exam/{m2}/broadsheet/export?readiness=0&change=0&grade_counts=0&absent_row=0')
+    rows = _xlsx(c, f'/mock-waec/exam/{m2}/broadsheet/export?readiness=1&teacher_row=1')
     flat = [x for r in rows for x in r]
-    assert 'Readiness' not in rows[0] and not any(h.startswith('Credits ±') for h in rows[0])
+    assert 'Readiness' in rows[0] and not any(h.startswith('Credits ±') for h in rows[0])
     assert 'No. with A1' not in flat and 'No. absent' not in flat
 
 
@@ -110,9 +112,20 @@ def test_pdf_follows_the_switches(app):
         assert r.status_code == 200
         with fitz.open(stream=r.get_data(), filetype='pdf') as d:
             return ' '.join(p.get_text() for p in d)
-    on = text()
+    on = text('change=1&readiness=1&borderline=1&absent_row=1&grade_counts=1&teacher_row=1')
     assert 'ABS' in on and 'No. with A1' in on and 'No. absent' in on and 'Shaded score' in on
     assert 'Readiness' in on and 'Change since' in on
-    off = text('readiness=0&change=0&grade_counts=0&absent_row=0&borderline=0')
+    off = text()                                                  # off by default
     assert 'No. with A1' not in off and 'No. absent' not in off and 'Shaded score' not in off
     assert 'Readiness' not in off and 'Change since' not in off
+
+
+def test_export_screen_starts_with_the_extras_off(app):
+    (m1, m2), a, b = _setup(app)
+    html = _admin(app).get(f'/mock-waec/exam/{m2}/broadsheet/print').get_data(as_text=True)
+    import re
+    for param in ('change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row'):
+        tag = re.search(r'<input[^>]*data-param="%s"[^>]*>' % param, html).group(0)
+        assert 'data-default="0"' in tag and 'checked' not in tag, param
+    tag = re.search(r'<input[^>]*data-param="credits"[^>]*>', html).group(0)
+    assert 'checked' in tag and 'data-default="1"' in tag
