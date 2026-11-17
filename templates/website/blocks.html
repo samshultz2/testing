@@ -13,7 +13,7 @@
         {% if p.message %}<span class="wb-topbar-msg">{{ p.message }}</span>{% endif %}
       </div>
       <div class="wb-topbar-social">
-        {% for net, icon in [('facebook','fa-facebook-f'),('instagram','fa-instagram'),('twitter','fa-x-twitter'),('youtube','fa-youtube'),('linkedin','fa-linkedin-in')] %}
+        {% for net, icon in [('facebook','fa-facebook-f'),('instagram','fa-instagram'),('twitter','fa-twitter'),('youtube','fa-youtube'),('linkedin','fa-linkedin-in')] %}
           {% if p[net] %}<a href="{{ p[net] }}" target="_blank" rel="noopener" aria-label="{{ net }}"><i class="fab {{ icon }}"></i></a>{% endif %}
         {% endfor %}
       </div>

@@ -83,7 +83,7 @@ export default function StudentProfile() {
                       onPick={(id) => id && setStudentId(String(id))} />
       </section>
 
-      {!studentId ? <div className="md-card"><EmptyState icon="fa-user-magnifying-glass" title="Search for a student"
+      {!studentId ? <div className="md-card"><EmptyState icon="fa-address-card" title="Search for a student"
                                 hint="Find any student to see their full attendance record across every term." /></div>
         : state.loading ? <div className="md-card"><Spinner label="Loading profile…" /></div>
         : state.error ? <div className="md-card"><ErrorState detail={state.error.message} /></div>

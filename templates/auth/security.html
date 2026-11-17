@@ -39,7 +39,7 @@
         <div class="sec-a">
           {% if user.mfa_enabled %}
           <button type="button" class="rs-btn ghost sm" data-toggle-form="acCodes"><i class="fas fa-rotate" aria-hidden="true"></i> New backup codes</button>
-          <button type="button" class="rs-btn ghost sm" data-toggle-form="acOff"><i class="fas fa-shield-xmark" aria-hidden="true"></i> Turn off</button>
+          <button type="button" class="rs-btn ghost sm" data-toggle-form="acOff"><i class="fas fa-lock-open" aria-hidden="true"></i> Turn off</button>
           {% else %}
           <a href="{{ url_for('auth.mfa_setup') }}" class="rs-btn primary sm"><i class="fas fa-shield-halved" aria-hidden="true"></i> Turn on</a>
           {% endif %}
@@ -55,7 +55,7 @@
       <form method="POST" action="{{ url_for('auth.mfa_disable') }}" class="sec-form" id="acOff" hidden data-confirm="Turn off two-step sign-in for your account?">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="password" name="password" required autocomplete="current-password" placeholder="Confirm with your password" aria-label="Your password">
-        <button type="submit" class="rs-btn danger sm"><i class="fas fa-shield-xmark" aria-hidden="true"></i> Turn off two-step sign-in</button>
+        <button type="submit" class="rs-btn danger sm"><i class="fas fa-lock-open" aria-hidden="true"></i> Turn off two-step sign-in</button>
       </form>
       {% endif %}
       <div class="sec-item">

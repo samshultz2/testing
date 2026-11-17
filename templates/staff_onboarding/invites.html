@@ -141,7 +141,7 @@
             {% elif i.expired %}<span class="iv-pill bad">Expired</span>
             {% else %}<span class="iv-pill off">Used up</span>{% endif %}
             <span class="iv-pill role">{{ role_label.get(i.role, i.role) }}</span>
-            {% if new_id == i.id %}<span class="iv-pill on"><i class="fas fa-sparkles"></i> New — copy and send it</span>{% endif %}
+            {% if new_id == i.id %}<span class="iv-pill on"><i class="fas fa-star"></i> New — copy and send it</span>{% endif %}
           </div>
           <div class="iv-meta">
             <span><i class="fas fa-code-branch" aria-hidden="true"></i>{{ i.branch.name if i.branch else ('All branches' if i.scope == 'central' else 'Joiner picks branch') }}</span>
