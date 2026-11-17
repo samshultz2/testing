@@ -235,12 +235,14 @@ def _term_fee_summary(term_id):
                 ClassArmAssignment.term_id == term_id),
         ClassArmAssignment).options(
             _joinedload(StudentEnrollment.class_arm_assignment)
-            .joinedload(ClassArmAssignment.school_class)).all()
+            .joinedload(ClassArmAssignment.school_class)).order_by(StudentEnrollment.id.desc()).all()
 
     placement = {}        # student_id -> (class_id, arm_id, class_name)
     total_cache = {}      # (class_id, arm_id) -> per-student fee total
     expected = 0.0
     for e in enrollments:
+        if e.student_id in placement:
+            continue                     # a second active enrolment in the term: bill once
         asg = e.class_arm_assignment
         key = (asg.class_id, asg.arm_id)
         if key not in total_cache:
@@ -274,16 +276,10 @@ def _term_fee_summary(term_id):
     summary['recent'] = (scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment)
                          .order_by(FeePayment.created_at.desc()).limit(8).all())
 
-    # Count students with an outstanding balance.
-    disc_by_student = {}
-    for d in scope_by_student(FeeDiscount.query.filter_by(term_id=term_id), FeeDiscount).all():
-        disc_by_student[d.student_id] = disc_by_student.get(d.student_id, 0.0) + d.amount
-    defaulters = 0
-    for sid, (cid, aid, _cn) in placement.items():
-        payable = max(total_cache[(cid, aid)] - disc_by_student.get(sid, 0.0), 0)
-        if payable - paid_by_student.get(sid, 0.0) > 0.005:
-            defaulters += 1
-    summary['defaulter_count'] = defaulters
+    # Students with an outstanding balance — same math as the Defaulters page
+    # (extra charges and credit notes included).
+    from utils.finance import defaulters_summary
+    summary['defaulter_count'] = defaulters_summary(term_id)['count']
     return summary
 
 
@@ -931,57 +927,31 @@ def defaulters():
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
     rows = []
-    totals = {'billed': 0.0, 'paid': 0.0, 'balance': 0.0}
+    totals = {'billed': 0.0, 'paid': 0.0, 'balance': 0.0,
+              # Whole-term picture (everyone enrolled, not just those owing) so
+              # "paid" isn't read as the school's collection rate.
+              'enrolled': 0, 'cleared': 0, 'all_payable': 0.0, 'all_paid': 0.0, 'no_fee': 0}
     if term_id:
-        from utils.branch_scope import scope_query
-        # Eager-load .class_arm_assignment and .student off the joins below
-        # (contains_eager) instead of the default lazy load: this loop's
-        # e.student is a fresh SELECT-per-row otherwise, one per enrollment
-        # across the whole school when no class filter is picked.
-        enr_q = scope_query(
-            StudentEnrollment.query
-            .join(ClassArmAssignment,
-                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-            .join(Student, StudentEnrollment.student_id == Student.id)
-            .options(contains_eager(StudentEnrollment.class_arm_assignment),
-                    contains_eager(StudentEnrollment.student))
-            .filter(StudentEnrollment.is_active == True,
-                    Student.is_active == True,          # not in the trash
-                    ClassArmAssignment.term_id == term_id),
-            ClassArmAssignment)
-        if class_id:
-            enr_q = enr_q.filter(ClassArmAssignment.class_id == class_id)
-        enrollments = enr_q.all()
-
-        # Pre-aggregate payments + discounts for the term.
-        paid_map = dict(scope_query(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
-                        .filter(FeePayment.term_id == term_id), FeePayment)
-                        .group_by(FeePayment.student_id).all())
-        disc_map = dict(scope_by_student(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
-                        .filter(FeeDiscount.term_id == term_id), FeeDiscount)
-                        .group_by(FeeDiscount.student_id).all())
-        from utils.finance import charges_map
-        extra_map = charges_map(term_id)                 # net additional charges / credit notes
-        total_cache = {}
-        for e in enrollments:
-            asg = e.class_arm_assignment
-            key = (asg.class_id, asg.arm_id)
-            if key not in total_cache:
-                total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
-            billed = total_cache[key]
-            payable = max(billed + (extra_map.get(e.student_id) or 0.0) - (disc_map.get(e.student_id) or 0.0), 0)
-            paid = paid_map.get(e.student_id) or 0.0
-            balance = payable - paid
-            if balance > 0.005:
+        from utils.finance import term_balances
+        for b in term_balances(term_id, class_id).values():
+            totals['enrolled'] += 1
+            totals['all_payable'] += b['payable']
+            totals['all_paid'] += b['paid']
+            if b['billed'] <= 0 and b['extra'] <= 0:
+                totals['no_fee'] += 1            # class has no fee set for this term
+            if b['balance'] > 0.005:
+                asg = b['enrollment'].class_arm_assignment
                 rows.append({
-                    'student': e.student,
+                    'student': b['student'],
                     'class_name': asg.school_class.name if asg.school_class else '—',
                     'arm_name': asg.arm_label,
-                    'billed': payable, 'paid': paid, 'balance': balance,
+                    'billed': b['payable'], 'paid': b['paid'], 'balance': b['balance'],
                 })
-                totals['billed'] += payable
-                totals['paid'] += paid
-                totals['balance'] += balance
+                totals['billed'] += b['payable']
+                totals['paid'] += b['paid']
+                totals['balance'] += b['balance']
+            else:
+                totals['cleared'] += 1
         rows.sort(key=lambda r: r['balance'], reverse=True)
 
     return _render({
@@ -997,6 +967,7 @@ def defaulters():
                   'record_url': url_for('finance.record_payment', student_id=r['student'].id, term_id=term_id)}
                  for r in rows],
         'self_url': url_for('finance.defaulters'),
+        'structure_url': url_for('finance.structure', term_id=term_id or ''),
         'message_url': url_for('comms.compose', audience='defaulters', class_id=class_id or '', term_id=term_id or ''),
     })
 
@@ -1279,28 +1250,13 @@ def export_report():
     ws3 = wb.create_sheet('Outstanding')
     write_head(ws3, ['Student', 'Student ID', 'Class', 'Payable', 'Paid', 'Balance'])
     if term_id:
-        paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
-                        .filter(FeePayment.term_id == term_id).group_by(FeePayment.student_id).all())
-        disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
-                        .filter(FeeDiscount.term_id == term_id).group_by(FeeDiscount.student_id).all())
-        enrollments = scope_query(
-            StudentEnrollment.query
-            .join(ClassArmAssignment,
-                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-            .filter(StudentEnrollment.is_active == True,
-                    ClassArmAssignment.term_id == term_id),
-            ClassArmAssignment).all()
-        cache = {}
-        for e in enrollments:
-            asg = e.class_arm_assignment
-            key = (asg.class_id, asg.arm_id)
-            if key not in cache:
-                cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
-            payable = max(cache[key] - (disc_map.get(e.student_id) or 0.0), 0)
-            paid = paid_map.get(e.student_id) or 0.0
-            if payable - paid > 0.005:
-                ws3.append([e.student.full_name, e.student.student_id,
-                            asg.display_name if asg else '', payable, paid, payable - paid])
+        from utils.finance import term_balances
+        owing = sorted((b for b in term_balances(term_id).values() if b['balance'] > 0.005),
+                       key=lambda b: b['balance'], reverse=True)
+        for b in owing:
+            asg = b['enrollment'].class_arm_assignment
+            ws3.append([b['student'].full_name, b['student'].student_id,
+                        asg.display_name if asg else '', b['payable'], b['paid'], b['balance']])
 
     fname = f"finance_report_{(term.full_name if term else 'all').replace(' ', '_').replace('/', '-')}.xlsx"
     return xlsx_response(wb, fname)

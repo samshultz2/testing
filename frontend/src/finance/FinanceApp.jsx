@@ -487,11 +487,14 @@ function Defaulters({ d, notify }) {
         ]} />}
       </>}>
       <Tiles items={[
-        { label: 'Students owing', value: d.rows.length, sub: 'with a balance' },
-        { label: 'Outstanding', value: nairaShort(T.balance), sub: naira(T.balance), tone: T.balance > 0 ? 'bad' : 'good' },
-        { label: 'Paid so far', value: nairaShort(T.paid), sub: `${pct(T.paid, T.billed)}% of their bills`, tone: 'good' },
-        { label: 'Their bills', value: nairaShort(T.billed), sub: 'after discounts' },
+        { label: 'Students owing', value: d.rows.length, sub: T.enrolled ? `of ${T.enrolled} enrolled` : 'with a balance' },
+        { label: 'Outstanding', value: nairaShort(T.balance), sub: d.rows.length ? `about ${nairaShort(T.balance / d.rows.length)} each` : naira(T.balance), tone: T.balance > 0 ? 'bad' : 'good' },
+        { label: 'Collected', value: nairaShort(T.all_paid), sub: `${pct(T.all_paid, T.all_payable)}% of ${nairaShort(T.all_payable)} due`, tone: 'good' },
+        { label: 'Owing students paid', value: nairaShort(T.paid), sub: `${pct(T.paid, T.billed)}% of their ${nairaShort(T.billed)}` },
       ]} />
+      {T.no_fee > 0 && (
+        <p className="rs-warn"><i className="fas fa-circle-info" aria-hidden="true" /> <span>{T.no_fee} enrolled student{T.no_fee === 1 ? ' is' : 's are'} in a class with no fees set for this term, so they aren't counted as owing. <A to={d.structure_url}>Check the fee structure</A></span></p>
+      )}
       <div className="rs-pick">
         <Chips value={d.class_id} onChange={(v) => go({ class_id: v })} label="Class"
           items={[{ value: '', label: 'All classes' }, ...d.classes.map((c) => ({ value: c.id, label: c.name }))]} />

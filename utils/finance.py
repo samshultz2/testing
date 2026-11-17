@@ -3,6 +3,7 @@ Finance helpers — turn the fee structure + payments + discounts into the
 numbers the UI shows (expected bill, paid, outstanding balance).
 """
 from sqlalchemy import func
+from sqlalchemy.orm import contains_eager
 
 from models import (
     db, FeeItem, FeeStructure, FeePayment, FeeDiscount,
@@ -116,55 +117,73 @@ def charges_map(term_id):
     return out
 
 
-def defaulters_summary(term_id, class_id=None):
-    """Aggregate fee defaulters for a term as {count, balance} — the same math as
-    the Defaulters page, branch-scoped, but summarised (no per-student rows) so
-    the dashboard can surface "N students owe ₦X" cheaply. Payments/discounts are
-    restricted to the branch-scoped enrolment set, so no cross-branch leakage."""
+def term_balances(term_id, class_id=None, scope=True):
+    """Every student enrolled in a term, ONCE each, with their bill and balance.
+
+    The single source for the Defaulters page, the dashboard counts and
+    defaulters_summary(), so they always agree. A student with two active
+    enrolments in the same term (e.g. moved arms without closing the old row)
+    is billed for one placement, not twice. Returns {student_id: {...}} with
+    keys student, enrollment, billed (structure), extra (charges - credits),
+    discount, payable, paid, balance."""
     from utils.branch_scope import scope_query
     if not term_id:
-        return {'count': 0, 'balance': 0.0}
-    enr_q = scope_query(
-        StudentEnrollment.query
-        .join(ClassArmAssignment,
-              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-        .join(Student, StudentEnrollment.student_id == Student.id)
-        .filter(StudentEnrollment.is_active == True,
-                Student.is_active == True,          # trashed students owe nothing
-                ClassArmAssignment.term_id == term_id),
-        ClassArmAssignment)
+        return {}
+    q = (StudentEnrollment.query
+         .join(ClassArmAssignment,
+               StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+         .join(Student, StudentEnrollment.student_id == Student.id)
+         .options(contains_eager(StudentEnrollment.class_arm_assignment),
+                  contains_eager(StudentEnrollment.student))
+         .filter(StudentEnrollment.is_active == True,
+                 Student.is_active == True,          # trashed students owe nothing
+                 ClassArmAssignment.term_id == term_id))
+    if scope:
+        q = scope_query(q, ClassArmAssignment)
     if class_id:
-        enr_q = enr_q.filter(ClassArmAssignment.class_id == class_id)
-    enrollments = enr_q.all()
+        q = q.filter(ClassArmAssignment.class_id == class_id)
+    enrollments = q.order_by(StudentEnrollment.id.desc()).all()   # newest placement wins
     if not enrollments:
-        return {'count': 0, 'balance': 0.0}
-    student_ids = [e.student_id for e in enrollments]
-    paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
-                    .filter(FeePayment.term_id == term_id,
-                            FeePayment.student_id.in_(student_ids))
-                    .group_by(FeePayment.student_id).all())
-    try:
-        disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
-                        .filter(FeeDiscount.term_id == term_id,
-                                FeeDiscount.student_id.in_(student_ids))
+        return {}
+    placement = {}
+    for e in enrollments:
+        placement.setdefault(e.student_id, e)
+    ids = list(placement)
+    paid_map, disc_map = {}, {}
+    for i in range(0, len(ids), 900):                 # stay under SQLite's variable limit
+        chunk = ids[i:i + 900]
+        paid_map.update(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
+                        .filter(FeePayment.term_id == term_id, FeePayment.student_id.in_(chunk))
+                        .group_by(FeePayment.student_id).all())
+        disc_map.update(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
+                        .filter(FeeDiscount.term_id == term_id, FeeDiscount.student_id.in_(chunk))
                         .group_by(FeeDiscount.student_id).all())
-    except Exception:
-        disc_map = {}
     extra_map = charges_map(term_id)
     total_cache = {}
-    count = 0
-    balance = 0.0
-    for e in enrollments:
+    out = {}
+    for sid, e in placement.items():
         asg = e.class_arm_assignment
         key = (asg.class_id, asg.arm_id)
         if key not in total_cache:
             total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
-        payable = max(total_cache[key] + (extra_map.get(e.student_id) or 0.0)
-                      - (disc_map.get(e.student_id) or 0.0), 0)
-        bal = payable - (paid_map.get(e.student_id) or 0.0)
-        if bal > 0.005:
+        billed = total_cache[key]
+        extra = float(extra_map.get(sid) or 0.0)
+        disc = float(disc_map.get(sid) or 0.0)
+        payable = max(billed + extra - disc, 0)
+        paid = float(paid_map.get(sid) or 0.0)
+        out[sid] = {'student': e.student, 'enrollment': e, 'billed': billed, 'extra': extra,
+                    'discount': disc, 'payable': payable, 'paid': paid, 'balance': payable - paid}
+    return out
+
+
+def defaulters_summary(term_id, class_id=None):
+    """Aggregate fee defaulters for a term as {count, balance} — the same math as
+    the Defaulters page (term_balances), branch-scoped, without per-student rows."""
+    count, balance = 0, 0.0
+    for b in term_balances(term_id, class_id).values():
+        if b['balance'] > 0.005:
             count += 1
-            balance += bal
+            balance += b['balance']
     return {'count': count, 'balance': round(balance, 2)}
 
 
