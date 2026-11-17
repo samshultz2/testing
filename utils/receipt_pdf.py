@@ -15,14 +15,42 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, HRFlowable)
 
 _PRIMARY = colors.HexColor('#0e8a64')
+_FONTS = __import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)), '..', 'assets', 'fonts')
+
+
+def _fonts():
+    """(regular, bold) font names with a ₦ glyph. The PDF built-in Helvetica
+    has no ₦, so viewers drew an empty box where the currency sign should be.
+    Inter ships with the app; DejaVu / Liberation are fallbacks."""
+    import os
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    if 'Rcp' in pdfmetrics.getRegisteredFontNames():
+        return 'Rcp', 'Rcp-Bold'
+    for reg, bold in ((os.path.join(_FONTS, 'Inter-Regular.ttf'), os.path.join(_FONTS, 'Inter-Bold.ttf')),
+                      ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+                      ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+                       '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf')):
+        if os.path.exists(reg) and os.path.exists(bold):
+            try:
+                pdfmetrics.registerFont(TTFont('Rcp', reg))
+                pdfmetrics.registerFont(TTFont('Rcp-Bold', bold))
+                pdfmetrics.registerFontFamily('Rcp', normal='Rcp', bold='Rcp-Bold', italic='Rcp', boldItalic='Rcp-Bold')
+                return 'Rcp', 'Rcp-Bold'
+            except Exception:
+                continue
+    return 'Helvetica', 'Helvetica-Bold'
 _MUTED = colors.HexColor('#64748b')
+
+
+_SIGN = {'v': '₦'}
 
 
 def _naira(v):
     try:
-        return '₦{:,.2f}'.format(float(v or 0))
+        return _SIGN['v'] + '{:,.2f}'.format(float(v or 0))
     except (TypeError, ValueError):
-        return '₦0.00'
+        return _SIGN['v'] + '0.00'
 
 
 def receipt_pdf(payment, bill, school):
@@ -33,7 +61,10 @@ def receipt_pdf(payment, bill, school):
                             topMargin=12 * mm, bottomMargin=12 * mm,
                             title=f'Receipt {payment.receipt_no}')
     ss = getSampleStyleSheet()
-    center = ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER)
+    body, _bold = _fonts()
+    _SIGN['v'] = 'N' if body == 'Helvetica' else '₦'      # no ₦ glyph -> plain N, never a box
+    base = ParagraphStyle('base', parent=ss['Normal'], fontName=body)
+    center = ParagraphStyle('c', parent=base, alignment=TA_CENTER)
     title = ParagraphStyle('t', parent=center, fontSize=15, leading=18,
                            textColor=_PRIMARY, spaceAfter=2)
     muted = ParagraphStyle('m', parent=center, fontSize=8, textColor=_MUTED)
@@ -44,14 +75,14 @@ def receipt_pdf(payment, bill, school):
 
     el = []
     nm = school.get('name') or 'School'
-    items = [(Paragraph(pdf_escape(nm), title), nm, 'Helvetica', 15)]
+    items = [(Paragraph(pdf_escape(nm), title), nm, body, 15)]
     br = getattr(payment.student, 'branch', None) if payment.student else None
     if br:
-        items.append((Paragraph(pdf_escape(f'{br.name} Branch'), muted), f'{br.name} Branch', 'Helvetica', 8))
+        items.append((Paragraph(pdf_escape(f'{br.name} Branch'), muted), f'{br.name} Branch', body, 8))
     if school.get('address'):
-        items.append((Paragraph(pdf_escape(school['address']), muted), school['address'], 'Helvetica', 8))
+        items.append((Paragraph(pdf_escape(school['address']), muted), school['address'], body, 8))
     if school.get('phone'):
-        items.append((Paragraph(pdf_escape(school['phone']), muted), school['phone'], 'Helvetica', 8))
+        items.append((Paragraph(pdf_escape(school['phone']), muted), school['phone'], body, 8))
     from utils.school import logo_flowable, logo_header_flowable
     logo = logo_flowable(max_h_mm=14, max_w_mm=22)
     header = logo_header_flowable(logo, items) if logo is not None else None
@@ -69,7 +100,7 @@ def receipt_pdf(payment, bill, school):
     def row(k, v, strong=False):
         vv = f'<b>{pdf_escape(v)}</b>' if strong else pdf_escape(v)
         return [Paragraph(k, label), Paragraph(vv, ParagraphStyle(
-            'r', parent=ss['Normal'], fontSize=9, alignment=2))]
+            'r', parent=base, fontSize=9, alignment=2))]
 
     rows = [
         row('Receipt No.', payment.receipt_no, True),

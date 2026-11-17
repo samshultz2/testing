@@ -64,3 +64,34 @@ def test_receipt_pdf_downloads(app):
     assert r.status_code == 200
     assert r.headers['Content-Type'] == 'application/pdf'
     assert r.get_data()[:4] == b'%PDF'
+
+
+def test_receipt_pdf_draws_the_naira_sign(app):
+    """The ₦ must come out as ₦: Helvetica (the PDF built-in) has no glyph for
+    it, so viewers showed an empty box. The receipt now embeds a font with it."""
+    import fitz
+    from datetime import date
+    from models import FeePayment, AcademicSession, Term, Student
+    with app.app_context():
+        s = Student(student_id='RCPTNGN', first_name='Naira', surname='Sign', gender='Male', is_active=True)
+        db.session.add(s); db.session.flush()
+        sess = AcademicSession.query.first() or AcademicSession(name='NG 24/25', is_active=True)
+        db.session.add(sess); db.session.flush()
+        term = Term.query.filter_by(session_id=sess.id, term_number=1).first() or Term(
+            session_id=sess.id, term_number=1, name='First Term')
+        db.session.add(term); db.session.flush()
+        p = FeePayment(student_id=s.id, term_id=term.id, amount=70000, payment_date=date.today(),
+                       method='Bank Transfer', receipt_no='NGN-1')
+        db.session.add(p); db.session.commit(); pid = p.id
+    data = _admin(app).get(f'/finance/payments/{pid}/receipt.pdf').get_data()
+    doc = fitz.open(stream=data, filetype='pdf')
+    page = doc[0]
+    assert '₦70,000.00' in page.get_text()
+    # Every ₦ is drawn with a font that actually contains the glyph.
+    for b in page.get_text('rawdict')['blocks']:
+        for line in b.get('lines', []):
+            for span in line['spans']:
+                for ch in span['chars']:
+                    if ch['c'] == '₦':
+                        assert 'Helvetica' not in span['font']
+    doc.close()
