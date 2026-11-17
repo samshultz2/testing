@@ -610,7 +610,16 @@ def record_payment():
     if term_id:
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
         assignments = filter_classes_for_user(all_assignments)
-        assignments.sort(key=lambda a: a.display_name)
+        assignments.sort(key=lambda a: ((a.school_class.level if a.school_class and a.school_class.level is not None else 999),
+                                        a.school_class.name if a.school_class else '', a.arm_label))
+    # Active students per class arm, for the arm chips ("Gold · 32").
+    counts = {}
+    if assignments:
+        counts = dict(db.session.query(StudentEnrollment.class_arm_assignment_id, func.count(StudentEnrollment.id))
+                      .join(Student, StudentEnrollment.student_id == Student.id)
+                      .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in assignments]),
+                              StudentEnrollment.is_active == True, Student.is_active == True)
+                      .group_by(StudentEnrollment.class_arm_assignment_id).all())
     roster = []
     if term_id and assignment_id and not student:
         enrollments = (StudentEnrollment.query.filter_by(
@@ -630,7 +639,9 @@ def record_payment():
         'student': ({'id': student.id, 'full_name': student.full_name,
                      'student_id': student.student_id, 'gender': student.gender or ''} if student else None),
         'bill': _bill_json(bill),
-        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'assignments': [{'id': a.id, 'display_name': a.display_name, 'class_id': a.class_id,
+                         'class_name': a.school_class.name if a.school_class else a.display_name,
+                         'arm': a.arm_label, 'students': counts.get(a.id, 0)} for a in assignments],
         'roster': [{'id': r['student'].id, 'full_name': r['student'].full_name,
                     'student_id': r['student'].student_id, 'balance': r['balance'],
                     'billed': r['billed'], 'paid': r['paid'], 'gender': r['student'].gender or '',

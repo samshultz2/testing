@@ -265,10 +265,8 @@ function FindStudent({ d, goWith }) {
         <Seg value={mode} onChange={setMode} label="Find a student" options={[
           { value: 'class', label: 'Pick a class', icon: 'fa-users' }, { value: 'search', label: 'Search by name', icon: 'fa-magnifying-glass' }]} />
         {mode === 'class' ? (
-          <div className="fn-clsbar">
-            <Chips value={d.assignment_id} onChange={(v) => goWith({ term_id: d.term_id, assignment_id: v })} label="Class"
-              items={(d.assignments || []).map((a) => ({ value: a.id, label: a.display_name }))} />
-          </div>
+          <ClassArmPicker assignments={d.assignments || []} value={d.assignment_id}
+            onPick={(v) => goWith({ term_id: d.term_id, assignment_id: v })} />
         ) : <StudentSearch url={d.search_url} termId={d.term_id} onPick={(id) => goWith({ student_id: id, term_id: d.term_id })} />}
       </div>
 
@@ -292,8 +290,50 @@ function FindStudent({ d, goWith }) {
           </div>
         </Card>
       ) : <Blank icon="fa-users" title="No students in this class">There are no active students in this class arm for the selected term.</Blank>)
-        : <Blank icon="fa-hand-pointer" title="Pick a class to see who owes what"><p>Or switch to <b>Search by name</b> to jump straight to a student.</p></Blank>)}
+        : <Blank icon="fa-hand-pointer" title="Pick a class, then an arm, to see who owes what"><p>Or switch to <b>Search by name</b> to jump straight to a student.</p></Blank>)}
     </>
+  );
+}
+
+// Class first, then its arms — instead of one long row of every "JSS1 Gold"
+// combination. A class with a single arm opens straight away.
+function ClassArmPicker({ assignments, value, onPick }) {
+  const classes = useMemo(() => {
+    const out = [];
+    const by = {};
+    assignments.forEach((a) => {
+      const k = String(a.class_id);
+      if (!by[k]) { by[k] = { id: k, name: a.class_name, arms: [], students: 0 }; out.push(by[k]); }
+      by[k].arms.push(a);
+      by[k].students += a.students || 0;
+    });
+    return out;
+  }, [assignments]);
+  const current = assignments.find((a) => String(a.id) === String(value));
+  const [cls, setCls] = useState(current ? String(current.class_id) : '');
+  useEffect(() => { if (current) setCls(String(current.class_id)); }, [value]);
+  const chosen = classes.find((c) => c.id === cls);
+  const pickClass = (id) => {
+    setCls(id);
+    const c = classes.find((x) => x.id === id);
+    if (c && c.arms.length === 1) onPick(c.arms[0].id);
+  };
+  if (!classes.length) return <p className="rs-muted">No classes set up for this term.</p>;
+  return (
+    <div className="fn-ca">
+      <div className="fn-ca-step">
+        <span className="fn-ca-l">Class</span>
+        <Chips value={cls} onChange={pickClass} label="Class"
+          items={classes.map((c) => ({ value: c.id, label: c.name, sub: c.arms.length > 1 ? `${c.arms.length} arms` : null }))} />
+      </div>
+      {chosen && chosen.arms.length > 1 && (
+        <div className="fn-ca-step">
+          <span className="fn-ca-l">Arm</span>
+          <Chips value={current && String(current.class_id) === cls ? value : ''} onChange={onPick} label={`${chosen.name} arm`}
+            items={chosen.arms.map((a) => ({ value: a.id, label: a.arm || a.display_name, sub: a.students }))} />
+        </div>
+      )}
+    </div>
   );
 }
 
