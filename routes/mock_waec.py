@@ -840,9 +840,15 @@ def add_result(exam_id):
         subjects = request.form.getlist('subject[]')
         scores = request.form.getlist('score[]')
         grades = request.form.getlist('grade[]')
+        absent = {(a or '').strip() for a in request.form.getlist('absent[]')}
         saved = 0
         for i, subject in enumerate(subjects):
             subject = (subject or '').strip()
+            if subject and subject in absent:
+                # Absent wins over any score left in the box, as on the grid.
+                _upsert_result(student_id, exam_id, subject, None, None).is_absent = True
+                saved += 1
+                continue
             raw = scores[i] if i < len(scores) else ''
             if not subject or raw in (None, ''):
                 continue
@@ -853,10 +859,10 @@ def add_result(exam_id):
             # Honour an edited grade only if it's a valid WAEC grade; else derive.
             supplied = (grades[i].strip().upper() if i < len(grades) else '')
             grade = supplied if supplied in WAEC_GRADES else None
-            _upsert_result(student_id, exam_id, subject, score, grade)
+            _upsert_result(student_id, exam_id, subject, score, grade).is_absent = False
             saved += 1
         if not saved:
-            flash('Enter at least one score before saving.', 'warning')
+            flash('Enter at least one score (or mark a subject absent) before saving.', 'warning')
             return redirect(url_for('mock_waec.add_result', exam_id=exam_id, student=student_id))
         db.session.commit()
         recompute_student_safe(student_id)
@@ -1129,12 +1135,17 @@ def edit_student_results(exam_id, student_id):
             subject = (request.form.get('subject') or '').strip()
             raw = (request.form.get('score') or '').strip()
             grade_in = (request.form.get('grade') or '').strip().upper()
-            if not subject or raw == '':
-                flash('Pick a subject and enter a score.', 'error')
+            if subject and request.form.get('absent') == 'on':
+                _upsert_result(student_id, exam_id, subject, None, None).is_absent = True
+                db.session.commit()
+                recompute_student_safe(student_id)
+                flash(f'{subject} marked absent.', 'success')
+            elif not subject or raw == '':
+                flash('Pick a subject and enter a score, or tick Absent.', 'error')
             else:
                 try:
                     grade = grade_in if grade_in in WAEC_GRADES else None
-                    _upsert_result(student_id, exam_id, subject, _clean_score(raw), grade)
+                    _upsert_result(student_id, exam_id, subject, _clean_score(raw), grade).is_absent = False
                     db.session.commit()
                     recompute_student_safe(student_id)
                     flash(f'{subject} saved.', 'success')
@@ -1144,15 +1155,23 @@ def edit_student_results(exam_id, student_id):
             changed = 0
             for row in MockWAECResult.query.filter_by(
                     mock_exam_id=exam_id, student_id=student_id).all():
+                if request.form.get(f'absent_{row.id}') == 'on':
+                    if not row.is_absent:
+                        row.apply_score(None, None)
+                        row.grade = None
+                        row.is_absent = True
+                        changed += 1
+                    continue
                 raw = (request.form.get(f'score_{row.id}') or '').strip()
                 if raw == '':
-                    continue
+                    continue                     # still absent / unchanged until a score is entered
                 try:
                     score = _clean_score(raw)
                 except (TypeError, ValueError):
                     continue
                 grade_in = (request.form.get(f'grade_{row.id}') or '').strip().upper()
                 row.apply_score(score, grade_in if grade_in in WAEC_GRADES else None)
+                row.is_absent = False
                 changed += 1
             db.session.commit()
             recompute_student_safe(student_id)

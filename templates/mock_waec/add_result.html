@@ -34,12 +34,12 @@
 .ae-who .t{flex:1;min-width:0}.ae-who b{font-size:1.05rem;display:block}.ae-who small{color:var(--text-muted);font-size:.8rem}
 .ae-pick{display:none}
 .ae-rows{display:flex;flex-direction:column}
-.ae-hrow{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 34px;gap:.7rem;padding:.55rem 1.1rem .4rem;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border-light,var(--border-color));background:var(--gray-50,#f8fafc)}
+.ae-hrow{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 50px 34px;gap:.7rem;padding:.55rem 1.1rem .4rem;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border-light,var(--border-color));background:var(--gray-50,#f8fafc)}
 .ae-hrow span:nth-child(2),.ae-hrow span:nth-child(3){text-align:center}
 .ae-pp{display:none}
 .ae-score::placeholder{color:var(--text-muted);opacity:.45;font-weight:600;font-size:.9rem}
 .ae-grade select:not(.cr):not(.ps):not(.fl){border-style:dashed;background:transparent;font-weight:600}
-.ae-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 34px;gap:.7rem;align-items:center;padding:.55rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.ae-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 86px 50px 34px;gap:.7rem;align-items:center;padding:.55rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
 .ae-row:focus-within{background:color-mix(in srgb,var(--primary) 5%,transparent)}
 .ae-subj{font-weight:700;font-size:.95rem;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .ae-subj small{display:block;font-weight:500;font-size:.72rem;color:var(--text-muted)}
@@ -53,6 +53,11 @@
 .ae-grade select.fl{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));border-color:color-mix(in srgb,var(--danger) 40%,transparent);color:var(--danger)}
 .ae-grade .man{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;background:var(--text-primary);color:var(--bg-card);font-size:.55rem;display:none;place-items:center}
 .ae-grade.touched .man{display:grid}
+.ae-abs{height:46px;width:100%;border:1.5px dashed var(--border-color);border-radius:12px;background:none;color:var(--text-muted);font:inherit;font-size:.72rem;font-weight:800;letter-spacing:.04em;cursor:pointer}
+.ae-abs:hover{border-color:var(--text-secondary);color:var(--text-secondary)}
+.ae-abs[aria-pressed="true"]{border-style:solid;border-color:var(--text-secondary);background:var(--text-secondary);color:var(--bg-card)}
+.ae-row.is-abs .ae-score,.ae-row.is-abs .ae-grade{opacity:.35;pointer-events:none}
+.ae-subj small.ab{color:var(--text-secondary)}
 .ae-x{width:34px;height:34px;border:0;border-radius:9px;background:none;color:var(--text-muted);cursor:pointer}.ae-x:hover{background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger)}
 .ae-add{display:flex;gap:.5rem;align-items:center;padding:.8rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color))}
 .ae-add select{flex:1;max-width:320px;height:40px;border:1.5px dashed var(--border-color);border-radius:10px;padding:0 .6rem;font:inherit;background:var(--bg-card);color:var(--text-secondary)}
@@ -80,7 +85,8 @@
 @media (max-width:760px){
   .ae{padding-bottom:90px}
   .ae-who{padding:.85rem 1rem}
-  .ae-row,.ae-hrow{grid-template-columns:minmax(0,1fr) 84px 64px 32px;gap:.45rem;padding:.5rem .9rem}
+  .ae-row,.ae-hrow{grid-template-columns:minmax(0,1fr) 72px 58px 44px 30px;gap:.4rem;padding:.5rem .9rem}
+  .ae-abs{height:40px;font-size:.68rem}
   .ae-hrow{padding:.45rem .9rem .35rem;font-size:.64rem}
   .ae-who b{font-size:.98rem;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .ae-pick{padding:0 .7rem}
@@ -223,9 +229,10 @@
     return '<div class="ae-row"><span class="ae-subj">' + esc(subj) + '<input type="hidden" name="subject[]" value="' + esc(subj) + '"></span>'
       + '<input class="ae-score" name="score[]" inputmode="numeric" pattern="[0-9]*" maxlength="3" enterkeyhint="next" placeholder="0–100" aria-label=""' + esc(subj) + ' score">'
       + '<span class="ae-grade"><select name="grade[]" aria-label="' + esc(subj) + ' grade">' + opts + '</select><span class="man" title="Changed by hand">✎</span></span>'
+      + '<button type="button" class="ae-abs" aria-pressed="false" title="Mark ' + esc(subj) + ' absent (didn’t sit the paper)">ABS</button>'
       + '<button type="button" class="ae-x" aria-label="Remove ' + esc(subj) + '" title="Not taking this subject"><i class="fas fa-trash-can" aria-hidden="true"></i></button></div>';
   }
-  function dirty() { return Array.prototype.some.call(rowsEl.querySelectorAll('.ae-score'), function (i) { return i.value.trim() !== ''; }); }
+  function dirty() { return Array.prototype.some.call(rowsEl.querySelectorAll('.ae-score'), function (i) { return i.value.trim() !== ''; }) || !!rowsEl.querySelector('.is-abs'); }
   function choose(id) {
     if (current && current.id === id) return;
     if (current && dirty() && !window.confirm('You have scores for ' + current.name + ' that aren’t saved. Switch student and lose them?')) return;
@@ -236,7 +243,7 @@
     document.getElementById('aeName').textContent = current.name;
     var sub = subjectsFor(id);
     document.getElementById('aeMeta').innerHTML = esc([current.sid, current.stream].filter(Boolean).join(' · ')) + '<span class="ae-src"> — ' + sub.list.length + ' subjects from ' + esc(sub.from) + '</span>';
-    rowsEl.innerHTML = '<div class="ae-hrow" aria-hidden="true"><span>Subject</span><span>Score /100</span><span>Grade</span><span></span></div>'
+    rowsEl.innerHTML = '<div class="ae-hrow" aria-hidden="true"><span>Subject</span><span>Score /100</span><span>Grade</span><span style="text-align:center">Absent</span><span></span></div>'
       + sub.list.map(rowHtml).join('');
     addBox.hidden = false; sum.hidden = false;
     renderLists(); update();
@@ -270,7 +277,25 @@
   });
   rowsEl.addEventListener('click', function (e) {
     var x = e.target.closest && e.target.closest('.ae-x');
-    if (x) { x.closest('.ae-row').remove(); update(); }
+    if (x) { x.closest('.ae-row').remove(); update(); return; }
+    var ab = e.target.closest && e.target.closest('.ae-abs');
+    if (ab) {
+      var row = ab.closest('.ae-row'), on = ab.getAttribute('aria-pressed') !== 'true';
+      var sc = row.querySelector('.ae-score'), sel = row.querySelector('select'), subj = row.querySelector('input[name="subject[]"]').value;
+      ab.setAttribute('aria-pressed', on ? 'true' : 'false');
+      row.classList.toggle('is-abs', on);
+      var hid = row.querySelector('input[name="absent[]"]');
+      if (on) {
+        sc.value = ''; sc.classList.remove('bad'); sel.value = ''; sc.readOnly = true; sc.tabIndex = -1;
+        row.querySelector('.ae-grade').classList.remove('touched');
+        if (!hid) row.querySelector('.ae-subj').insertAdjacentHTML('beforeend', '<input type="hidden" name="absent[]" value="' + esc(subj) + '"><small class="ab">Absent</small>');
+      } else {
+        sc.readOnly = false; sc.removeAttribute('tabindex');
+        if (hid) { hid.remove(); var n = row.querySelector('small.ab'); if (n) n.remove(); }
+        sc.focus();
+      }
+      update();
+    }
   });
   addSel.addEventListener('change', function () {
     var v = addSel.value; addSel.value = '';
@@ -284,8 +309,16 @@
 
   // ---- Live summary + buttons ----
   function update() {
-    var rows = Array.prototype.slice.call(rowsEl.querySelectorAll('.ae-row')), entered = 0, credits = 0, bad = 0, eng = null, mth = null;
+    var rows = Array.prototype.slice.call(rowsEl.querySelectorAll('.ae-row')), entered = 0, credits = 0, bad = 0, eng = null, mth = null, absent = 0;
     rows.forEach(function (r) {
+      if (r.classList.contains('is-abs')) {
+        absent++;
+        r.querySelector('select').className = '';
+        var as = r.querySelector('input[name="subject[]"]').value;
+        if (/^english/i.test(as)) eng = 'abs';
+        if (/^math/i.test(as)) mth = 'abs';
+        return;
+      }
       var sc = r.querySelector('.ae-score'), sel = r.querySelector('select'), subj = r.querySelector('input[name="subject[]"]').value;
       sel.className = band(sel.value);
       if (sc.classList.contains('bad')) bad++;
@@ -296,16 +329,22 @@
       if (/^math/i.test(subj)) mth = sel.value ? cr : mth;
     });
     if (current) {
-      var chips = ['<span class="ae-chip">' + entered + ' of ' + rows.length + ' scores</span>',
+      var chips = ['<span class="ae-chip">' + entered + ' of ' + (rows.length - absent) + ' scores</span>',
         '<span class="ae-chip' + (credits >= 5 ? ' good' : '') + '">' + credits + ' credit' + (credits === 1 ? '' : 's') + ' (A1–C6)</span>'];
       if (eng !== null || mth !== null) {
-        var both = eng && mth;
-        chips.push('<span class="ae-chip ' + (both ? 'good' : 'bad') + '">' + (both ? '✓ English & Maths credits' : 'English & Maths: ' + [eng === false ? 'English' : '', mth === false ? 'Maths' : ''].filter(Boolean).join(', ') + (eng === false || mth === false ? ' below credit' : ' pending')) + '</span>');
+        var both = eng === true && mth === true, msg = [];
+        var below = [eng === false ? 'English' : '', mth === false ? 'Maths' : ''].filter(Boolean);
+        var abs = [eng === 'abs' ? 'English' : '', mth === 'abs' ? 'Maths' : ''].filter(Boolean);
+        if (below.length) msg.push(below.join(' & ') + ' below credit');
+        if (abs.length) msg.push(abs.join(' & ') + ' absent');
+        if (!msg.length) msg.push('pending');
+        chips.push('<span class="ae-chip ' + (both ? 'good' : (below.length || abs.length ? 'bad' : '')) + '">' + (both ? '✓ English & Maths credits' : 'English & Maths: ' + msg.join(', ')) + '</span>');
       }
+      if (absent) chips.push('<span class="ae-chip">' + absent + ' absent</span>');
       if (bad) chips.push('<span class="ae-chip bad">' + bad + ' score' + (bad === 1 ? '' : 's') + ' over 100</span>');
       sum.innerHTML = chips.join('');
     }
-    var ok = current && entered > 0 && !bad;
+    var ok = current && (entered > 0 || absent > 0) && !bad;
     save.disabled = saveNext.disabled = !ok;
   }
   save.addEventListener('click', function () { document.getElementById('aeNext').value = ''; });

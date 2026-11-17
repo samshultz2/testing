@@ -35,25 +35,26 @@
         <form method="post" action="{{ url_for('mock_waec.edit_student_results', exam_id=exam.id, student_id=student.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="table-responsive"><table class="data-table">
-                <thead><tr><th>Subject</th><th style="width:120px;">Score</th><th style="width:160px;">Grade</th><th style="width:90px;"></th></tr></thead>
+                <thead><tr><th>Subject</th><th style="width:120px;">Score</th><th style="width:160px;">Grade</th><th style="width:90px;text-align:center;">Absent</th><th style="width:70px;"></th></tr></thead>
                 <tbody>
                     {% for r in results %}
-                    <tr>
-                        <td><strong>{{ r.subject }}</strong></td>
-                        <td><input type="number" min="0" max="100" inputmode="numeric" class="form-control" name="score_{{ r.id }}" value="{{ r.score if r.score is not none else '' }}"></td>
+                    <tr class="es-row{{ ' is-abs' if r.is_absent }}">
+                        <td><strong>{{ r.subject }}</strong>{% if r.is_absent %}<small class="es-ab"> · absent</small>{% endif %}</td>
+                        <td><input type="number" min="0" max="100" inputmode="numeric" class="form-control es-score" name="score_{{ r.id }}" value="{{ r.score if r.score is not none else '' }}" placeholder="{{ 'ABS' if r.is_absent else '' }}" aria-label="{{ r.subject }} score"></td>
                         <td>
                             <select class="form-control" name="grade_{{ r.id }}">
                                 <option value="">Auto ({{ r.grade or '—' }})</option>
                                 {% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
                             </select>
                         </td>
+                        <td style="text-align:center;"><label class="es-abs" title="Didn’t sit the {{ r.subject }} paper"><input type="checkbox" name="absent_{{ r.id }}" {% if r.is_absent %}checked{% endif %} aria-label="{{ r.subject }} absent"> ABS</label></td>
                         <td><button type="submit" name="delete_id" value="{{ r.id }}" class="btn btn-danger btn-sm" title="Remove subject" data-confirm="Remove {{ r.subject }}?"><i class="fas fa-trash"></i></button></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table></div>
             <div class="mt-2"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save changes</button>
-                <span class="text-muted text-sm">Leave "Grade" on Auto to derive it from the score.</span></div>
+                <span class="text-muted text-sm">Leave "Grade" on Auto to derive it from the score. Tick ABS if the student didn’t sit that paper; untick it and enter a score to undo.</span></div>
         </form>
         {% else %}
         <p class="text-muted">No subjects recorded yet for this student — add them below.</p>
@@ -74,9 +75,10 @@
                     {% for s in available %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
                 </select></div>
             <div class="form-group"><label class="form-label">Score</label>
-                <input type="number" min="0" max="100" inputmode="numeric" class="form-control" name="score" placeholder="0–100" required></div>
+                <input type="number" min="0" max="100" inputmode="numeric" class="form-control" name="score" id="esAddScore" placeholder="0–100" required></div>
             <div class="form-group"><label class="form-label">Grade</label>
                 <select class="form-control" name="grade"><option value="">Auto</option>{% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></div>
+            <div class="form-group es-add-abs"><label class="es-abs"><input type="checkbox" name="absent" id="esAddAbs"> Absent</label></div>
             <div class="filter-actions"><button type="submit" class="btn btn-success"><i class="fas fa-plus"></i> Add subject</button></div>
         </form>
         {% else %}
@@ -85,4 +87,26 @@
     </div>
 </div>
 </div>
+<style>
+.es-abs{display:inline-flex;align-items:center;gap:.35rem;font-weight:700;font-size:.8rem;cursor:pointer;white-space:nowrap}
+.es-abs input{width:18px;height:18px}
+.es-row.is-abs .es-score,.es-row.is-abs select{opacity:.4}
+.es-ab{color:var(--text-muted);font-weight:600}
+.es-add-abs{align-self:flex-end;display:flex;align-items:center;min-height:42px}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  document.querySelectorAll('.es-row').forEach(function (tr) {
+    var cb = tr.querySelector('.es-abs input'), sc = tr.querySelector('.es-score');
+    if (!cb || !sc) return;
+    cb.addEventListener('change', function () {
+      tr.classList.toggle('is-abs', cb.checked);
+      if (cb.checked) { sc.value = ''; sc.placeholder = 'ABS'; } else { sc.placeholder = ''; sc.focus(); }
+    });
+    sc.addEventListener('input', function () { if (sc.value !== '' && cb.checked) { cb.checked = false; tr.classList.remove('is-abs'); } });
+  });
+  var a = document.getElementById('esAddAbs'), s = document.getElementById('esAddScore');
+  if (a && s) a.addEventListener('change', function () { s.required = !a.checked; s.disabled = a.checked; if (a.checked) s.value = ''; });
+})();
+</script>
 {% endblock %}
