@@ -3,42 +3,290 @@
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <span>Import</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.imp-grid{display:grid;grid-template-columns:1fr;gap:1rem}
-@media(min-width:768px){.imp-grid{grid-template-columns:1fr 1fr}}
-.imp-card .hint{font-size:.82rem;color:var(--text-muted);line-height:1.5}
-code{background:var(--gray-50);padding:.05rem .3rem;border-radius:4px;font-size:.8rem}
+.im{max-width:1080px;margin:0 auto}
+.im-steps{display:flex;gap:.4rem;margin:0 0 1rem;list-style:none;padding:0}
+.im-steps li{flex:1;display:flex;align-items:center;gap:.5rem;padding:.55rem .7rem;border-radius:12px;background:var(--gray-100);color:var(--text-muted);font-weight:700;font-size:.84rem}
+.im-steps li b{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--bg-card);font-size:.78rem;flex:none}
+.im-steps li.on{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.im-steps li.on b{background:var(--primary);color:#fff}
+.im-steps li.done b{background:var(--success);color:#fff}
+.im-sec{display:flex;flex-direction:column;gap:1rem}
+.im-sec[hidden]{display:none}
+.im-exams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem}
+.im-exam{position:relative;display:flex;flex-direction:column;gap:.3rem;padding:.9rem 1rem;border:1.5px solid var(--border-color);border-radius:14px;background:var(--bg-card);cursor:pointer}
+.im-exam input{position:absolute;opacity:0}
+.im-exam b{font-size:1.05rem}.im-exam small{color:var(--text-muted);font-size:.8rem;line-height:1.4}
+.im-exam:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--bg-card))}
+.im-exam:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.im-exam i{font-size:1.1rem;color:var(--primary)}
+.im-row{display:flex;flex-wrap:wrap;gap:.8rem;align-items:flex-end}
+.im-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;min-height:190px;padding:1.4rem;border:2px dashed var(--border-color);border-radius:18px;background:var(--bg-card);text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.im-drop:hover,.im-drop.over{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 5%,var(--bg-card))}
+.im-drop i{font-size:2rem;color:var(--primary)}
+.im-drop b{font-size:1.05rem}
+.im-drop small{color:var(--text-muted)}
+.im-drop.has{border-style:solid;border-color:var(--success)}
+.im-drop.has i{color:var(--success)}
+.im-or{display:flex;align-items:center;gap:.7rem;color:var(--text-muted);font-size:.82rem;font-weight:700}
+.im-or::before,.im-or::after{content:'';flex:1;height:1px;background:var(--border-color)}
+.im-paste textarea{width:100%;min-height:120px;border:1.5px solid var(--border-color);border-radius:14px;padding:.75rem .85rem;font:inherit;font-family:ui-monospace,Menlo,monospace;font-size:.85rem;background:var(--bg-card);color:var(--text-primary);resize:vertical}
+.im-how{font-size:.86rem;color:var(--text-secondary)}
+.im-how summary{cursor:pointer;font-weight:700;color:var(--primary);list-style:none}
+.im-how summary::-webkit-details-marker{display:none}
+.im-how code{background:var(--gray-100);padding:.05rem .35rem;border-radius:5px;font-size:.8rem}
+.im-how ul{margin:.5rem 0 0;padding-left:1.1rem;line-height:1.6}
+.im-tmpl{display:flex;flex-wrap:wrap;gap:.5rem}
+.im-filter{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+.im-filter .rs-seg button{white-space:nowrap}
+.im-list{display:flex;flex-direction:column;gap:.45rem}
+.im-r{display:grid;grid-template-columns:3.2rem minmax(0,1.2fr) minmax(0,2fr) auto;gap:.8rem;align-items:center;padding:.65rem .85rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card)}
+.im-r[hidden]{display:none}
+.im-r .ln{font-size:.75rem;color:var(--text-muted);font-weight:700}
+.im-r .st{display:flex;flex-direction:column;min-width:0}
+.im-r .st b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.im-r .st small{color:var(--text-muted);font-size:.76rem}
+.im-r .it{display:flex;flex-wrap:wrap;gap:.25rem;min-width:0}
+.im-r .it span{font-size:.76rem;padding:.12rem .45rem;border-radius:7px;background:var(--gray-100)}
+.im-r .it span b{margin-left:.25rem}
+.im-r .it span s{color:var(--text-muted);font-size:.72rem}
+.im-r .pr{grid-column:2/-1;color:var(--danger);font-size:.82rem;font-weight:600}
+.im-r .nt{grid-column:2/-1;color:var(--text-muted);font-size:.78rem}
+.im-r.error{border-color:color-mix(in srgb,var(--danger) 45%,var(--border-color));background:color-mix(in srgb,var(--danger) 4%,var(--bg-card))}
+.im-badge{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.2rem .5rem;border-radius:999px;white-space:nowrap}
+.im-badge.new{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.im-badge.update{background:color-mix(in srgb,var(--info,#0ea5e9) 14%,var(--bg-card));color:var(--info,#0369a1)}
+.im-badge.same{background:var(--gray-100);color:var(--text-muted)}
+.im-badge.error{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.im-done{text-align:center;padding:2rem 1rem}
+.im-done>i{font-size:2.6rem;color:var(--success)}
+.im-done h2{margin:.6rem 0 .3rem}
+.im-done .acts{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-top:1rem}
+.im-err{display:flex;gap:.55rem;align-items:flex-start;padding:.75rem .9rem;border-radius:12px;background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));color:var(--danger);font-weight:600}
+.im-err[hidden]{display:none}
+@media(max-width:759px){
+  .im{padding-bottom:6rem}
+  .im-steps li span{display:none}.im-steps li{justify-content:center}
+  .im-exams{grid-template-columns:minmax(0,1fr)}
+  .im-exam{flex-direction:row;align-items:center;gap:.8rem}.im-exam small{display:none}
+  .im-r{grid-template-columns:minmax(0,1fr) auto;gap:.35rem .6rem}
+  .im-r .ln{display:none}
+  .im-r .it,.im-r .pr,.im-r .nt{grid-column:1/-1}
+  .im-r .st{grid-column:1}
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div><h1>Import Results</h1><p class="text-muted text-sm">Bulk-load WAEC/JAMB results from Excel or CSV. Students are matched by ID or full name.</p></div>
-</div>
+<div class="rs im">
+  <header class="rs-head">
+    <span class="rs-head-ic"><i class="fas fa-file-import" aria-hidden="true"></i></span>
+    <div class="rs-head-t"><h1>Import results</h1><p>Bring in WAEC, NECO or JAMB results from Excel, CSV or copied cells. You'll see every row before anything is saved.</p></div>
+  </header>
 
-<div class="imp-grid">
-    <div class="card imp-card">
-        <div class="card-header"><h3><span class="badge badge-info">WAEC</span> Import</h3></div>
-        <div class="card-body">
-            <p class="hint">One row per subject. Columns: <code>student_id, exam_year, subject, grade</code>.</p>
-            <a href="{{ url_for('results.import_template', exam='waec') }}" class="btn btn-secondary btn-sm mb-3"><i class="fas fa-download"></i> Download template</a>
-            <form method="POST" action="{{ url_for('results.import_results_run', exam='waec') }}" enctype="multipart/form-data">
-                <input type="file" name="file" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
-                <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Import WAEC</button>
-            </form>
-        </div>
-    </div>
+  <ol class="im-steps" aria-label="Steps">
+    <li class="on" data-step="1"><b>1</b><span>Exam &amp; sheet</span></li>
+    <li data-step="2"><b>2</b><span>Check</span></li>
+    <li data-step="3"><b>3</b><span>Done</span></li>
+  </ol>
 
-    <div class="card imp-card">
-        <div class="card-header"><h3><span class="badge badge-primary">JAMB</span> Import</h3></div>
-        <div class="card-body">
-            <p class="hint">One row per student. Columns: <code>student_id, exam_year, total_score, subject1, subject1_score, …</code></p>
-            <a href="{{ url_for('results.import_template', exam='jamb') }}" class="btn btn-secondary btn-sm mb-3"><i class="fas fa-download"></i> Download template</a>
-            <form method="POST" action="{{ url_for('results.import_results_run', exam='jamb') }}" enctype="multipart/form-data">
-                <input type="file" name="file" class="form-control mb-2" accept=".xlsx,.xls,.csv" required>
-                <button class="btn btn-primary" type="submit"><i class="fas fa-upload"></i> Import JAMB</button>
-            </form>
+  <form id="imForm" class="im-sec" data-step-sec="1" method="POST" enctype="multipart/form-data" action="{{ url_for('results.import_results_run', exam=exam) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3>Which exam?</h3></div>
+      <div class="im-exams" role="radiogroup" aria-label="Exam">
+        {% for k, label, ic, hint in [('waec', 'WAEC', 'fa-file-lines', 'Grades A1…F9, one row per subject or one row per student'), ('neco', 'NECO', 'fa-file-lines', 'Same grades and layouts as WAEC'), ('jamb', 'JAMB', 'fa-file-signature', 'Total out of 400 and up to four subject scores')] %}
+        <label class="im-exam"><input type="radio" name="exam" value="{{ k }}" {{ 'checked' if exam == k }}><i class="fas {{ ic }}" aria-hidden="true"></i><b>{{ label }}</b><small>{{ hint }}</small></label>
+        {% endfor %}
+      </div>
+      <div class="im-row" style="margin-top:.9rem">
+        <label class="rs-sel"><span>Exam session (if the sheet has no year)</span>
+          <select name="year">
+            {% for y, l in years %}<option value="{{ y }}" {{ 'selected' if y == default_year }}>{{ l }} ({{ y }})</option>{% endfor %}
+          </select></label>
+      </div>
+    </section>
+
+    <section class="rs-card">
+      <div class="rs-card-h"><h3>Your sheet</h3></div>
+      <label class="im-drop" id="imDrop" tabindex="0">
+        <input type="file" name="file" id="imFile" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+        <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
+        <b id="imDropT">Drop a file here or tap to choose</b>
+        <small id="imDropS">Excel (.xlsx) or CSV</small>
+      </label>
+      <div class="im-or">or</div>
+      <div class="im-paste"><textarea name="text" id="imText" placeholder="Paste cells copied from Excel or Google Sheets — include the header row" aria-label="Paste cells"></textarea></div>
+      <div class="im-err" id="imErr" hidden><i class="fas fa-circle-exclamation" aria-hidden="true"></i><span></span></div>
+      <details class="im-how">
+        <summary><i class="fas fa-circle-question" aria-hidden="true"></i> What should the sheet look like?</summary>
+        <ul class="im-how-waec">
+          <li><b>One row per subject:</b> <code>student_id, exam_year, subject, grade</code></li>
+          <li><b>Or one row per student:</b> <code>student_id, exam_year</code> then a column for each subject, with the grade in it.</li>
+          <li>Grades A1 to F9. "ABS" (absent) is skipped. Subject names like “Maths” or “Eng” are understood.</li>
+        </ul>
+        <ul class="im-how-jamb" hidden>
+          <li><code>student_id, exam_year, total_score, subject1, subject1_score … subject4, subject4_score</code></li>
+          <li>Total 0–400, each subject 0–100. If the total is blank, the four scores are added up.</li>
+        </ul>
+        <ul><li>Students are matched by <b>admission number</b>. A full name works only when exactly one student has it. Only students in your branch are matched.</li></ul>
+        <div class="im-tmpl" style="margin-top:.6rem">
+          <a class="rs-btn sm" id="imT1" href="{{ url_for('results.import_template', exam=exam) }}"><i class="fas fa-download" aria-hidden="true"></i> Template</a>
+          <a class="rs-btn sm ghost" id="imT2" href="{{ url_for('results.import_template', exam=exam, layout='wide') }}"><i class="fas fa-download" aria-hidden="true"></i> One row per student</a>
         </div>
+      </details>
+    </section>
+
+    <div class="rs-bar fixed">
+      <div class="rs-bar-t"><b id="imBarT">Add a sheet to check</b><small>Nothing is saved until you confirm.</small></div>
+      <button type="submit" class="rs-btn primary" id="imCheck" disabled><i class="fas fa-magnifying-glass" aria-hidden="true"></i> Check sheet</button>
     </div>
+  </form>
+
+  <section class="im-sec" data-step-sec="2" hidden>
+    <div class="rs-tiles" id="imTiles"></div>
+    <div class="im-filter">
+      <div class="rs-seg" role="group" aria-label="Show">
+        <button type="button" class="on" data-show="all">All rows</button>
+        <button type="button" data-show="error">Problems</button>
+        <button type="button" data-show="ok">Ready</button>
+      </div>
+      <button type="button" class="rs-btn ghost sm" id="imCsv"><i class="fas fa-file-csv" aria-hidden="true"></i> Download problems</button>
+    </div>
+    <div class="im-list" id="imList"></div>
+    <div class="rs-bar fixed">
+      <div class="rs-bar-t"><b id="imGoT"></b><small id="imGoS"></small></div>
+      <button type="button" class="rs-btn ghost" id="imBack"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back</button>
+      <button type="button" class="rs-btn primary" id="imGo"><i class="fas fa-check" aria-hidden="true"></i> Import</button>
+    </div>
+  </section>
+
+  <section class="im-sec" data-step-sec="3" hidden>
+    <div class="rs-card im-done">
+      <i class="fas fa-circle-check" aria-hidden="true"></i>
+      <h2 id="imDoneT">Imported</h2>
+      <p class="rs-muted" id="imDoneS"></p>
+      <div class="acts"><a class="rs-btn primary" id="imView" href="#"><i class="fas fa-list" aria-hidden="true"></i> View results</a>
+        <a class="rs-btn" href="{{ url_for('results.import_results') }}"><i class="fas fa-rotate" aria-hidden="true"></i> Import another</a></div>
+    </div>
+  </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var form = document.getElementById('imForm'), file = document.getElementById('imFile'), text = document.getElementById('imText');
+  var drop = document.getElementById('imDrop'), check = document.getElementById('imCheck'), err = document.getElementById('imErr');
+  var BASE = {{ url_for('results.import_results_run', exam='EXAM')|tojson }}, TPL = {{ url_for('results.import_template', exam='EXAM')|tojson }};
+  var data = null, show = 'all';
+  function exam() { return form.querySelector('[name=exam]:checked').value; }
+  function step(n) {
+    document.querySelectorAll('[data-step-sec]').forEach(function (s) { s.hidden = +s.getAttribute('data-step-sec') !== n; });
+    document.querySelectorAll('.im-steps li').forEach(function (li) { var k = +li.getAttribute('data-step'); li.classList.toggle('on', k === n); li.classList.toggle('done', k < n); });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function ready() {
+    var has = (file.files && file.files.length) || text.value.trim();
+    check.disabled = !has;
+    document.getElementById('imBarT').textContent = has ? 'Ready to check' : 'Add a sheet to check';
+  }
+  function setExam() {
+    var e = exam(), j = e === 'jamb';
+    document.querySelector('.im-how-waec').hidden = j; document.querySelector('.im-how-jamb').hidden = !j;
+    document.getElementById('imT1').href = TPL.replace('EXAM', e);
+    var t2 = document.getElementById('imT2'); t2.hidden = j; t2.href = TPL.replace('EXAM', e) + '?layout=wide';
+    try { history.replaceState(null, '', '?exam=' + e); } catch (x) {}
+  }
+  form.addEventListener('change', function (e) { if (e.target.name === 'exam') setExam(); });
+  function pick(f) {
+    if (!f) return;
+    var dt = new DataTransfer(); dt.items.add(f); file.files = dt.files;
+    drop.classList.add('has'); document.getElementById('imDropT').textContent = f.name;
+    document.getElementById('imDropS').textContent = Math.max(1, Math.round(f.size / 1024)) + ' KB · tap to change';
+    text.value = ''; ready();
+  }
+  file.addEventListener('change', function () { if (file.files[0]) pick(file.files[0]); });
+  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); });
+  text.addEventListener('input', function () { if (text.value.trim() && file.files.length) { file.value = ''; drop.classList.remove('has'); document.getElementById('imDropT').textContent = 'Drop a file here or tap to choose'; document.getElementById('imDropS').textContent = 'Excel (.xlsx) or CSV'; } ready(); });
+
+  function send(mode) {
+    var fd = new FormData(form); fd.set('mode', mode);
+    if (!(file.files && file.files.length)) fd.delete('file');
+    return fetch(BASE.replace('EXAM', exam()), { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'The server did not answer properly (' + r.status + ').' }; }); });
+  }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  var LABEL = { 'new': 'New', update: 'Update', same: 'No change', error: 'Problem' };
+  function render() {
+    var c = data.counts, ok = c['new'] + c.update;
+    document.getElementById('imTiles').innerHTML =
+      '<div class="rs-tile good"><span class="l">New</span><span class="v">' + c['new'] + '</span><span class="s">rows to add</span></div>' +
+      '<div class="rs-tile"><span class="l">Updates</span><span class="v">' + c.update + '</span><span class="s">change saved results</span></div>' +
+      '<div class="rs-tile"><span class="l">No change</span><span class="v">' + c.same + '</span><span class="s">already saved</span></div>' +
+      '<div class="rs-tile ' + (c.error ? 'bad' : '') + '"><span class="l">Problems</span><span class="v">' + c.error + '</span><span class="s">will be skipped</span></div>';
+    var list = document.getElementById('imList'); list.innerHTML = '';
+    data.rows.forEach(function (r) {
+      var el = document.createElement('div'); el.className = 'im-r ' + r.status;
+      el.setAttribute('data-ok', r.status === 'error' ? '0' : '1');
+      var who = r.student ? '<b>' + esc(r.student.name) + '</b><small>' + esc(r.student.code || '') + (r.year ? ' · ' + r.year : '') + '</small>' : '<b>Not matched</b><small>' + (r.year || '') + '</small>';
+      var items = (r.items || []).map(function (it) { return '<span>' + esc(it.subject) + '<b>' + esc(it.value == null ? '–' : it.value) + '</b>' + (it.was ? ' <s title="saved now">' + esc(it.was) + '</s>' : '') + '</span>'; }).join('');
+      if (r.total != null) items = '<span>Total<b>' + r.total + '</b></span>' + items;
+      el.innerHTML = '<span class="ln">Row ' + r.line + '</span><span class="st">' + who + '</span><span class="it">' + items + '</span>' +
+        '<span class="im-badge ' + r.status + '">' + LABEL[r.status] + '</span>' +
+        (r.problems.length ? '<span class="pr">' + r.problems.map(esc).join(' · ') + '</span>' : '') +
+        (r.notes.length ? '<span class="nt">' + r.notes.map(esc).join(' · ') + '</span>' : '');
+      list.appendChild(el);
+    });
+    filter();
+    var go = document.getElementById('imGo');
+    go.disabled = !ok;
+    go.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i> Import ' + ok + ' row' + (ok === 1 ? '' : 's');
+    document.getElementById('imGoT').textContent = ok ? ok + ' row' + (ok === 1 ? '' : 's') + ' ready' : 'Nothing to import';
+    document.getElementById('imGoS').textContent = c.error ? c.error + ' with problems will be skipped' : 'Every row passed';
+    document.getElementById('imCsv').hidden = !c.error;
+  }
+  function filter() {
+    document.querySelectorAll('.im-r').forEach(function (el) {
+      el.hidden = show === 'error' ? el.getAttribute('data-ok') === '1' : show === 'ok' ? el.getAttribute('data-ok') === '0' : false;
+    });
+  }
+  document.querySelectorAll('[data-show]').forEach(function (b) {
+    b.addEventListener('click', function () { show = b.getAttribute('data-show'); document.querySelectorAll('[data-show]').forEach(function (x) { x.classList.toggle('on', x === b); }); filter(); });
+  });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault(); err.hidden = true;
+    check.disabled = true; check.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Checking…';
+    send('preview').then(function (res) {
+      check.innerHTML = '<i class="fas fa-magnifying-glass" aria-hidden="true"></i> Check sheet'; ready();
+      if (!res.ok) { err.querySelector('span').textContent = res.error || 'Could not read that sheet.'; err.hidden = false; return; }
+      data = res; render(); step(2);
+    }).catch(function () { check.innerHTML = '<i class="fas fa-magnifying-glass" aria-hidden="true"></i> Check sheet'; ready(); err.querySelector('span').textContent = 'Could not reach the server — check your connection.'; err.hidden = false; });
+  });
+  document.getElementById('imBack').addEventListener('click', function () { step(1); });
+  document.getElementById('imGo').addEventListener('click', function () {
+    var go = this; go.disabled = true; go.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Importing…';
+    send('apply').then(function (res) {
+      if (!res.ok) { go.disabled = false; render(); alert(res.error || 'Import failed.'); return; }
+      document.getElementById('imDoneT').textContent = (res.added + res.updated) + ' result' + ((res.added + res.updated) === 1 ? '' : 's') + ' saved';
+      document.getElementById('imDoneS').textContent = res.added + ' added · ' + res.updated + ' updated' + (res.skipped ? ' · ' + res.skipped + ' row(s) skipped because of problems' : '') + (res.same ? ' · ' + res.same + ' already up to date' : '');
+      document.getElementById('imView').href = res.view_url || '#';
+      step(3);
+    });
+  });
+  document.getElementById('imCsv').addEventListener('click', function () {
+    var lines = [['row', 'student', 'problem']].concat(data.rows.filter(function (r) { return r.problems.length; }).map(function (r) {
+      return [r.line, r.student ? r.student.name + ' (' + r.student.code + ')' : '', r.problems.join('; ')];
+    }));
+    var csv = lines.map(function (l) { return l.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = exam() + '_import_problems.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  setExam(); ready();
+})();
+</script>
 {% endblock %}

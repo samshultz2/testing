@@ -5,7 +5,11 @@ from routes.results import *  # noqa: F401,F403
 @results_bp.route('/import')
 @login_required
 def import_results():
-    return render_template('results/import_results.html')
+    from utils.helpers import exam_year_choices
+    exam = request.args.get('exam') if request.args.get('exam') in ('waec', 'neco', 'jamb') else 'waec'
+    years = exam_year_choices()
+    return render_template('results/import_results.html', exam=exam, years=years,
+                           default_year=max(years) if years else None)
 
 
 @results_bp.route('/import/template/<exam>')
@@ -21,86 +25,70 @@ def import_template(exam):
                    'subject2', 'subject2_score', 'subject3', 'subject3_score', 'subject4', 'subject4_score'])
         ws.append(['STU00001', 2025, 250, 'English Language', 62, 'Mathematics', 70, 'Physics', 60, 'Chemistry', 58])
         fn = 'jamb_import_template.xlsx'
+    elif request.args.get('layout') == 'wide':
+        ws.title = exam.upper()
+        ws.append(['student_id', 'exam_year', 'English Language', 'Mathematics', 'Biology', 'Physics', 'Chemistry'])
+        ws.append(['STU00001', 2025, 'C4', 'B2', 'B3', 'C5', 'C6'])
+        fn = f'{exam}_import_template_one_row_per_student.xlsx'
     else:
-        ws.title = 'WAEC'
+        ws.title = 'NECO' if exam == 'neco' else 'WAEC'
         ws.append(['student_id', 'exam_year', 'subject', 'grade'])
         ws.append(['STU00001', 2025, 'Mathematics', 'B2'])
         ws.append(['STU00001', 2025, 'English Language', 'C4'])
-        fn = 'waec_import_template.xlsx'
+        fn = f'{"neco" if exam == "neco" else "waec"}_import_template.xlsx'
     return xlsx_response(wb, fn)
 
 
 @results_bp.route('/import/<exam>', methods=['POST'])
 @login_required
 def import_results_run(exam):
-    import pandas as pd
-    exam = 'jamb' if exam == 'jamb' else 'waec'
-    file = request.files.get('file')
-    if not file or not file.filename:
-        flash('Please choose a file.', 'error')
-        return redirect(url_for('results.import_results'))
-
+    """mode=preview: say what each row would do (JSON, nothing saved).
+    mode=apply (default): save the rows that pass; problem rows are skipped.
+    Answers JSON to the page's fetch, else flashes and redirects (old form)."""
+    from utils import results_import as RI
+    from routes.results.entry import wants_fetch
+    exam = exam if exam in RI.EXAMS else 'waec'
+    mode = request.form.get('mode', 'apply')
+    js = wants_fetch()
+    back = url_for('results.import_results', exam=exam)
     try:
-        name = file.filename.lower()
-        df = pd.read_csv(file) if name.endswith('.csv') else pd.read_excel(file)
-    except Exception as e:
+        headers, rows = RI.read_table(request.files.get('file'), request.form.get('text'))
+        if len(rows) > 5000:
+            raise ValueError('That sheet has more than 5,000 rows — split it into smaller files.')
+        result = RI.analyse(exam, headers, rows, default_year=request.form.get('year', type=int))
+    except ValueError as e:
+        if js:
+            return jsonify({'ok': False, 'error': str(e)}), 400
+        flash(str(e), 'error')
+        return redirect(back)
+    except Exception as e:  # pragma: no cover - unreadable file
+        current_app.logger.exception('results import failed to read')
+        if js:
+            return jsonify({'ok': False, 'error': f'Could not read the file: {e}'}), 400
         flash(f'Could not read the file: {e}', 'error')
-        return redirect(url_for('results.import_results'))
-
-    df.columns = [str(c).strip().lower() for c in df.columns]
-
-    students = Student.query.all()
-    by_code = {s.student_id.lower(): s for s in students if s.student_id}
-    by_name = {s.full_name.lower(): s for s in students}
-
-    def find_student(val):
-        v = str(val).strip().lower()
-        return by_code.get(v) or by_name.get(v)
-
-    imported, skipped, errors = 0, 0, []
-    for i, row in df.iterrows():
-        line = i + 2  # header is row 1
-        try:
-            stu = find_student(row.get('student_id'))
-            if not stu:
-                skipped += 1
-                errors.append(f'Row {line}: student "{row.get("student_id")}" not found')
-                continue
-            year = int(row.get('exam_year'))
-            if exam == 'waec':
-                subject = str(row.get('subject') or '').strip()
-                grade = str(row.get('grade') or '').strip().upper()
-                if not subject or not grade:
-                    skipped += 1
-                    continue
-                existing = WAECResult.query.filter_by(student_id=stu.id, exam_year=year, subject=subject).first()
-                if existing:
-                    existing.grade = grade
-                else:
-                    db.session.add(WAECResult(student_id=stu.id, exam_year=year, subject=subject, grade=grade))
-                imported += 1
-            else:
-                total = int(row.get('total_score') or 0)
-                existing = JAMBResult.query.filter_by(student_id=stu.id, exam_year=year).first()
-                obj = existing or JAMBResult(student_id=stu.id, exam_year=year, total_score=total)
-                obj.total_score = total
-                for n in range(1, 5):
-                    sname = row.get(f'subject{n}')
-                    sscore = row.get(f'subject{n}_score')
-                    if pd.notna(sname):
-                        setattr(obj, f'subject{n}', str(sname).strip())
-                        setattr(obj, f'subject{n}_score', int(sscore) if pd.notna(sscore) else None)
-                if not existing:
-                    db.session.add(obj)
-                imported += 1
-        except Exception as e:
-            skipped += 1
-            errors.append(f'Row {line}: {e}')
-
+        return redirect(back)
+    if mode == 'preview':
+        return jsonify({'ok': True, 'exam': exam, **result})
+    added, updated = RI.apply(exam, result)
     db.session.commit()
-    log_action(f'import_{exam}', f'{imported} imported, {skipped} skipped')
-    flash(f'{exam.upper()} import complete: {imported} saved, {skipped} skipped.',
-          'success' if imported else 'warning')
-    for e in errors[:8]:
-        flash(e, 'error')
-    return redirect(url_for('results.import_results'))
+    c = result['counts']
+    log_action(f'import_{exam}', f'{added} added, {updated} updated, {c["error"]} row(s) skipped')
+    try:
+        from routes.results import bust_school_stats
+        bust_school_stats()
+    except Exception:
+        pass
+    links = {'waec': url_for('results.waec_list'), 'jamb': url_for('results.jamb_list')}
+    try:
+        links['neco'] = url_for('results.neco_list')
+    except Exception:
+        links['neco'] = links['waec']
+    if js:
+        return jsonify({'ok': True, 'added': added, 'updated': updated, 'skipped': c['error'],
+                        'same': c['same'], 'view_url': links.get(exam)})
+    flash(f'{exam.upper()} import: {added} added, {updated} updated'
+          + (f', {c["error"]} row(s) skipped because of problems' if c['error'] else '') + '.',
+          'success' if (added or updated) else 'warning')
+    for r in [r for r in result['rows'] if r['problems']][:8]:
+        flash(f'Row {r["line"]}: {"; ".join(r["problems"])}', 'error')
+    return redirect(back)
