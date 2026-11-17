@@ -665,7 +665,8 @@ def record_payment():
     if term_id and assignment_id and not student:
         enrollments = (StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True)
-            .join(Student).order_by(Student.surname, Student.first_name).all())
+            .join(Student).filter(Student.is_active == True)        # not deleted (in the trash)
+            .order_by(Student.surname, Student.first_name).all())
         for e in enrollments:
             b = student_bill(e.student_id, term_id)
             roster.append({'student': e.student, 'balance': b['balance'],
@@ -1189,7 +1190,9 @@ def reports():
         _enq = (StudentEnrollment.query
                 .join(ClassArmAssignment,
                       StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .join(Student, StudentEnrollment.student_id == Student.id)
                 .filter(StudentEnrollment.is_active == True,
+                        Student.is_active == True,            # deleted students owe nothing
                         ClassArmAssignment.term_id == term_id))
         if _bid is not None:
             _enq = _enq.filter(ClassArmAssignment.branch_id == _bid)
