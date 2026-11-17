@@ -34,12 +34,15 @@ _EXTRA_ROWS = 3        # blank rows before the summary, for hand-written additio
 # Headers + per-student values for the independently-toggleable last-sheet-only
 # summary columns (broadsheet_pdf's ``tail_cols``).
 _TAIL_LABELS = {'credits': 'Credits', 'average': 'Average %', 'position': 'Position',
-                'subjects_sat': 'Subjects Sat', 'remark': 'Remark'}
+                'subjects_sat': 'Subjects Sat', 'remark': 'Remark',
+                'change': 'Change', 'readiness': 'Readiness'}
 # Relative width of each tail column, as a fraction of the standard 1-unit
 # width every other column gets. Credits/Average only ever hold a couple of
 # digits, so they read fine narrower; Position/Subjects Sat/Remark keep the
 # full unit (Remark in particular needs the room to wrap "Not Qualified").
-_TAIL_WEIGHT = {'credits': 0.6, 'average': 0.6}
+_TAIL_WEIGHT = {'credits': 0.6, 'average': 0.6, 'change': 0.75, 'readiness': 1.35}
+# Light amber behind a 45-49 score (prints as a soft grey in black & white).
+_BORDER_FILL = colors.HexColor('#FCE3B8')
 
 
 class _VHead(Flowable):
@@ -72,6 +75,8 @@ def _styles():
     if _S:
         return _S
     base = getSampleStyleSheet()
+    _S['note'] = ParagraphStyle('note', parent=base['Normal'], fontSize=7.5, leading=9,
+                                fontName='Helvetica')
     _S['school'] = ParagraphStyle('sch', parent=base['Title'], fontSize=18, leading=20,
                                   alignment=TA_CENTER, spaceAfter=0, textColor=_BLACK)
     _S['addr'] = ParagraphStyle('addr', parent=base['Normal'], fontSize=9,
@@ -83,6 +88,8 @@ def _styles():
                                 fontName='Helvetica-Bold')
     _S['exam'] = ParagraphStyle('exam', parent=base['Normal'], fontSize=11,
                                 alignment=TA_CENTER, spaceAfter=6, fontName='Helvetica-Bold')
+    _S['tail'] = ParagraphStyle('tl', parent=base['Normal'], fontSize=7, leading=8,
+                                alignment=TA_CENTER, fontName='Helvetica-Bold', splitLongWords=0)
     _S['colhead'] = ParagraphStyle('ch', parent=base['Normal'], fontSize=7.5, leading=8.5,
                                    alignment=TA_CENTER, fontName='Helvetica-Bold')
     _S['name'] = ParagraphStyle('nm', parent=base['Normal'], fontSize=8.5, leading=9.5,
@@ -420,6 +427,31 @@ def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
     return per
 
 
+def _signed(v):
+    """'+2' / '−1' / '0' for a change value."""
+    from utils.mock_broadsheet_extras import change_text
+    return change_text(v)
+
+
+def _summary_rows(opts, bs):
+    """(label, fn(subject_summary) -> cell) rows under the broadsheet, in
+    order; the Mock-readiness extras are each switchable."""
+    rows = []
+    if _opt(opts, 'teacher_row') and any(d.get('teacher') for d in bs['subject_summary'].values()):
+        rows.append(('Subject teacher', lambda d: _VHead(d.get('teacher') or '—', size=6.5, pad=4)))
+    rows.append(('No. offered', lambda d: d['offered']))
+    if _opt(opts, 'absent_row'):
+        rows.append(('No. absent', lambda d: d.get('absent', 0)))
+    rows += [('No. passed (C6+)', lambda d: d['passed']),
+             ('No. failed', lambda d: d['failed']),
+             ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
+             ('Average grade', lambda d: d['avg_grade'])]
+    if _opt(opts, 'grade_counts'):
+        for g in bs.get('grade_order') or []:
+            rows.append((f'No. with {g}', (lambda gg: lambda d: (d.get('distribution') or {}).get(gg, 0))(g)))
+    return rows
+
+
 def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                    size='A4', separate_cols=False):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
@@ -471,9 +503,19 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 tail_cols.append('position')
             if _opt(opts, 'subjects_sat'):
                 tail_cols.append('subjects_sat')
+            if _opt(opts, 'change') and bs.get('prev_exam') is not None:
+                tail_cols.insert(tail_cols.index('average') + 1 if 'average' in tail_cols else len(tail_cols), 'change')
             if _opt(opts, 'remark'):
                 tail_cols.append('remark')
+            if _opt(opts, 'readiness') and bs['rows'] and 'readiness' in bs['rows'][0]:
+                tail_cols.append('readiness')
         tail = len(tail_cols)
+        prev = bs.get('prev_exam')
+        tail_label = dict(_TAIL_LABELS)
+        if prev is not None:
+            tail_label['change'] = f'Change since {prev.display_name.replace(" Mock WAEC", " Mock")}'
+        shade = _opt(opts, 'borderline')
+        border_cells = []                      # (col, row) of 45-49 scores to shade
         n_subj_cols = 2 * len(group) if separate_cols else len(group)
         # Every individual column (each subject sub-column, and each tail
         # column) is one "unit" wide, except Credits/Average which are
@@ -496,7 +538,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 h1 += [_VHead(s), '']
                 h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]
             for tc in tail_cols:
-                h1.append(_VHead(_TAIL_LABELS[tc]))
+                h1.append(_VHead(tail_label[tc]))
                 h2.append('')
             data = [h1, h2]
         else:
@@ -505,7 +547,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 header.append(Paragraph('Arm', _S['colhead']))
             header += [_VHead(s) for s in group]
             for tc in tail_cols:
-                header.append(_VHead(_TAIL_LABELS[tc]))
+                header.append(_VHead(tail_label[tc]))
             data = [header]
 
         for i, row in enumerate(bs['rows'], 1):
@@ -516,14 +558,18 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 r = row['cells'].get(s)
                 is_ab = bool(r and getattr(r, 'is_absent', False))
                 has = r and r.score is not None
+                if shade and has and not is_ab and 45 <= r.score < 50:
+                    border_cells.append((len(line), len(data)))
+                    if separate_cols:
+                        border_cells.append((len(line) + 1, len(data)))
                 if separate_cols:
                     if is_ab:
-                        line += ['AB', '']
+                        line += ['ABS', '']
                     else:
                         line += [str(r.score), r.grade] if has else ['', '']
                 else:
                     if is_ab:
-                        line.append('AB')
+                        line.append('ABS')
                     else:
                         line.append(f'{r.score} {r.grade}' if has else '')
             for tc in tail_cols:
@@ -535,10 +581,21 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                     line.append(str(row['position']) if row.get('position') is not None else '')
                 elif tc == 'subjects_sat':
                     line.append(str(row.get('subjects_sat', '')))
+                elif tc == 'change':
+                    pv = row.get('prev')
+                    if pv:
+                        txt = _signed(pv['d_credits'])
+                        if pv.get('d_average') is not None:
+                            txt += f'<br/><font size="6.5">{_signed(pv["d_average"])}</font>'
+                        line.append(Paragraph(txt, _S['tail']))
+                    else:
+                        line.append(Paragraph('<font size="6.5">new</font>', _S['tail']))
+                elif tc == 'readiness':
+                    line.append(Paragraph(pdf_escape(row['readiness']['label']), _S['tail']))
                 else:
                     # Paragraph (not a bare string) so "Not Qualified" wraps
                     # instead of overflowing a narrow column.
-                    line.append(Paragraph(row.get('remark', ''), _S['colhead']))
+                    line.append(Paragraph(row.get('remark', ''), _S['tail' if 'readiness' in tail_cols else 'colhead']))
             data.append(line)
 
         ncols = lead + n_subj_cols + tail
@@ -559,17 +616,17 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             data.append(heading_row)
 
         sum0 = len(data)
+        sum_rows = []
         if show_summary:
-            for label, fn in (('No. offered', lambda d: d['offered']),
-                              ('No. passed (C6+)', lambda d: d['passed']),
-                              ('No. failed', lambda d: d['failed']),
-                              ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
-                              ('Average grade', lambda d: d['avg_grade'])):
+            sum_rows = _summary_rows(opts, bs)
+            for label, fn in sum_rows:
                 # Label always sits under Name (col 1), same as with no Arm
                 # column, rather than sliding into Arm's narrow cell.
                 rr = [''] + [label] + [''] * (lead - 2)
                 for s in group:
-                    rr += [str(fn(ss[s])), ''] if separate_cols else [str(fn(ss[s]))]
+                    v = fn(ss[s])
+                    v = v if isinstance(v, Flowable) else str(v)
+                    rr += [v, ''] if separate_cols else [v]
                 if tail:
                     rr += [''] * tail
                 data.append(rr)
@@ -586,7 +643,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             widths += [unit * base_per_tail * w for w in tail_weights]
         heights = ([None] * header_rows + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
                    + ([9.5 * mm] if show_summary else [])
-                   + ([None] * len(_BLANK_SUMMARY) if show_summary else []))
+                   + [None] * len(sum_rows))
         # repeatRows=0: the header (subject names, S/N, Name, Credits, Average)
         # appears on the first page only; an overflowing roster continues without
         # the header band repeating.
@@ -621,13 +678,29 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             if summary_heading_spans_full:
                 style.append(('SPAN', (0, summary_heading_row), (ncols - 1, summary_heading_row)))
             if separate_cols:
-                for k in range(len(_BLANK_SUMMARY)):
+                for k in range(len(sum_rows)):
                     for j in range(len(group)):
                         c0 = lead + j * 2
                         style.append(('SPAN', (c0, sum0 + k), (c0 + 1, sum0 + k)))
+        if tail:
+            # Tight side padding so "Qualifies" / "Not on track" fit their columns.
+            c0 = lead + n_subj_cols
+            style += [('LEFTPADDING', (c0, header_rows), (-1, header_rows - 1 + nrows), 1.5),
+                      ('RIGHTPADDING', (c0, header_rows), (-1, header_rows - 1 + nrows), 1.5)]
+        for c, r_ in border_cells:
+            style.append(('BACKGROUND', (c, r_), (c, r_), _BORDER_FILL))
         style += _wrapped_name_padding(data, header_rows, nrows, name_w, _row_pad(size))
         t.setStyle(TableStyle(style))
         e.append(t)
+        if border_cells or (tail and 'change' in tail_cols):
+            notes = []
+            if border_cells:
+                notes.append('Shaded score: 45–49, a few marks short of a credit')
+            if 'change' in tail_cols:
+                notes.append(f'Change: credits, and average % below it, since {prev.display_name}')
+            notes.append('ABS: absent')
+            e.append(Spacer(1, 3))
+            e.append(Paragraph(' · '.join(notes), _S['note']))
         if _opt(opts, 'grades'):
             e.append(Spacer(1, 6))
             e.append(_grade_key_table(usable))

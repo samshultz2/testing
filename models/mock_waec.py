@@ -435,10 +435,12 @@ class MockWAECAnalytics:
             for r in srs:
                 if r.grade in dist:
                     dist[r.grade] += 1
+            absent = sum(1 for r in srs if getattr(r, 'is_absent', False))
             subject_summary[subj] = {
                 'offered': offered,
                 'passed': passed,
-                'failed': offered - passed,
+                'absent': absent,
+                'failed': offered - passed - absent,      # an absence isn't a fail
                 'avg_score': avg,
                 'avg_grade': waec_grade_from_score(avg) if avg is not None else '—',
                 'pass_rate': round(passed / offered * 100, 1) if offered else 0,

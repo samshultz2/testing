@@ -227,9 +227,10 @@ def view_exam(exam_id):
 def broadsheet(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
-    bs = MockWAECAnalytics.get_broadsheet(exam_id)
+    from utils.mock_broadsheet_extras import enrich, change_text
+    bs = enrich(MockWAECAnalytics.get_broadsheet(exam_id))
     return render_template('mock_waec/broadsheet.html', exam=exam, bs=bs,
-                           grade_classes=_GRADE_CLASS)
+                           grade_classes=_GRADE_CLASS, change_text=change_text)
 
 
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/print')
@@ -246,6 +247,7 @@ def broadsheet_print(exam_id):
         title='Broadsheet (PDF)', show_cols=True, show_orient=True, show_size=True, show_names=True,
         show_layout_mode=True, options=_OPTS_BROADSHEET,
         pdf_url=url_for('mock_waec.broadsheet_pdf_view', exam_id=exam_id),
+        xlsx_url=url_for('mock_waec.broadsheet_export', exam_id=exam_id),
         back_url=url_for('mock_waec.broadsheet', exam_id=exam_id))
 
 
@@ -261,6 +263,8 @@ def broadsheet_pdf_view(exam_id):
     if not bs or not bs['rows']:
         flash('No results recorded yet.', 'warning')
         return redirect(url_for('mock_waec.broadsheet', exam_id=exam_id))
+    from utils.mock_broadsheet_extras import enrich
+    enrich(bs)
     from utils.mock_waec_pdf import broadsheet_pdf
     per = request.args.get('cols', default=8, type=int)
     size = request.args.get('size', 'A4').upper()
@@ -447,30 +451,89 @@ def broadsheet_export(exam_id):
     per-subject offered/passed/failed/average rows beneath, just like the sheet."""
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
-    bs = MockWAECAnalytics.get_broadsheet(exam_id)
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from utils.mock_broadsheet_extras import enrich, change_text, is_borderline
+    bs = enrich(MockWAECAnalytics.get_broadsheet(exam_id))
     subjects = bs['subjects']
+    o = _pdf_opts()                      # same switches as the PDF preview (all on by default)
+    prev = bs.get('prev_exam')
+    show_change = o['change'] and prev is not None
+
+    head = ['S/N', 'Student'] + (['Arm'] if o['arm_col'] else []) + subjects
+    tail = []
+    if o['credits']:
+        tail.append(('Credits', lambda r: r['credits']))
+    if o['average']:
+        tail.append(('Avg %', lambda r: r['average_score'] if r['average_score'] is not None else ''))
+    if show_change:
+        short = prev.display_name.replace(' Mock WAEC', ' Mock')
+        tail.append((f'Credits ± {short}', lambda r: change_text(r['prev']['d_credits']) if r.get('prev') else 'new'))
+        tail.append((f'Avg % ± {short}', lambda r: change_text(r['prev']['d_average'])
+                     if r.get('prev') and r['prev']['d_average'] is not None else ''))
+    if o['position']:
+        tail.append(('Position', lambda r: r.get('position') or ''))
+    if o['subjects_sat']:
+        tail.append(('Subjects sat', lambda r: r.get('subjects_sat', '')))
+    if o['remark']:
+        tail.append(('Remark', lambda r: r.get('remark', '')))
+    if o['readiness']:
+        tail.append(('Readiness', lambda r: r['readiness']['label'] if r.get('readiness') else ''))
 
     wb = Workbook()
     ws = wb.active
     ws.title = 'Broadsheet'
-    ws.append(['S/N', 'Student'] + subjects + ['Credits', 'Avg %'])
+    ws.append(head + [t[0] for t in tail])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    first_subj = 3 + (1 if o['arm_col'] else 0)            # 1-based column of the first subject
+    fill = PatternFill('solid', fgColor='FCE3B8')
     for i, row in enumerate(bs['rows'], 1):
-        line = [i, formula_guard(row['student'].full_name)]
+        line = [i, formula_guard(row['student'].full_name)] + ([row.get('arm') or ''] if o['arm_col'] else [])
         for subj in subjects:
             r = row['cells'].get(subj)
-            line.append(f'{r.score} {r.grade}' if r and r.score is not None else '')
-        line += [row['credits'], row['average_score'] if row['average_score'] is not None else '']
+            if r is not None and r.is_absent:
+                line.append('ABS')
+            else:
+                line.append(f'{r.score} {r.grade}' if r and r.score is not None else '')
+        line += [fn(row) for _, fn in tail]
         ws.append(line)
+        if o['borderline']:
+            for j, subj in enumerate(subjects):
+                if is_borderline(row['cells'].get(subj)):
+                    ws.cell(row=ws.max_row, column=first_subj + j).fill = fill
 
+    if o['summary']:
+        ws.append([])
+        ss = bs['subject_summary']
+        pad = [''] * (1 if o['arm_col'] else 0)
+
+        def _summary_row(label, fn):
+            ws.append([''] + [label] + pad + [fn(ss[s]) for s in subjects] + [''] * len(tail))
+            ws.cell(row=ws.max_row, column=2).font = Font(bold=True)
+        if o['teacher_row']:
+            _summary_row('Subject teacher', lambda d: d.get('teacher') or '')
+        _summary_row('No. offered', lambda d: d['offered'])
+        if o['absent_row']:
+            _summary_row('No. absent', lambda d: d.get('absent', 0))
+        _summary_row('No. passed', lambda d: d['passed'])
+        _summary_row('No. failed', lambda d: d['failed'])
+        _summary_row('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '')
+        _summary_row('Average grade', lambda d: d['avg_grade'])
+        if o['grade_counts']:
+            for g in bs['grade_order']:
+                _summary_row(f'No. with {g}', (lambda gg: lambda d: d['distribution'].get(gg, 0))(g))
+
+    notes = ['ABS = absent']
+    if o['borderline'] and bs.get('borderline_total'):
+        notes.insert(0, 'Shaded score = 45–49, a few marks short of a credit')
+    if show_change:
+        notes.append(f'± = change since {prev.display_name}')
     ws.append([])
-    ss = bs['subject_summary']
-    def _summary_row(label, fn):
-        ws.append(['', label] + [fn(ss[s]) for s in subjects] + ['', ''])
-    _summary_row('No. offered', lambda d: d['offered'])
-    _summary_row('No. passed', lambda d: d['passed'])
-    _summary_row('No. failed', lambda d: d['failed'])
-    _summary_row('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '')
-    _summary_row('Average grade', lambda d: d['avg_grade'])
+    ws.append(['', ' · '.join(notes)])
+    ws.cell(row=ws.max_row, column=2).font = Font(italic=True, color='666666')
+    ws.column_dimensions['B'].width = 30
+    for j in range(len(subjects)):
+        ws.cell(row=1, column=first_subj + j).alignment = Alignment(text_rotation=90, horizontal='center')
 
     return xlsx_response(wb, f'mock_waec_broadsheet_{exam.exam_number}_'
                              f'{exam.session.name.replace("/", "-")}.xlsx')
@@ -1144,7 +1207,9 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              'exam_date', 'arm_col', 'position', 'subjects_sat', 'remark',
              'watermark_name', 'watermark_logo', 'branch_name',
              'page_numbers', 'printed_on',
-             'logo', 'score', 'grade', 'ribbon_exam', 'ribbon_statement')
+             'logo', 'score', 'grade', 'ribbon_exam', 'ribbon_statement',
+             # Mock-readiness extras (broadsheet)
+             'change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row')
 
 
 def _pdf_opts():
@@ -1184,6 +1249,10 @@ _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'S
                     ('arm_col', 'Class arm column'), ('credits', 'Credits column'),
                     ('average', 'Average column'), ('position', 'Position column'),
                     ('subjects_sat', 'Subjects sat column'), ('remark', 'Remark column'),
+                    ('change', 'Change since last mock column'), ('readiness', 'Readiness status column'),
+                    ('borderline', 'Shade borderline scores (45–49)'),
+                    ('teacher_row', 'Subject teacher row'), ('absent_row', 'No. absent row'),
+                    ('grade_counts', 'Number at each grade (A1–F9) rows'),
                     ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
                     ('sig_hod_arts', 'HOD (Arts/Humanities) signature'),
                     ('watermark_name', 'Watermark — school name'),

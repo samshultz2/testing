@@ -7,6 +7,24 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
+.bx-mx td.abs{color:var(--text-muted);font-weight:800;font-size:.68rem;letter-spacing:.04em;background:repeating-linear-gradient(135deg,transparent 0 5px,color-mix(in srgb,var(--text-muted) 9%,transparent) 5px 7px)}
+.bx-mx td.bl{outline:2px dashed #d97706;outline-offset:-3px}
+.bx-mx td.chg{line-height:1.15}
+.bx-mx td.chg b{display:block;font-size:.8rem}
+.bx-mx td.chg b.up{color:var(--success)}.bx-mx td.chg b.dn{color:var(--danger)}
+.bx-mx td.chg small{color:var(--text-muted);font-size:.66rem}
+.bx-mx td.chg small.na{font-style:italic}
+.bx-mx tr.tch td:not(.lab){vertical-align:bottom;height:110px}
+.bx-mx tr.tch td span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:.7rem;color:var(--text-secondary);max-height:104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bx-mx tr.gh td{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);background:var(--bg-card)}
+.bx-mx tr.gd td.z{color:var(--text-muted);opacity:.45;font-weight:500}
+.bx-mx .g-tag{display:inline-block;min-width:2.1rem;text-align:center;border-radius:6px;padding:.05rem .3rem;font-size:.7rem;font-weight:800;background:var(--gray-100)}
+.bx-mx .g-tag.a1,.bx-mx .g-tag.b2,.bx-mx .g-tag.b3{color:var(--g-d);background:color-mix(in srgb,var(--g-d) 12%,var(--bg-card))}
+.bx-mx .g-tag.c4,.bx-mx .g-tag.c5,.bx-mx .g-tag.c6{color:var(--g-c);background:color-mix(in srgb,var(--g-c) 12%,var(--bg-card))}
+.bx-mx .g-tag.d7,.bx-mx .g-tag.e8{color:#b45309;background:color-mix(in srgb,var(--g-p) 16%,var(--bg-card))}
+.bx-mx .g-tag.f9{color:var(--g-f);background:color-mix(in srgb,var(--g-f) 12%,var(--bg-card))}
+.bx-legend{margin:0;padding:.6rem .9rem;font-size:.76rem;color:var(--text-muted);border-top:1px solid var(--border-light,var(--border-color));display:flex;flex-wrap:wrap;align-items:center;gap:.35rem}
+.bx-key.bl{display:inline-block;width:18px;height:14px;border:2px dashed #d97706;border-radius:3px}
 @media print {
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .sidebar, .top-header, .bottom-nav, .breadcrumb, .no-print, .sidebar-overlay, .rs-head-a { display: none !important; }
@@ -49,7 +67,11 @@
   <div class="rs-tiles bx-tiles">
     <div class="rs-tile"><span class="l">Students</span><span class="v">{{ sch.students }}</span><span class="s">{{ sch.subject_entries }} entries · {{ bs.subjects|length }} subjects</span></div>
     <div class="rs-tile {{ 'good' if sch.with_5_incl_core_pct >= 60 else ('mid' if sch.with_5_incl_core_pct >= 40 else 'bad') }}"><span class="l">Qualify (5 + Eng &amp; Maths)</span><span class="v">{{ sch.with_5_incl_core_pct }}<small>%</small></span><span class="s">{{ qualify }} students</span></div>
-    <div class="rs-tile {{ 'mid' if near else '' }}"><span class="l" title="4+ credits but not yet 5 including English and Maths">Close to qualifying</span><span class="v">{{ near }}</span><span class="s">4+ credits, not there yet</span></div>
+    {% set rc = bs.readiness_counts %}
+    <div class="rs-tile {{ 'mid' if (rc.one + rc.core) else '' }}"><span class="l" title="One credit short, or only English/Maths missing">Close to qualifying</span><span class="v">{{ rc.one + rc.core }}</span><span class="s" title="{{ rc.one }} one credit short · {{ rc.core }} only need English/Maths">{{ rc.one }} short 1 · {{ rc.core }} Eng/Maths</span></div>
+    <div class="rs-tile {{ 'mid' if bs.borderline_total else '' }}"><span class="l" title="Papers scored 45–49: a few marks short of a credit">Borderline papers</span><span class="v">{{ bs.borderline_total }}</span><span class="s" title="Scored 45–49">{{ bs.rows|selectattr('borderline')|list|length }} students</span></div>
+    {% if bs.prev_exam %}{% set wp = bs.rows|selectattr('prev')|list %}
+    <div class="rs-tile"><span class="l">Since {{ bs.prev_exam.display_name }}</span><span class="v">{{ wp|selectattr('prev.d_credits', 'gt', 0)|list|length }}<small> up</small></span><span class="s">{{ wp|selectattr('prev.d_credits', 'lt', 0)|list|length }} down · {{ wp|selectattr('prev.d_credits', 'eq', 0)|list|length }} same (credits)</span></div>{% endif %}
     <div class="rs-tile"><span class="l">Avg credits</span><span class="v">{{ sch.avg_credits }}</span><span class="s">per student</span></div>
     {% if worst.s %}<div class="rs-tile bad"><span class="l">Weakest subject</span><span class="v bx-tv">{{ worst.s }}</span><span class="s">{{ worst.r|round|int }}% credited{% if best.s %} · best: {{ best.s }} {{ best.r|round|int }}%{% endif %}</span></div>{% endif %}
   </div>
@@ -62,6 +84,8 @@
       <div class="rs-chips bx-mx-chips" role="group" aria-label="Show">
         <button type="button" class="rs-chip on" data-show="all">All <small>{{ sch.students }}</small></button>
         <button type="button" class="rs-chip" data-show="below">Not qualified <small>{{ sch.students - qualify }}</small></button>
+        {% set nb = bs.rows|selectattr('borderline')|list|length %}{% if nb %}<button type="button" class="rs-chip" data-show="border">Borderline <small>{{ nb }}</small></button>{% endif %}
+        {% if bs.prev_exam %}{% set nd = bs.rows|selectattr('prev')|selectattr('prev.d_credits', 'lt', 0)|list|length %}{% if nd %}<button type="button" class="rs-chip" data-show="down">Went down <small>{{ nd }}</small></button>{% endif %}{% endif %}
         {% for a in arms %}<button type="button" class="rs-chip" data-show="arm:{{ a }}">{{ a }}</button>{% endfor %}
       </div>
       <div class="rs-chips bx-mx-chips" role="group" aria-label="Sort">
@@ -75,34 +99,45 @@
           <tr>
             <th class="sn">S/N</th><th class="name">Name of Student</th>
             {% for subj in bs.subjects %}<th class="subj" title="{{ subj }}"><span>{{ subj }}</span></th>{% endfor %}
-            <th class="sum" title="Credits (C6 or better)">Cr</th><th class="sum" title="Average score">Avg%</th><th class="sum" title="Position by average">Pos</th><th class="sum">Remark</th>
+            <th class="sum" title="Credits (C6 or better)">Cr</th><th class="sum" title="Average score">Avg%</th>{% if bs.prev_exam %}<th class="sum" title="Change since {{ bs.prev_exam.display_name }}: credits, and average score">± {{ bs.prev_exam.display_name.split(' ')[0] }}</th>{% endif %}<th class="sum" title="Position by average">Pos</th><th class="sum">Status</th>
           </tr>
         </thead>
         <tbody>
           {% for row in bs.rows %}
-          <tr data-name="{{ row.student.full_name|lower }}" data-arm="{{ row.arm }}" data-ok="{{ 1 if row.has_5_incl_core else 0 }}" data-pos="{{ row.position or 9999 }}" data-i="{{ loop.index }}">
+          <tr data-name="{{ row.student.full_name|lower }}" data-arm="{{ row.arm }}" data-ok="{{ 1 if row.has_5_incl_core else 0 }}" data-bl="{{ 1 if row.borderline else 0 }}" data-dn="{{ 1 if row.prev and row.prev.d_credits < 0 else 0 }}" data-pos="{{ row.position or 9999 }}" data-i="{{ loop.index }}">
             <td class="sn">{{ loop.index }}</td>
             <td class="name"><a href="{{ url_for('mock_waec.edit_student_results', exam_id=exam.id, student_id=row.student.id) }}">{{ row.student.full_name }}</a>{% if row.arm %}<small>{{ row.arm }}</small>{% endif %}</td>
             {% for subj in bs.subjects %}{% set r = row.cells.get(subj) %}
-            <td class="g {{ r.grade|lower if r and r.grade }}">{% if r and r.score is not none %}<span class="sc">{{ r.score }}</span>{{ r.grade }}{% endif %}</td>
+            {% if r and r.is_absent %}<td class="g abs" title="Absent">ABS</td>
+            {% else %}<td class="g {{ r.grade|lower if r and r.grade }}{{ ' bl' if subj in row.borderline }}"{% if subj in row.borderline %} title="{{ 50 - r.score }} mark{{ '' if 50 - r.score == 1 else 's' }} short of a credit"{% endif %}>{% if r and r.score is not none %}<span class="sc">{{ r.score }}</span>{{ r.grade }}{% endif %}</td>{% endif %}
             {% endfor %}
             <td class="sum"><b>{{ row.credits }}</b></td>
             <td class="sum">{{ row.average_score if row.average_score is not none else '' }}</td>
+            {% if bs.prev_exam %}<td class="sum chg">{% if row.prev %}{% set dc = row.prev.d_credits %}<b class="{{ 'up' if dc > 0 else ('dn' if dc < 0 else '') }}" title="Credits: {{ row.prev.credits }} → {{ row.credits }}">{{ change_text(dc) }}</b>{% if row.prev.d_average is not none %}<small>{{ change_text(row.prev.d_average) }}%</small>{% endif %}{% else %}<small class="na" title="Didn't sit {{ bs.prev_exam.display_name }}">new</small>{% endif %}</td>{% endif %}
             <td class="sum">{{ row.position or '' }}</td>
-            <td class="sum">{% if row.has_5_incl_core %}<span class="sl-pill good">Qualifies</span>{% else %}<span class="sl-pill bad">Not qualified</span>{% endif %}</td>
+            <td class="sum"><span class="sl-pill {{ row.readiness.tone }}">{{ row.readiness.label }}</span></td>
           </tr>
           {% endfor %}
         </tbody>
+        {% set tl = 5 if bs.prev_exam else 4 %}
         <tfoot>
-          <tr><td class="lab" colspan="2">No. who offered</td>{% for subj in bs.subjects %}<td>{{ sums[subj].offered }}</td>{% endfor %}<td colspan="4"></td></tr>
-          <tr><td class="lab" colspan="2">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ sums[subj].passed }}</td>{% endfor %}<td colspan="4"></td></tr>
-          <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td class="{{ 'bx-bad' if sums[subj].failed }}">{{ sums[subj].failed }}</td>{% endfor %}<td colspan="4"></td></tr>
-          <tr><td class="lab" colspan="2">Credit rate</td>{% for subj in bs.subjects %}{% set pr = sums[subj].pass_rate %}<td class="{{ 'bx-good' if pr >= 70 else ('bx-mid' if pr >= 50 else 'bx-bad') }}">{{ pr|round|int }}%</td>{% endfor %}<td colspan="4"></td></tr>
-          <tr><td class="lab" colspan="2">Average score %</td>{% for subj in bs.subjects %}<td>{{ sums[subj].avg_score if sums[subj].avg_score is not none else '—' }}</td>{% endfor %}<td colspan="4"></td></tr>
-          <tr><td class="lab" colspan="2">Average grade</td>{% for subj in bs.subjects %}{% set ag = sums[subj].avg_grade %}<td class="g {{ ag|lower }}">{{ ag }}</td>{% endfor %}<td colspan="4"></td></tr>
+          <tr class="tch"><td class="lab" colspan="2">Subject teacher</td>{% for subj in bs.subjects %}<td title="{{ subj }}: {{ sums[subj].teacher or 'not set' }}"><span>{{ sums[subj].teacher or '—' }}</span></td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">No. who offered</td>{% for subj in bs.subjects %}<td>{{ sums[subj].offered }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">No. absent</td>{% for subj in bs.subjects %}<td class="{{ 'bx-mid' if sums[subj].absent }}">{{ sums[subj].absent }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ sums[subj].passed }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td class="{{ 'bx-bad' if sums[subj].failed }}">{{ sums[subj].failed }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2" title="Scored 45–49: a few marks short of a credit">Borderline (45–49)</td>{% for subj in bs.subjects %}<td class="{{ 'bx-mid' if sums[subj].borderline }}">{{ sums[subj].borderline }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">Credit rate</td>{% for subj in bs.subjects %}{% set pr = sums[subj].pass_rate %}<td class="{{ 'bx-good' if pr >= 70 else ('bx-mid' if pr >= 50 else 'bx-bad') }}">{{ pr|round|int }}%</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">Average score %</td>{% for subj in bs.subjects %}<td>{{ sums[subj].avg_score if sums[subj].avg_score is not none else '—' }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr><td class="lab" colspan="2">Average grade</td>{% for subj in bs.subjects %}{% set ag = sums[subj].avg_grade %}<td class="g {{ ag|lower }}">{{ ag }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          <tr class="gh"><td class="lab" colspan="{{ 2 + bs.subjects|length + tl }}">Number at each grade</td></tr>
+          {% for g in bs.grade_order %}
+          <tr class="gd"><td class="lab" colspan="2"><span class="g-tag {{ g|lower }}">{{ g }}</span></td>{% for subj in bs.subjects %}{% set n = sums[subj].distribution[g] %}<td class="{{ 'z' if not n }}">{{ n }}</td>{% endfor %}<td colspan="{{ tl }}"></td></tr>
+          {% endfor %}
         </tfoot>
       </table>
     </div>
+    <p class="bx-legend"><span class="bx-key bl"></span> Dashed box: scored 45–49, a few marks short of a credit · <b>ABS</b>: absent{% if bs.prev_exam %} · <b>± {{ bs.prev_exam.display_name.split(' ')[0] }}</b>: change in credits (and average %) since {{ bs.prev_exam.display_name }}{% endif %}</p>
   </section>
 
   <div class="bx-two">
@@ -146,7 +181,8 @@
     var q = (find.value || '').trim().toLowerCase(), n = 0;
     rows.forEach(function (r) {
       var ok = (!q || r.dataset.name.indexOf(q) !== -1) &&
-        (show === 'all' || (show === 'below' && r.dataset.ok === '0') || show === 'arm:' + r.dataset.arm);
+        (show === 'all' || (show === 'below' && r.dataset.ok === '0') || (show === 'border' && r.dataset.bl === '1') ||
+         (show === 'down' && r.dataset.dn === '1') || show === 'arm:' + r.dataset.arm);
       r.style.display = ok ? '' : 'none'; if (ok) n++;
     });
     count.textContent = (q || show !== 'all') ? n + ' of ' + rows.length : '';

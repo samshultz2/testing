@@ -82,6 +82,7 @@
       <p>{{ exam.display_name }}{% if exam.session %} · {{ exam.session.name }}{% endif %} — changes show in the preview straight away. School details come from Settings → School.</p></div>
     <div class="rs-head-a pv-head-a">
       <a id="openTab" href="#" target="_blank" rel="noopener" class="rs-btn"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open in new tab</a>
+      {% if xlsx_url %}<a id="xl" href="{{ xlsx_url }}" class="rs-btn" title="Excel with the same options"><i class="fas fa-file-excel" aria-hidden="true"></i> Excel</a>{% endif %}
       <a id="dl" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download PDF</a>
     </div>
   </header>
@@ -193,6 +194,7 @@
   <div class="pv-bar">
     <button type="button" class="rs-btn" id="pvOpen"><i class="fas fa-sliders" aria-hidden="true"></i> Options</button>
     <a id="openTab3" href="#" class="rs-btn" title="View full screen without downloading"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Open</a>
+    {% if xlsx_url %}<a id="xl2" href="{{ xlsx_url }}" class="rs-btn" aria-label="Excel" title="Excel with the same options"><i class="fas fa-file-excel" aria-hidden="true"></i></a>{% endif %}
     <a id="dl2" href="#" class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
   </div>
 </div>
@@ -247,11 +249,14 @@
     if (sn) sn.textContent = subjBoxes.filter(function (b) { return b.checked; }).length + ' of ' + subjBoxes.length;
     if (on) on.textContent = opts.filter(function (b) { return b.checked; }).length + ' of ' + opts.length + ' on';
   }
+  var XLSX = {{ (xlsx_url or '')|tojson }};
   var VIEWER = "{{ url_for('mock_waec.pdf_viewer') }}", TITLE = {{ title|tojson }};
   function refresh() {
     counts();
     var url = build('');
     dl.href = dl2.href = build('download=1');
+    var q = url.indexOf('?') === -1 ? '' : url.slice(url.indexOf('?'));
+    ['xl', 'xl2'].forEach(function (id) { var a = $(id); if (a) a.href = XLSX + q; });
     openTab.href = url; if (openTab2) openTab2.href = url;
     // Phones: our own full-screen viewer (Android Chrome downloads PDFs opened in a tab).
     $('openTab3').href = VIEWER + '?src=' + encodeURIComponent(url) + '&title=' + encodeURIComponent(TITLE);
