@@ -379,12 +379,13 @@ def draw_modern_slip(c, student, summary, exam, school, opts=None, signers='both
     x_rem = PW - M - rem_w
     x_grade = x_rem - grade_w - (9 if show_rem else 0)
     x_score_r = x_grade - (9 if show_grade else 0)
-    # Row height: as tall as the design (34.5pt) when there's room, tighter for
-    # long subject lists so everything stays on one page.
-    reserve = 150 + (24 if _on(opts, 'grades') else 0)
+    # Row height: the rows share the page down to a comfortable gap above the
+    # signatures (no empty band under the grading key), capped so a short list
+    # doesn't look stretched, and tighter for long lists so it stays one page.
+    reserve = 148 + (24 if _on(opts, 'grades') else 0)
     avail = y - 22 - reserve
-    row_h = max(20, min(34.5, avail / max(len(res), 1)))
-    fs = 10.1 if row_h >= 28 else 9
+    row_h = max(20, min(42, avail / max(len(res), 1)))
+    fs = 10.5 if row_h >= 36 else (10.1 if row_h >= 28 else 9)
     _spaced(c, M + 3, y - 7, '#' if show_sn else '', F['b'], 7.5, INK, 0.9)
     _spaced(c, x_subj, y - 7, 'SUBJECT', F['b'], 7.5, INK, 0.9)
     if show_score:
