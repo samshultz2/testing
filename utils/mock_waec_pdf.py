@@ -1308,8 +1308,8 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False, t
     ``bw=True`` renders a black-and-white, print-friendly variant. ``theme``
     'modern' draws the clean modern slip (utils.mock_slip_modern) instead."""
     from reportlab.pdfgen import canvas as _canvas
-    if theme == 'modern' and slips:
-        return _modern_slips_pdf(slips, exam, school, opts, signers, bw)
+    if theme in ('modern', 'profile') and slips:
+        return _modern_slips_pdf(slips, exam, school, opts, signers, bw, theme=theme)
     F = _slip_fonts()
     buf = io.BytesIO()
     PW, PH = A4
@@ -1328,11 +1328,14 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False, t
     return buf
 
 
-def _modern_slips_pdf(slips, exam, school, opts, signers, bw):
-    """The modern theme: one page per student, with the change since the
-    previous mock worked out once for the whole batch."""
+def _modern_slips_pdf(slips, exam, school, opts, signers, bw, theme='modern'):
+    """The modern / profile themes: one page per student, with the change
+    since the previous mock worked out once for the whole batch."""
     from reportlab.pdfgen import canvas as _canvas
-    from utils.mock_slip_modern import draw_modern_slip
+    if theme == 'profile':
+        from utils.mock_slip_profile import draw_profile_slip as draw_modern_slip
+    else:
+        from utils.mock_slip_modern import draw_modern_slip
     from utils import timeutil
     prev, prev_map = None, {}
     try:

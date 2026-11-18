@@ -1246,7 +1246,11 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              # Modern result-slip theme (utils.mock_slip_modern.MODERN_OPTIONS)
              'm_stripe', 'm_label', 'm_exam', 'm_session', 'm_date', 'm_class', 'm_gender',
              'm_subjects', 'm_credits', 'm_average', 'm_change', 'm_sn', 'm_core', 'm_stamp', 'm_footer',
-             'm_stream', 'm_distinctions', 'm_five', 'm_missing')
+             'm_stream', 'm_distinctions', 'm_five', 'm_missing',
+             # Profile result-slip theme (utils.mock_slip_profile.PROFILE_OPTIONS)
+             'p_pill', 'p_session', 'p_photo', 'p_exam', 'p_class', 'p_stream', 'p_gender', 'p_ring',
+             'p_subjects', 'p_credits', 'p_distinctions', 'p_avgtile', 'p_change', 'p_five',
+             'p_missing', 'p_core', 'p_stamp', 'p_footer')
 
 
 # Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
@@ -1278,8 +1282,9 @@ def _branch_name(branch_id):
 
 
 def _slip_theme():
-    """Result-slip look: 'classic' (default) or 'modern'."""
-    return 'modern' if request.args.get('theme') == 'modern' else 'classic'
+    """Result-slip look: 'classic' (default), 'modern' or 'profile'."""
+    t = request.args.get('theme')
+    return t if t in ('modern', 'profile') else 'classic'
 
 
 def _signers():
@@ -1326,8 +1331,10 @@ _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('logo', 'School log
 def _slip_options():
     """Export-screen switches for both slip themes: (param, label, on, theme)."""
     from utils.mock_slip_modern import MODERN_OPTIONS
+    from utils.mock_slip_profile import PROFILE_OPTIONS
     return ([(p, l, True, 'classic') for p, l in _OPTS_SLIP]
-            + [(p, l, True, 'modern') for p, l in MODERN_OPTIONS])
+            + [(p, l, True, 'modern') for p, l in MODERN_OPTIONS]
+            + [(p, l, True, 'profile') for p, l in PROFILE_OPTIONS])
 
 
 @mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
