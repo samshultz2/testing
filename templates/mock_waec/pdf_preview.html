@@ -158,11 +158,12 @@
         {% if show_theme %}
         <section class="pv-sec">
           <h4><i class="fas fa-palette" aria-hidden="true"></i> Theme</h4>
-          <select id="themeSel" hidden><option value="classic">Classic</option><option value="modern">Modern</option><option value="profile">Profile</option></select>
+          <select id="themeSel" hidden><option value="classic">Classic</option><option value="modern">Modern</option><option value="profile">Profile</option><option value="transcript">Transcript</option></select>
           <div class="pv-seg" data-for="themeSel" role="radiogroup" aria-label="Theme">
             <button type="button" data-v="classic" class="on">Classic</button>
             <button type="button" data-v="modern">Modern</button>
             <button type="button" data-v="profile">Profile</button>
+            <button type="button" data-v="transcript">Transcript</button>
           </div>
         </section>
         {% endif %}
@@ -308,7 +309,7 @@
   (function () {
     var ts = $('themeSel'); if (!ts) return;
     var saved = null; try { saved = localStorage.getItem('mwSlipTheme'); } catch (e) {}
-    if (saved === 'modern' || saved === 'classic' || saved === 'profile') {
+    if (['classic', 'modern', 'profile', 'transcript'].indexOf(saved) !== -1) {
       ts.value = saved;
       var seg = document.querySelector('.pv-seg[data-for="themeSel"]');
       if (seg) seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-v') === saved); });

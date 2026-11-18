@@ -1250,7 +1250,11 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              # Profile result-slip theme (utils.mock_slip_profile.PROFILE_OPTIONS)
              'p_pill', 'p_session', 'p_photo', 'p_exam', 'p_class', 'p_stream', 'p_gender', 'p_ring',
              'p_subjects', 'p_credits', 'p_distinctions', 'p_avgtile', 'p_change', 'p_five',
-             'p_missing', 'p_core', 'p_stamp', 'p_footer')
+             'p_missing', 'p_core', 'p_stamp', 'p_footer',
+             # Transcript result-slip theme (utils.mock_slip_transcript.TRANSCRIPT_OPTIONS)
+             't_label', 't_exam', 't_date', 't_progress', 't_class', 't_stream', 't_gender', 't_first',
+             't_change', 't_core', 't_subjects', 't_credits', 't_distinctions', 't_average', 't_five',
+             't_missing', 't_stamp', 't_footer')
 
 
 # Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
@@ -1282,9 +1286,9 @@ def _branch_name(branch_id):
 
 
 def _slip_theme():
-    """Result-slip look: 'classic' (default), 'modern' or 'profile'."""
+    """Result-slip look: 'classic' (default), 'modern', 'profile' or 'transcript'."""
     t = request.args.get('theme')
-    return t if t in ('modern', 'profile') else 'classic'
+    return t if t in ('modern', 'profile', 'transcript') else 'classic'
 
 
 def _signers():
@@ -1332,9 +1336,11 @@ def _slip_options():
     """Export-screen switches for both slip themes: (param, label, on, theme)."""
     from utils.mock_slip_modern import MODERN_OPTIONS
     from utils.mock_slip_profile import PROFILE_OPTIONS
+    from utils.mock_slip_transcript import TRANSCRIPT_OPTIONS
     return ([(p, l, True, 'classic') for p, l in _OPTS_SLIP]
             + [(p, l, True, 'modern') for p, l in MODERN_OPTIONS]
-            + [(p, l, True, 'profile') for p, l in PROFILE_OPTIONS])
+            + [(p, l, True, 'profile') for p, l in PROFILE_OPTIONS]
+            + [(p, l, True, 'transcript') for p, l in TRANSCRIPT_OPTIONS])
 
 
 @mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
