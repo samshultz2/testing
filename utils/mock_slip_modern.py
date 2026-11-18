@@ -104,9 +104,22 @@ def _on(opts, key):
     return (opts or {}).get(key, True) is not False
 
 
+_ORDINALS = {1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth', 5: 'Fifth', 6: 'Sixth',
+             7: 'Seventh', 8: 'Eighth', 9: 'Ninth', 10: 'Tenth'}
+
+
 def competence_title(exam):
-    """'Second Mock WAEC' -> 'Second Competence'."""
-    name = exam.display_name or ''
+    """The slip title for this particular mock, from its number:
+    mock 1 -> 'First Competence', mock 2 -> 'Second Competence', … up to
+    'Tenth', then '11th Competence'."""
+    n = getattr(exam, 'exam_number', None)
+    if isinstance(n, int) and n > 0:
+        word = _ORDINALS.get(n)
+        if not word:
+            suffix = 'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+            word = f'{n}{suffix}'
+        return f'{word} Competence'
+    name = getattr(exam, 'display_name', '') or ''
     return name.replace('Mock WAEC', 'Competence').strip() or 'Competence'
 
 

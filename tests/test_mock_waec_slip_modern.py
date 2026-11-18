@@ -81,3 +81,22 @@ def test_export_screen_offers_both_themes(app):
     html = _admin(app).get(f'/mock-waec/exam/{m2}/student/{sid}/slip').get_data(as_text=True)
     assert 'id="themeSel"' in html and 'data-theme="modern"' in html and 'data-theme="classic"' in html
     assert 'data-param="m_stamp"' in html
+
+
+def test_slip_title_follows_the_mock_number():
+    from types import SimpleNamespace
+    from utils.mock_slip_modern import competence_title
+    t = lambda n: competence_title(SimpleNamespace(exam_number=n, display_name=''))
+    assert [t(n) for n in (1, 2, 3, 4, 5, 10)] == ['First Competence', 'Second Competence', 'Third Competence',
+                                                    'Fourth Competence', 'Fifth Competence', 'Tenth Competence']
+    assert t(11) == '11th Competence' and t(21) == '21st Competence'
+
+
+def test_every_new_theme_titles_the_slip_by_its_own_mock(app):
+    (m1, m2), sid = _setup(app)
+    c = _admin(app)
+    for theme in ('modern', 'profile', 'transcript'):
+        _, first = _text(c, f'/mock-waec/exam/{m1}/student/{sid}/slip.pdf?theme={theme}')
+        _, second = _text(c, f'/mock-waec/exam/{m2}/student/{sid}/slip.pdf?theme={theme}')
+        assert 'firstcompetence' in first.lower() and 'secondcompetence' not in first.lower(), theme
+        assert 'secondcompetence' in second.lower(), theme
