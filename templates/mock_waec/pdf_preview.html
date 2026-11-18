@@ -155,6 +155,17 @@
         </section>
         {% endif %}
 
+        {% if show_theme %}
+        <section class="pv-sec">
+          <h4><i class="fas fa-palette" aria-hidden="true"></i> Theme</h4>
+          <select id="themeSel" hidden><option value="classic">Classic</option><option value="modern">Modern</option></select>
+          <div class="pv-seg" data-for="themeSel" role="radiogroup" aria-label="Theme">
+            <button type="button" data-v="classic" class="on">Classic</button>
+            <button type="button" data-v="modern">Modern</button>
+          </div>
+        </section>
+        {% endif %}
+
         {% if show_signers %}
         <section class="pv-sec">
           <h4><i class="fas fa-pen-nib" aria-hidden="true"></i> Signature &amp; colour</h4>
@@ -171,8 +182,8 @@
 
         <section class="pv-sec">
           <h4><i class="fas fa-list-check" aria-hidden="true"></i> Include in the PDF <span class="n" id="optN"></span></h4>
-          {% for o in (options or [('title', '“COMPETENCE RESULT” heading')]) %}{% set on = o[2] if o|length > 2 else true %}
-          <label class="pv-sw"><span>{{ o[1] }}</span><input type="checkbox" class="pdf-opt" data-param="{{ o[0] }}" data-default="{{ 1 if on else 0 }}"{% if on %} checked{% endif %}><span class="t"></span></label>
+          {% for o in (options or [('title', '“COMPETENCE RESULT” heading')]) %}{% set on = o[2] if o|length > 2 else true %}{% set th = o[3] if o|length > 3 else '' %}
+          <label class="pv-sw"{% if th %} data-theme="{{ th }}"{% if th != 'classic' %} hidden{% endif %}{% endif %}><span>{{ o[1] }}</span><input type="checkbox" class="pdf-opt" data-param="{{ o[0] }}" data-default="{{ 1 if on else 0 }}"{% if on %} checked{% endif %}><span class="t"></span></label>
           {% endfor %}
         </section>
       </div>
@@ -209,11 +220,17 @@
   var colsSel = $('colsSel'), orientSel = $('orientSel'), sizeSel = $('sizeSel'), layoutModeSel = $('layoutModeSel');
   var signersSel = $('signersSel'), bwOpt = $('bwOpt');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
+  // The switches that belong to the chosen theme (all of them on pages without themes).
+  function activeOpts() {
+    return opts.filter(function (o) { var l = o.closest('.pv-sw'); return !l || !l.dataset.theme || !l.hidden; });
+  }
   var subjBoxes = Array.prototype.slice.call(document.querySelectorAll('.pdf-subj'));
 
   function build(extra) {
     var p = [];
-    opts.forEach(function (o) {
+    var themeSel = $('themeSel');
+    if (themeSel && themeSel.value !== 'classic') p.push('theme=' + themeSel.value);
+    activeOpts().forEach(function (o) {
       // Send only what differs from the server's default for that option.
       var def = o.dataset.default !== '0';
       if (o.checked !== def) p.push(o.dataset.param + '=' + (o.checked ? '1' : '0'));
@@ -251,7 +268,8 @@
   function counts() {
     var sn = $('subjN'), on = $('optN');
     if (sn) sn.textContent = subjBoxes.filter(function (b) { return b.checked; }).length + ' of ' + subjBoxes.length;
-    if (on) on.textContent = opts.filter(function (b) { return b.checked; }).length + ' of ' + opts.length + ' on';
+    var act = activeOpts();
+    if (on) on.textContent = act.filter(function (b) { return b.checked; }).length + ' of ' + act.length + ' on';
   }
   var XLSX = {{ (xlsx_url or '')|tojson }};
   var VIEWER = "{{ url_for('mock_waec.pdf_viewer') }}", TITLE = {{ title|tojson }};
@@ -276,9 +294,26 @@
       var b = e.target.closest('button'); if (!b || !sel) return;
       sel.value = b.getAttribute('data-v');
       seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      if (sel.id === 'themeSel') applyTheme(true);
       soon();
     });
   });
+  // Theme: show only that theme's switches; remember the choice on this device.
+  function applyTheme(save) {
+    var ts = $('themeSel'); if (!ts) return;
+    document.querySelectorAll('.pv-sw[data-theme]').forEach(function (l) { l.hidden = l.dataset.theme !== ts.value; });
+    if (save) { try { localStorage.setItem('mwSlipTheme', ts.value); } catch (e) {} }
+  }
+  (function () {
+    var ts = $('themeSel'); if (!ts) return;
+    var saved = null; try { saved = localStorage.getItem('mwSlipTheme'); } catch (e) {}
+    if (saved === 'modern' || saved === 'classic') {
+      ts.value = saved;
+      var seg = document.querySelector('.pv-seg[data-for="themeSel"]');
+      if (seg) seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-v') === saved); });
+    }
+    applyTheme(false);
+  })();
   document.querySelectorAll('.pdf-opt, .pdf-subj, .pdf-name, #pdfMidInit, #bwOpt').forEach(function (b) { b.addEventListener('change', soon); });
   [sizeSel, layoutModeSel, signersSel].forEach(function (s) { if (s) s.addEventListener('change', soon); });
   var subjAll = $('subjAll'), subjNone = $('subjNone');

@@ -1203,8 +1203,8 @@ def _slips_for(exam_id, student_id=None):
     """List of {student, summary} slips — one student or the whole exam (A–Z)."""
     if student_id is not None:
         student = db.get_or_404(Student, student_id)
-        return [{'student': student,
-                 'summary': MockWAECAnalytics.get_student_exam_summary(student_id, exam_id)}]
+        return _with_class([{'student': student,
+                             'summary': MockWAECAnalytics.get_student_exam_summary(student_id, exam_id)}])
     by_student = {}
     result_rows = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
                    .join(Student).options(contains_eager(MockWAECResult.student)).all())
@@ -1217,6 +1217,22 @@ def _slips_for(exam_id, student_id=None):
         summary['results'] = sorted(info['results'], key=lambda x: x.subject)
         slips.append({'student': info['student'], 'summary': summary})
     slips.sort(key=lambda s: (s['student'].surname or '', s['student'].first_name or ''))
+    return _with_class(slips)
+
+
+def _with_class(slips):
+    """Add a 'klass' label ("SSS3 Gold · Science") to each slip, best-effort."""
+    try:
+        from utils.helpers import get_sss3_class
+        cls = get_sss3_class()
+        arms = _arm_by_student([s['student'] for s in slips])
+        for s in slips:
+            st = s['student']
+            parts = [' '.join(p for p in ((cls.name if cls else ''), arms.get(st.id, '')) if p),
+                     (st.stream or '')]
+            s['klass'] = ' · '.join(p for p in parts if p)
+    except Exception:
+        pass
     return slips
 
 
@@ -1228,7 +1244,10 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              'page_numbers', 'printed_on',
              'logo', 'score', 'grade', 'ribbon_exam', 'ribbon_statement',
              # Mock-readiness extras (broadsheet)
-             'change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row')
+             'change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row',
+             # Modern result-slip theme (utils.mock_slip_modern.MODERN_OPTIONS)
+             'm_stripe', 'm_label', 'm_exam', 'm_session', 'm_date', 'm_class', 'm_gender',
+             'm_subjects', 'm_credits', 'm_average', 'm_change', 'm_sn', 'm_core', 'm_stamp', 'm_footer')
 
 
 # Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
@@ -1257,6 +1276,11 @@ def _branch_name(branch_id):
         return b.name if b else None
     except Exception:
         return None
+
+
+def _slip_theme():
+    """Result-slip look: 'classic' (default) or 'modern'."""
+    return 'modern' if request.args.get('theme') == 'modern' else 'classic'
 
 
 def _signers():
@@ -1300,6 +1324,13 @@ _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('logo', 'School log
               ('summary', 'Summary box')]
 
 
+def _slip_options():
+    """Export-screen switches for both slip themes: (param, label, on, theme)."""
+    from utils.mock_slip_modern import MODERN_OPTIONS
+    return ([(p, l, True, 'classic') for p, l in _OPTS_SLIP]
+            + [(p, l, True, 'modern') for p, l in MODERN_OPTIONS])
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/student/<int:student_id>/slip')
 @login_required
 def result_slip(exam_id, student_id):
@@ -1309,7 +1340,7 @@ def result_slip(exam_id, student_id):
     assert_exam_student(student_id)          # own-arm only for SSS3 teachers
     student = db.get_or_404(Student, student_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
-        show_signers=True, title=f'Result — {student.full_name}', options=_OPTS_SLIP,
+        show_signers=True, show_theme=True, title=f'Result — {student.full_name}', options=_slip_options(),
         pdf_url=url_for('mock_waec.result_slip_pdf', exam_id=exam_id, student_id=student_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
@@ -1320,7 +1351,7 @@ def result_slips_all(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
-        show_signers=True, title='Results (PDF)', options=_OPTS_SLIP,
+        show_signers=True, show_theme=True, title='Results (PDF)', options=_slip_options(),
         pdf_url=url_for('mock_waec.result_slips_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
@@ -1336,7 +1367,8 @@ def result_slip_pdf(exam_id, student_id):
     from utils.mock_waec_pdf import result_slips_pdf
     bw = request.args.get('bw') in ('1', 'true', 'yes')
     buf = result_slips_pdf(_slips_for(exam_id, student_id), exam,
-                           _school_profile(), opts=_pdf_opts(), signers=_signers(), bw=bw)
+                           _school_profile(), opts=_pdf_opts(), signers=_signers(), bw=bw,
+                           theme=_slip_theme())
     student = db.session.get(Student, student_id)
     name = f"result_{(student.full_name if student else student_id)}.pdf".replace(' ', '_')
     return send_file(buf, mimetype='application/pdf',
@@ -1352,7 +1384,7 @@ def result_slips_pdf_view(exam_id):
     from utils.mock_waec_pdf import result_slips_pdf
     bw = request.args.get('bw') in ('1', 'true', 'yes')
     buf = result_slips_pdf(_slips_for(exam_id), exam, _school_profile(),
-                           opts=_pdf_opts(), signers=_signers(), bw=bw)
+                           opts=_pdf_opts(), signers=_signers(), bw=bw, theme=_slip_theme())
     name = f"results_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)

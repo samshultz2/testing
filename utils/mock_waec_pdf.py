@@ -1302,11 +1302,14 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
         c.circle(PW / 2 + sgn * (tw / 2 + 12), 30.5, 1.6, stroke=0, fill=1)
 
 
-def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False):
+def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False, theme='classic'):
     """One A4 designed "Competence Result" statement per student. ``opts`` toggles
     the identity/banner/summary blocks; ``signers`` chooses the signature line(s).
-    ``bw=True`` renders a black-and-white, print-friendly variant."""
+    ``bw=True`` renders a black-and-white, print-friendly variant. ``theme``
+    'modern' draws the clean modern slip (utils.mock_slip_modern) instead."""
     from reportlab.pdfgen import canvas as _canvas
+    if theme == 'modern' and slips:
+        return _modern_slips_pdf(slips, exam, school, opts, signers, bw)
     F = _slip_fonts()
     buf = io.BytesIO()
     PW, PH = A4
@@ -1320,6 +1323,34 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False):
     for slip in slips:
         _draw_competence_slip(c, PW, PH, slip['student'], slip['summary'],
                               exam, school, opts, signers, F, bw=bw)
+        c.showPage()
+    c.save(); buf.seek(0)
+    return buf
+
+
+def _modern_slips_pdf(slips, exam, school, opts, signers, bw):
+    """The modern theme: one page per student, with the change since the
+    previous mock worked out once for the whole batch."""
+    from reportlab.pdfgen import canvas as _canvas
+    from utils.mock_slip_modern import draw_modern_slip
+    from utils import timeutil
+    prev, prev_map = None, {}
+    try:
+        from utils.mock_broadsheet_extras import previous_exam, _prev_summaries
+        prev = previous_exam(exam)
+        prev_map = _prev_summaries(prev) if prev else {}
+    except Exception:
+        prev, prev_map = None, {}
+    issued = timeutil.today().strftime('%d %b %Y').lstrip('0')
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=A4)
+    c.setTitle('Results — %s' % exam.display_name)
+    for slip in slips:
+        st = slip['student']
+        draw_modern_slip(c, st, slip['summary'] or {'results': []}, exam, school, opts=opts,
+                         signers=signers, bw=bw, klass=slip.get('klass') or '',
+                         prev=prev if st.id in prev_map else None,
+                         prev_stats=prev_map.get(st.id), issued=issued)
         c.showPage()
     c.save(); buf.seek(0)
     return buf
