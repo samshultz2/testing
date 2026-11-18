@@ -26,9 +26,11 @@ MODERN_OPTIONS = [
     ('motto', 'School motto'),
     ('m_label', '“RESULT SLIP” label'), ('m_exam', 'Exam title'),
     ('m_session', 'Session'), ('m_date', 'Exam date'),
-    ('m_class', 'Class'), ('m_gender', 'Gender'),
+    ('m_class', 'Class'), ('m_stream', 'Stream'), ('m_gender', 'Gender'),
     ('m_subjects', 'Summary — subjects'), ('m_credits', 'Summary — credits'),
+    ('m_distinctions', 'Summary — distinctions (A1–B3)'),
     ('m_average', 'Summary — average'), ('m_change', 'Change since the previous mock'),
+    ('m_five', '5 credits incl. English & Maths (Yes / No)'), ('m_missing', 'Missing core subjects'),
     ('m_sn', 'Row numbers (#)'), ('m_core', '“CORE” tag on English & Maths'),
     ('score', 'Score column'), ('grade', 'Grade column'), ('remark', 'Remark column'),
     ('grades', 'Grading key'), ('m_stamp', 'Stamp circle'),
@@ -265,6 +267,8 @@ def draw_modern_slip(c, student, summary, exam, school, opts=None, signers='both
     details = []
     if _on(opts, 'm_class') and klass:
         details.append(('CLASS', klass))
+    if _on(opts, 'm_stream') and getattr(student, 'stream', None):
+        details.append(('STREAM', student.stream))
     if _on(opts, 'm_gender') and student.gender:
         details.append(('GENDER', student.gender))
     if details:
@@ -298,6 +302,8 @@ def draw_modern_slip(c, student, summary, exam, school, opts=None, signers='both
             d = credits - (prev_stats[0] or 0)
             sub = (f'{_signed(d)} since {prev_name}', good if d > 0 else (bad if d < 0 else MUTED))
         cells.append(('CREDITS', str(credits), ' A1–C6', sub))
+    if _on(opts, 'm_distinctions'):
+        cells.append(('DISTINCTIONS', str(summary.get('distinctions') or 0), ' A1–B3', None))
     if _on(opts, 'm_average'):
         sub = None
         if show_change and avg is not None and prev_stats[1] is not None:
@@ -325,10 +331,39 @@ def draw_modern_slip(c, student, summary, exam, school, opts=None, signers='both
                 c.setFillColor(MUTED)
                 c.drawString(cx + stringWidth(val, F['h'], 18) + 2, y - 35, unit)
             if sub:
-                c.setFont(F['sb'], 7.9)
+                room = cw - 22
+                text = sub[0]
+                size = _fit(text, F['sb'], 7.9, room, 6.6)
+                if stringWidth(text, F['sb'], size) > room and ' since ' in text:
+                    text = text.split(' since ')[0] + ' since last'      # e.g. "+11.8 since last"
+                    size = _fit(text, F['sb'], 7.9, room, 6.6)
+                c.setFont(F['sb'], size)
                 c.setFillColor(sub[1])
-                c.drawString(cx, y - 48, sub[0][:46])
-        y -= h + 19.5
+                c.drawString(cx, y - 48, text)
+        y -= h
+
+    # ---- core-subject line: 5 credits incl. English & Maths / missing core ----
+    facts = []
+    missing = list(summary.get('missing_core') or [])
+    if _on(opts, 'm_five'):
+        ok = bool(summary.get('has_5_incl_core'))
+        facts.append(('5 credits incl. English & Maths', 'Yes' if ok else 'No', good if ok else bad))
+    if _on(opts, 'm_missing'):
+        facts.append(('Missing core', ', '.join(missing) if missing else 'None', bad if missing else good))
+    if facts:
+        y -= 14
+        fx = M + 13.5
+        for lab, val, col in facts:
+            c.setFont(F['m'], 8.25)
+            c.setFillColor(MUTED)
+            c.drawString(fx, y, lab + ':')
+            fx += stringWidth(lab + ':', F['m'], 8.25) + 5
+            c.setFont(F['b'], 8.25)
+            c.setFillColor(col)
+            c.drawString(fx, y, val)
+            fx += stringWidth(val, F['b'], 8.25) + 24
+        y -= 4
+    y -= 19.5
 
     # ---- subject table ------------------------------------------------------------
     def order(r):

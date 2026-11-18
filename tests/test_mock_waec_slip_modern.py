@@ -43,8 +43,9 @@ def test_modern_theme_draws_the_new_slip(app):
     c = _admin(app)
     pages, t = _text(c, f'/mock-waec/exam/{m2}/student/{sid}/slip.pdf?theme=modern')
     assert pages == 1
-    for frag in ('RESULTSLIP', 'SecondCompetence', 'Okonkwo', 'SUBJECTS', 'CREDITS', 'AVERAGE',
-                 'sinceFirstCompetence', 'ABS', 'Absent', 'GRADING', 'STAMP', 'Issued'):
+    for frag in ('RESULTSLIP', 'SecondCompetence', 'Okonkwo', 'SUBJECTS', 'CREDITS', 'AVERAGE', 'DISTINCTIONS',
+                 'since', 'ABS', 'Absent', 'GRADING', 'STAMP', 'Issued',
+                 '5creditsincl.English&Maths:No', 'Missingcore:None'):
         assert frag in t, frag
     assert t.count('CORE') == 3                      # the SCORE header + English and Maths tags
     # Classic is still the default and untouched.
@@ -56,11 +57,13 @@ def test_every_block_can_be_switched_off(app):
     (m1, m2), sid = _setup(app)
     c = _admin(app)
     off = ('m_label', 'm_exam', 'm_session', 'm_date', 'm_class', 'm_gender', 'm_subjects', 'm_credits',
-           'm_average', 'm_core', 'remark', 'grades', 'm_stamp', 'm_footer', 'printed_on')
+           'm_average', 'm_core', 'remark', 'grades', 'm_stamp', 'm_footer', 'printed_on',
+           'm_stream', 'm_distinctions', 'm_five', 'm_missing')
     q = '&'.join(f'{k}=0' for k in off)
     _, t = _text(c, f'/mock-waec/exam/{m2}/student/{sid}/slip.pdf?theme=modern&{q}&signers=none')
     for frag in ('RESULTSLIP', 'SecondCompetence', 'Session', 'Examdate', 'GENDER', 'papermissed', 'A1–C6', 'CREDITS',
-                 'AVERAGE', 'REMARK', 'GRADING', 'STAMP', 'notanofficial', 'Issued', 'Principal'):
+                 'AVERAGE', 'REMARK', 'GRADING', 'STAMP', 'notanofficial', 'Issued', 'Principal',
+                 'DISTINCTIONS', '5credits', 'Missingcore'):
         assert frag not in t, frag
     assert t.count('CORE') == 1                      # only the SCORE header is left
     assert 'Okonkwo' in t and 'Physics' in t          # the name and the results always stay

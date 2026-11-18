@@ -1221,16 +1221,14 @@ def _slips_for(exam_id, student_id=None):
 
 
 def _with_class(slips):
-    """Add a 'klass' label ("SSS3 Gold · Science") to each slip, best-effort."""
+    """Add a 'klass' label ("SSS3 Gold") to each slip, best-effort."""
     try:
         from utils.helpers import get_sss3_class
         cls = get_sss3_class()
         arms = _arm_by_student([s['student'] for s in slips])
         for s in slips:
             st = s['student']
-            parts = [' '.join(p for p in ((cls.name if cls else ''), arms.get(st.id, '')) if p),
-                     (st.stream or '')]
-            s['klass'] = ' · '.join(p for p in parts if p)
+            s['klass'] = ' '.join(p for p in ((cls.name if cls else ''), arms.get(st.id, '')) if p)
     except Exception:
         pass
     return slips
@@ -1247,7 +1245,8 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              'change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row',
              # Modern result-slip theme (utils.mock_slip_modern.MODERN_OPTIONS)
              'm_stripe', 'm_label', 'm_exam', 'm_session', 'm_date', 'm_class', 'm_gender',
-             'm_subjects', 'm_credits', 'm_average', 'm_change', 'm_sn', 'm_core', 'm_stamp', 'm_footer')
+             'm_subjects', 'm_credits', 'm_average', 'm_change', 'm_sn', 'm_core', 'm_stamp', 'm_footer',
+             'm_stream', 'm_distinctions', 'm_five', 'm_missing')
 
 
 # Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
