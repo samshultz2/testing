@@ -702,6 +702,33 @@ button.ak-band{cursor:pointer}
   .an2-who .ak-seg{display:grid;grid-template-columns:1fr 1fr;width:100%;overflow:visible}.an2-who .ak-seg button{justify-content:center;padding:.5rem .4rem;font-size:.82rem}
 }
 @media print{.an2-tabs,.an2-acts,.an2-find{display:none!important}}
+/* ── Termly report (tr2) ── */
+.an2-legend li.on>*{background:color-mix(in srgb,var(--primary) 8%,var(--bg-card))}
+.an2-legend li.on .go{color:var(--primary)}
+.tr2-list{list-style:none;margin:0;padding:.3rem .4rem}
+.tr2-list .md-ghead{margin-top:.3rem}
+.tr2-row a{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"av nm p" "av wk wk";align-items:center;column-gap:.7rem;row-gap:.4rem;padding:.65rem .5rem;color:inherit;text-decoration:none;border-radius:12px}
+.tr2-row+.tr2-row a{border-top:1px solid var(--border-color);border-radius:0}
+.tr2-row .att-av{grid-area:av;align-self:start}
+.tr2-row .nm{grid-area:nm;font-weight:600;min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.tr2-row .nm small{font-weight:500;color:var(--text-muted);font-size:.76rem}
+.tr2-row .ak-pct{grid-area:p}
+.tr2-row .wk{grid-area:wk;display:flex;gap:3px}
+.tr2-c{flex:1;height:10px;border-radius:4px;background:var(--gray-100);display:inline-flex;align-items:center;justify-content:center}
+.tr2-c.na{background:repeating-linear-gradient(45deg,var(--gray-100) 0 4px,transparent 4px 8px)}
+.tr2-c.big{flex:none;width:34px;height:26px;border-radius:8px;font-size:.78rem;font-weight:700;font-variant-numeric:tabular-nums}
+.tr2-c.big.na{color:var(--text-muted);font-weight:500}
+.tr2-table td.wc{padding:.3rem .2rem;text-align:center}
+.tr2-table td.nm a{color:inherit;text-decoration:none;font-weight:600}
+.tr2-table td.nm a:hover{color:var(--primary);text-decoration:underline}
+.tr2-table tr.low td.nm a{color:var(--danger)}
+.tr2-table td:last-child{white-space:nowrap;text-align:right}
+.tr2-rate{display:inline-block;vertical-align:middle;width:56px;height:6px;border-radius:999px;background:var(--gray-100);overflow:hidden;margin-right:.5rem}
+.tr2-rate i{display:block;height:100%;border-radius:999px}
+.tr2-table tfoot td{font-weight:700}
+.tr2-table tr.gh td{text-align:left!important}
+@media (max-width:759px){.tr2 .ak-card-a .ak-seg{width:100%}.tr2 .ak-card-a .ak-seg button{flex:1;justify-content:center}}
+@media print{.tr2 .md-pick,.tr2 .an2-find{display:none!important}.tr2-c.big{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 {% endblock %}
 

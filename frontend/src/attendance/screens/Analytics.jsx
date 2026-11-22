@@ -26,7 +26,7 @@ function Bars({ rows, labelKey, valueKey }) {
 // Weekly trend: fixed to its card's width however many weeks the term has.
 // Values sit on the bars only when there's room; otherwise tap / hover a week
 // to read it in the header line. 50% and 75% guides + the term average.
-function ColumnChart({ rows }) {
+export function ColumnChart({ rows }) {
   const ref = useRef(null);
   const [w, setW] = useState(0);
   const [sel, setSel] = useState(null);
@@ -91,7 +91,7 @@ const Delta = ({ v, unit = ' pts', label }) => (v == null ? null : (
   </span>));
 
 // The four attendance bands as one stacked bar + legend.
-function Spread({ dist, total, onPick }) {
+export function Spread({ dist, total, onPick, active, pickAll }) {
   const bands = [
     { k: 'excellent', t: 'Excellent', r: '90% +', c: 'var(--success)' },
     { k: 'good', t: 'Good', r: '75–89%', c: 'color-mix(in srgb,var(--success) 55%,#a3e635)' },
@@ -106,12 +106,13 @@ function Spread({ dist, total, onPick }) {
       </div>
       <ul className="an2-legend">
         {bands.map((b) => {
+          const pick = pickAll ? b.k : b.pick;
           const body = (<><span className="sw" style={{ background: b.c }} /><span className="nm">{b.t}<small>{b.r}</small></span>
             <b>{dist[b.k]}</b><span className="pc">{total ? fmtPct(Math.round(dist[b.k] / total * 1000) / 10) : '—'}</span>
-            {b.pick && dist[b.k] > 0 ? <i className="fas fa-chevron-right go" aria-hidden="true" /> : <span className="go" />}</>);
+            {pick && dist[b.k] > 0 ? <i className={'fas go ' + (active === pick ? 'fa-check' : 'fa-chevron-right')} aria-hidden="true" /> : <span className="go" />}</>);
           return (
-            <li key={b.k}>{b.pick && dist[b.k] > 0
-              ? <button type="button" onClick={() => onPick(b.pick)}>{body}</button>
+            <li key={b.k} className={active === pick ? 'on' : ''}>{pick && dist[b.k] > 0
+              ? <button type="button" aria-pressed={active === pick} onClick={() => onPick(pick)}>{body}</button>
               : <div>{body}</div>}</li>);
         })}
       </ul>

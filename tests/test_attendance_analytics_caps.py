@@ -105,3 +105,41 @@ def test_analytics_lists_students_below_target_and_class_counts(app):
         row = data['class_rank'][0]
         assert row['below'] == 2 and row['chronic'] == 1
         assert data['most_declined'] == [] and data['kpis']['prev_overall'] is None
+
+
+def test_termly_report_rates_count_only_days_so_far(app):
+    """Weeks are created for the whole term up front; mid-term the report's
+    'so far' rate must not count days that haven't happened as absences."""
+    from utils import timeutil
+    from utils.calculations import get_termly_attendance_summary
+    with app.app_context():
+        today = timeutil.today()
+        mon = today - timedelta(days=today.weekday())          # this week's Monday
+        sess = AcademicSession(name='CapS4', is_active=False); db.session.add(sess); db.session.flush()
+        t, w, caa = _term(sess, 1, mon, 'F')
+        w2 = Week(term_id=t.id, week_number=2, start_date=mon + timedelta(days=7), end_date=mon + timedelta(days=13))
+        db.session.add(w2); db.session.flush()
+        st = Student(student_id='CAPF1', first_name='Now', surname='Cap', gender='Female',
+                     is_active=True, branch_id=Branch.get_default().id)
+        db.session.add(st); db.session.flush()
+        en = StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True)
+        db.session.add(en); db.session.flush()
+        past = [mon + timedelta(days=i) for i in range(5) if mon + timedelta(days=i) <= today]
+        for d in past:
+            _mark(en, w, d)
+        db.session.commit()
+        s = get_termly_attendance_summary(caa.id, t.id)
+        assert s['term_info']['school_days_so_far'] == len(past)
+        assert s['term_info']['total_school_days'] == 10
+        if past:
+            assert s['students'][0]['pct_so_far'] == 100.0
+            assert s['class_totals']['pct_so_far'] == 100.0
+
+
+def test_termly_api_names_and_weeks(app):
+    from tests.test_attendance_analytics import _admin, _seed_term
+    tid, caa_id, sids = _seed_term(app, 'TA1', [('Ada', [(d, True, True) for d in range(5)])])
+    c = _admin(app)
+    j = c.get(f'/attendance/api/report/termly?assignment_id={caa_id}').get_json()
+    assert j['weeks'][0]['days'] == 5 and 'days_so_far' in j['weeks'][0]
+    assert j['students'][0]['pct_so_far'] == 100.0

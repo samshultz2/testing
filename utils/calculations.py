@@ -270,14 +270,24 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
     holidays = Holiday.query.filter_by(term_id=term_id).all()
     holiday_dates = set(h.date for h in holidays)
     
-    # Calculate total school days for term
-    total_school_days = 0
+    # Calculate total school days for term (and how many have happened yet —
+    # weeks are created for the whole term up front, so mid-term a rate over
+    # the full term would count days that haven't come as absences).
+    from utils import timeutil
+    today = timeutil.today()
+    total_school_days = days_so_far = 0
+    week_days, week_days_so_far = {}, {}
     for week in weeks:
         current = week.start_date
         while current <= week.end_date:
             if current.weekday() < 5 and current not in holiday_dates:
                 total_school_days += 1
+                week_days[week.id] = week_days.get(week.id, 0) + 1
+                if current <= today:
+                    days_so_far += 1
+                    week_days_so_far[week.id] = week_days_so_far.get(week.id, 0) + 1
             current += timedelta(days=1)
+    opened_so_far = days_so_far * 2
     
     total_times_opened = total_school_days * 2
     
@@ -355,6 +365,8 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
             'student_id': student.id,
             'student_name': student.full_name,
             'gender': student.gender,
+            'admission_no': student.student_id,
+            'pct_so_far': round(min(student_total, opened_so_far) / opened_so_far * 100, 2) if opened_so_far else 0,
             'morning_total': student_morning,
             'afternoon_total': student_afternoon,
             'termly_morning': student_morning,
@@ -383,8 +395,12 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
             'term_id': term_id,
             'total_weeks': len(weeks),
             'total_school_days': total_school_days,
-            'total_times_opened': total_times_opened
+            'total_times_opened': total_times_opened,
+            'school_days_so_far': days_so_far,
+            'times_opened_so_far': opened_so_far,
         },
+        'week_days': week_days,
+        'week_days_so_far': week_days_so_far,
         'total_students': total_students,
         'total_male_students': total_male_students,
         'total_female_students': total_female_students,
@@ -398,7 +414,9 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
             'male_attendance': total_male_attendance,
             'female_attendance': total_female_attendance,
             'termly_average': termly_average,
-            'termly_percentage': termly_percentage
+            'termly_percentage': termly_percentage,
+            'pct_so_far': (round(min(total_attendance, total_students * opened_so_far) / (total_students * opened_so_far) * 100, 2)
+                           if total_students and opened_so_far else 0.0),
         }
     }
 

@@ -240,7 +240,9 @@ def api_context():
     if term:
         form_classes = filter_classes_for_user(
             ClassArmAssignment.query.filter_by(term_id=term.id).all(), form_only=True)
-        classes = [{'id': a.id, 'name': a.display_name} for a in form_classes]
+        from utils.attendance_analytics import _class_names
+        cname = _class_names(form_classes)
+        classes = [{'id': a.id, 'name': cname[a.id]} for a in form_classes]
         week_rows = Week.query.filter_by(term_id=term.id).order_by(Week.week_number).all()
         weeks = [{'id': w.id, 'number': w.week_number,
                   'start': w.start_date.isoformat(), 'end': w.end_date.isoformat()}
@@ -494,8 +496,16 @@ def api_report_termly():
         return jsonify({'error': 'no weeks defined for this term'}), 404
     # The summary embeds Week model objects under 'weeks'; replace with a
     # JSON-friendly shape before serialising.
-    summary['weeks'] = [{'id': w.id, 'number': w.week_number} for w in summary['weeks']]
-    return jsonify({'class_name': caa.display_name, **_jsonable(summary)})
+    summary['weeks'] = [{'id': w.id, 'number': w.week_number,
+                          'start': w.start_date.isoformat(), 'end': w.end_date.isoformat(),
+                          'days': summary['week_days'].get(w.id, 0),
+                          'days_so_far': summary['week_days_so_far'].get(w.id, 0)}
+                         for w in summary['weeks']]
+    summary.pop('week_days', None); summary.pop('week_days_so_far', None)
+    from utils.attendance_analytics import _class_names
+    peers = ClassArmAssignment.query.filter_by(term_id=caa.term_id).all()
+    name = _class_names(peers).get(caa.id, caa.display_name)
+    return jsonify({'class_name': name, **_jsonable(summary)})
 
 
 @attendance_bp.route('/api/report/alerts')

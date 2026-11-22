@@ -246,7 +246,7 @@ def test_termly_report_serialises_weeks(app):
     assert r.status_code == 200
     j = r.get_json()
     # weeks must be JSON-friendly dicts, not Week objects
-    assert all(set(w) == {'id', 'number'} for w in j['weeks'])
+    assert all(set(w) == {'id', 'number', 'start', 'end', 'days', 'days_so_far'} for w in j['weeks'])
     # every stat/total the React termly screen renders must be present
     for k in ('total_students', 'total_male_students', 'total_female_students', 'weekly_totals'):
         assert k in j
