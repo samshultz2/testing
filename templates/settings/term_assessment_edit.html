@@ -115,9 +115,6 @@
     });
   });
   ins.forEach(function (i) { i.addEventListener('input', draw); });
-  form.querySelectorAll('[data-confirm]').forEach(function (b) {
-    b.addEventListener('click', function (e) { if (!confirm(b.dataset.confirm)) e.preventDefault(); });
-  });
   draw();
 })();
 </script>

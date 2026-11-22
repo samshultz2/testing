@@ -231,8 +231,8 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
         <div class="xe-acts" style="margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border-color)">
           <form method="POST" action="{{ url_for('exam_timetable.duplicate', tt_id=xt.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="rs-btn ghost"><i class="fas fa-copy" aria-hidden="true"></i> Make a copy</button></form>
-          <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=xt.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <button class="rs-btn ghost" data-confirm="Delete this timetable and all its papers?" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button></form>
+          <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=xt.id) }}" data-confirm="Delete this timetable and all its papers?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="rs-btn ghost" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button></form>
         </div>
       </details>
       {% endif %}
@@ -286,9 +286,6 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
     var box = sel.closest('.xe-f').querySelector('.xe-other');
     function sync() { var on = sel.value === '__other'; box.hidden = !on; box.required = on && sel.required; if (on) box.focus(); }
     sel.addEventListener('change', sync);
-  });
-  document.querySelectorAll('[data-confirm]').forEach(function (b) {
-    b.addEventListener('click', function (e) { if (!confirm(b.dataset.confirm)) e.preventDefault(); });
   });
   var h = location.hash && document.querySelector(location.hash);
   if (h && h.tagName === 'DETAILS') h.open = true;

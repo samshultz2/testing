@@ -73,7 +73,15 @@
   document.addEventListener('click', function (e) {
     document.querySelectorAll('details.bx-menu[open]').forEach(function (d) {
       if (!owns(d, e.target)) d.open = false;
-      else if (d._pop && d._pop.contains(e.target) && e.target.closest('a,button') && !e.target.closest('form')) setTimeout(function () { d.open = false; }, 0);
+      else if (d.contains(e.target) || (d._pop && d._pop.contains(e.target))) {
+        // A chosen item closes the menu — links, plain buttons and a form's
+        // submit button (Delete, Make a copy …), so a confirm dialog never
+        // opens with the menu / bottom sheet still sitting over the page.
+        // Helper buttons inside a menu form (type="button") keep it open.
+        var hit = e.target.closest('a,button');
+        if (hit && !hit.closest('summary') && (hit.tagName === 'A' || !hit.closest('form') || hit.type === 'submit'))
+          setTimeout(function () { d.open = false; }, 0);
+      }
     });
   });
   document.addEventListener('toggle', function (e) {

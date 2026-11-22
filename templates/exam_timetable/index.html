@@ -108,9 +108,6 @@
     a.addEventListener('change', function () { b.min = a.value; if (b.value && b.value < a.value) b.value = a.value; if (a.value && y) y.value = a.value.slice(0, 4); });
     b.addEventListener('change', function () { a.max = b.value; });
   }
-  document.querySelectorAll('form[data-confirm]').forEach(function (f) {
-    f.addEventListener('submit', function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); });
-  });
 })();
 </script>
 {% endblock %}
