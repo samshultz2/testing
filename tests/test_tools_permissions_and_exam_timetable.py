@@ -184,7 +184,7 @@ def test_subject_specific_papers_and_types(app):
     assert waec[:4] == ['Paper 1 (Objective)', 'Paper 2 (Prose)', 'Papers 2 & 1 (Prose & Objective)',
                         'Paper 3 (Drama & Poetry)']
     neco = dict(papers_for('neco', 'Literature-in-English'))
-    assert neco['Paper II: Drama & Poetry'] == 'drama_poetry'
+    assert neco['Paper II: Drama & Poetry'] == 'drama_poetry' and 'Paper IV: Prose' in neco
     assert neco['Papers III & IV: Objective & Prose'] == 'objective_prose'
     assert papers_for('waec', 'Mathematics')[0][0] == 'Paper 1 (Objective)'      # usual list otherwise
     assert {'Drama & Poetry', 'Objective & Prose', 'Prose', 'Alternative to Practical'} <= set(KIND_LABEL.values())
@@ -205,7 +205,10 @@ def test_paste_many_papers_and_kept_fields(app):
     neco_en = [l for l, _k in papers_for('neco', 'English Language')]
     assert 'Paper IV: Test of Orals' in neco_en and 'Paper I: Test of Orals' not in neco_en
     assert papers_for('waec', 'Geography')[3] == ('Paper 3 (Practical and Physical Geography)', 'practical_physical')
-    assert ('Papers III & I: Objective & Practical / Physical', 'objective_practical') in papers_for('neco', 'Geography')
+    geo = papers_for('neco', 'Geography')
+    assert geo[0] == ('Papers III & I: Objective & Practical & Physical', 'objective_practical')
+    assert ('Paper II: Essay - Human and Regional Geography', 'essay') in geo
+    assert ('Papers III & IV: Objective & Drawing', 'drawing') in papers_for('neco', 'Technical Drawing')
     c = _admin(app)
     c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': 'waec', 'year': '2043',
                                                  'start_date': '2043-05-01', 'end_date': '2043-06-30'})
@@ -239,3 +242,21 @@ def test_paste_many_papers_and_kept_fields(app):
     assert 's=09:30' in loc and 'subj=Literature' in loc and 'v=Hall' in loc
     nxt = c.get(loc).get_data(as_text=True)
     assert '<option selected>Literature in English</option>' in nxt and 'value="Hall B"' in nxt
+
+
+def test_neco_2027_geography_sitting_pastes_as_one_paper(app):
+    """NECO 2027: Wed 28 Apr 'Papers III & I: Objective & Practical & Physical'
+    2:00-4:30pm is one sitting; Fri 7 May Paper II: Essay is another."""
+    c = _admin(app)
+    c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': 'neco', 'year': '2027',
+                                                 'start_date': '2027-04-01', 'end_date': '2027-05-11'})
+    with app.app_context():
+        tid = ExamTimetable.query.filter_by(board='neco', year=2027).order_by(ExamTimetable.id.desc()).first().id
+    data = ("Wednesday 28th April 2027, 2:00 pm - 4:30 pm, Geography, Papers III & I: Objective & Practical & Physical\n"
+            "2027-05-07, 10:00am, 2hrs, Geography, Paper II: Essay - Human and Regional Geography")
+    c.post(f'/tools/exam-timetable/{tid}/paste', data={'_csrf_token': auth_csrf(c), 'data': data, 'action': 'save'})
+    with app.app_context():
+        ps = ExamTimetablePaper.query.filter_by(timetable_id=tid).order_by(ExamTimetablePaper.exam_date).all()
+        assert [(p.exam_date.isoformat(), p.start_time.strftime('%H:%M'), p.end_time.strftime('%H:%M'), p.kind)
+                for p in ps] == [('2027-04-28', '14:00', '16:30', 'objective_practical'),
+                                 ('2027-05-07', '10:00', '12:00', 'essay')]

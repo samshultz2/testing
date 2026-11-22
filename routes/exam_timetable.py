@@ -60,22 +60,48 @@ SUBJECT_PAPERS = {
             ('Papers 2 & 1 (Essay & Objective)', 'combined'),
             ('Paper 3 (Practical and Physical Geography)', 'practical_physical')],
     },
+    # NECO wording below follows the official 2027 SSCE Internal timetable.
     'neco': {
         'literature in english': [
-            ('Paper II: Drama & Poetry', 'drama_poetry'), ('Paper III: Objective', 'objective'),
-            ('Paper IV: Prose', 'prose'), ('Papers III & IV: Objective & Prose', 'objective_prose')],
+            ('Paper II: Drama & Poetry', 'drama_poetry'), ('Papers III & IV: Objective & Prose', 'objective_prose'),
+            ('Paper III: Objective', 'objective'), ('Paper IV: Prose', 'prose')],
         'english language': [
             ('Paper III: Objective', 'objective'), ('Paper II: Essay', 'essay'),
-            ('Papers III & II: Objective & Essay', 'combined'), ('Paper IV: Test of Orals', 'oral')],
+            ('Paper IV: Test of Orals', 'oral'), ('Papers III & II: Objective & Essay', 'combined')],
+        'mathematics': [
+            ('Paper III: Objective', 'objective'), ('Paper II: Essay', 'essay'),
+            ('Papers III & II: Objective & Essay', 'combined')],
+        'further mathematics': [
+            ('Paper III: Objective', 'objective'), ('Paper II: Essay', 'essay'),
+            ('Papers III & II: Objective & Essay', 'combined')],
         'geography': [
-            ('Paper I: Practical / Physical', 'practical_physical'), ('Paper II: Essay (Human & Regional)', 'essay'),
-            ('Paper III: Objective', 'objective'),
-            ('Papers III & I: Objective & Practical / Physical', 'objective_practical')],
+            ('Papers III & I: Objective & Practical & Physical', 'objective_practical'),
+            ('Paper II: Essay - Human and Regional Geography', 'essay'),
+            ('Paper III: Objective', 'objective'), ('Paper I: Practical & Physical', 'practical_physical')],
         'technical drawing': [
-            ('Paper I: Drawing', 'drawing'), ('Papers III & II: Objective & Essay', 'combined')],
+            ('Paper I: Practical', 'practical'), ('Papers III & IV: Objective & Drawing', 'drawing')],
+        'visual arts': [
+            ('Papers III & II: Objective & Essay', 'combined'), ('Paper I: Drawing', 'drawing'),
+            ('Paper IV: Creative Design', 'project')],
+        'financial accounting': [
+            ('Papers III & II: Objective, Theory & Practice', 'combined')],
+        'french': [
+            ('Paper I: Written Comprehension', 'essay'), ('Paper II: Written Expression', 'essay'),
+            ('Paper IV: Oral French', 'oral')],
+        'arabic': [
+            ('Papers III & II: Objective, Essay & Literature', 'combined'), ('Paper IV: Oral Arabic', 'oral')],
+        'music': [
+            ('Paper I: Performance Test, Music Technology & Alternative To Music Technology', 'practical'),
+            ('Papers III & II: Objective & Essay', 'combined'), ('Paper IV: Aural Music', 'oral')],
+        'health education': [
+            ('Paper I: Test of Practical', 'practical'), ('Papers III & II: Objective & Essay', 'combined')],
+        'physical education': [
+            ('Paper I: Practical', 'practical'), ('Papers III & II: Objective & Essay', 'combined')],
     },
 }
 SUBJECT_ALIASES = {'literature-in-english': 'literature in english', 'literature': 'literature in english',
+                   'general mathematics': 'mathematics', 'accounting': 'financial accounting',
+                   'visual art': 'visual arts',
                    'english': 'english language', 'visual art': 'visual arts', 'fine art': 'visual arts',
                    'fine arts': 'visual arts'}
 
@@ -303,7 +329,9 @@ def _prompt(tt, subjects):
         "- start and end as times like 9:30am and 12:30pm (if only a duration is shown, put the duration, e.g. 1hr 30mins, as end).\n"
         "- subject exactly as the subject is named (e.g. English Language, Literature in English).\n"
         "- paper as printed on the timetable, e.g. {papers}.\n"
-        "- When two papers are sat back to back (e.g. Essay then Objective), give each its own line with its own times.\n"
+        "- If the timetable prints papers together as ONE sitting with one time (e.g. 'Papers III & I: Objective & Practical & Physical'), keep them as ONE line, paper exactly as printed.\n"
+        "- If papers have their own times (e.g. Essay 9:30am-11:30am then Objective 11:30am-12:30pm), give each its own line.\n"
+        "- Skip papers marked 'to be determined' or with no date/time.\n"
         "- Only include these subjects: {wanted}.\n"
         "- Output only the rows. No headings, no totals, no extra text, no code block.\n\n"
         "Example:\n"
@@ -311,8 +339,8 @@ def _prompt(tt, subjects):
     ).format(body=body, yr=(' %s' % tt.year) if tt.year else '', papers=papers, wanted=wanted,
              ex=("2026-06-05, 9:30am, 11:30am, Geography, Paper 2 (Essay)\n"
                  "2026-06-05, 11:30am, 12:30pm, Geography, Paper 1 (Objective)") if tt.board == 'waec' else
-                ("2026-07-15, 10:00am, 11:00am, English Language, Paper III: Objective\n"
-                 "2026-07-15, 1:15pm, 2:00pm, English Language, Paper IV: Test of Orals"))
+                ("2027-04-28, 2:00pm, 4:30pm, Geography, Papers III & I: Objective & Practical & Physical\n"
+                 "2027-05-07, 10:00am, 12:00pm, Geography, Paper II: Essay - Human and Regional Geography"))
 
 
 @exam_timetable_bp.route('/<int:tt_id>/paste', methods=['GET', 'POST'])
