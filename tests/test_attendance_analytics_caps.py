@@ -80,3 +80,28 @@ def test_most_improved_ignores_untaken_previous_register(app):
         assert not any('Untaken' in n for n in names)
         real = next(x for n, x in names.items() if 'Real' in n)
         assert real['from'] == 20.0 and real['to'] == 100.0 and real['delta'] == 80.0
+
+
+def test_analytics_lists_students_below_target_and_class_counts(app):
+    from utils import attendance_analytics as AA
+    with app.app_context():
+        sess = AcademicSession(name='CapS3', is_active=False); db.session.add(sess); db.session.flush()
+        mon = date(2025, 5, 5)
+        t, w, caa = _term(sess, 1, mon, 'B')
+        bid = Branch.get_default().id
+        rates = {'Full': 5, 'Risk': 3, 'Low': 1}       # present days out of 5
+        for nm, n in rates.items():
+            st = Student(student_id='CAPB' + nm, first_name=nm, surname='Cap', gender='Male', is_active=True, branch_id=bid)
+            db.session.add(st); db.session.flush()
+            en = StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True)
+            db.session.add(en); db.session.flush()
+            for i in range(n):
+                _mark(en, w, mon + timedelta(days=i))
+        db.session.commit()
+        data = AA.build(t, [caa], use_cache=False)
+        names = [s['name'] for s in data['below_list']]
+        assert len(names) == 2 and 'Low' in names[0] and 'Risk' in names[1]   # lowest first
+        assert data['kpis']['below_threshold'] == 2 and data['kpis']['chronic'] == 1
+        row = data['class_rank'][0]
+        assert row['below'] == 2 and row['chronic'] == 1
+        assert data['most_declined'] == [] and data['kpis']['prev_overall'] is None
