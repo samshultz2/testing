@@ -66,27 +66,33 @@ def test_jss3_bulk_delete_removes_results_and_sitting_for_that_body_only(app):
     a, b, keep = _students(app, 3, 'S')
     for sid in (a, b, keep):
         _enroll(app, 'JSS3', 3, sid)
+    # The entry page lists the JSS3 class of the session that sits the exam
+    # year, so use the current session's year (where _enroll put them) rather
+    # than a fixed one another test's sessions could claim.
+    with app.app_context():
+        from utils.helpers import session_exam_year, get_active_session
+        Y = session_exam_year(get_active_session()) or 2033
     c = _admin(app)
     tok = auth_csrf(c)
     for sid in (a, b, keep):
         for body in ('state', 'federal'):
             c.post(f'/jss3-exams/{body}/add', data={
-                '_csrf_token': tok, 'student_id': sid, 'exam_year': 2033, 'exam_number': f'X{sid}',
+                '_csrf_token': tok, 'student_id': sid, 'exam_year': Y, 'exam_number': f'X{sid}',
                 'subject[]': ['Mathematics', 'English Studies'], 'score[]': ['60', '55'], 'grade[]': ['', '']})
-    html = c.get('/jss3-exams/?body=state&year=2033').get_data(as_text=True)
+    html = c.get(f'/jss3-exams/?body=state&year={Y}').get_data(as_text=True)
     assert 'id="bulkDel"' in html and f'value="{a}" form="bulkDel"' in html
-    r = c.post('/jss3-exams/state/delete-bulk', data={'_csrf_token': tok, 'year': 2033,
+    r = c.post('/jss3-exams/state/delete-bulk', data={'_csrf_token': tok, 'year': Y,
                                                       'ids': [str(a), str(b)]})
     assert r.status_code == 302
     with app.app_context():
         rows = {(x.student_id, x.body) for x in SchoolExamResult.query.filter(
-            SchoolExamResult.student_id.in_([a, b, keep]), SchoolExamResult.exam_year == 2033)}
+            SchoolExamResult.student_id.in_([a, b, keep]), SchoolExamResult.exam_year == Y)}
         cands = {(x.student_id, x.body) for x in SchoolExamCandidate.query.filter(
             SchoolExamCandidate.student_id.in_([a, b, keep]))}
     assert rows == {(a, 'federal'), (b, 'federal'), (keep, 'state'), (keep, 'federal')}
     assert cands == rows
     # Basic 6's endpoint exists separately and touches only Basic 6.
-    assert c.post('/basic6-exams/state/delete-bulk', data={'_csrf_token': tok, 'year': 2033,
+    assert c.post('/basic6-exams/state/delete-bulk', data={'_csrf_token': tok, 'year': Y,
                                                           'ids': [str(keep)]}).status_code == 302
     with app.app_context():
         assert SchoolExamResult.query.filter_by(student_id=keep, level='jss3').count() == 4
