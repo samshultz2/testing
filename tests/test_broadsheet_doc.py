@@ -55,12 +55,21 @@ def test_pdf_has_header_tiles_stats_key_and_ranked_rows(app):
     assert r.status_code == 200 and r.data[:4] == b'%PDF'
     pages, txt = _pdf_text(r.data)
     assert pages == 1
-    for s in ('Broadsheet', 'CLASS AVERAGE', 'TOP STUDENT', 'Subject average', 'Pass rate',
+    for s in ('BROADSHEET', 'CLASS AVERAGE', 'TOP OF THE CLASS', 'Subject average', 'Pass rate',
               'MTH', 'CIV', 'Mathematics', 'Civic Education', "Principal", 'Page 1 of 1'):
         assert s in txt, s
     # 92.5 average first (90, 95), then 65, 62.5, 35 — and no trailing zeros
     assert txt.index(f'{tag}SurA') < txt.index(f'{tag}SurC')
     assert '92.5' in txt and '62.5' in txt and '62.50' not in txt
+
+
+def test_minimal_theme_and_black_and_white(app):
+    q, _tag = _seed(app)
+    c = _admin(app)
+    _, txt = _pdf_text(c.get(f'/subjects/broadsheet/export?{q}&format=pdf&theme=minimal').data)
+    assert 'TOP STUDENT' in txt and 'Broadsheet' in txt and 'TOP OF THE CLASS' not in txt
+    _, txt = _pdf_text(c.get(f'/subjects/broadsheet/export?{q}&format=pdf&style=bw').data)
+    assert 'TOP OF THE CLASS' not in txt          # black & white always prints the plain layout
 
 
 def test_options_switch_blocks_off_and_change_order(app):

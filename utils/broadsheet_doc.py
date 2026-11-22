@@ -59,6 +59,7 @@ def parse_opts(args):
     o['orient'] = 'portrait' if args.get('orient') == 'portrait' else 'landscape'
     o['size'] = args.get('size') if args.get('size') in SIZES else 'm'
     o['sort'] = args.get('sort') if args.get('sort') in ('position', 'name', 'gender') else 'position'
+    o['theme'] = 'minimal' if args.get('theme') == 'minimal' else 'aurora'
     return o
 
 
@@ -267,6 +268,26 @@ def _palette(bw):
     return p
 
 
+def _mix(a, b, t):
+    """Blend two reportlab colours (t=0 → a, 1 → b)."""
+    from reportlab.lib import colors as C
+    t = max(0.0, min(1.0, t))
+    return C.Color(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t)
+
+
+def _heat(v, pm):
+    """Soft heat-map tint for a score: rose below the pass mark, then amber →
+    mint → green as it climbs to 100. Returns (background, text colour)."""
+    from reportlab.lib import colors as C
+    H = C.HexColor
+    if v < pm:
+        return _mix(H('#FFE4E2'), H('#FECACA'), (pm - v) / max(pm, 1)), H('#B42318')
+    t = (v - pm) / max(100 - pm, 1)
+    if t < 0.5:
+        return _mix(H('#FEF6DC'), H('#E7F6E9'), t * 2), H('#1F2937')
+    return _mix(H('#E7F6E9'), H('#BFEBD2'), (t - 0.5) * 2), H('#0B5E3F')
+
+
 def _grade_key(g):
     g = (g or '').strip().upper()
     return g[:1].lower() if g[:1] in 'ABCDEF' else ''
@@ -291,6 +312,7 @@ def render_pdf(model, o):
     m = prepare(model, o)
     F = _fonts()
     P = _palette(o['style'] == 'bw')
+    aurora = o.get('theme', 'aurora') == 'aurora' and o['style'] != 'bw'
     sc = SIZES[o['size']]
     pw, ph = _page_size(o)
     M = 12 * mm
@@ -341,6 +363,64 @@ def render_pdf(model, o):
             c.setFillColor(self.color); c.circle(cx, self.d / 2, self.d / 2, stroke=0, fill=1)
             c.setFillColor(P['medal_fg']); c.setFont(F['b'], self.s)
             c.drawCentredString(cx, self.d / 2 - self.s * 0.36, str(self.n))
+
+    class NameCell(Flowable):
+        """Initials avatar + name (+ student ID underneath)."""
+        _tones = ['#0E7C66', '#2563EB', '#7C3AED', '#DB2777', '#EA580C', '#0891B2', '#4D7C0F', '#B45309']
+
+        def __init__(self, name, sub, size):
+            super().__init__()
+            self.name, self.sub, self.s = name or '', sub, size
+            self.d = size * 2.15
+            self.height = max(self.d, size * (2.5 if sub else 1.3))
+
+        def wrap(self, aw, ah):
+            self.width = aw
+            return aw, self.height
+
+        def draw(self):
+            c = self.canv
+            parts = [w for w in self.name.replace('-', ' ').split() if w]
+            ini = ''.join(w[0] for w in parts[:2]).upper() or '?'
+            col = C.HexColor(self._tones[sum(map(ord, self.name)) % len(self._tones)])
+            cy = self.height / 2
+            c.setFillColor(_mix(col, C.white, 0.84)); c.circle(self.d / 2, cy, self.d / 2, stroke=0, fill=1)
+            c.setFillColor(col); c.setFont(F['b'], self.s * 0.78)
+            c.drawCentredString(self.d / 2, cy - self.s * 0.28, ini)
+            x = self.d + 6
+            room = self.width - x - 2
+            nm = self.name
+            while nm and stringWidth(nm, F['m'], self.s) > room:
+                nm = nm[:-1]
+            if nm != self.name:
+                nm = nm.rstrip() + '…'
+            c.setFillColor(P['ink']); c.setFont(F['m'], self.s)
+            if self.sub:
+                c.drawString(x, cy + 1, nm)
+                c.setFillColor(P['muted']); c.setFont(F['r'], self.s * 0.8)
+                c.drawString(x, cy - self.s * 0.95, self.sub)
+            else:
+                c.drawString(x, cy - self.s * 0.35, nm)
+
+    class AvgBar(Flowable):
+        """The average, with a slim bar underneath (pass mark ticked)."""
+        def __init__(self, v, size):
+            super().__init__()
+            self.v, self.s = v, size
+            self.height = size * 2.0
+
+        def wrap(self, aw, ah):
+            self.width = aw
+            return aw, self.height
+
+        def draw(self):
+            c = self.canv
+            c.setFillColor(P['ink'] if self.v >= pm else P['fail_fg']); c.setFont(F['b'], self.s)
+            c.drawCentredString(self.width / 2, self.s * 0.75, _n(self.v))
+            bw_, bx = self.width - 8, 4
+            c.setFillColor(P['hair']); c.roundRect(bx, 0, bw_, 2.4, 1.2, stroke=0, fill=1)
+            col = P['accent'] if self.v >= pm else P['fail_fg']
+            c.setFillColor(col); c.roundRect(bx, 0, max(2.4, bw_ * min(self.v, 100) / 100), 2.4, 1.2, stroke=0, fill=1)
 
     class KpiStrip(Flowable):
         """The summary cards, drawn as one row of soft rounded panels."""
@@ -442,6 +522,11 @@ def render_pdf(model, o):
                 pos = r['position']
                 row.append(Medal(pos, medals[pos], fs * 0.95) if (o['b_top'] and pos in medals and r['average'])
                            else str(pos))
+            elif kind == 'name' and aurora:
+                sid = r['student'].student_id if (o['c_sid'] and r['student'].student_id) else ''
+                row.append(NameCell(r['student'].full_name or '', sid, fs))
+            elif key == 'avg' and aurora and r['average']:
+                row.append(AvgBar(r['average'], fs))
             elif kind == 'name':
                 sub = []
                 if o['c_sid'] and r['student'].student_id:
@@ -455,7 +540,7 @@ def render_pdf(model, o):
                 cid = int(key[1:])
                 v = r['subjects'].get(cid)
                 label = cell_value(r, key, o)
-                if v and o['b_fail'] and v < pm:
+                if v and o['b_fail'] and v < pm and not aurora:
                     row.append(Pill(label, P['fail_bg'], P['fail_fg'], F['s'], fs))
                 else:
                     row.append(label)
@@ -513,7 +598,28 @@ def render_pdf(model, o):
                ('TEXTCOLOR', (name_i, s0), (name_i, -1), P['text']),
                ('FONTNAME', (0, s0), (-1, s0), F['s']), ('TEXTCOLOR', (0, s0), (-1, s0), P['ink']),
                ('TOPPADDING', (0, s0), (-1, -1), 3 * sc), ('BOTTOMPADDING', (0, s0), (-1, -1), 3 * sc)]
-    table = Table(data, colWidths=widths, repeatRows=1)
+    if aurora:
+        # Heat-map the subject scores; a light header row; a rounded panel.
+        subj_cols = [(i, int(c[0][1:])) for i, c in enumerate(cols) if c[2] == 'subj']
+        for ri, r in enumerate(m['rows'], 1):
+            for i, cid in subj_cols:
+                v = r['subjects'].get(cid)
+                if v:
+                    bg, fg = _heat(v, pm)
+                    ts.append(('BACKGROUND', (i, ri), (i, ri), bg))
+                    ts.append(('TEXTCOLOR', (i, ri), (i, ri), fg))
+                    if v < pm and o['b_fail']:
+                        ts.append(('FONTNAME', (i, ri), (i, ri), F['s']))
+        ts += [('BACKGROUND', (0, 0), (-1, 0), C.HexColor('#F1F4F8')),
+               ('LINEBELOW', (0, 0), (-1, 0), 0.6, P['line']),
+               ('TOPPADDING', (0, 0), (-1, 0), 6), ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+               ('LINEBELOW', (0, 1), (-1, n_body), 0.6, C.white),
+               ('LINEAFTER', (0, 1), (-1, n_body), 0.6, C.white),
+               ('BOX', (0, 0), (-1, -1), 0.6, P['line'])]
+        if stats:
+            ts.append(('LINEABOVE', (0, n_body + 1), (-1, n_body + 1), 0.9, P['line']))
+            ts.append(('BACKGROUND', (0, n_body + 1), (-1, -1), C.HexColor('#F7F9FB')))
+    table = Table(data, colWidths=widths, repeatRows=1, cornerRadii=(8, 8, 8, 8) if aurora else None)
     table.setStyle(TableStyle(ts))
 
     # ---------- header ----------
@@ -551,9 +657,14 @@ def render_pdf(model, o):
     ht = Table([hcells], colWidths=hw)
     ht.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'), ('LEFTPADDING', (0, 0), (-1, -1), 0),
                             ('RIGHTPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0)]))
-    elems = [ht, Spacer(1, 10 * sc)]
+    HERO = 0
+    if aurora:
+        HERO = (92 if o['b_kpis'] else 74) * sc + (8 * sc if o['b_header'] and school.get('address') else 0)
+        elems = []
+    else:
+        elems = [ht, Spacer(1, 10 * sc)]
 
-    if o['b_kpis'] and m['rows']:
+    if o['b_kpis'] and m['rows'] and not aurora:
         k = m['kpis']
         from collections import Counter
         spread = Counter(r['grade'] for r in m['rows'] if r['grade'])
@@ -578,7 +689,9 @@ def render_pdf(model, o):
             F['s'], P['ink'].hexval().replace('0x', '#'), E(_short(cs)), E(cs.subject.name)) for cs in m['subjects']),
             st('k', fontSize=7 * sc, leading=10 * sc, textColor=P['muted'])))
         legend = []
-        if o['b_fail']:
+        if aurora:
+            legend.append('score cells are tinted from red (below the pass mark of %s) through amber to green' % _n(pm))
+        elif o['b_fail']:
             legend.append('highlighted scores are below the pass mark (%s)' % _n(pm))
         if o['b_top']:
             legend.append('medals mark the top three')
@@ -636,9 +749,115 @@ def render_pdf(model, o):
                           bottomMargin=14 * mm, title=title, author=school.get('name') or '')
     frame = Frame(M, 14 * mm, avail, ph - M - 14 * mm, id='f', leftPadding=0, rightPadding=0,
                   topPadding=0, bottomPadding=0)
-    doc.addPageTemplates([PageTemplate(id='p', frames=[frame])])
+    if aurora:
+        from reportlab.platypus import NextPageTemplate
+        first = Frame(M, 14 * mm, avail, ph - HERO - 6 * mm - 14 * mm, id='f1', leftPadding=0, rightPadding=0,
+                      topPadding=0, bottomPadding=0)
+
+        def hero(c, _doc):
+            _draw_hero(c, pw, ph, HERO, M, m, o, school, F, sc, pm, logo_path=school.get('logo_path') if o['b_logo'] else None)
+        doc.addPageTemplates([PageTemplate(id='first', frames=[first], onPage=hero),
+                              PageTemplate(id='later', frames=[frame])])
+        elems.insert(0, NextPageTemplate('later'))
+    else:
+        doc.addPageTemplates([PageTemplate(id='p', frames=[frame])])
     doc.build(elems, canvasmaker=_Numbered)
     return buf.getvalue()
+
+
+def _draw_hero(c, pw, ph, H, M, m, o, school, F, sc, pm, logo_path=None):
+    """The Aurora header band: a full-bleed ink-to-teal gradient with the class,
+    term and school on the left and the headline figures on the right."""
+    from reportlab.lib import colors as C
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    from collections import Counter
+    from utils import timeutil
+    top = ph
+    y0 = top - H
+    c.saveState()
+    clip = c.beginPath(); clip.rect(0, y0, pw, H)
+    c.clipPath(clip, stroke=0, fill=0)                 # keep the band to the top
+    c.linearGradient(0, y0, pw, top, (C.HexColor('#0B1220'), C.HexColor('#0F2E2C'), C.HexColor('#0E5A4C')),
+                     positions=(0, 0.6, 1), extend=True)
+    # soft decorative rings
+    c.setStrokeColor(C.Color(1, 1, 1, alpha=0.06)); c.setLineWidth(18)
+    c.circle(pw - 40, top - 10, H * 0.9, stroke=1, fill=0)
+    c.setLineWidth(10); c.circle(pw * 0.62, y0 - 30, H * 0.7, stroke=1, fill=0)
+    c.restoreState()
+    c.saveState()
+    x = M
+    if logo_path:
+        try:
+            from reportlab.lib.utils import ImageReader
+            img = ImageReader(logo_path)
+            iw, ih = img.getSize()
+            d = 34 * sc
+            c.setFillColor(C.white); c.circle(x + d / 2, top - H / 2, d / 2 + 3, stroke=0, fill=1)
+            s_ = d * 0.78 / max(iw, ih)
+            c.drawImage(img, x + d / 2 - iw * s_ / 2, top - H / 2 - ih * s_ / 2, iw * s_, ih * s_, mask='auto')
+            x += d + 12
+        except Exception:
+            pass
+    asg, term = m['assignment'], m['term']
+    ty = top - 22 * sc
+    if o['b_header']:
+        c.setFillColor(C.Color(1, 1, 1, alpha=0.62)); c.setFont(F['s'], 7.6 * sc)
+        c.drawString(x, ty, (school.get('name') or 'School').upper())
+        ty -= 6 * sc
+    c.setFillColor(C.white); c.setFont(F['x'], 26 * sc)
+    c.drawString(x, ty - 24 * sc, asg.display_name)
+    c.setFont(F['s'], 9.5 * sc); c.setFillColor(C.HexColor('#5EEAD4'))
+    lab = 'BROADSHEET'
+    c.drawString(x, ty - 40 * sc, lab)
+    c.setFillColor(C.Color(1, 1, 1, alpha=0.78)); c.setFont(F['r'], 9.5 * sc)
+    c.drawString(x + stringWidth(lab, F['s'], 9.5 * sc) + 8, ty - 40 * sc,
+                 '%s  ·  pass mark %s  ·  printed %s' % (term.full_name, _n(pm), timeutil.now().strftime('%d %b %Y').lstrip('0')))
+    if o['b_header'] and school.get('address'):
+        c.setFont(F['r'], 7.2 * sc); c.setFillColor(C.Color(1, 1, 1, alpha=0.5))
+        c.drawString(x, y0 + 9 * sc, school['address'][:110])
+    if o['b_kpis'] and m['rows']:
+        k = m['kpis']
+        stats = [(str(k['students']), 'STUDENTS', f"{k['boys']} boys · {k['girls']} girls"),
+                 (_n(k['class_avg']) if k['class_avg'] is not None else '–', 'CLASS AVERAGE', f"{k['subjects']} subjects"),
+                 ((f"{k['pass_rate']}%" if k['pass_rate'] is not None else '–'), 'PASSED', f"{k['passed']} of {k['scored']}")]
+        colw = 74 * sc
+        sx = pw - M - colw * len(stats) - 120 * sc
+        for i, (val, lab_, note) in enumerate(stats):
+            cx = sx + i * colw
+            c.setFillColor(C.Color(1, 1, 1, alpha=0.55)); c.setFont(F['s'], 6.4 * sc)
+            c.drawString(cx, top - 30 * sc, lab_)
+            c.setFillColor(C.white); c.setFont(F['x'], 22 * sc)
+            c.drawString(cx, top - 55 * sc, val)
+            c.setFillColor(C.Color(1, 1, 1, alpha=0.6)); c.setFont(F['r'], 7 * sc)
+            c.drawString(cx, top - 67 * sc, note)
+            if i:
+                c.setStrokeColor(C.Color(1, 1, 1, alpha=0.14)); c.setLineWidth(0.6)
+                c.line(cx - 10, top - 24 * sc, cx - 10, top - 70 * sc)
+        # top student + grade spread
+        bx = pw - M - 112 * sc
+        c.setStrokeColor(C.Color(1, 1, 1, alpha=0.14)); c.line(bx - 10, top - 24 * sc, bx - 10, top - 70 * sc)
+        c.setFillColor(C.Color(1, 1, 1, alpha=0.55)); c.setFont(F['s'], 6.4 * sc)
+        c.drawString(bx, top - 30 * sc, 'TOP OF THE CLASS')
+        best = k['best'] or '–'
+        fsz = 11 * sc
+        while stringWidth(best, F['b'], fsz) > 112 * sc and fsz > 6:
+            fsz -= 0.4
+        c.setFillColor(C.white); c.setFont(F['b'], fsz)
+        c.drawString(bx, top - 45 * sc, best)
+        spread = Counter(r['grade'] for r in m['rows'] if r['grade'])
+        if spread:
+            order = sorted(spread, key=lambda g: (g[:1], g[1:] != '+', g))
+            tot = sum(spread.values())
+            wbar, xx = 112 * sc, bx
+            tones = {'a': '#34D399', 'b': '#60A5FA', 'c': '#FBBF24', 'd': '#FB923C', 'e': '#F97316', 'f': '#F87171'}
+            for g in order:
+                w = wbar * spread[g] / tot
+                c.setFillColor(C.HexColor(tones.get(_grade_key(g), '#CBD5E1')))
+                c.rect(xx, top - 57 * sc, max(w - 1, 0.6), 5 * sc, stroke=0, fill=1)
+                xx += w
+            c.setFont(F['m'], 6.6 * sc); c.setFillColor(C.Color(1, 1, 1, alpha=0.72))
+            c.drawString(bx, top - 67 * sc, '  '.join('%s %d' % (g, spread[g]) for g in order)[:40])
+    c.restoreState()
 
 
 def render_png_pages(pdf_bytes, page=None, zoom=2.0):

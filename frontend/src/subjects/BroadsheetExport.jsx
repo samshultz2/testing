@@ -11,7 +11,7 @@ const FORMATS = [
 ];
 
 function loadPrefs(options) {
-  const base = { format: 'pdf', style: 'colour', paper: 'A4', orient: 'landscape', size: 'm', sort: 'position' };
+  const base = { format: 'pdf', theme: 'aurora', style: 'colour', paper: 'A4', orient: 'landscape', size: 'm', sort: 'position' };
   options.forEach((o) => { base[o.key] = o.on; });
   try { return { ...base, ...(JSON.parse(localStorage.getItem(PREF) || '{}')) }; } catch (_) { return base; }
 }
@@ -36,7 +36,7 @@ export default function BroadsheetExport({ url, options, filter, rowsShown, onCl
   const query = (format, extra = {}) => {
     const q = new URLSearchParams();
     q.set('format', format);
-    ['style', 'paper', 'orient', 'size', 'sort'].forEach((k) => q.set(k, o[k]));
+    ['theme', 'style', 'paper', 'orient', 'size', 'sort'].forEach((k) => q.set(k, o[k]));
     options.forEach((op) => q.set(op.key, o[op.key] ? '1' : '0'));
     if (filter) { q.set('min_score', filter.min); q.set('filter_field', filter.field); }
     Object.entries(extra).forEach(([k, v]) => q.set(k, v));
@@ -118,6 +118,15 @@ export default function BroadsheetExport({ url, options, filter, rowsShown, onCl
             </div>
             <button type="button" className="bxe-pvbar" onClick={() => setFull(true)}>
               <span><b>Preview</b><small>Page {pv.page} of {pv.total}</small></span><span className="go">Open <i className="fas fa-chevron-right" aria-hidden="true" /></span></button>
+            {o.style !== 'bw' && (
+              <>
+                <div className="bxe-l">Design</div>
+                <div className="bxe-themes" role="radiogroup" aria-label="Design">
+                  {[['aurora', 'Aurora', 'Dark header band, heat-mapped scores'], ['minimal', 'Minimal', 'Light and quiet, red marks only']].map(([v, l, d]) => (
+                    <button key={v} type="button" role="radio" aria-checked={o.theme === v} className={'bxe-theme ' + v + (o.theme === v ? ' on' : '')} onClick={() => set('theme', v)}>
+                      <span className="sw" aria-hidden="true"><i /><b /><b /><b /></span><strong>{l}</strong><small>{d}</small></button>))}
+                </div>
+              </>)}
             <div className="bxe-row">
               <div><div className="bxe-l">Style</div><Seg label="Style" value={o.style} onChange={(v) => set('style', v)} options={[['colour', 'Colour'], ['bw', 'Black & white']]} /></div>
               <div><div className="bxe-l">Text size</div><Seg label="Text size" value={o.size} onChange={(v) => set('size', v)} options={[['s', 'S'], ['m', 'M'], ['l', 'L']]} /></div>
