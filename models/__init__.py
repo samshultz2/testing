@@ -61,6 +61,7 @@ from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATU
 from .models_waec_cert import WAECCertTemplate, WAECCertPreset, WAECCertIssue
 from .models_study_groups import GroupSet, StudentGroup, GroupMember
 from .models_exam_halls import ExamHallPlan
+from .models_exam_timetable import ExamTimetable, ExamTimetablePaper
 from .models_jobs import BackgroundJob
 
 __all__ = [

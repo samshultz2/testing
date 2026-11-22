@@ -40,6 +40,7 @@ MODULES = {
     'sales': 'Sales & Inventory',
     'contributions': 'Contributions & Levies',
     'website': 'Website Builder',
+    'tools': 'Tools (exam halls, study groups, exam timetables)',
     'settings': 'School Settings',
 }
 
@@ -58,7 +59,14 @@ BLUEPRINT_MODULE = {
     'jss3_exams': 'external_exams', 'basic6_exams': 'external_exams',
     'exam_levels': 'external_exams',
     'settings': 'settings', 'website_admin': 'website',
+    # Tools menu — each tool is its own grantable sub-section (see TOOL_BLUEPRINTS).
+    'exam_halls': 'tools', 'study_groups': 'tools', 'exam_timetable': 'tools',
 }
+
+# Tools-menu blueprints -> their sub-section of the 'tools' module, so each tool
+# can be granted on its own (view = open saved work / download, edit = create).
+TOOL_BLUEPRINTS = {'exam_halls': 'exam_halls', 'study_groups': 'study_groups',
+                   'exam_timetable': 'exam_timetable'}
 
 # Endpoints always reachable by any logged-in user (the shell + own account).
 _ALWAYS_ALLOWED_ENDPOINTS = {
@@ -90,8 +98,9 @@ _ALWAYS_ALLOWED_ENDPOINTS = {
 
 # Default module set when a non-admin user has no explicit allowed_modules.
 ROLE_DEFAULT_MODULES = {
+    # Study groups was open to every teacher before Tools were permissioned.
     'teacher': {'students', 'attendance', 'results', 'external_exams', 'cbt',
-                'timetable', 'events'},
+                'timetable', 'events', 'tools.study_groups'},
     'readonly': {'students', 'results', 'external_exams', 'reports', 'events'},
     'staff': set(),
 }
@@ -218,6 +227,11 @@ MODULE_SUBSECTIONS = {
         'expenses': 'Expenses',
         'reports': 'Reports',
         'settings': 'Settings',
+    },
+    'tools': {
+        'exam_halls': 'Exam Hall Allocator',
+        'study_groups': 'Study Groups',
+        'exam_timetable': 'WAEC / NECO Exam Timetable',
     },
     'website': {
         'pages': 'Pages & Content',
@@ -1191,7 +1205,27 @@ for _mod, _subs in _SUBSECTION_ENDPOINTS.items():
 
 def subsection_for_endpoint(endpoint):
     """('module','sub') for a gated endpoint, or None."""
-    return _ENDPOINT_SUBSECTION.get(endpoint or '')
+    hit = _ENDPOINT_SUBSECTION.get(endpoint or '')
+    if hit:
+        return hit
+    tool = TOOL_BLUEPRINTS.get((endpoint or '').split('.', 1)[0])
+    return ('tools', tool) if tool else None
+
+
+def can_use_tool(key):
+    """May the current user open this Tools-menu tool ('exam_halls',
+    'study_groups', 'exam_timetable')? Admins always; others need the tool's
+    sub-section (or the whole Tools module)."""
+    return is_admin() or subsection_level('tools', key) is not None
+
+
+def can_see_generator():
+    """Show the Timetable Generator in the Tools menu: anyone who may generate,
+    or who holds any of the generator set-up/result sub-sections."""
+    if is_admin() or can_generate_timetable():
+        return True
+    perms = effective_perms()
+    return any(k.startswith('timetable.generator') for k in perms)
 
 
 def effective_perms():

@@ -695,8 +695,9 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% set _show_generator = session.get('role') in ('super_admin', 'admin') or can_generate_timetable %}
-                    {% if _show_generator or can_access_module('website') %}
+                    {% set _show_generator = session.get('role') in ('super_admin', 'admin') or can_generate_timetable or can_see_generator %}
+                    {% set _tool_halls = can_use_tool('exam_halls') %}{% set _tool_groups = can_use_tool('study_groups') %}{% set _tool_examtt = can_use_tool('exam_timetable') %}
+                    {% if _show_generator or can_access_module('website') or _tool_halls or _tool_groups or _tool_examtt %}
                     <li class="nav-section">Tools</li>
                     {% if _show_generator %}
                     <li class="nav-item has-submenu">
@@ -729,18 +730,27 @@
                         </ul>
                     </li>
                     {% endif %}
-                    {% if session.get('role') in ('super_admin', 'admin') %}
+                    {% if _tool_halls %}
                     <li class="nav-item">
                         <a href="{{ url_for('exam_halls.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('exam_halls.') %}active{% endif %}">
                             <i class="fas fa-chair"></i><span>Exam Hall Allocator</span>
                         </a>
                     </li>
                     {% endif %}
+                    {% if _tool_groups %}
                     <li class="nav-item">
                         <a href="{{ url_for('study_groups.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('study_groups.') %}active{% endif %}">
                             <i class="fas fa-users"></i><span>Study Groups</span>
                         </a>
                     </li>
+                    {% endif %}
+                    {% if _tool_examtt %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('exam_timetable.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('exam_timetable.') %}active{% endif %}">
+                            <i class="fas fa-calendar-check"></i><span>WAEC / NECO Timetable</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if can_access_module('website') %}
                     <li class="nav-item">
                         <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">

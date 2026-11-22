@@ -254,6 +254,8 @@ def create_app(config_class=None):
     app.register_blueprint(exam_halls_bp)
     from routes.study_groups import study_groups_bp
     app.register_blueprint(study_groups_bp)
+    from routes.exam_timetable import exam_timetable_bp
+    app.register_blueprint(exam_timetable_bp)
     app.register_blueprint(contributions_bp)
     app.register_blueprint(mock_jamb_bp)
     app.register_blueprint(mock_jamb_portal_bp)
@@ -636,6 +638,20 @@ def create_app(config_class=None):
             except Exception:
                 return False
 
+        def _can_use_tool(key):
+            try:
+                from utils.access_control import can_use_tool as _f
+                return _f(key)
+            except Exception:
+                return False
+
+        def _can_see_generator():
+            try:
+                from utils.access_control import can_see_generator as _f
+                return _f()
+            except Exception:
+                return False
+
         def can_generate_timetable():
             try:
                 from utils.access_control import can_generate_timetable as _f
@@ -794,6 +810,8 @@ def create_app(config_class=None):
             'page_can_write': page_can_write(),
             'is_read_only': is_read_only(),
             'can_generate_timetable': can_generate_timetable(),
+            'can_use_tool': _can_use_tool,
+            'can_see_generator': _can_see_generator(),
             'can_generate_result_cards': can_generate_result_cards(),
             'can_access_graduates': can_access_graduates(),
             'has_sss3_exam_access': _sss3_exam_access(),

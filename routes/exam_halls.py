@@ -28,7 +28,11 @@ exam_halls_bp = Blueprint('exam_halls', __name__, url_prefix='/tools/exam-halls'
 
 
 def _admin_only():
-    if not is_admin():
+    """Admins, or staff granted the Exam Hall Allocator tool (Users →
+    permissions → Tools). The before-request gates already enforce view vs
+    edit; this is the in-view backstop."""
+    from utils.access_control import can_use_tool
+    if not can_use_tool('exam_halls'):
         abort(403)
 
 

@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_menu, bx_menu_js with context %}
+{% block title %}{{ xt.title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_timetable.index') }}">WAEC / NECO Timetable</a> / <span>{{ xt.title }}</span>{% endblock %}
+
+{% macro paper_fields(p=None, default_date='', prefix='') %}
+<div class="xe-fg">
+  <label class="xe-f"><span>Date</span><input class="xe-in" type="date" name="exam_date" required value="{{ p.exam_date.isoformat() if p else default_date }}"></label>
+  <label class="xe-f"><span>Starts</span><input class="xe-in" type="time" name="start_time" required value="{{ p.start_time.strftime('%H:%M') if p else '09:00' }}" data-start></label>
+  <label class="xe-f"><span>Ends</span><input class="xe-in" type="time" name="end_time" required value="{{ p.end_time.strftime('%H:%M') if p else '11:00' }}" data-end></label>
+</div>
+{% if not p %}
+<div class="xe-quick" aria-label="Common times">
+  {% for a, b in [('08:30','10:30'), ('09:00','11:00'), ('09:30','12:30'), ('12:00','14:00'), ('14:00','16:00'), ('14:30','17:30')] %}
+  <button type="button" data-t="{{ a }}-{{ b }}">{{ a }}–{{ b }}</button>{% endfor %}
+</div>
+{% endif %}
+<div class="xe-fg two">
+  <label class="xe-f"><span>Subject</span><input class="xe-in" type="text" name="subject" required list="xeSubjects" maxlength="120" value="{{ p.subject if p else '' }}" placeholder="e.g. Mathematics"></label>
+  <label class="xe-f"><span>Paper</span><input class="xe-in" type="text" name="paper" list="xePapers" maxlength="120" value="{{ (p.paper or '') if p else '' }}" placeholder="e.g. Paper 2 (Essay)"></label>
+</div>
+<div class="xe-fg two">
+  <label class="xe-f"><span>Type</span><select class="xe-in" name="kind"><option value="">—</option>{% for k, l in kinds %}<option value="{{ k }}" {{ 'selected' if p and p.kind == k }}>{{ l }}</option>{% endfor %}</select></label>
+  <label class="xe-f"><span>Hall / venue</span><input class="xe-in" type="text" name="venue" maxlength="120" value="{{ (p.venue or '') if p else '' }}" placeholder="e.g. Main Hall"></label>
+</div>
+<label class="xe-f"><span>Invigilators</span><input class="xe-in" type="text" name="invigilators" maxlength="255" value="{{ (p.invigilators or '') if p else '' }}" placeholder="Names, separated by commas"></label>
+{% endmacro %}
+
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.xe-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:1rem;align-items:start}
+@media(max-width:1000px){.xe-grid{grid-template-columns:1fr}.xe-side{order:-1}}
+.xe-side{display:flex;flex-direction:column;gap:1rem;position:sticky;top:80px}
+@media(max-width:1000px){.xe-side{position:static}}
+.xe-day{margin-bottom:1rem;padding:0;overflow:hidden}
+.xe-dh{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.8rem 1rem;background:color-mix(in srgb,var(--primary) 6%,var(--bg-card));border-bottom:1px solid var(--border-color)}
+.xe-dh .d{display:flex;align-items:center;gap:.7rem}
+.xe-cal{width:44px;height:46px;border-radius:11px;background:var(--bg-card);border:1px solid var(--border-color);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.xe-cal small{font-size:.58rem;font-weight:800;letter-spacing:.06em;color:var(--primary)}
+.xe-cal b{font-size:1.15rem;font-weight:800}
+.xe-dh h3{margin:0;font-size:.98rem}
+.xe-dh p{margin:0;font-size:.76rem;color:var(--text-muted)}
+.xe-p{border-bottom:1px solid var(--border-light,var(--border-color))}
+.xe-p:last-child{border-bottom:0}
+.xe-p summary{list-style:none;display:grid;grid-template-columns:86px minmax(0,1fr) auto;gap:.8rem;align-items:center;padding:.8rem 1rem;cursor:pointer}
+.xe-p summary::-webkit-details-marker{display:none}
+.xe-p summary:hover{background:var(--gray-50,var(--gray-100))}
+.xe-t b{display:block;font-size:.9rem}
+.xe-t small{font-size:.72rem;color:var(--text-muted)}
+.xe-s b{display:block;font-size:.93rem}
+.xe-s small{font-size:.78rem;color:var(--text-muted)}
+.xe-s .chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem}
+.xe-chip{font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:999px;background:var(--gray-100);color:var(--text-secondary)}
+.xe-chip.k-objective{background:color-mix(in srgb,#2563eb 12%,var(--bg-card));color:#2563eb}
+.xe-chip.k-essay{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.xe-chip.k-practical{background:color-mix(in srgb,#b45309 14%,var(--bg-card));color:#b45309}
+.xe-chip.k-oral{background:color-mix(in srgb,#7c3aed 12%,var(--bg-card));color:#7c3aed}
+.xe-chip.clash{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.xe-n{text-align:right}
+.xe-n b{display:block;font-size:1.2rem;font-weight:800;line-height:1}
+.xe-n small{font-size:.68rem;color:var(--text-muted)}
+.xe-edit{padding:.4rem 1rem 1rem;background:var(--gray-50,var(--gray-100))}
+.xe-fg{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:.5rem}
+.xe-fg.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.xe-side .xe-fg:not(.two){grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.xe-side .xe-fg:not(.two)>:first-child{grid-column:1/-1}
+@media(max-width:520px){.xe-fg{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.xe-fg>:first-child{grid-column:1/-1}.xe-fg.two{grid-template-columns:minmax(0,1fr)}}
+.xe-f{display:block;margin-bottom:.6rem}
+.xe-f span{display:block;font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:.25rem}
+.xe-in{width:100%;height:40px;padding:0 .7rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
+textarea.xe-in{height:auto;padding:.6rem .7rem}
+.xe-quick{display:flex;gap:.35rem;flex-wrap:wrap;margin:-.2rem 0 .7rem}
+.xe-quick button{border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.25rem .6rem;font-size:.74rem;font-weight:700;color:var(--text-secondary);cursor:pointer}
+.xe-quick button:hover{border-color:var(--primary);color:var(--primary)}
+.xe-acts{display:flex;gap:.45rem;flex-wrap:wrap}
+.xe-who{font-size:.76rem;color:var(--text-muted);margin:.1rem 0 .7rem;line-height:1.5}
+.xe-check{display:flex;flex-direction:column;gap:.7rem}
+.xe-check h4{margin:0 0 .3rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.xe-cl{padding:.55rem .7rem;border-radius:10px;background:color-mix(in srgb,var(--danger) 8%,var(--bg-card));font-size:.82rem;margin-bottom:.4rem}
+.xe-cl b{color:var(--danger)}
+.xe-cl small{display:block;color:var(--text-secondary);font-size:.74rem;margin-top:.15rem}
+.xe-ok{color:var(--success);font-weight:600;font-size:.86rem}
+.xe-chips{display:flex;flex-wrap:wrap;gap:.35rem}
+.xe-mchip{font-size:.78rem;font-weight:600;padding:.25rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));color:#92400e}
+.xe-head-badge{font-size:.62rem;font-weight:800;letter-spacing:.08em;padding:.15rem .45rem;border-radius:6px;background:var(--primary);color:#fff;vertical-align:middle;margin-left:.4rem}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set can_edit = can_write_sub('tools', 'exam_timetable') %}
+<div class="rs bx">
+  {% call bx_head('fa-calendar-check', xt.title, xt.board_label ~ ' SSCE' ~ ((' ' ~ xt.year) if xt.year else '') ~ (' · ' ~ d.first.strftime('%d %b') ~ ' – ' ~ d.last.strftime('%d %b %Y') if d.first else '')) %}
+    <a href="{{ url_for('exam_timetable.index') }}" class="rs-btn ghost" aria-label="All timetables"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">All timetables</span></a>
+    {% if d.rows %}
+    {{ bx_menu('Download', [
+        (url_for('exam_timetable.export', tt_id=xt.id, format='pdf'), 'fa-file-pdf', 'Timetable PDF · notice board'),
+        (url_for('exam_timetable.export', tt_id=xt.id, format='candidates'), 'fa-id-card', 'Personal timetable for each candidate'),
+        (url_for('exam_timetable.export', tt_id=xt.id, format='excel'), 'fa-file-excel', 'Excel · timetable + by candidate')], 'fa-download', True) }}
+    {% endif %}
+  {% endcall %}
+  {{ bx_menu_js() }}
+
+  <datalist id="xeSubjects">{% for s in subjects %}<option value="{{ s }}">{% endfor %}</datalist>
+  <datalist id="xePapers">{% for s in presets %}<option value="{{ s }}">{% endfor %}</datalist>
+
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Papers</span><span class="v">{{ d.rows|length }}</span><span class="s">{{ d.subjects }} subject{{ 's' if d.subjects != 1 }}</span></div>
+    <div class="rs-tile"><span class="l">Exam days</span><span class="v">{{ d.days|length }}</span><span class="s">{% if d.first %}{{ d.first.strftime('%d %b') }} – {{ d.last.strftime('%d %b') }}{% else %}none yet{% endif %}</span></div>
+    <div class="rs-tile"><span class="l">Candidates</span><span class="v">{{ d.candidates }}</span><span class="s">{{ d.registered }} with a {{ xt.board_label }} reg. no.</span></div>
+    <div class="rs-tile {{ 'bad' if d.clashes else ('good' if d.rows else '') }}"><span class="l">Clashes</span><span class="v">{{ d.clashes|length }}</span><span class="s">{{ 'papers overlapping for a candidate' if d.clashes else 'no candidate double-booked' }}</span></div>
+  </div>
+
+  {% set clash_ids = [] %}{% for c in d.clashes %}{% set _ = clash_ids.append(c.a.id) %}{% set _ = clash_ids.append(c.b.id) %}{% endfor %}
+  <div class="xe-grid">
+    <div>
+      {% for day in d.days %}
+      <section class="rs-card xe-day">
+        <div class="xe-dh">
+          <div class="d"><span class="xe-cal"><small>{{ day.date.strftime('%b')|upper }}</small><b>{{ day.date.day }}</b></span>
+            <div><h3>{{ day.date.strftime('%A') }}</h3><p>{{ day.date.strftime('%d %B %Y') }} · {{ day.rows|length }} paper{{ 's' if day.rows|length != 1 }}</p></div></div>
+        </div>
+        {% for r in day.rows %}{% set p = r.p %}
+        <details class="xe-p" id="p{{ p.id }}">
+          <summary>
+            <span class="xe-t"><b>{{ fmt_time(p.start_time) }}</b><small>to {{ fmt_time(p.end_time) }} · {{ fmt_dur(r.minutes) }}</small></span>
+            <span class="xe-s"><b>{{ p.subject }}</b>{% if p.paper %}<small>{{ p.paper }}</small>{% endif %}
+              <span class="chips">{% if p.kind %}<span class="xe-chip k-{{ p.kind }}">{{ dict(kinds)[p.kind] }}</span>{% endif %}
+                {% if p.venue %}<span class="xe-chip"><i class="fas fa-location-dot" aria-hidden="true"></i> {{ p.venue }}</span>{% endif %}
+                {% if p.invigilators %}<span class="xe-chip"><i class="fas fa-user-shield" aria-hidden="true"></i> {{ p.invigilators }}</span>{% endif %}
+                {% if p.id in clash_ids %}<span class="xe-chip clash"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> Clash</span>{% endif %}</span></span>
+            <span class="xe-n"><b>{{ r.count }}</b><small>candidate{{ 's' if r.count != 1 }}</small></span>
+          </summary>
+          <div class="xe-edit">
+            {% if r.cands %}<p class="xe-who"><b>Sitting:</b> {{ r.cands|map(attribute='name')|join(', ') }}</p>{% else %}<p class="xe-who">No candidate has {{ p.subject }} on their profile.</p>{% endif %}
+            {% if can_edit %}
+            <form method="POST" action="{{ url_for('exam_timetable.update_paper', tt_id=xt.id, paper_id=p.id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              {{ paper_fields(p) }}
+              <div class="xe-acts">
+                <button class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Save</button>
+                <button class="rs-btn ghost" name="delete" value="1" formnovalidate data-confirm="Remove {{ p.subject }}{{ ' — ' ~ p.paper if p.paper }}?" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Remove</button>
+              </div>
+            </form>
+            {% endif %}
+          </div>
+        </details>
+        {% endfor %}
+      </section>
+      {% else %}
+      <div class="rs-blank"><span><i class="fas fa-calendar-plus" aria-hidden="true"></i></span><h3>No papers yet</h3><p>Add the first paper{{ ' with the form' if can_edit }} — copy the dates and times from the official {{ xt.board_label }} timetable.</p></div>
+      {% endfor %}
+    </div>
+
+    <aside class="xe-side">
+      {% if can_edit %}
+      <form class="rs-card" id="add" method="POST" action="{{ url_for('exam_timetable.add_paper', tt_id=xt.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="rs-card-h"><h3><i class="fas fa-plus" aria-hidden="true"></i> Add a paper</h3></div>
+        {{ paper_fields(None, request.args.get('after') or (last.exam_date.isoformat() if last else '')) }}
+        <button class="rs-btn primary" style="width:100%;justify-content:center"><i class="fas fa-plus" aria-hidden="true"></i> Add paper</button>
+      </form>
+      {% endif %}
+
+      <section class="rs-card">
+        <div class="rs-card-h"><h3><i class="fas fa-list-check" aria-hidden="true"></i> Checks</h3></div>
+        <div class="xe-check">
+          <div><h4>Clashes</h4>
+            {% for c in d.clashes %}<div class="xe-cl"><b>{{ c.a.exam_date.strftime('%a %d %b') }}</b> · {{ c.a.subject }} ({{ fmt_time(c.a.start_time) }}) and {{ c.b.subject }} ({{ fmt_time(c.b.start_time) }})<small>{{ c.students|length }} candidate{{ 's' if c.students|length != 1 }}: {{ c.students[:6]|join(', ') }}{{ ' …' if c.students|length > 6 }}</small></div>
+            {% else %}<p class="xe-ok"><i class="fas fa-circle-check" aria-hidden="true"></i> No candidate has two papers at once.</p>{% endfor %}
+          </div>
+          {% if d.missing %}
+          <div><h4>Subjects with no paper yet</h4>
+            <div class="xe-chips">{% for name, n in d.missing %}<span class="xe-mchip" title="{{ n }} candidate{{ 's' if n != 1 }}">{{ name }} · {{ n }}</span>{% endfor %}</div></div>
+          {% endif %}
+          {% if d.heavy %}
+          <div><h4>Three or more papers in a day</h4>
+            <div class="xe-chips">{% for h in d.heavy[:12] %}<span class="xe-mchip">{{ h.name }} · {{ h.papers }}</span>{% endfor %}{% if d.heavy|length > 12 %}<span class="xe-mchip">+{{ d.heavy|length - 12 }} more</span>{% endif %}</div></div>
+          {% endif %}
+        </div>
+      </section>
+
+      {% if can_edit %}
+      <details class="rs-card">
+        <summary style="cursor:pointer;font-weight:700;list-style:none"><i class="fas fa-pen" aria-hidden="true" style="color:var(--text-muted)"></i> Name, year &amp; notes</summary>
+        <form method="POST" action="{{ url_for('exam_timetable.save_details', tt_id=xt.id) }}" style="margin-top:.8rem">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <label class="xe-f"><span>Name</span><input class="xe-in" type="text" name="title" value="{{ xt.title }}" maxlength="150" required></label>
+          <label class="xe-f"><span>Year</span><input class="xe-in" type="number" name="year" value="{{ xt.year or '' }}"></label>
+          <label class="xe-f"><span>Notes for candidates <small style="font-weight:500;color:var(--text-muted)">printed under the title</small></span><textarea class="xe-in" name="notes" rows="3" placeholder="e.g. Be in the hall 30 minutes early with your photo card.">{{ xt.notes or '' }}</textarea></label>
+          <button class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Save</button>
+        </form>
+        <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=xt.id) }}" style="margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border-color)">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="rs-btn ghost" data-confirm="Delete this timetable and all its papers?" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Delete timetable</button>
+        </form>
+      </details>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  document.querySelectorAll('[data-t]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = b.closest('form'), t = b.dataset.t.split('-');
+      f.querySelector('[data-start]').value = t[0]; f.querySelector('[data-end]').value = t[1];
+    });
+  });
+  document.querySelectorAll('[data-confirm]').forEach(function (b) {
+    b.addEventListener('click', function (e) { if (!confirm(b.dataset.confirm)) e.preventDefault(); });
+  });
+  var h = location.hash && document.querySelector(location.hash);
+  if (h && h.tagName === 'DETAILS') h.open = true;
+  if (location.hash === '#add') { var s = document.querySelector('#add [name=subject]'); if (s) s.focus(); }
+})();
+</script>
+{% endblock %}

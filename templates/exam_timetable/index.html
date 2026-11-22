@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% block title %}WAEC / NECO Timetable - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <span>WAEC / NECO Timetable</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.xt-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:960px){.xt-grid{grid-template-columns:1fr}}
+.xt-list{display:flex;flex-direction:column}
+.xt-item{display:flex;align-items:center;gap:.9rem;padding:.85rem 0;border-bottom:1px solid var(--border-light,var(--border-color));text-decoration:none;color:inherit}
+.xt-item:last-child{border-bottom:0}
+.xt-badge{width:52px;height:52px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;font-weight:800;line-height:1.05}
+.xt-badge b{font-size:.72rem;letter-spacing:.06em}
+.xt-badge small{font-size:.68rem;font-weight:700;opacity:.85}
+.xt-badge.waec{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.xt-badge.neco{background:color-mix(in srgb,#2563eb 12%,var(--bg-card));color:#2563eb}
+.xt-item .t{flex:1;min-width:0}
+.xt-item .t b{display:block;font-size:.95rem}
+.xt-item .t small{color:var(--text-muted);font-size:.8rem}
+a.xt-item:hover .t b{color:var(--primary)}
+.xt-seg{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.9rem}
+.xt-seg label{position:relative}
+.xt-seg input{position:absolute;opacity:0}
+.xt-seg span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;height:72px;border:1px solid var(--border-color);border-radius:14px;cursor:pointer;font-weight:800;font-size:1.05rem}
+.xt-seg span small{font-weight:500;font-size:.72rem;color:var(--text-muted)}
+.xt-seg input:checked+span{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--bg-card));color:var(--primary)}
+.xt-seg input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
+.xt-f{display:block;margin-bottom:.8rem}
+.xt-f span{display:block;font-size:.75rem;font-weight:700;color:var(--text-secondary);margin-bottom:.3rem}
+.xt-in{width:100%;height:42px;padding:0 .8rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);color:var(--text-primary);font:inherit}
+.xt-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:.6rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="rs bx">
+  {% call bx_head('fa-calendar-check', 'WAEC / NECO timetable', 'Copy in the official SSCE papers, add halls and invigilators, see who sits what, catch clashes and print') %}{% endcall %}
+  <div class="xt-grid">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-folder-open" aria-hidden="true"></i> Your timetables</h3><small>{{ rows|length }}</small></div>
+      {% if rows %}
+      <div class="xt-list">
+        {% for r in rows %}
+        <a class="xt-item" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}">
+          <span class="xt-badge {{ r.t.board }}"><b>{{ r.t.board_label }}</b><small>{{ r.t.year or '' }}</small></span>
+          <span class="t"><b>{{ r.t.title }}</b><small>{{ r.papers }} paper{{ 's' if r.papers != 1 }}{% if r.first %} · {{ r.first.strftime('%d %b') }} – {{ r.last.strftime('%d %b %Y') }}{% endif %}</small></span>
+          <i class="fas fa-chevron-right" aria-hidden="true" style="color:var(--text-muted)"></i>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="rs-blank" style="border:0;padding:1.5rem 0"><span><i class="fas fa-calendar-plus" aria-hidden="true"></i></span><h3>No timetables yet</h3><p>Start one on the right — WAEC or NECO.</p></div>
+      {% endif %}
+    </section>
+
+    {% if can_write_sub('tools', 'exam_timetable') %}
+    <form class="rs-card" method="POST" action="{{ url_for('exam_timetable.create') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="rs-card-h"><h3><i class="fas fa-plus" aria-hidden="true"></i> New timetable</h3></div>
+      <div class="xt-seg" role="radiogroup" aria-label="Exam body">
+        <label><input type="radio" name="board" value="waec" checked><span>WAEC<small>SSCE May/June</small></span></label>
+        <label><input type="radio" name="board" value="neco"><span>NECO<small>SSCE June/July</small></span></label>
+      </div>
+      <div class="xt-row">
+        <label class="xt-f"><span>Year</span><input class="xt-in" type="number" name="year" value="{{ this_year }}" min="2000" max="2100"></label>
+        <label class="xt-f"><span>Name <small style="font-weight:500;color:var(--text-muted)">optional</small></span><input class="xt-in" type="text" name="title" maxlength="150" placeholder="e.g. WAEC SSCE {{ this_year }} timetable"></label>
+      </div>
+      {% if rows %}
+      <label class="xt-f"><span>Start from <small style="font-weight:500;color:var(--text-muted)">optional — copies its papers</small></span>
+        <select class="xt-in" name="copy_from"><option value="">Blank timetable</option>{% for r in rows %}<option value="{{ r.t.id }}">{{ r.t.title }}</option>{% endfor %}</select></label>
+      {% endif %}
+      <button class="rs-btn primary" style="width:100%;justify-content:center"><i class="fas fa-arrow-right" aria-hidden="true"></i> Create and add papers</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
