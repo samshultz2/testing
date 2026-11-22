@@ -14,6 +14,7 @@ from utils import student_list_export as SLE
 
 KINDS = [('objective', 'Objective'), ('essay', 'Essay / Theory'), ('combined', 'Objective & Essay'),
          ('practical', 'Practical'), ('alt_practical', 'Alternative to Practical'),
+         ('practical_physical', 'Practical & Physical'), ('objective_practical', 'Objective & Practical'),
          ('prose', 'Prose'), ('drama_poetry', 'Drama & Poetry'), ('objective_prose', 'Objective & Prose'),
          ('oral', 'Oral / Listening'), ('drawing', 'Drawing'), ('project', 'Project / Coursework'),
          ('other', 'Other')]
@@ -336,3 +337,167 @@ def render_xlsx(tt, cands, data):
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# Paste import — rows copied from a chatbot / spreadsheet / the official PDF
+# --------------------------------------------------------------------------- #
+import re as _re
+
+_MONTHS = {m: i for i, m in enumerate(
+    ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'], 1)}
+_WEEKDAY = _re.compile(r'\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)[a-z]*\.?,?\s*', _re.I)
+
+
+def parse_date(text, default_year=None):
+    """2026-05-04 · 04/05/2026 (day first) · 4/5/26 · Monday, 4th May 2026 ·
+    May 4, 2026 · 4 May (year from ``default_year``)."""
+    t = (text or '').strip()
+    if not t:
+        return None
+    m = _re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})$', t)
+    if m:
+        y, mo, d = map(int, m.groups())
+    else:
+        t = _WEEKDAY.sub('', t).strip()
+        t = _re.sub(r'(\d)(st|nd|rd|th)\b', r'\1', t, flags=_re.I).replace(',', ' ').replace('.', ' ')
+        m = _re.match(r'^(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?$', t)
+        if m:
+            d, mo = int(m.group(1)), int(m.group(2))
+            y = int(m.group(3)) if m.group(3) else default_year
+        else:
+            words = t.split()
+            nums = [int(w) for w in words if w.isdigit()]
+            mon = next((_MONTHS[w[:3].lower()] for w in words if w[:3].lower() in _MONTHS and not w.isdigit()), None)
+            if not mon or not nums:
+                return None
+            mo = mon
+            d = next((n for n in nums if n <= 31), None)
+            y = next((n for n in nums if n > 31), default_year)
+        if y is not None and y < 100:
+            y += 2000
+    try:
+        return dt.date(int(y), int(mo), int(d)) if y and d else None
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_time(text):
+    """9:30am · 9.30 a.m. · 14:00 · 2pm · 12 noon."""
+    t = (text or '').strip().lower().replace(' ', '').replace('.', ':').replace('a:m:', 'am').replace('p:m:', 'pm')
+    t = t.replace('a:m', 'am').replace('p:m', 'pm').rstrip(':')
+    if t in ('noon', '12noon'):
+        return dt.time(12, 0)
+    m = _re.match(r'^(\d{1,2})(?::(\d{2}))?(am|pm|noon)?$', t)
+    if not m:
+        return None
+    h, mi, ap = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+    if ap == 'pm' and h < 12:
+        h += 12
+    if ap == 'am' and h == 12:
+        h = 0
+    return dt.time(h, mi) if h < 24 and mi < 60 else None
+
+
+def parse_duration(text):
+    """1hr 30mins · 2 hrs · 45 mins · 1½ hrs · 1.5 hours · 90 → minutes."""
+    t = (text or '').lower().replace('½', '.5').replace(' ', '')
+    if not t or not _re.search(r'\d', t):
+        return None
+    if t.isdigit():
+        return int(t)
+    h = _re.search(r'(\d+(?:\.\d+)?)h', t)
+    m = _re.search(r'(\d+)m', t)
+    if not (h or m):
+        return None
+    return int(round(float(h.group(1)) * 60)) + (int(m.group(1)) if m else 0) if h else int(m.group(1))
+
+
+_RANGE = _re.compile(r'^(.+?)\s*(?:-|–|—|to)\s*(.+)$', _re.I)
+
+
+def _split(line):
+    for sep in ('\t', '|', ';'):
+        if sep in line:
+            return [c.strip() for c in line.split(sep)]
+    return [c.strip() for c in line.split(',')]
+
+
+def parse_paste(text, subjects, papers_for, default_year=None):
+    """Rows of ``date, start, end, subject, paper[, venue, invigilators]``.
+    ``start, end`` may be one "9:30am - 12:30pm" cell, and ``end`` may be a
+    duration (2hrs 30mins). Subjects are matched to the known list (case,
+    '&'/'and', common short names). Returns [{line, raw, …, error}]."""
+    known = {norm(s): s for s in subjects}
+    alias = {'eng': 'english language', 'english': 'english language', 'maths': 'mathematics',
+             'math': 'mathematics', 'gen maths': 'mathematics', 'general mathematics': 'mathematics',
+             'further maths': 'further mathematics', 'f/maths': 'further mathematics',
+             'lit': 'literature in english', 'literature': 'literature in english',
+             'literature-in-english': 'literature in english', 'crs': 'christian religious studies',
+             'crk': 'christian religious studies', 'irs': 'islamic religious studies',
+             'irk': 'islamic religious studies', 'agric': 'agricultural science',
+             'agricultural science': 'agricultural science', 'govt': 'government', 'econs': 'economics',
+             'geo': 'geography', 'bio': 'biology', 'chem': 'chemistry', 'phy': 'physics', 'physics': 'physics',
+             'civic': 'civic education', 'comm': 'commerce', 'accounts': 'financial accounting',
+             'computer': 'computer studies', 'data processing': 'data processing', 'tech drawing': 'technical drawing',
+             'td': 'technical drawing', 'visual art': 'visual arts', 'fine art': 'visual arts'}
+    out = []
+    for n, raw in enumerate((text or '').splitlines(), 1):
+        line = raw.strip().strip('`')
+        if not line or line.lower().startswith(('date', '#', '//')):
+            continue
+        cols = _split(line)
+        row = {'line': n, 'raw': line, 'error': None}
+        # date may have been split at its own comma ("Monday, 4 May 2026")
+        if len(cols) > 1 and _WEEKDAY.fullmatch(cols[0] + ' ') and parse_date(cols[1], default_year):
+            cols = [cols[0] + ' ' + cols[1]] + cols[2:]
+        if len(cols) > 1 and not parse_time(cols[1]) and _RANGE.match(cols[1] or ''):
+            a, b = _RANGE.match(cols[1]).groups()
+            if parse_time(a) and (parse_time(b) or parse_duration(b)):
+                cols = [cols[0], a, b] + cols[2:]
+        while len(cols) < 7:
+            cols.append('')
+        d, st = parse_date(cols[0], default_year), parse_time(cols[1])
+        en = parse_time(cols[2])
+        if st and not en:
+            mins = parse_duration(cols[2])
+            if mins:
+                tot = st.hour * 60 + st.minute + mins
+                en = dt.time(tot // 60 % 24, tot % 60)
+        subj_in = cols[3]
+        key = norm(subj_in).replace('-', ' ')
+        key = alias.get(norm(subj_in), alias.get(key, key))
+        subject = known.get(key) or known.get(norm(subj_in)) or subj_in.strip()
+        paper = cols[4].strip()
+        kinds = dict(papers_for(subject))
+        kind = kinds.get(paper) or _guess_kind(paper)
+        row.update(date=d, start=st, end=en, subject=subject, paper=paper or None, kind=kind,
+                   venue=cols[5] or None, invigilators=cols[6] or None,
+                   known=bool(known.get(key) or known.get(norm(subj_in))))
+        if not d:
+            row['error'] = 'Date not understood: “%s”' % cols[0]
+        elif not st:
+            row['error'] = 'Start time not understood: “%s”' % cols[1]
+        elif not en:
+            row['error'] = 'End time / duration not understood: “%s”' % cols[2]
+        elif en <= st:
+            row['error'] = 'Ends before it starts'
+        elif not subject:
+            row['error'] = 'No subject'
+        out.append(row)
+    return out
+
+
+def _guess_kind(paper):
+    p = norm(paper)
+    has = lambda *w: all(x in p for x in w)
+    for test, kind in ((has('drama', 'poetry'), 'drama_poetry'), (has('objective', 'prose'), 'objective_prose'),
+                       (has('objective', 'practical'), 'objective_practical'),
+                       (has('practical', 'physical'), 'practical_physical'),
+                       (has('objective', 'essay'), 'combined'), (has('alternative'), 'alt_practical'),
+                       (has('prose'), 'prose'), (has('practical'), 'practical'), (has('oral'), 'oral'),
+                       (has('listening'), 'oral'), (has('drawing'), 'drawing'), (has('project'), 'project'),
+                       (has('objective'), 'objective'), (has('essay'), 'essay'), (has('theory'), 'essay')):
+        if test:
+            return kind
+    return None

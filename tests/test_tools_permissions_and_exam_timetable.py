@@ -198,3 +198,44 @@ def test_subject_specific_papers_and_types(app):
     page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
     assert 'Drama &amp; Poetry' in page and 'k-drama_poetry' in page
     assert c.get(f'/tools/exam-timetable/{tid}/print').status_code == 200
+
+
+def test_paste_many_papers_and_kept_fields(app):
+    from routes.exam_timetable import papers_for
+    neco_en = [l for l, _k in papers_for('neco', 'English Language')]
+    assert 'Paper IV: Test of Orals' in neco_en and 'Paper I: Test of Orals' not in neco_en
+    assert papers_for('waec', 'Geography')[3] == ('Paper 3 (Practical and Physical Geography)', 'practical_physical')
+    assert ('Papers III & I: Objective & Practical / Physical', 'objective_practical') in papers_for('neco', 'Geography')
+    c = _admin(app)
+    c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': 'waec', 'year': '2043',
+                                                 'start_date': '2043-05-01', 'end_date': '2043-06-30'})
+    with app.app_context():
+        tid = ExamTimetable.query.filter_by(year=2043).order_by(ExamTimetable.id.desc()).first().id
+    page = c.get(f'/tools/exam-timetable/{tid}/paste').get_data(as_text=True)
+    assert 'Copy prompt' in page and 'date, start, end, subject, paper' in page
+    data = ("2043-06-05, 9:30am, 11:30am, Geography, Paper 2 (Essay), Main Hall\n"
+            "Friday, 5 June 2043, 11:30am - 12:30pm, Geo, Paper 1 (Objective)\n"
+            "2043-06-05 | 3:30pm | 1hr 50mins | Geography | Paper 3 (Practical and Physical Geography)\n"
+            "2043-07-09, 9:30am, 12:30pm, Maths, Paper 2 (Essay)\n"
+            "nonsense line")
+    prev = c.post(f'/tools/exam-timetable/{tid}/paste', data={'_csrf_token': auth_csrf(c), 'data': data,
+                                                             'action': 'preview'}).get_data(as_text=True)
+    assert '3 ready' in prev and '2 to fix' in prev and 'Outside the exam dates' in prev
+    r = c.post(f'/tools/exam-timetable/{tid}/paste', data={'_csrf_token': auth_csrf(c), 'data': data, 'action': 'save'})
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        ps = ExamTimetablePaper.query.filter_by(timetable_id=tid).order_by(ExamTimetablePaper.start_time).all()
+        assert [(p.subject, p.kind) for p in ps] == [('Geography', 'essay'), ('Geography', 'objective'),
+                                                     ('Geography', 'practical_physical')]
+        assert ps[2].end_time.strftime('%H:%M') == '17:20' and ps[0].venue == 'Main Hall'
+    again = c.post(f'/tools/exam-timetable/{tid}/paste', data={'_csrf_token': auth_csrf(c), 'data': data,
+                                                              'action': 'preview'}).get_data(as_text=True)
+    assert '3 already added' in again                        # pasting twice doesn't double up
+    # single add keeps date / times / hall / subject for the next paper
+    r = c.post(f'/tools/exam-timetable/{tid}/papers', data={
+        '_csrf_token': auth_csrf(c), 'exam_date': '2043-06-08', 'start_time': '09:30', 'end_time': '11:30',
+        'subject': 'Literature in English', 'paper': 'Paper 2 (Prose)', 'venue': 'Hall B'})
+    loc = r.headers['Location']
+    assert 's=09:30' in loc and 'subj=Literature' in loc and 'v=Hall' in loc
+    nxt = c.get(loc).get_data(as_text=True)
+    assert '<option selected>Literature in English</option>' in nxt and 'value="Hall B"' in nxt

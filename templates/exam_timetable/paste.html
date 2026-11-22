@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% block title %}Paste papers — {{ xt.title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_timetable.index') }}">WAEC / NECO Timetable</a> / <a href="{{ url_for('exam_timetable.edit', tt_id=xt.id) }}">{{ xt.title }}</a> / <span>Paste</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.xq-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:1rem;align-items:start;margin-bottom:1rem}
+@media(max-width:960px){.xq-grid{grid-template-columns:1fr}}
+.xq-step{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:.75rem;font-weight:800;flex:none}
+.xq-prompt{white-space:pre-wrap;background:var(--gray-50,var(--gray-100));border:1px solid var(--border-color);border-radius:12px;padding:.8rem .9rem;font-size:.8rem;line-height:1.5;max-height:340px;overflow:auto;margin:0 0 .6rem}
+.xq-help{font-size:.82rem;color:var(--text-secondary);line-height:1.5;margin:0 0 .7rem}
+.xq-help code{font-size:.78rem;background:var(--gray-100);padding:.05rem .3rem;border-radius:5px}
+.xq-ta{width:100%;min-height:260px;border:1px solid var(--border-color);border-radius:12px;padding:.75rem .85rem;font:500 .84rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg-card);color:var(--text-primary);resize:vertical}
+.xq-acts{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem}
+.xq-sum{display:flex;gap:.4rem;flex-wrap:wrap}
+.xq-pill{font-size:.76rem;font-weight:800;padding:.25rem .65rem;border-radius:999px}
+.xq-pill.ok{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.xq-pill.bad{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.xq-pill.mid{background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));color:#92400e}
+.xq-pill.dim{background:var(--gray-100);color:var(--text-muted)}
+.xq-tbl-wrap{overflow-x:auto}
+.xq-tbl{width:100%;border-collapse:collapse;font-size:.84rem}
+.xq-tbl th{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);text-align:left;padding:.55rem .6rem;border-bottom:1px solid var(--border-color);white-space:nowrap}
+.xq-tbl td{padding:.55rem .6rem;border-bottom:1px solid var(--border-light,var(--border-color));vertical-align:top}
+.xq-tbl tr.err td{background:color-mix(in srgb,var(--danger) 6%,var(--bg-card))}
+.xq-tbl tr.dup td{opacity:.55}
+.xq-tbl small{display:block;color:var(--text-muted);font-size:.74rem}
+.xq-tbl .st{white-space:nowrap;font-weight:700;font-size:.76rem}
+.xq-tbl .st.ok{color:var(--success)}.xq-tbl .st.bad{color:var(--danger)}.xq-tbl .st.mid{color:#92400e}.xq-tbl .st.dim{color:var(--text-muted)}
+.xq-raw{font-family:ui-monospace,monospace;font-size:.72rem;color:var(--text-muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="rs bx">
+  {% call bx_head('fa-paste', 'Paste many papers', xt.title ~ ' · add the whole timetable in one go') %}
+    <a href="{{ url_for('exam_timetable.edit', tt_id=xt.id) }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">Back to papers</span></a>
+  {% endcall %}
+
+  <div class="xq-grid">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><span class="xq-step">1</span> Let an AI read the official timetable</h3></div>
+      <p class="xq-help">Upload the {{ xt.board_label }} timetable (PDF, screenshot or photo) to any chatbot — Claude, ChatGPT, Gemini — with this prompt. It already lists your candidates’ subjects. Then paste its answer in step 2.</p>
+      <pre class="xq-prompt" id="xq-prompt">{{ prompt }}</pre>
+      <button type="button" class="rs-btn ghost" data-copy="xq-prompt" data-copied="Copied"><i class="fas fa-copy" aria-hidden="true"></i> Copy prompt</button>
+    </section>
+
+    <form class="rs-card" method="POST">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="rs-card-h"><h3><span class="xq-step">2</span> Paste the rows</h3></div>
+      <p class="xq-help">One paper per line: <code>date, start, end, subject, paper</code> — optionally <code>, venue, invigilators</code>. Commas, tabs (straight from Excel / Sheets) or <code>|</code> all work.
+        Times like <code>9:30am</code> or <code>14:00</code>; a range <code>9:30am - 12:30pm</code> in one column is fine, and the end can be a duration like <code>2hrs 30mins</code>. Short names (Eng, Maths, Lit, CRS…) are understood.</p>
+      <textarea class="xq-ta" name="data" spellcheck="false" placeholder="2026-06-05, 9:30am, 11:30am, Geography, Paper 2 (Essay)&#10;2026-06-05, 11:30am, 12:30pm, Geography, Paper 1 (Objective)&#10;2026-06-05, 3:30pm, 1hr 50mins, Geography, Paper 3 (Practical and Physical Geography), Main Hall">{{ text }}</textarea>
+      <div class="xq-acts">
+        <button type="submit" name="action" value="preview" class="rs-btn primary"><i class="fas fa-eye" aria-hidden="true"></i> Check rows</button>
+        {% if summary and summary.ok %}<button type="submit" name="action" value="save" class="rs-btn primary" style="background:var(--success);border-color:var(--success)"><i class="fas fa-check" aria-hidden="true"></i> Add {{ summary.ok }} paper{{ 's' if summary.ok != 1 }}</button>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  {% if summary %}
+  <section class="rs-card flush">
+    <div class="rs-card-h" style="padding:1rem 1.1rem .4rem"><h3><i class="fas fa-list-check" aria-hidden="true"></i> Preview</h3>
+      <div class="xq-sum"><span class="xq-pill ok">{{ summary.ok }} ready</span>
+        {% if summary.errors %}<span class="xq-pill bad">{{ summary.errors }} to fix</span>{% endif %}
+        {% if summary.dups %}<span class="xq-pill dim">{{ summary.dups }} already added</span>{% endif %}
+        {% if summary.unknown %}<span class="xq-pill mid">{{ summary.unknown }} new subject name{{ 's' if summary.unknown != 1 }}</span>{% endif %}</div></div>
+    <div class="xq-tbl-wrap">
+      <table class="xq-tbl">
+        <thead><tr><th>Line</th><th>Date</th><th>Time</th><th>Subject / paper</th><th>Type</th><th>Venue</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr class="{{ 'err' if r.error else ('dup' if r.dup) }}">
+            <td>{{ r.line }}</td>
+            {% if r.error and not r.date %}
+            <td colspan="5"><span class="xq-raw">{{ r.raw }}</span></td>
+            {% else %}
+            <td>{{ r.date.strftime('%a %d %b %Y') if r.date else '—' }}</td>
+            <td>{% if r.start %}{{ fmt_time(r.start) }}{% if r.end %} – {{ fmt_time(r.end) }}<small>{{ fmt_dur(minutes(r.start, r.end)) }}</small>{% endif %}{% else %}—{% endif %}</td>
+            <td><b>{{ r.subject }}</b>{% if r.paper %}<small>{{ r.paper }}</small>{% endif %}</td>
+            <td>{{ kinds.get(r.kind, '—') if r.kind else '—' }}</td>
+            <td>{{ r.venue or '' }}</td>
+            {% endif %}
+            <td class="st {{ 'bad' if r.error else ('dim' if r.dup else ('mid' if not r.known else 'ok')) }}">
+              {% if r.error %}{{ r.error }}{% elif r.dup %}Already added{% elif not r.known %}Check subject name{% else %}Ready{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

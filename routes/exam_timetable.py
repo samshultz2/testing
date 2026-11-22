@@ -29,8 +29,8 @@ PAPER_PRESETS = {
              ('Paper 3 (Listening Comprehension)', 'oral'), ('Paper 3 (Drawing)', 'drawing'),
              ('Paper 4 (Project / Coursework)', 'project')],
     'neco': [('Paper I: Practical', 'practical'), ('Paper II: Essay', 'essay'), ('Paper III: Objective', 'objective'),
-             ('Papers III & II: Objective & Essay', 'combined'), ('Paper I: Alternative to Practical', 'alt_practical'),
-             ('Paper I: Test of Orals', 'oral'), ('Paper I: Listening Comprehension', 'oral'),
+             ('Papers III & II: Objective & Essay', 'combined'), ('Papers III & I: Objective & Practical', 'objective_practical'),
+             ('Paper I: Alternative to Practical', 'alt_practical'), ('Paper IV: Test of Orals', 'oral'),
              ('Paper I: Drawing', 'drawing'), ('Paper IV: Project / Coursework', 'project')],
 }
 
@@ -38,7 +38,10 @@ PAPER_PRESETS = {
 # Essay / Practical — offered first when that subject is chosen. Literature:
 # WAEC 1 Objective, 2 Prose, 3 Drama & Poetry (Prose and Objective sat back
 # to back); NECO II Drama & Poetry, III Objective, IV Prose (III & IV
-# usually sat together). English: WAEC Paper 3 is the Test of Orals.
+# usually sat together). English: WAEC Paper 3 / NECO Paper IV is the Test
+# of Orals (45 mins). Geography: WAEC 3 is 'Practical and Physical
+# Geography'; NECO I Practical / Physical, II Essay (Human & Regional),
+# III Objective, with III & I usually sat together.
 SUBJECT_PAPERS = {
     'waec': {
         'literature in english': [
@@ -52,15 +55,22 @@ SUBJECT_PAPERS = {
             ('Paper 3A (Drawing)', 'drawing'), ('Paper 3B (Craft / Design)', 'practical')],
         'technical drawing': [
             ('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'), ('Paper 3 (Drawing)', 'drawing')],
+        'geography': [
+            ('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'),
+            ('Papers 2 & 1 (Essay & Objective)', 'combined'),
+            ('Paper 3 (Practical and Physical Geography)', 'practical_physical')],
     },
     'neco': {
         'literature in english': [
             ('Paper II: Drama & Poetry', 'drama_poetry'), ('Paper III: Objective', 'objective'),
             ('Paper IV: Prose', 'prose'), ('Papers III & IV: Objective & Prose', 'objective_prose')],
         'english language': [
-            ('Papers III & II: Objective & Essay', 'combined'), ('Paper II: Essay', 'essay'),
-            ('Paper III: Objective', 'objective'), ('Paper I: Test of Orals', 'oral'),
-            ('Paper I: Listening Comprehension', 'oral')],
+            ('Paper III: Objective', 'objective'), ('Paper II: Essay', 'essay'),
+            ('Papers III & II: Objective & Essay', 'combined'), ('Paper IV: Test of Orals', 'oral')],
+        'geography': [
+            ('Paper I: Practical / Physical', 'practical_physical'), ('Paper II: Essay (Human & Regional)', 'essay'),
+            ('Paper III: Objective', 'objective'),
+            ('Papers III & I: Objective & Practical / Physical', 'objective_practical')],
         'technical drawing': [
             ('Paper I: Drawing', 'drawing'), ('Papers III & II: Objective & Essay', 'combined')],
     },
@@ -274,7 +284,77 @@ def add_paper(tt_id):
     tt.papers.append(paper)
     db.session.commit()
     flash('Added %s%s.' % (paper.subject, (' — ' + paper.paper) if paper.paper else ''), 'success')
-    return redirect(url_for('exam_timetable.edit', tt_id=tt.id, after=paper.exam_date.isoformat()) + '#add')
+    # Keep date, times, hall, invigilators and subject for the next paper —
+    # usually the same subject's next paper or another subject in the same session.
+    return redirect(url_for('exam_timetable.edit', tt_id=tt.id, after=paper.exam_date.isoformat(),
+                            s=paper.start_time.strftime('%H:%M'), e=paper.end_time.strftime('%H:%M'),
+                            v=paper.venue or '', inv=paper.invigilators or '', subj=paper.subject) + '#add')
+
+
+def _prompt(tt, subjects):
+    body = tt.board_label
+    wanted = ', '.join(subjects) if subjects else 'every subject'
+    papers = '; '.join(lbl for lbl, _k in PAPER_PRESETS.get(tt.board, PAPER_PRESETS['waec'])[:4])
+    return (
+        "Read this {body} SSCE timetable{yr} (photo, screenshot or PDF). Output one line per paper, "
+        "as comma-separated values in EXACTLY this order:\n\n"
+        "date, start, end, subject, paper\n\n"
+        "- date as YYYY-MM-DD.\n"
+        "- start and end as times like 9:30am and 12:30pm (if only a duration is shown, put the duration, e.g. 1hr 30mins, as end).\n"
+        "- subject exactly as the subject is named (e.g. English Language, Literature in English).\n"
+        "- paper as printed on the timetable, e.g. {papers}.\n"
+        "- When two papers are sat back to back (e.g. Essay then Objective), give each its own line with its own times.\n"
+        "- Only include these subjects: {wanted}.\n"
+        "- Output only the rows. No headings, no totals, no extra text, no code block.\n\n"
+        "Example:\n"
+        "{ex}"
+    ).format(body=body, yr=(' %s' % tt.year) if tt.year else '', papers=papers, wanted=wanted,
+             ex=("2026-06-05, 9:30am, 11:30am, Geography, Paper 2 (Essay)\n"
+                 "2026-06-05, 11:30am, 12:30pm, Geography, Paper 1 (Objective)") if tt.board == 'waec' else
+                ("2026-07-15, 10:00am, 11:00am, English Language, Paper III: Objective\n"
+                 "2026-07-15, 1:15pm, 2:00pm, English Language, Paper IV: Test of Orals"))
+
+
+@exam_timetable_bp.route('/<int:tt_id>/paste', methods=['GET', 'POST'])
+@login_required
+def paste(tt_id):
+    """Add many papers at once: paste rows (from a chatbot reading the
+    official timetable, a spreadsheet, or typed), preview, then save."""
+    tt = _tt_or_404(tt_id)
+    cands = ET.candidates(tt.board)
+    mine = sorted({n for c in cands for n in c['subject_names']}, key=str.lower)
+    subjects = mine + sorted(set(WAEC_SUBJECTS) - set(mine), key=str.lower)
+    text = request.form.get('data', '') if request.method == 'POST' else ''
+    rows, summary = [], None
+    if request.method == 'POST' and text.strip():
+        rows = ET.parse_paste(text, subjects, lambda subj: papers_for(tt.board, subj),
+                              default_year=tt.year or (tt.start_date.year if tt.start_date else None))
+        have = {(p.exam_date, p.start_time, ET.norm(p.subject), ET.norm(p.paper or '')) for p in tt.papers}
+        for r in rows:
+            if r['error']:
+                continue
+            if tt.start_date and r['date'] < tt.start_date or tt.end_date and r['date'] > tt.end_date:
+                r['error'] = 'Outside the exam dates'
+            elif (r['date'], r['start'], ET.norm(r['subject']), ET.norm(r['paper'] or '')) in have:
+                r['dup'] = True
+        ok = [r for r in rows if not r['error'] and not r.get('dup')]
+        summary = {'ok': len(ok), 'errors': sum(1 for r in rows if r['error']),
+                   'dups': sum(1 for r in rows if r.get('dup')),
+                   'unknown': sum(1 for r in ok if not r['known'])}
+        if request.form.get('action') == 'save' and ok:
+            for r in ok:
+                tt.papers.append(ExamTimetablePaper(
+                    exam_date=r['date'], start_time=r['start'], end_time=r['end'], subject=r['subject'][:120],
+                    paper=(r['paper'] or '')[:120] or None, kind=r['kind'], venue=(r['venue'] or '')[:120] or None,
+                    invigilators=(r['invigilators'] or '')[:255] or None))
+            db.session.commit()
+            from utils.audit import log_action
+            log_action('exam_timetable.paste', '%s: %d papers' % (tt.title, len(ok)))
+            flash('Added %d paper%s.' % (len(ok), '' if len(ok) == 1 else 's'), 'success')
+            return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
+    return render_template('exam_timetable/paste.html', xt=tt, text=text, rows=rows, summary=summary,
+                           prompt=_prompt(tt, mine), kinds=dict(ET.KINDS), fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur,
+                           minutes=ET.minutes)
 
 
 @exam_timetable_bp.route('/<int:tt_id>/papers/<int:paper_id>', methods=['POST'])

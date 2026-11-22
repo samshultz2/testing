@@ -4,9 +4,12 @@
 {% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_timetable.index') }}">WAEC / NECO Timetable</a> / <span>{{ xt.title }}</span>{% endblock %}
 
 {% macro paper_fields(p=None, default_date='', prefix='') %}
-{% set st = p.start_time.strftime('%H:%M') if p else sessions[0].start %}
-{% set en = p.end_time.strftime('%H:%M') if p else sessions[0].end %}
-{% set mins = ((p.end_time.hour * 60 + p.end_time.minute) - (p.start_time.hour * 60 + p.start_time.minute)) if p else sessions[0].minutes %}
+{% set a = request.args if not p else {} %}
+{% set st = p.start_time.strftime('%H:%M') if p else (a.get('s') or sessions[0].start) %}
+{% set en = p.end_time.strftime('%H:%M') if p else (a.get('e') or sessions[0].end) %}
+{% set _sh, _sm = (st ~ ':0').split(':')[0]|int, (st ~ ':0').split(':')[1]|int %}
+{% set _eh, _em = (en ~ ':0').split(':')[0]|int, (en ~ ':0').split(':')[1]|int %}
+{% set mins = (_eh * 60 + _em) - (_sh * 60 + _sm) %}
 <div class="xe-time" data-time>
   <label class="xe-f"><span>Date</span><input class="xe-in" type="date" name="exam_date" required value="{{ p.exam_date.isoformat() if p else default_date }}"{% if xt.start_date %} min="{{ xt.start_date.isoformat() }}"{% endif %}{% if xt.end_date %} max="{{ xt.end_date.isoformat() }}"{% endif %}></label>
   <p class="xe-sub">Common {{ xt.board_label }} sessions</p>
@@ -23,7 +26,7 @@
   </div>
 </div>
 <div class="xe-fg two">
-  {% set cur_s = p.subject if p else '' %}{% set cur_p = (p.paper or '') if p else '' %}
+  {% set cur_s = p.subject if p else (a.get('subj') or '') %}{% set cur_p = (p.paper or '') if p else '' %}
   <div class="xe-f"><label><span>Subject</span>
     <select class="xe-in" name="subject" required data-other>
       <option value="" disabled {{ 'selected' if not cur_s }}>Choose a subject…</option>
@@ -45,9 +48,9 @@
 </div>
 <div class="xe-fg two">
   <label class="xe-f"><span>Type</span><select class="xe-in" name="kind"><option value="">—</option>{% for k, l in kinds %}<option value="{{ k }}" {{ 'selected' if p and p.kind == k }}>{{ l }}</option>{% endfor %}</select></label>
-  <label class="xe-f"><span>Hall / venue</span><input class="xe-in" type="text" name="venue" maxlength="120" value="{{ (p.venue or '') if p else '' }}" placeholder="e.g. Main Hall"></label>
+  <label class="xe-f"><span>Hall / venue</span><input class="xe-in" type="text" name="venue" maxlength="120" value="{{ (p.venue or '') if p else (a.get('v') or '') }}" placeholder="e.g. Main Hall"></label>
 </div>
-<label class="xe-f"><span>Invigilators</span><input class="xe-in" type="text" name="invigilators" maxlength="255" value="{{ (p.invigilators or '') if p else '' }}" placeholder="Names, separated by commas"></label>
+<label class="xe-f"><span>Invigilators</span><input class="xe-in" type="text" name="invigilators" maxlength="255" value="{{ (p.invigilators or '') if p else (a.get('inv') or '') }}" placeholder="Names, separated by commas"></label>
 {% endmacro %}
 
 {% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
@@ -97,6 +100,11 @@
 .xe-f span{display:block;font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:.25rem}
 .xe-in{width:100%;height:40px;padding:0 .7rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
 textarea.xe-in{height:auto;padding:.6rem .7rem}
+.xe-paste{display:flex;align-items:center;gap:.7rem;padding:.7rem .8rem;margin:-.2rem 0 1rem;border-radius:14px;background:color-mix(in srgb,var(--primary) 8%,var(--bg-card));border:1px solid color-mix(in srgb,var(--primary) 25%,var(--border-color));color:var(--primary);text-decoration:none}
+.xe-paste>i:first-child{font-size:1.1rem}
+.xe-paste span{flex:1;min-width:0}
+.xe-paste b{display:block;font-size:.9rem}
+.xe-paste small{display:block;font-size:.74rem;color:var(--text-secondary)}
 .xe-sub{font-size:.72rem;font-weight:700;color:var(--text-secondary);margin:0 0 .35rem}
 .xe-sess{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:.35rem;margin-bottom:.7rem}
 .xe-sess button{display:flex;flex-direction:column;align-items:flex-start;gap:.05rem;border:1px solid var(--border-color);background:var(--bg-card);border-radius:10px;padding:.4rem .55rem;cursor:pointer;color:var(--text-primary);font:inherit;text-align:left}
@@ -181,7 +189,7 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
         {% endfor %}
       </section>
       {% else %}
-      <div class="rs-blank"><span><i class="fas fa-calendar-plus" aria-hidden="true"></i></span><h3>No papers yet</h3><p>Add the first paper{{ ' with the form' if can_edit }} — copy the dates and times from the official {{ xt.board_label }} timetable.</p></div>
+      <div class="rs-blank"><span><i class="fas fa-calendar-plus" aria-hidden="true"></i></span><h3>No papers yet</h3><p>Add the first paper{{ ' with the form' if can_edit }} — copy the dates and times from the official {{ xt.board_label }} timetable, or <a href="{{ url_for('exam_timetable.paste', tt_id=xt.id) }}">paste the whole timetable</a> in one go.</p></div>
       {% endfor %}
     </div>
 
@@ -189,7 +197,8 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
       {% if can_edit %}
       <form class="rs-card" id="add" method="POST" action="{{ url_for('exam_timetable.add_paper', tt_id=xt.id) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div class="rs-card-h"><h3><i class="fas fa-plus" aria-hidden="true"></i> Add a paper</h3></div>
+        <a class="xe-paste" href="{{ url_for('exam_timetable.paste', tt_id=xt.id) }}"><i class="fas fa-paste" aria-hidden="true"></i><span><b>Paste many papers</b><small>Let an AI read the official timetable, paste, done.</small></span><i class="fas fa-chevron-right" aria-hidden="true"></i></a>
+        <div class="rs-card-h"><h3><i class="fas fa-plus" aria-hidden="true"></i> Add a paper</h3>{% if request.args.get('subj') %}<small>kept from the last paper</small>{% endif %}</div>
         {{ paper_fields(None, request.args.get('after') or (last.exam_date.isoformat() if last else (xt.start_date.isoformat() if xt.start_date else ''))) }}
         <button class="rs-btn primary" style="width:100%;justify-content:center"><i class="fas fa-plus" aria-hidden="true"></i> Add paper</button>
       </form>
@@ -287,6 +296,16 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
       list.forEach(function (x) { var o = document.createElement('option'); o.textContent = x[0]; o.dataset.kind = x[1]; paper.insertBefore(o, other); });
       paper.value = list.some(function (x) { return x[0] === keep; }) ? keep : '';
     });
+  });
+  // Back from adding a paper: jump to the form, ready for the next paper.
+  if (location.hash === '#add') {
+    var f0 = document.getElementById('add'), nxt = f0 && (f0.querySelector('[name=subject]').value ? f0.querySelector('[name=paper]') : f0.querySelector('[name=subject]'));
+    if (f0) f0.scrollIntoView({block: 'start'}); if (nxt) nxt.focus({preventScroll: true});
+  }
+  // Ctrl/⌘ + Enter adds the paper from anywhere in the form.
+  var addForm = document.getElementById('add');
+  if (addForm) addForm.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); addForm.requestSubmit ? addForm.requestSubmit() : addForm.submit(); }
   });
   // Picking a paper fills in its type (NECO Paper I = Practical, etc.).
   document.querySelectorAll('select[name=paper]').forEach(function (sel) {
