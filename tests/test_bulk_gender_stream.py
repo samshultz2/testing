@@ -75,3 +75,25 @@ def test_clearing_stream_leaves_waec_untouched(app, auth_client):
     with app.app_context():
         s = db.session.get(Student, sid)
         assert s.stream is None and s.waec_subjects == 'Physics, Chemistry'
+
+
+def test_bulk_set_religion_and_clear(app, auth_client):
+    with app.app_context():
+        a = _make(religion=None); b = _make(religion='Islam')
+        db.session.commit()
+    h = {'X-Requested-With': 'fetch'}
+    r = auth_client.post('/students/bulk-religion', headers=h,
+                         data={'religion': 'Christianity', 'student_ids': [a, b], '_csrf_token': _ptoken(auth_client)})
+    assert r.status_code == 200 and r.get_json()['updated'] == 2
+    with app.app_context():
+        assert db.session.get(Student, a).religion == 'Christianity'
+        assert db.session.get(Student, b).religion == 'Christianity'
+    r = auth_client.post('/students/bulk-religion', headers=h,
+                         data={'religion': '__clear__', 'student_ids': [a], '_csrf_token': _ptoken(auth_client)})
+    assert r.status_code == 200
+    with app.app_context():
+        assert db.session.get(Student, a).religion is None
+        assert db.session.get(Student, b).religion == 'Christianity'
+    r = auth_client.post('/students/bulk-religion', headers=h,
+                         data={'religion': 'Pastafarian', 'student_ids': [a], '_csrf_token': _ptoken(auth_client)})
+    assert r.status_code == 400

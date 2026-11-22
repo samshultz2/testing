@@ -2112,6 +2112,7 @@ def _students_payload():
         'bulk_subject_url': url_for('main.bulk_add_subject'),
         'bulk_house_url': url_for('main.bulk_set_house'),
         'bulk_boarding_url': url_for('main.bulk_set_boarding'),
+        'bulk_religion_url': url_for('main.bulk_set_religion'),
         'bulk_message_url': url_for('main.bulk_message_students'),
         'bulk_id_cards_url': url_for('main.bulk_id_cards'),
         'bulk_aspiration_url': url_for('main.bulk_set_aspiration'),

@@ -186,6 +186,7 @@ export default function App({ initial }) {
   const [showImportPhotos, setShowImportPhotos] = useState(false);
   const [bulkStream, setBulkStream] = useState('');
   const [bulkGender, setBulkGender] = useState('');
+  const [bulkReligion, setBulkReligion] = useState('');
   const [bulkSubject, setBulkSubject] = useState('');
   const [bulkHouse, setBulkHouse] = useState('');
   const [bulkBoarding, setBulkBoarding] = useState('');
@@ -604,6 +605,11 @@ export default function App({ initial }) {
                   <option value="">Set gender…</option><option value="Male">Male</option><option value="Female">Female</option></select>
                   <button type="button" className="btn btn-primary btn-sm" disabled={!bulkGender}
                           onClick={() => needSel() && runAction(d.bulk_gender_url, { gender: bulkGender, student_ids: selectedIds }, 'Gender updated.')}>Apply</button></span>
+                {d.bulk_religion_url && <span className="sl-bulk-f"><select className="form-control" value={bulkReligion} onChange={(e) => setBulkReligion(e.target.value)} aria-label="Bulk religion">
+                  <option value="">Set religion…</option>{(filters.religions || []).map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="__clear__">Clear religion</option></select>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!bulkReligion}
+                          onClick={() => needSel() && runAction(d.bulk_religion_url, { religion: bulkReligion, student_ids: selectedIds }, bulkReligion === '__clear__' ? 'Religion cleared.' : 'Religion updated.')}>Apply</button></span>}
                 <span className="sl-bulk-f"><select className="form-control" value={bulkStream} onChange={(e) => setBulkStream(e.target.value)} aria-label="Bulk stream">
                   <option value="">Set stream…</option>{(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}</select>
                   <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream} title="Also fills WAEC subjects from the stream where not already set"

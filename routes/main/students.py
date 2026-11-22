@@ -1093,6 +1093,35 @@ def bulk_set_gender():
     return jsonify({'updated': updated, 'gender': gender})
 
 
+@main_bp.route('/students/bulk-religion', methods=['POST'])
+@login_required
+def bulk_set_religion():
+    """Set the religion for several students at once (scoped to the caller's
+    students). ``religion=__clear__`` removes it."""
+    from utils.helpers import RELIGIONS
+    raw = (request.form.get('religion') or '').strip()
+    religion = None if raw == '__clear__' else raw
+    if religion is not None and religion not in RELIGIONS:
+        return jsonify({'error': 'Invalid religion'}), 400
+    student_ids = request.form.getlist('student_ids')
+    if not student_ids:
+        return jsonify({'error': 'No students selected'}), 400
+    try:
+        ids = [int(i) for i in student_ids]
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
+    if not ids:
+        return jsonify({'error': 'No students you can edit were selected'}), 403
+    updated = Student.query.filter(Student.id.in_(ids)).update(
+        {Student.religion: religion}, synchronize_session=False)
+    db.session.commit()
+    label = religion or 'cleared'
+    log_action('bulk_set_religion', f'{updated} students -> {label}')
+    flash(f'Religion {"set to " + religion if religion else "cleared"} for {updated} student(s).', 'success')
+    return jsonify({'updated': updated, 'religion': religion})
+
+
 @main_bp.route('/students/bulk-house', methods=['POST'])
 @login_required
 def bulk_set_house():

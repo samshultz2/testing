@@ -604,7 +604,7 @@ _SUBSECTION_ENDPOINTS = {
         'create': {'add_student', 'import_students', 'import_photos'},
         'edit': {'edit_student', 'apply_stream_waec', 'update_import_students'},
         'bulk': {'bulk_set_stream', 'bulk_set_gender', 'bulk_set_house',
-                 'bulk_set_boarding', 'bulk_add_subject', 'bulk_message_students'},
+                 'bulk_set_boarding', 'bulk_set_religion', 'bulk_add_subject', 'bulk_message_students'},
         'delete': {'delete_student', 'bulk_delete_students'},
         'trash': {'students_trash'},
         'restore': {'restore_student', 'bulk_restore_students'},
