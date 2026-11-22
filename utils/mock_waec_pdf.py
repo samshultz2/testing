@@ -1306,7 +1306,7 @@ _TOC_ROWS = 34          # contents rows per A4 page
 
 
 def _wants_toc(slips, opts):
-    return len(slips) > 1 and (opts or {}).get('toc', True)
+    return len(slips) > 1 and bool((opts or {}).get('toc', False))     # opt-in
 
 
 def _toc_page_count(n):

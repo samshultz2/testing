@@ -1,5 +1,6 @@
 """Whole-class Mock WAEC result slips open with a contents page: every student,
 their page number, and a link from each name to their slip."""
+import re
 import uuid
 from datetime import date
 
@@ -32,7 +33,7 @@ def test_contents_page_lists_and_links_every_student(app, theme):
     import fitz
     eid, tag = _exam_with(app, [('Ada', 'Bello'), ('Chidi', 'Okafor'), ('Zainab', 'Yusuf')])
     c = _admin(app)
-    r = c.get(f'/mock-waec/exam/{eid}/slips.pdf?theme={theme}')
+    r = c.get(f'/mock-waec/exam/{eid}/slips.pdf?theme={theme}&toc=1')
     assert r.status_code == 200
     with fitz.open(stream=r.get_data(), filetype='pdf') as d:
         assert len(d) == 1 + 3                               # contents + one page each
@@ -53,14 +54,16 @@ def test_contents_page_lists_and_links_every_student(app, theme):
         assert outline[0] == 'Contents' and len(outline) == 4
 
 
-def test_contents_can_be_switched_off_and_single_slips_have_none(app):
+def test_contents_is_off_unless_chosen(app):
     import fitz
     eid, tag = _exam_with(app, [('Ada', 'Bello'), ('Chidi', 'Okafor')])
     c = _admin(app)
-    with fitz.open(stream=c.get(f'/mock-waec/exam/{eid}/slips.pdf?toc=0').get_data(), filetype='pdf') as d:
-        assert len(d) == 2 and 'Contents' not in d[0].get_text()
+    for q in ('', '?toc=0'):
+        with fitz.open(stream=c.get(f'/mock-waec/exam/{eid}/slips.pdf{q}').get_data(), filetype='pdf') as d:
+            assert len(d) == 2 and 'Contents' not in d[0].get_text()
     page = c.get(f'/mock-waec/exam/{eid}/slips').get_data(as_text=True)
-    assert 'data-param="toc"' in page
+    sw = re.search(r'<input[^>]*data-param="toc"[^>]*>', page).group(0)
+    assert 'data-default="0"' in sw and 'checked' not in sw
 
 
 def test_contents_spills_onto_more_pages_for_big_classes(app, monkeypatch):
@@ -77,7 +80,7 @@ def test_contents_spills_onto_more_pages_for_big_classes(app, monkeypatch):
     exam = SimpleNamespace(display_name='Mock 1', name='M1', exam_number=1, exam_date=None, session=None,
                            session_id=None, id=0, branch_id=None)
     with app.test_request_context('/'):
-        buf = result_slips_pdf(slips, exam, {'name': 'Test School'}, opts={}, theme='classic')
+        buf = result_slips_pdf(slips, exam, {'name': 'Test School'}, opts={'toc': True}, theme='classic')
     with fitz.open(stream=buf.getvalue(), filetype='pdf') as d:
         assert len(d) == 2 + n
         assert len(d[0].get_links()) == _TOC_ROWS and len(d[1].get_links()) == 5

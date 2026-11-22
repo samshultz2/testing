@@ -1292,7 +1292,7 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
 
 
 # Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
-_PDF_FLAGS_OFF = ('change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row')
+_PDF_FLAGS_OFF = ('change', 'readiness', 'borderline', 'absent_row', 'grade_counts', 'teacher_row', 'toc')
 
 
 def _pdf_opts():
@@ -1398,7 +1398,7 @@ def result_slips_all(exam_id):
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
         show_signers=True, show_theme=True, title='Results (PDF)',
-        options=[('toc', 'Contents page (names link to their page)', True)] + _slip_options(),
+        options=[('toc', 'Contents page (names link to their page)', False)] + _slip_options(),
         pdf_url=url_for('mock_waec.result_slips_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
