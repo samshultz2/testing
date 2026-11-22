@@ -1038,10 +1038,24 @@ def _teacher_assignment_summary():
         for r in rows:
             line_total = sum(p for p in r['periods_list'] if p is not None)
             total += line_total
+            known = [x for x in r['periods_list'] if x is not None]
+            if r['arm_name']:
+                arms = r['arm_name']
+            else:
+                arms = 'All %d arm%s' % (r['num_arms'], '' if r['num_arms'] == 1 else 's')
+            if not known:
+                each = None
+            elif len(set(known)) == 1:
+                each = known[0]
+            else:
+                each = 'varies'
             lines.append({
                 'text': _format_assignment_line(r['class_name'], r['subject_name'], r['arm_name'],
                                                 r['num_arms'], r['periods_list'], line_total),
                 'line_total': line_total,
+                'class_name': r['class_name'], 'subject_name': r['subject_name'], 'arms': arms,
+                'num_arms': 1 if r['arm_name'] else r['num_arms'], 'each': each,
+                'missing': len(r['periods_list']) - len(known),
             })
         result.append({'teacher': teacher, 'lines': lines, 'total': total})
 

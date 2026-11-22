@@ -1,133 +1,174 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
 {% block title %}Study Groups - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Tools</span> <span>Study Groups</span>{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <span>Study Groups</span>{% endblock %}
 
-{% block extra_css %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.sg-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-@media (min-width: 900px) { .sg-grid { grid-template-columns: 1.1fr .9fr; } }
-.sg-card { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
-.sg-card h3 { font-size: 1rem; margin: 0 0 .75rem 0; }
-.sg-field { margin-bottom: .9rem; }
-.sg-field label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .35rem; }
-.sg-field input, .sg-field select { width: 100%; padding: .55rem; border: 1px solid #ddd; border-radius: 6px; font-size: .9rem; }
-.arm-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .3rem; }
-.arm-item { display: flex; align-items: center; gap: .4rem; padding: .4rem .6rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 8px; font-size: .85rem; }
-.arm-item .cnt { color: var(--text-muted); font-size: .75rem; }
-.muted { color: var(--text-muted); font-size: .8rem; }
-.sg-recent-row { display: flex; justify-content: space-between; align-items: center; padding: .55rem .2rem; border-bottom: 1px solid #f0f0f0; font-size: .85rem; }
-.sg-recent-row:last-child { border-bottom: none; }
-.sg-recent-row a { font-weight: 600; }
+.sg-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:960px){.sg-grid{grid-template-columns:1fr}}
+.sg-step{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:.75rem;font-weight:800;flex:none}
+.sg-lbl{display:flex;align-items:center;gap:.55rem;font-size:.9rem;font-weight:700;margin:0 0 .6rem}
+.sg-lbl small{font-weight:500;color:var(--text-muted);font-size:.78rem}
+.sg-block{padding:1rem 0;border-top:1px solid var(--border-light,var(--border-color))}
+.sg-block:first-of-type{border-top:0;padding-top:0}
+.sg-chips{display:flex;flex-wrap:wrap;gap:.45rem}
+.sg-chip{position:relative}
+.sg-chip input{position:absolute;opacity:0;pointer-events:none}
+.sg-chip span{display:inline-flex;align-items:center;gap:.45rem;height:40px;padding:0 .9rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);font-size:.88rem;font-weight:600;cursor:pointer;user-select:none}
+.sg-chip span em{font-style:normal;font-size:.72rem;font-weight:800;color:var(--text-muted);background:var(--gray-100);border-radius:999px;padding:.05rem .45rem}
+.sg-chip input:checked+span{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
+.sg-chip input:checked+span em{background:var(--primary);color:#fff}
+.sg-chip input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
+.sg-hint{font-size:.78rem;color:var(--text-muted);margin:.5rem 0 0}
+.sg-arms[hidden]{display:none}
+.sg-pick{font-size:.84rem;color:var(--text-muted)}
+.sg-size{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.sg-step-btn{width:42px;height:42px;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-card);font-size:1.1rem;font-weight:700;cursor:pointer;color:var(--text-primary)}
+.sg-num{width:76px;height:42px;text-align:center;font-size:1.05rem;font-weight:800;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);color:var(--text-primary)}
+.sg-in{width:100%;height:42px;padding:0 .8rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);color:var(--text-primary);font:inherit}
+.sg-preview{margin-top:1rem;padding:.85rem 1rem;border-radius:14px;background:color-mix(in srgb,var(--primary) 6%,var(--bg-card));font-size:.88rem;color:var(--text-secondary)}
+.sg-preview b{color:var(--text-primary)}
+.sg-how{display:flex;flex-direction:column;gap:.7rem;margin:0;padding:0;list-style:none}
+.sg-how li{display:flex;gap:.7rem;font-size:.85rem;color:var(--text-secondary);line-height:1.45}
+.sg-how li i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary);flex:none;font-size:.8rem}
+.sg-how b{color:var(--text-primary)}
+.sg-sets{display:flex;flex-direction:column}
+.sg-set{display:flex;align-items:center;gap:.8rem;padding:.7rem 0;border-bottom:1px solid var(--border-light,var(--border-color));text-decoration:none;color:inherit}
+.sg-set:last-child{border-bottom:0}
+.sg-set .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary);flex:none;font-weight:800;font-size:.78rem}
+.sg-set .t{flex:1;min-width:0}
+.sg-set b{display:block;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg-set small{color:var(--text-muted);font-size:.78rem}
+.sg-set .go{color:var(--text-muted)}
+a.sg-set:hover b{color:var(--primary)}
+.sg-submit{display:flex;justify-content:flex-end;margin-top:1rem}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
-  <div>
-    <h1 style="font-size:1.25rem;margin:0;"><i class="fas fa-users"></i> Study Groups</h1>
-    <p class="muted" style="margin:.25rem 0 0;">Group a class into study/project groups by last term's performance &mdash;
-      top performers lead each group. New students with no prior results are placed randomly.</p>
-  </div>
-</div>
+<div class="rs bx">
+  {% call bx_head('fa-users', 'Study groups', 'Split a class into balanced study or project groups — last term’s top performers lead, so every group gets a fair mix') %}{% endcall %}
 
-{% if not has_term %}
-  <div class="sg-card"><p class="muted" style="margin:0;">No active term is set. Set an active term first.</p></div>
-{% elif not classes %}
-  <div class="sg-card"><p class="muted" style="margin:0;">No classes with enrolled students were found for the active term in your branch.</p></div>
-{% else %}
-<div class="sg-grid">
-  <div class="sg-card">
-    <h3>New Grouping</h3>
-    <form method="POST" action="{{ url_for('study_groups.generate') }}">
+  {% if not has_term %}
+  <div class="rs-blank"><span><i class="fas fa-calendar-xmark" aria-hidden="true"></i></span><h3>No active term</h3><p>Set an active term first, then come back to make groups.</p></div>
+  {% elif not classes %}
+  <div class="rs-blank"><span><i class="fas fa-users-slash" aria-hidden="true"></i></span><h3>No classes with students</h3><p>No class in your branch has enrolled students this term.</p></div>
+  {% else %}
+  <div class="sg-grid">
+    <form method="POST" action="{{ url_for('study_groups.generate') }}" class="rs-card" id="sgForm">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <div class="sg-field">
-        <label>Class</label>
-        <select id="sgClassSelect" name="class_id" required>
-          <option value="" disabled selected>Choose a class&hellip;</option>
+      <div class="rs-card-h"><h3><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> New grouping</h3><small><span id="sgSelCount">0</span> students selected</small></div>
+
+      <div class="sg-block">
+        <p class="sg-lbl"><span class="sg-step">1</span> Class</p>
+        <div class="sg-chips" role="radiogroup" aria-label="Class">
           {% for c in classes %}
-          <option value="{{ c.id }}">{{ c.name }} ({{ c.total }} students)</option>
+          <label class="sg-chip"><input type="radio" name="class_id" value="{{ c.id }}" required data-class="{{ c.id }}"><span>{{ c.name }}<em>{{ c.total }}</em></span></label>
           {% endfor %}
-        </select>
+        </div>
       </div>
 
-      <div class="sg-field">
-        <label>Arm(s) <span class="muted">(pick 2+ to merge arms for this grouping only &mdash; it won't change where any student is actually enrolled)</span></label>
+      <div class="sg-block">
+        <p class="sg-lbl"><span class="sg-step">2</span> Arms <small>pick two or more to mix arms — enrolment isn’t changed</small></p>
+        <p class="sg-pick" id="sgPickFirst">Choose a class first.</p>
         {% for c in classes %}
-        <div class="arm-list" data-class-arms="{{ c.id }}" style="display:none;">
+        <div class="sg-chips sg-arms" data-class-arms="{{ c.id }}" hidden>
           {% for a in c.arms %}
-          <label class="arm-item">
-            <input type="checkbox" name="arm_ids[]" value="{{ a.id }}" class="sg-arm-box">
-            <span>{{ a.name }}</span>
-            <span class="cnt">{{ a.count }}</span>
-          </label>
+          <label class="sg-chip"><input type="checkbox" name="arm_ids[]" value="{{ a.id }}" data-count="{{ a.count }}"><span>{{ a.name }}<em>{{ a.count }}</em></span></label>
           {% endfor %}
         </div>
         {% endfor %}
-        <p class="muted" style="margin:.4rem 0 0;">Selected students: <strong id="sgSelCount">0</strong></p>
       </div>
 
-      <div class="sg-field">
-        <label>Students per group</label>
-        <input type="number" name="group_size" min="1" max="100" value="4" required>
+      <div class="sg-block">
+        <p class="sg-lbl"><span class="sg-step">3</span> Students per group</p>
+        <div class="sg-size">
+          <button type="button" class="sg-step-btn" data-step="-1" aria-label="Fewer per group">−</button>
+          <input class="sg-num" type="number" name="group_size" id="sgSize" min="1" max="100" value="4" required aria-label="Students per group">
+          <button type="button" class="sg-step-btn" data-step="1" aria-label="More per group">+</button>
+        </div>
+        <div class="sg-preview" id="sgPreview" hidden></div>
       </div>
 
-      <div class="sg-field">
-        <label>Title <span class="muted">(optional)</span></label>
-        <input type="text" name="title" maxlength="150" placeholder="e.g. Term 2 Project Groups">
+      <div class="sg-block">
+        <p class="sg-lbl"><span class="sg-step">4</span> Name <small>optional</small></p>
+        <input class="sg-in" type="text" name="title" maxlength="150" placeholder="e.g. Second term project groups">
       </div>
 
-      <button type="submit" class="btn btn-primary"><i class="fas fa-random"></i> Generate Groups</button>
+      <div class="sg-submit"><button type="submit" class="rs-btn primary"><i class="fas fa-shuffle" aria-hidden="true"></i> Make groups</button></div>
     </form>
-  </div>
 
-  <div class="sg-card">
-    <h3>Recent Group Sets</h3>
-    {% if recent %}
-    {% for r in recent %}
-    <div class="sg-recent-row">
-      <div>
-        <a href="{{ r.url }}">{{ r.title }}</a>
-        <div class="muted">{{ r.class_name }} &middot; {{ r.num_groups }} group(s) of {{ r.group_size }} &middot; {{ r.created_at }}</div>
-      </div>
+    <div>
+      <section class="rs-card" style="margin-bottom:1rem">
+        <div class="rs-card-h"><h3><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Saved group sets</h3><small>{{ recent|length }}</small></div>
+        {% if recent %}
+        <div class="sg-sets">
+          {% for r in recent %}
+          <a class="sg-set" href="{{ r.url }}">
+            <span class="ic">{{ r.num_groups }}</span>
+            <span class="t"><b>{{ r.title }}</b><small>{{ r.class_name }} · {{ r.num_groups }} group{{ 's' if r.num_groups != 1 }} of {{ r.group_size }} · {{ r.created_at }}</small></span>
+            <i class="fas fa-chevron-right go" aria-hidden="true"></i>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="rs-muted">No groups made yet — your sets will appear here.</p>
+        {% endif %}
+      </section>
+      <section class="rs-card">
+        <div class="rs-card-h"><h3><i class="fas fa-circle-info" aria-hidden="true"></i> How groups are made</h3></div>
+        <ul class="sg-how">
+          <li><i class="fas fa-crown" aria-hidden="true"></i><span><b>Leaders first.</b> Students are ranked by last term’s average; the strongest lead each group.</span></li>
+          <li><i class="fas fa-scale-balanced" aria-hidden="true"></i><span><b>Fair mix.</b> The rest are dealt out in turn so every group gets a similar spread of ability.</span></li>
+          <li><i class="fas fa-user-plus" aria-hidden="true"></i><span><b>New students</b> with no results yet are placed at random.</span></li>
+          <li><i class="fas fa-hand-pointer" aria-hidden="true"></i><span><b>Adjust after.</b> Move students, rename groups or change a leader, then export to PDF, Excel or image.</span></li>
+        </ul>
+      </section>
     </div>
-    {% endfor %}
-    {% else %}
-    <p class="muted" style="margin:0;">No groups generated yet.</p>
-    {% endif %}
   </div>
+  {% endif %}
 </div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
 (function () {
-  var classSelect = document.getElementById('sgClassSelect');
-  var selCount = document.getElementById('sgSelCount');
-
-  function showArmsFor(classId) {
-    document.querySelectorAll('[data-class-arms]').forEach(function (div) {
-      var match = div.getAttribute('data-class-arms') === String(classId);
-      div.style.display = match ? 'flex' : 'none';
-      div.querySelectorAll('.sg-arm-box').forEach(function (b) { if (!match) b.checked = false; });
+  var form = document.getElementById('sgForm');
+  if (!form) return;
+  var size = document.getElementById('sgSize'), preview = document.getElementById('sgPreview');
+  function selected() {
+    var t = 0;
+    form.querySelectorAll('input[name="arm_ids[]"]:checked').forEach(function (b) { t += parseInt(b.dataset.count, 10) || 0; });
+    return t;
+  }
+  function update() {
+    var n = selected(), k = Math.max(1, parseInt(size.value, 10) || 1);
+    document.getElementById('sgSelCount').textContent = n;
+    if (!n) { preview.hidden = true; return; }
+    var groups = Math.max(1, Math.ceil(n / k));
+    var lo = Math.floor(n / groups), hi = Math.ceil(n / groups);
+    preview.hidden = false;
+    preview.innerHTML = 'About <b>' + groups + ' group' + (groups === 1 ? '' : 's') + '</b> of <b>' + (lo === hi ? lo : lo + '–' + hi) + '</b> from ' + n + ' students.';
+  }
+  form.querySelectorAll('input[name=class_id]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      document.getElementById('sgPickFirst').hidden = true;
+      form.querySelectorAll('[data-class-arms]').forEach(function (div) {
+        var on = div.dataset.classArms === r.value;
+        div.hidden = !on;
+        var ins = div.querySelectorAll("input"); ins.forEach(function (b) { b.checked = on && (ins.length === 1 || b.checked); });
+      });
+      update();
     });
-    recount();
-  }
-
-  function recount() {
-    var total = 0;
-    document.querySelectorAll('.sg-arm-box:checked').forEach(function (b) {
-      var cnt = b.closest('.arm-item').querySelector('.cnt');
-      total += parseInt(cnt.textContent, 10) || 0;
-    });
-    selCount.textContent = total;
-  }
-
-  if (classSelect) {
-    classSelect.addEventListener('change', function () { showArmsFor(classSelect.value); });
-  }
-  document.querySelectorAll('.sg-arm-box').forEach(function (b) {
-    b.addEventListener('change', recount);
+  });
+  form.querySelectorAll('input[name="arm_ids[]"]').forEach(function (b) { b.addEventListener('change', update); });
+  form.querySelectorAll('[data-step]').forEach(function (b) {
+    b.addEventListener('click', function () { size.value = Math.max(1, Math.min(100, (parseInt(size.value, 10) || 1) + parseInt(b.dataset.step, 10))); update(); });
+  });
+  size.addEventListener('input', update);
+  form.addEventListener('submit', function (e) {
+    if (!form.querySelector('input[name="arm_ids[]"]:checked')) { e.preventDefault(); alert('Pick at least one arm.'); }
   });
 })();
 </script>

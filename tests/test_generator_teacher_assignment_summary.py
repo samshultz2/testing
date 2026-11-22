@@ -41,7 +41,7 @@ def test_summary_all_arms_uniform_periods_and_total(app):
     body = r.get_data(as_text=True)
     assert 'Zz Mr Uniform' in body
     assert 'ZzTAS1 - ZzMathsTAS1 all arms 4 periods each' in body
-    assert '12 periods/week' in body   # 3 arms * 4 periods
+    assert 'data-load=\"12\"' in body   # 3 arms * 4 periods
 
 
 def test_summary_single_named_arm(app):
@@ -63,7 +63,7 @@ def test_summary_single_named_arm(app):
     r = c.get('/generator/assignments/report')
     body = r.get_data(as_text=True)
     assert 'ZzTAS2 - ZzGovtTAS2 (ZzRoseTAS2) 3 periods' in body
-    assert '3 periods/week' in body
+    assert 'data-load=\"3\"' in body
 
 
 def test_summary_two_teachers_multiple_subjects_and_total(app):
@@ -96,7 +96,7 @@ def test_summary_two_teachers_multiple_subjects_and_total(app):
     assert 'ZzTAS3A - ZzMathsTAS3 all arms 4 periods each' in body
     assert 'ZzTAS3B - ZzPhonicsTAS3 all arms 1 period each' in body
     # 2 arms * 4 + 1 arm * 1 = 9
-    assert '9 periods/week' in body
+    assert 'data-load=\"9\"' in body
 
 
 def test_summary_resolves_stream_specific_periods_per_arm(app):
@@ -135,8 +135,9 @@ def test_summary_resolves_stream_specific_periods_per_arm(app):
     # Non-uniform (5 vs 2) -> total shown, not a false "N periods each".
     assert 'ZzTAS4 - ZzChemTAS4 all arms' in body
     assert '7 periods total' in body   # 5 + 2
-    assert '7 periods/week' in body
-    assert 'each' not in body.split('ZzTAS4 - ZzChemTAS4')[1].split('</li>')[0]
+    assert 'data-load=\"7\"' in body
+    assert 'each' not in body.split('ZzTAS4 - ZzChemTAS4')[1].split('"')[0]
+    assert 'varies by arm' in body
 
 
 def test_summary_image_and_pdf_export(app):
@@ -157,7 +158,7 @@ def test_summary_image_and_pdf_export(app):
     c = _admin(app)
     r_page = c.get('/generator/assignments/report')
     body = r_page.get_data(as_text=True)
-    assert 'Image (HD)' in body and 'PDF' in body
+    assert 'HD image' in body and 'PDF' in body
 
     r_img = c.get('/generator/assignments/report/image')
     assert r_img.status_code == 200

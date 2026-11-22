@@ -1,27 +1,70 @@
 {% extends "base.html" %}
-{% block title %}Per-term assessment settings - {{ app_name }}{% endblock %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% block title %}Assessment settings by term - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Termly Assessments</span>{% endblock %}
-{% block content %}
-<div class="page-header">
-  <div><h1><i class="fas fa-sliders"></i> Assessment settings by term</h1>
-    <p class="text-muted text-sm">Most terms use your normal assessment maxes. For a peculiar term — e.g. no CBT/OBJ that
-      term, so Theory carries more — give that term its own settings. Terms without custom settings are unchanged.</p></div>
-  <div class="page-header-actions"><a href="{{ url_for('settings.assessments_list') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Default settings</a></div>
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.ta-def{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.ta-def .t{flex:1 1 240px}
+.ta-def .t b{display:block;font-size:.95rem}
+.ta-def .t small{color:var(--text-muted);font-size:.8rem}
+.ta-bar{display:flex;height:30px;border-radius:9px;overflow:hidden;gap:2px;background:var(--gray-100);min-width:0}
+.ta-bar span{display:flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;padding:0 .25rem;min-width:0}
+.ta-legend{display:flex;flex-wrap:wrap;gap:.35rem .8rem;margin-top:.45rem;font-size:.76rem;color:var(--text-secondary)}
+.ta-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:.3rem}
+.ta-sess{margin:1.4rem 0 .6rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);font-weight:800;display:flex;align-items:center;gap:.5rem}
+.ta-sess .now{font-size:.62rem;letter-spacing:.06em;color:var(--primary);background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));padding:.1rem .45rem;border-radius:999px}
+.ta-terms{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:.8rem}
+.ta-term{display:flex;flex-direction:column;gap:.65rem;text-decoration:none;color:inherit;transition:border-color .15s}
+.ta-term:hover{border-color:var(--primary)}
+.ta-term .h{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.ta-term .h b{font-size:.98rem}
+.ta-pill{font-size:.7rem;font-weight:800;padding:.2rem .55rem;border-radius:999px;white-space:nowrap}
+.ta-pill.custom{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.ta-pill.def{background:var(--gray-100);color:var(--text-muted)}
+.ta-pill.active{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.ta-term .f{display:flex;align-items:center;justify-content:space-between;font-size:.8rem;color:var(--text-muted)}
+.ta-term .f .go{color:var(--primary);font-weight:700}
+.ta-term .tot.bad{color:var(--danger);font-weight:700}
+</style>
+{% endblock %}
+{% macro bar(parts, total) -%}
+{% set inks = ['#0d6a4e', '#2563eb', '#b45309', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#dc2626'] %}
+<div class="ta-bar" role="img" style="margin-bottom:0" aria-label="{% for p in parts %}{{ p.name }} {{ p.max }}{{ ', ' if not loop.last }}{% endfor %}">
+  {% for p in parts if p.max %}<span style="flex:{{ p.max }};background:{{ inks[loop.index0 % inks|length] }}" title="{{ p.name }}: {{ p.max }}">{% if total and p.max / total >= 0.14 %}{{ p.name }} {{ p.max }}{% elif total and p.max / total >= 0.07 %}{{ p.max }}{% endif %}</span>{% endfor %}
 </div>
-<div class="card"><div class="card-body">
-  {% if rows %}
-  <table class="table">
-    <thead><tr><th>Term</th><th>Assessment settings</th><th></th></tr></thead>
-    <tbody>
-      {% for r in rows %}
-      <tr>
-        <td><strong>{{ r.term.full_name }}</strong></td>
-        <td>{% if r.custom %}<span class="badge badge-info">Custom for this term</span>{% else %}<span class="badge badge-secondary">Using defaults</span>{% endif %}</td>
-        <td style="text-align:right"><a href="{{ url_for('settings.term_assessment_edit', term_id=r.term.id) }}" class="btn btn-sm btn-primary">Configure</a></td>
-      </tr>
+<div class="ta-legend">{% for p in parts if p.max %}<span><i style="background:{{ inks[loop.index0 % inks|length] }}"></i>{{ p.name }} {{ p.max }}</span>{% endfor %}</div>
+{%- endmacro %}
+{% block content %}
+<div class="rs bx">
+  {% call bx_head('fa-sliders', 'Assessment settings by term', 'Most terms use your normal marks. Give a peculiar term its own — e.g. no CBT that term, so Theory carries more') %}
+    <a href="{{ url_for('settings.assessments_list') }}" class="rs-btn ghost"><i class="fas fa-pen-ruler" aria-hidden="true"></i><span class="rs-hide-sm">Edit default marks</span></a>
+  {% endcall %}
+
+  <section class="rs-card" style="margin-bottom:.4rem">
+    <div class="ta-def">
+      <div class="t"><b>Default marks</b><small>Used by every term without its own settings · total {{ default_total }}</small></div>
+    </div>
+    <div style="margin-top:.7rem">{{ bar(default, default_total) }}</div>
+  </section>
+
+  {% if groups %}
+    {% for g in groups %}
+    <h2 class="ta-sess">{{ g.session.name if g.session else 'Session' }}{% if g.session and g.session.is_active %}<span class="now">CURRENT</span>{% endif %}</h2>
+    <div class="ta-terms">
+      {% for r in g.rows %}
+      <a class="rs-card ta-term" href="{{ url_for('settings.term_assessment_edit', term_id=r.term.id) }}">
+        <div class="h"><b>{{ r.term.name }}</b>
+          <span style="display:flex;gap:.3rem">{% if r.term.is_active %}<span class="ta-pill active">Active</span>{% endif %}
+          <span class="ta-pill {{ 'custom' if r.custom else 'def' }}">{{ 'Own settings' if r.custom else 'Default' }}</span></span></div>
+        {{ bar(r.parts, r.total) }}
+        <div class="f"><span class="tot {{ 'bad' if r.total != default_total }}">Total {{ r.total }}{% if r.total != default_total %} · default is {{ default_total }}{% endif %}</span><span class="go">{{ 'Edit' if r.custom else 'Customise' }} <i class="fas fa-chevron-right" aria-hidden="true"></i></span></div>
+      </a>
       {% endfor %}
-    </tbody>
-  </table>
-  {% else %}<div class="empty-state"><i class="fas fa-sliders"></i><p>No terms found.</p></div>{% endif %}
-</div></div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-sliders" aria-hidden="true"></i></span><h3>No terms yet</h3><p>Create a session and its terms first.</p></div>
+  {% endif %}
+</div>
 {% endblock %}

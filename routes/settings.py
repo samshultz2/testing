@@ -1710,9 +1710,26 @@ def save_assessments():
 def term_assessments():
     """List terms and whether each has its own (peculiar) assessment settings."""
     from utils.assessments import term_maxes
+    from models import AcademicSession
     terms = Term.query.order_by(Term.id.desc()).all()
-    rows = [{'term': t, 'custom': bool(term_maxes(t.id))} for t in terms]
-    return render_template('settings/term_assessments.html', rows=rows)
+    types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
+    default = [{'name': at.short_name or at.name, 'max': at.max_score or 0} for at in types]
+    sessions = {}
+    for t in terms:
+        tset = term_maxes(t.id)
+        parts = ([{'name': at.short_name or at.name, 'max': tset.get(at.id, at.max_score) or 0} for at in types]
+                 if tset else default)
+        sessions.setdefault(t.session_id, []).append(
+            {'term': t, 'custom': bool(tset), 'parts': parts, 'total': sum(x['max'] for x in parts)})
+    groups = []
+    for sid, rows in sessions.items():
+        sess = db.session.get(AcademicSession, sid)
+        rows.sort(key=lambda r: r['term'].term_number or 0)
+        groups.append({'session': sess, 'rows': rows})
+    groups.sort(key=lambda g: (g['session'].name if g['session'] else ''), reverse=True)
+    return render_template('settings/term_assessments.html', groups=groups, default=default,
+                           default_total=sum(x['max'] for x in default),
+                           rows=[r for g in groups for r in g['rows']])
 
 
 @settings_bp.route('/assessments/terms/<int:term_id>')
