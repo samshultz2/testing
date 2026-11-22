@@ -8,7 +8,7 @@
 {% set en = p.end_time.strftime('%H:%M') if p else sessions[0].end %}
 {% set mins = ((p.end_time.hour * 60 + p.end_time.minute) - (p.start_time.hour * 60 + p.start_time.minute)) if p else sessions[0].minutes %}
 <div class="xe-time" data-time>
-  <label class="xe-f"><span>Date</span><input class="xe-in" type="date" name="exam_date" required value="{{ p.exam_date.isoformat() if p else default_date }}"></label>
+  <label class="xe-f"><span>Date</span><input class="xe-in" type="date" name="exam_date" required value="{{ p.exam_date.isoformat() if p else default_date }}"{% if xt.start_date %} min="{{ xt.start_date.isoformat() }}"{% endif %}{% if xt.end_date %} max="{{ xt.end_date.isoformat() }}"{% endif %}></label>
   <p class="xe-sub">Common {{ xt.board_label }} sessions</p>
   <div class="xe-sess" role="group" aria-label="Common {{ xt.board_label }} sessions">
     {% for s in sessions %}<button type="button" data-t="{{ s.start }}-{{ s.end }}" class="{{ 'on' if s.start == st and s.end == en }}"><b>{{ s.label }}</b><small>{{ s.dur }}</small></button>{% endfor %}
@@ -36,8 +36,9 @@
   <div class="xe-f"><label><span>Paper</span>
     <select class="xe-in" name="paper" data-other>
       <option value="" {{ 'selected' if not cur_p }}>—</option>
-      {% if cur_p and cur_p not in presets %}<option selected>{{ cur_p }}</option>{% endif %}
-      {% for s in presets %}<option {{ 'selected' if s == cur_p }}>{{ s }}</option>{% endfor %}
+      {% set labels = presets|map('first')|list %}
+      {% if cur_p and cur_p not in labels %}<option selected>{{ cur_p }}</option>{% endif %}
+      {% for s, k in presets %}<option data-kind="{{ k }}" {{ 'selected' if s == cur_p }}>{{ s }}</option>{% endfor %}
       <option value="__other">Other…</option>
     </select></label>
     <input class="xe-in xe-other" type="text" name="paper_other" maxlength="120" placeholder="e.g. Paper 4 (Oral)" hidden aria-label="Other paper"></div>
@@ -76,6 +77,7 @@
 .xe-chip{font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:999px;background:var(--gray-100);color:var(--text-secondary)}
 .xe-chip.k-objective{background:color-mix(in srgb,#2563eb 12%,var(--bg-card));color:#2563eb}
 .xe-chip.k-essay{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.xe-chip.k-combined{background:color-mix(in srgb,#0891b2 12%,var(--bg-card));color:#0891b2}
 .xe-chip.k-practical{background:color-mix(in srgb,#b45309 14%,var(--bg-card));color:#b45309}
 .xe-chip.k-oral{background:color-mix(in srgb,#7c3aed 12%,var(--bg-card));color:#7c3aed}
 .xe-chip.clash{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
@@ -121,7 +123,7 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
 {% block content %}
 {% set can_edit = can_write_sub('tools', 'exam_timetable') %}
 <div class="rs bx">
-  {% call bx_head('fa-calendar-check', xt.title, xt.board_label ~ ' SSCE' ~ ((' ' ~ xt.year) if xt.year else '') ~ (' · ' ~ d.first.strftime('%d %b') ~ ' – ' ~ d.last.strftime('%d %b %Y') if d.first else '')) %}
+  {% call bx_head('fa-calendar-check', xt.title, xt.board_label ~ ' SSCE' ~ ((' ' ~ xt.year) if xt.year else '') ~ ((' · exams ' ~ xt.start_date.strftime('%d %b') ~ ' – ' ~ xt.end_date.strftime('%d %b %Y')) if xt.start_date and xt.end_date else (' · ' ~ d.first.strftime('%d %b') ~ ' – ' ~ d.last.strftime('%d %b %Y') if d.first else ''))) %}
     <a href="{{ url_for('exam_timetable.index') }}" class="rs-btn ghost" aria-label="All timetables"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">All timetables</span></a>
     {% if d.rows %}
     {{ bx_menu('Download', [
@@ -186,7 +188,7 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
       <form class="rs-card" id="add" method="POST" action="{{ url_for('exam_timetable.add_paper', tt_id=xt.id) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="rs-card-h"><h3><i class="fas fa-plus" aria-hidden="true"></i> Add a paper</h3></div>
-        {{ paper_fields(None, request.args.get('after') or (last.exam_date.isoformat() if last else '')) }}
+        {{ paper_fields(None, request.args.get('after') or (last.exam_date.isoformat() if last else (xt.start_date.isoformat() if xt.start_date else ''))) }}
         <button class="rs-btn primary" style="width:100%;justify-content:center"><i class="fas fa-plus" aria-hidden="true"></i> Add paper</button>
       </form>
       {% endif %}
@@ -210,19 +212,28 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
       </section>
 
       {% if can_edit %}
-      <details class="rs-card">
-        <summary style="cursor:pointer;font-weight:700;list-style:none"><i class="fas fa-pen" aria-hidden="true" style="color:var(--text-muted)"></i> Name, year &amp; notes</summary>
-        <form method="POST" action="{{ url_for('exam_timetable.save_details', tt_id=xt.id) }}" style="margin-top:.8rem">
+      <details class="rs-card" id="details">
+        <summary style="cursor:pointer;font-weight:700;list-style:none"><i class="fas fa-pen" aria-hidden="true" style="color:var(--text-muted)"></i> Timetable details</summary>
+        <form method="POST" action="{{ url_for('exam_timetable.save_details', tt_id=xt.id) }}" style="margin-top:.8rem" data-window>
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <label class="xe-f"><span>Name</span><input class="xe-in" type="text" name="title" value="{{ xt.title }}" maxlength="150" required></label>
-          <label class="xe-f"><span>Year</span><input class="xe-in" type="number" name="year" value="{{ xt.year or '' }}"></label>
+          <div class="xe-fg two">
+            <label class="xe-f"><span>Exam body</span><select class="xe-in" name="board"><option value="waec" {{ 'selected' if xt.board == 'waec' }}>WAEC</option><option value="neco" {{ 'selected' if xt.board == 'neco' }}>NECO</option></select></label>
+            <label class="xe-f"><span>Year</span><input class="xe-in" type="number" name="year" value="{{ xt.year or '' }}"></label>
+          </div>
+          <div class="xe-fg two">
+            <label class="xe-f"><span>Exam starts</span><input class="xe-in" type="date" name="start_date" value="{{ xt.start_date.isoformat() if xt.start_date else '' }}" data-ws></label>
+            <label class="xe-f"><span>Exam ends</span><input class="xe-in" type="date" name="end_date" value="{{ xt.end_date.isoformat() if xt.end_date else '' }}" data-we></label>
+          </div>
           <label class="xe-f"><span>Notes for candidates <small style="font-weight:500;color:var(--text-muted)">printed under the title</small></span><textarea class="xe-in" name="notes" rows="3" placeholder="e.g. Be in the hall 30 minutes early with your photo card.">{{ xt.notes or '' }}</textarea></label>
-          <button class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Save</button>
+          <button class="rs-btn primary"><i class="fas fa-check" aria-hidden="true"></i> Save details</button>
         </form>
-        <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=xt.id) }}" style="margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border-color)">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-          <button class="rs-btn ghost" data-confirm="Delete this timetable and all its papers?" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Delete timetable</button>
-        </form>
+        <div class="xe-acts" style="margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border-color)">
+          <form method="POST" action="{{ url_for('exam_timetable.duplicate', tt_id=xt.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="rs-btn ghost"><i class="fas fa-copy" aria-hidden="true"></i> Make a copy</button></form>
+          <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=xt.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="rs-btn ghost" data-confirm="Delete this timetable and all its papers?" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button></form>
+        </div>
       </details>
       {% endif %}
     </aside>
@@ -257,6 +268,19 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
     du.addEventListener('change', fromDur);
     en.addEventListener('change', mark);
   });
+  // Picking a paper fills in its type (NECO Paper I = Practical, etc.).
+  document.querySelectorAll('select[name=paper]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var o = sel.selectedOptions[0], k = o && o.dataset.kind, t = sel.form.querySelector('select[name=kind]');
+      if (k && t) t.value = k;
+    });
+  });
+  document.querySelectorAll('[data-window]').forEach(function (f) {
+    var a = f.querySelector('[data-ws]'), b = f.querySelector('[data-we]');
+    function sync() { b.min = a.value || ''; a.max = b.value || ''; }
+    a.addEventListener('change', sync); b.addEventListener('change', sync); sync();
+  });
+  if (location.hash === '#details') { var dd = document.getElementById('details'); if (dd) dd.open = true; }
   // Drop-downs with an "Other…" choice reveal a box to type anything not listed.
   document.querySelectorAll('select[data-other]').forEach(function (sel) {
     var box = sel.closest('.xe-f').querySelector('.xe-other');

@@ -7,7 +7,8 @@
 .xt-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:1rem;align-items:start}
 @media(max-width:960px){.xt-grid{grid-template-columns:1fr}}
 .xt-list{display:flex;flex-direction:column}
-.xt-item{display:flex;align-items:center;gap:.9rem;padding:.85rem 0;border-bottom:1px solid var(--border-light,var(--border-color));text-decoration:none;color:inherit}
+.xt-item{display:flex;align-items:center;gap:.5rem;padding:.85rem 0;border-bottom:1px solid var(--border-light,var(--border-color))}
+.xt-open{display:flex;align-items:center;gap:.9rem;flex:1;min-width:0;text-decoration:none;color:inherit}
 .xt-item:last-child{border-bottom:0}
 .xt-badge{width:52px;height:52px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;font-weight:800;line-height:1.05}
 .xt-badge b{font-size:.72rem;letter-spacing:.06em}
@@ -17,7 +18,9 @@
 .xt-item .t{flex:1;min-width:0}
 .xt-item .t b{display:block;font-size:.95rem}
 .xt-item .t small{color:var(--text-muted);font-size:.8rem}
-a.xt-item:hover .t b{color:var(--primary)}
+.xt-open:hover .t b{color:var(--primary)}
+.xt-item .t{min-width:0}
+.xt-item .t b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .xt-seg{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.9rem}
 .xt-seg label{position:relative}
 .xt-seg input{position:absolute;opacity:0}
@@ -29,6 +32,8 @@ a.xt-item:hover .t b{color:var(--primary)}
 .xt-f span{display:block;font-size:.75rem;font-weight:700;color:var(--text-secondary);margin-bottom:.3rem}
 .xt-in{width:100%;height:42px;padding:0 .8rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);color:var(--text-primary);font:inherit}
 .xt-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:.6rem}
+.xt-row.xt-dates{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.xt-hint{font-size:.74rem;color:var(--text-muted);margin:-.4rem 0 .8rem}
 </style>
 {% endblock %}
 {% block content %}
@@ -40,11 +45,24 @@ a.xt-item:hover .t b{color:var(--primary)}
       {% if rows %}
       <div class="xt-list">
         {% for r in rows %}
-        <a class="xt-item" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}">
-          <span class="xt-badge {{ r.t.board }}"><b>{{ r.t.board_label }}</b><small>{{ r.t.year or '' }}</small></span>
-          <span class="t"><b>{{ r.t.title }}</b><small>{{ r.papers }} paper{{ 's' if r.papers != 1 }}{% if r.first %} · {{ r.first.strftime('%d %b') }} – {{ r.last.strftime('%d %b %Y') }}{% endif %}</small></span>
-          <i class="fas fa-chevron-right" aria-hidden="true" style="color:var(--text-muted)"></i>
-        </a>
+        <div class="xt-item">
+          <a class="xt-open" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}">
+            <span class="xt-badge {{ r.t.board }}"><b>{{ r.t.board_label }}</b><small>{{ r.t.year or '' }}</small></span>
+            <span class="t"><b>{{ r.t.title }}</b><small>{{ r.papers }} paper{{ 's' if r.papers != 1 }}{% if r.t.start_date and r.t.end_date %} · exams {{ r.t.start_date.strftime('%d %b') }} – {{ r.t.end_date.strftime('%d %b %Y') }}{% elif r.first %} · {{ r.first.strftime('%d %b') }} – {{ r.last.strftime('%d %b %Y') }}{% endif %}</small></span>
+          </a>
+          {% if can_write_sub('tools', 'exam_timetable') %}
+          <details class="bx-menu">
+            <summary class="rs-icon-btn" aria-label="More for {{ r.t.title }}"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></summary>
+            <div class="bx-menu-pop" role="menu">
+              <a role="menuitem" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}"><i class="fas fa-list" aria-hidden="true"></i><span>Open papers</span></a>
+              <a role="menuitem" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}#details"><i class="fas fa-pen" aria-hidden="true"></i><span>Edit details</span></a>
+              {% if r.papers %}<a role="menuitem" href="{{ url_for('exam_timetable.print_view', tt_id=r.t.id) }}"><i class="fas fa-print" aria-hidden="true"></i><span>Print / download</span></a>{% endif %}
+              <form method="POST" action="{{ url_for('exam_timetable.duplicate', tt_id=r.t.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit" role="menuitem"><i class="fas fa-copy" aria-hidden="true"></i><span>Make a copy</span></button></form>
+              <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=r.t.id) }}" data-confirm="Delete “{{ r.t.title }}” and all its papers?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit" role="menuitem" class="bx-danger"><i class="fas fa-trash" aria-hidden="true"></i><span>Delete</span></button></form>
+            </div>
+          </details>
+          {% endif %}
+        </div>
         {% endfor %}
       </div>
       {% else %}
@@ -60,6 +78,11 @@ a.xt-item:hover .t b{color:var(--primary)}
         <label><input type="radio" name="board" value="waec" checked><span>WAEC<small>SSCE May/June</small></span></label>
         <label><input type="radio" name="board" value="neco"><span>NECO<small>SSCE June/July</small></span></label>
       </div>
+      <div class="xt-row xt-dates">
+        <label class="xt-f"><span>Exam starts</span><input class="xt-in" type="date" name="start_date" id="xtStart"></label>
+        <label class="xt-f"><span>Exam ends</span><input class="xt-in" type="date" name="end_date" id="xtEnd"></label>
+      </div>
+      <p class="xt-hint">Papers can then only be dated within these days. You can change them later.</p>
       <div class="xt-row">
         <label class="xt-f"><span>Year</span><input class="xt-in" type="number" name="year" value="{{ this_year }}" min="2000" max="2100"></label>
         <label class="xt-f"><span>Name <small style="font-weight:500;color:var(--text-muted)">optional</small></span><input class="xt-in" type="text" name="title" maxlength="150" placeholder="e.g. WAEC SSCE {{ this_year }} timetable"></label>
@@ -73,4 +96,21 @@ a.xt-item:hover .t b{color:var(--primary)}
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% from "results/_board_shell.html" import bx_menu_js with context %}
+{{ bx_menu_js() }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var a = document.getElementById('xtStart'), b = document.getElementById('xtEnd'), y = document.querySelector('[name=year]');
+  if (a && b) {
+    a.addEventListener('change', function () { b.min = a.value; if (b.value && b.value < a.value) b.value = a.value; if (a.value && y) y.value = a.value.slice(0, 4); });
+    b.addEventListener('change', function () { a.max = b.value; });
+  }
+  document.querySelectorAll('form[data-confirm]').forEach(function (f) {
+    f.addEventListener('submit', function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); });
+  });
+})();
+</script>
 {% endblock %}

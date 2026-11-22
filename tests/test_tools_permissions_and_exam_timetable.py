@@ -134,3 +134,44 @@ def test_duration_wording_and_common_sessions(app):
         page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
         assert 'Common %s sessions' % board.upper() in page and first in page
         assert '<option value="90" >1hr 30mins</option>' in page or '>1hr 30mins</option>' in page
+
+
+def test_exam_window_board_papers_and_crud(app):
+    c = _admin(app)
+    c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': 'neco', 'year': '',
+                                                 'start_date': '2041-06-16', 'end_date': '2041-07-25'})
+    with app.app_context():
+        tt = ExamTimetable.query.filter_by(board='neco').order_by(ExamTimetable.id.desc()).first()
+        tid = tt.id
+        assert (tt.start_date.isoformat(), tt.end_date.isoformat(), tt.year) == ('2041-06-16', '2041-07-25', 2041)
+    page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
+    assert 'min="2041-06-16"' in page and 'max="2041-07-25"' in page
+    assert 'data-kind="practical" >Paper I: Practical' in page or '>Paper I: Practical</option>' in page
+    assert 'Papers III &amp; II: Objective &amp; Essay' in page and 'Paper 1 (Objective)' not in page
+    add = lambda d: c.post(f'/tools/exam-timetable/{tid}/papers', data={
+        '_csrf_token': auth_csrf(c), 'exam_date': d, 'start_time': '10:00', 'end_time': '12:00',
+        'subject': 'Chemistry', 'paper': 'Paper I: Practical', 'kind': 'practical'}, follow_redirects=True)
+    assert 'after the exam ends' in add('2041-08-01').get_data(as_text=True)
+    assert 'before the exam starts' in add('2041-06-01').get_data(as_text=True)
+    add('2041-06-20')
+    with app.app_context():
+        assert ExamTimetablePaper.query.filter_by(timetable_id=tid).count() == 1
+    # update details, including the window and the exam body
+    r = c.post(f'/tools/exam-timetable/{tid}/details', data={
+        '_csrf_token': auth_csrf(c), 'title': 'Renamed', 'board': 'waec', 'year': '2041',
+        'start_date': '2041-06-25', 'end_date': '2041-07-25', 'notes': ''}, follow_redirects=True)
+    assert 'fall outside the new exam dates' in r.get_data(as_text=True)
+    with app.app_context():
+        tt = db.session.get(ExamTimetable, tid)
+        assert tt.title == 'Renamed' and tt.board == 'waec'
+    # copy, then delete the copy
+    c.post(f'/tools/exam-timetable/{tid}/duplicate', data={'_csrf_token': auth_csrf(c)})
+    with app.app_context():
+        cp = ExamTimetable.query.filter_by(title='Renamed (copy)').one()
+        assert len(cp.papers) == 1 and cp.start_date == tt.start_date
+        cid = cp.id
+    listing = c.get('/tools/exam-timetable/').get_data(as_text=True)
+    assert 'Edit details' in listing and 'Make a copy' in listing
+    c.post(f'/tools/exam-timetable/{cid}/delete', data={'_csrf_token': auth_csrf(c)})
+    with app.app_context():
+        assert db.session.get(ExamTimetable, cid) is None

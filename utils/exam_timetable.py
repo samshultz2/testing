@@ -12,7 +12,8 @@ import io
 
 from utils import student_list_export as SLE
 
-KINDS = [('objective', 'Objective'), ('essay', 'Essay / Theory'), ('practical', 'Practical'),
+KINDS = [('objective', 'Objective'), ('essay', 'Essay / Theory'), ('combined', 'Objective & Essay'),
+         ('practical', 'Practical'),
          ('oral', 'Oral / Listening'), ('other', 'Other')]
 KIND_LABEL = dict(KINDS)
 SESSION_CUT = dt.time(12, 0)          # papers starting before noon are "morning"
@@ -61,8 +62,8 @@ def fmt_dur(m):
 COMMON_SESSIONS = {
     'waec': [('09:30', '12:30'), ('09:30', '12:00'), ('09:30', '11:30'), ('09:30', '11:00'),
              ('14:00', '15:30'), ('14:00', '15:00'), ('14:00', '17:00'), ('15:30', '16:15')],
-    'neco': [('10:00', '13:00'), ('10:00', '12:45'), ('10:00', '12:00'), ('10:00', '11:30'),
-             ('14:00', '15:30'), ('15:00', '16:30'), ('15:00', '16:00'), ('14:00', '17:00')],
+    'neco': [('10:00', '13:00'), ('10:00', '12:45'), ('10:00', '12:30'), ('10:00', '12:00'),
+             ('14:00', '16:30'), ('14:00', '16:00'), ('15:00', '16:30'), ('15:00', '16:00')],
 }
 DURATIONS = [45, 60, 90, 120, 150, 165, 180]
 

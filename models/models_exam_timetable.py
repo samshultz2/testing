@@ -15,6 +15,8 @@ class ExamTimetable(db.Model):
     board = db.Column(db.String(10), nullable=False, default='waec')   # 'waec' | 'neco'
     title = db.Column(db.String(150), nullable=False)
     year = db.Column(db.Integer)
+    start_date = db.Column(db.Date)            # the exam window — paper dates must fall inside it
+    end_date = db.Column(db.Date)
     notes = db.Column(db.Text)                                        # shown under the title on exports
     created_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)

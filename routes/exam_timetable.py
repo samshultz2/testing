@@ -17,9 +17,22 @@ from utils import exam_timetable as ET
 
 exam_timetable_bp = Blueprint('exam_timetable', __name__, url_prefix='/tools/exam-timetable')
 
-PAPER_PRESETS = ['Paper 1 (Objective)', 'Paper 2 (Essay)', 'Paper 1 & 2', 'Paper 2 & 1 (Essay & Objective)',
-                 'Paper 3 (Practical)', 'Paper 3 (Alternative to Practical)', 'Paper 3 (Oral)',
-                 'Paper 3 (Listening Comprehension)', 'Paper 4 (Test of Orals)']
+# How each body names its papers on the official SSCE timetable, with the
+# paper type each implies. WAEC numbers 1-2-3 (1 Objective, 2 Essay,
+# 3 Practical / Alternative to Practical Work; English 3 is the Test of
+# Orals); NECO uses Roman numerals the other way round (I Practical,
+# II Essay, III Objective) and usually sits III & II together.
+PAPER_PRESETS = {
+    'waec': [('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'),
+             ('Papers 2 & 1 (Essay & Objective)', 'combined'), ('Paper 3 (Practical)', 'practical'),
+             ('Paper 3 (Alternative to Practical Work)', 'practical'), ('Paper 3 (Test of Orals)', 'oral'),
+             ('Paper 3 (Listening Comprehension)', 'oral'), ('Paper 3 (Drawing)', 'practical'),
+             ('Paper 4 (Project / Coursework)', 'other')],
+    'neco': [('Paper I: Practical', 'practical'), ('Paper II: Essay', 'essay'), ('Paper III: Objective', 'objective'),
+             ('Papers III & II: Objective & Essay', 'combined'), ('Paper I: Test of Orals', 'oral'),
+             ('Paper I: Listening Comprehension', 'oral'), ('Paper I: Drawing', 'practical'),
+             ('Paper IV: Project / Coursework', 'other')],
+}
 
 
 @exam_timetable_bp.before_request
@@ -49,7 +62,7 @@ def _parse_time(v):
     return dt.time(h, mi) if 0 <= h < 24 and 0 <= mi < 60 else None
 
 
-def _paper_from_form(form, paper=None):
+def _paper_from_form(form, paper=None, tt=None):
     """Fill/validate a paper from the form; returns (paper, error)."""
     d, s, e = _parse_date(form.get('exam_date')), _parse_time(form.get('start_time')), _parse_time(form.get('end_time'))
     subject = form.get('subject') or ''
@@ -60,6 +73,10 @@ def _paper_from_form(form, paper=None):
         return None, 'Give the paper a date, start and end time, and subject.'
     if e <= s:
         return None, 'The paper must end after it starts.'
+    if tt is not None and tt.start_date and d < tt.start_date:
+        return None, 'That date is before the exam starts (%s).' % tt.start_date.strftime('%d %b %Y')
+    if tt is not None and tt.end_date and d > tt.end_date:
+        return None, 'That date is after the exam ends (%s).' % tt.end_date.strftime('%d %b %Y')
     paper = paper or ExamTimetablePaper()
     paper.exam_date, paper.start_time, paper.end_time, paper.subject = d, s, e, subject
     pp = form.get('paper') or ''
@@ -100,27 +117,61 @@ def index():
     return render_template('exam_timetable/index.html', rows=rows, this_year=dt.date.today().year)
 
 
+def _window(form):
+    """(start, end, error) from the form's exam start/end dates (both optional)."""
+    a, b = _parse_date(form.get('start_date')), _parse_date(form.get('end_date'))
+    if a and b and b < a:
+        return None, None, 'The exam must end on or after the day it starts.'
+    return a, b, None
+
+
 @exam_timetable_bp.route('/create', methods=['POST'])
 @login_required
 def create():
     board = 'neco' if request.form.get('board') == 'neco' else 'waec'
-    year = request.form.get('year', type=int) or dt.date.today().year
+    start, end, err = _window(request.form)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('exam_timetable.index'))
+    year = request.form.get('year', type=int) or (start.year if start else dt.date.today().year)
     title = (request.form.get('title') or '').strip()[:150] or \
         '%s SSCE %d timetable' % ('NECO' if board == 'neco' else 'WAEC', year)
     tt = ExamTimetable(branch_id=branch_for_new(), board=board, year=year, title=title,
-                       created_by=session.get('username') or 'Admin')
+                       start_date=start, end_date=end, created_by=session.get('username') or 'Admin')
     src = request.form.get('copy_from', type=int)
     if src:
-        old = _tt_or_404(src)
-        shift = dt.timedelta(days=0)
-        for p in old.papers:
-            tt.papers.append(ExamTimetablePaper(
-                exam_date=p.exam_date + shift, start_time=p.start_time, end_time=p.end_time, subject=p.subject,
-                paper=p.paper, kind=p.kind, venue=p.venue, invigilators=p.invigilators, notes=p.notes))
+        _copy_papers(_tt_or_404(src), tt)
     db.session.add(tt)
     db.session.commit()
     from utils.audit import log_action
     log_action('exam_timetable.create', title)
+    return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
+
+
+def _copy_papers(old, new):
+    """Copy every paper; when both have a start date, shift the dates so the
+    first exam day lines up with the new window."""
+    shift = dt.timedelta(0)
+    first = min((p.exam_date for p in old.papers), default=None)
+    if new.start_date and first:
+        shift = new.start_date - (old.start_date or first)
+    for p in old.papers:
+        new.papers.append(ExamTimetablePaper(
+            exam_date=p.exam_date + shift, start_time=p.start_time, end_time=p.end_time, subject=p.subject,
+            paper=p.paper, kind=p.kind, venue=p.venue, invigilators=p.invigilators, notes=p.notes))
+
+
+@exam_timetable_bp.route('/<int:tt_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate(tt_id):
+    old = _tt_or_404(tt_id)
+    tt = ExamTimetable(branch_id=old.branch_id, board=old.board, year=old.year, title=(old.title + ' (copy)')[:150],
+                       start_date=old.start_date, end_date=old.end_date, notes=old.notes,
+                       created_by=session.get('username') or 'Admin')
+    _copy_papers(old, tt)
+    db.session.add(tt)
+    db.session.commit()
+    flash('Copied “%s”.' % old.title, 'success')
     return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
 
 
@@ -134,7 +185,7 @@ def edit(tt_id):
     rest = sorted(set(WAEC_SUBJECTS) - set(mine), key=str.lower)
     subjects = mine + rest
     last = data['rows'][-1]['p'] if data['rows'] else None
-    return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, subj_mine=mine, subj_rest=rest, presets=PAPER_PRESETS,
+    return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, subj_mine=mine, subj_rest=rest, presets=PAPER_PRESETS.get(tt.board, PAPER_PRESETS['waec']),
                            kinds=ET.KINDS, fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur, last=last,
                            sessions=_sessions(tt.board), durations=ET.DURATIONS,
                            others=[t for t in scope_query(ExamTimetable.query, ExamTimetable).all() if t.id != tt.id])
@@ -144,11 +195,23 @@ def edit(tt_id):
 @login_required
 def save_details(tt_id):
     tt = _tt_or_404(tt_id)
+    start, end, err = _window(request.form)
+    if err:
+        flash(err, 'error')
+        return redirect(url_for('exam_timetable.edit', tt_id=tt.id) + '#details')
     tt.title = (request.form.get('title') or '').strip()[:150] or tt.title
+    if request.form.get('board') in ('waec', 'neco'):
+        tt.board = request.form['board']
     tt.year = request.form.get('year', type=int) or tt.year
+    tt.start_date, tt.end_date = start, end
     tt.notes = (request.form.get('notes') or '').strip() or None
     db.session.commit()
-    flash('Saved.', 'success')
+    outside = [p for p in tt.papers if (start and p.exam_date < start) or (end and p.exam_date > end)]
+    if outside:
+        flash('Saved. %d paper%s fall outside the new exam dates — move or remove %s.' % (
+            len(outside), '' if len(outside) == 1 else 's', 'it' if len(outside) == 1 else 'them'), 'warning')
+    else:
+        flash('Saved.', 'success')
     return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
 
 
@@ -156,7 +219,7 @@ def save_details(tt_id):
 @login_required
 def add_paper(tt_id):
     tt = _tt_or_404(tt_id)
-    paper, err = _paper_from_form(request.form)
+    paper, err = _paper_from_form(request.form, tt=tt)
     if err:
         flash(err, 'error')
         return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
@@ -178,7 +241,7 @@ def update_paper(tt_id, paper_id):
         db.session.commit()
         flash('Paper removed.', 'success')
         return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
-    _p, err = _paper_from_form(request.form, paper)
+    _p, err = _paper_from_form(request.form, paper, tt=tt)
     if err:
         db.session.rollback()
         flash(err, 'error')
