@@ -17,8 +17,9 @@ from utils import exam_timetable as ET
 
 exam_timetable_bp = Blueprint('exam_timetable', __name__, url_prefix='/tools/exam-timetable')
 
-PAPER_PRESETS = ['Paper 1 (Objective)', 'Paper 2 (Essay)', 'Paper 3 (Practical)', 'Paper 1 & 2',
-                 'Paper 3 (Alternative to Practical)', 'Oral / Listening']
+PAPER_PRESETS = ['Paper 1 (Objective)', 'Paper 2 (Essay)', 'Paper 1 & 2', 'Paper 2 & 1 (Essay & Objective)',
+                 'Paper 3 (Practical)', 'Paper 3 (Alternative to Practical)', 'Paper 3 (Oral)',
+                 'Paper 3 (Listening Comprehension)', 'Paper 4 (Test of Orals)']
 
 
 @exam_timetable_bp.before_request
@@ -51,14 +52,20 @@ def _parse_time(v):
 def _paper_from_form(form, paper=None):
     """Fill/validate a paper from the form; returns (paper, error)."""
     d, s, e = _parse_date(form.get('exam_date')), _parse_time(form.get('start_time')), _parse_time(form.get('end_time'))
-    subject = (form.get('subject') or '').strip()[:120]
+    subject = form.get('subject') or ''
+    if subject == '__other':
+        subject = form.get('subject_other') or ''
+    subject = subject.strip()[:120]
     if not (d and s and e and subject):
         return None, 'Give the paper a date, start and end time, and subject.'
     if e <= s:
         return None, 'The paper must end after it starts.'
     paper = paper or ExamTimetablePaper()
     paper.exam_date, paper.start_time, paper.end_time, paper.subject = d, s, e, subject
-    paper.paper = (form.get('paper') or '').strip()[:120] or None
+    pp = form.get('paper') or ''
+    if pp == '__other':
+        pp = form.get('paper_other') or ''
+    paper.paper = pp.strip()[:120] or None
     kind = form.get('kind') or ''
     paper.kind = kind if kind in ET.KIND_LABEL else None
     paper.venue = (form.get('venue') or '').strip()[:120] or None
@@ -109,9 +116,11 @@ def edit(tt_id):
     tt = _tt_or_404(tt_id)
     cands = ET.candidates(tt.board)
     data = ET.analyse(tt, cands)
-    subjects = sorted({n for c in cands for n in c['subject_names']} | set(WAEC_SUBJECTS), key=str.lower)
+    mine = sorted({n for c in cands for n in c['subject_names']}, key=str.lower)
+    rest = sorted(set(WAEC_SUBJECTS) - set(mine), key=str.lower)
+    subjects = mine + rest
     last = data['rows'][-1]['p'] if data['rows'] else None
-    return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, presets=PAPER_PRESETS,
+    return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, subj_mine=mine, subj_rest=rest, presets=PAPER_PRESETS,
                            kinds=ET.KINDS, fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur, last=last,
                            others=[t for t in scope_query(ExamTimetable.query, ExamTimetable).all() if t.id != tt.id])
 

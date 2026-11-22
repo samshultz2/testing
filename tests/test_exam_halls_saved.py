@@ -50,6 +50,7 @@ def test_save_reopen_export_rename_delete(app):
     import fitz
     text = ''.join(pg.get_text() for pg in fitz.open(stream=pdf.data, filetype='pdf')).replace(' ', '')
     assert 'Candidatesperhall,byclass' in text and 'Attendanceroster' in text and 'SSS3' in text
+    assert 'Seatingplan' not in text and 'frontofhall' not in text          # no seating plans in exports
 
     xl = c.get(f'/tools/exam-halls/plans/{pid}/export?format=excel')
     from openpyxl import load_workbook

@@ -16,8 +16,24 @@
 </div>
 {% endif %}
 <div class="xe-fg two">
-  <label class="xe-f"><span>Subject</span><input class="xe-in" type="text" name="subject" required list="xeSubjects" maxlength="120" value="{{ p.subject if p else '' }}" placeholder="e.g. Mathematics"></label>
-  <label class="xe-f"><span>Paper</span><input class="xe-in" type="text" name="paper" list="xePapers" maxlength="120" value="{{ (p.paper or '') if p else '' }}" placeholder="e.g. Paper 2 (Essay)"></label>
+  {% set cur_s = p.subject if p else '' %}{% set cur_p = (p.paper or '') if p else '' %}
+  <div class="xe-f"><label><span>Subject</span>
+    <select class="xe-in" name="subject" required data-other>
+      <option value="" disabled {{ 'selected' if not cur_s }}>Choose a subject…</option>
+      {% if cur_s and cur_s not in subjects %}<option selected>{{ cur_s }}</option>{% endif %}
+      {% if subj_mine %}<optgroup label="Your candidates’ subjects">{% for s in subj_mine %}<option {{ 'selected' if s == cur_s }}>{{ s }}</option>{% endfor %}</optgroup>{% endif %}
+      <optgroup label="{{ 'Other WAEC subjects' if subj_mine else 'WAEC subjects' }}">{% for s in subj_rest %}<option {{ 'selected' if s == cur_s }}>{{ s }}</option>{% endfor %}</optgroup>
+      <option value="__other">Other…</option>
+    </select></label>
+    <input class="xe-in xe-other" type="text" name="subject_other" maxlength="120" placeholder="Type the subject" hidden aria-label="Other subject"></div>
+  <div class="xe-f"><label><span>Paper</span>
+    <select class="xe-in" name="paper" data-other>
+      <option value="" {{ 'selected' if not cur_p }}>—</option>
+      {% if cur_p and cur_p not in presets %}<option selected>{{ cur_p }}</option>{% endif %}
+      {% for s in presets %}<option {{ 'selected' if s == cur_p }}>{{ s }}</option>{% endfor %}
+      <option value="__other">Other…</option>
+    </select></label>
+    <input class="xe-in xe-other" type="text" name="paper_other" maxlength="120" placeholder="e.g. Paper 4 (Oral)" hidden aria-label="Other paper"></div>
 </div>
 <div class="xe-fg two">
   <label class="xe-f"><span>Type</span><select class="xe-in" name="kind"><option value="">—</option>{% for k, l in kinds %}<option value="{{ k }}" {{ 'selected' if p and p.kind == k }}>{{ l }}</option>{% endfor %}</select></label>
@@ -66,6 +82,7 @@
 .xe-side .xe-fg:not(.two)>:first-child{grid-column:1/-1}
 @media(max-width:520px){.xe-fg{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.xe-fg>:first-child{grid-column:1/-1}.xe-fg.two{grid-template-columns:minmax(0,1fr)}}
 .xe-f{display:block;margin-bottom:.6rem}
+.xe-other{margin-top:.4rem}
 .xe-f span{display:block;font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:.25rem}
 .xe-in{width:100%;height:40px;padding:0 .7rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
 textarea.xe-in{height:auto;padding:.6rem .7rem}
@@ -100,8 +117,6 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
   {% endcall %}
   {{ bx_menu_js() }}
 
-  <datalist id="xeSubjects">{% for s in subjects %}<option value="{{ s }}">{% endfor %}</datalist>
-  <datalist id="xePapers">{% for s in presets %}<option value="{{ s }}">{% endfor %}</datalist>
 
   <div class="rs-tiles bx-tiles">
     <div class="rs-tile"><span class="l">Papers</span><span class="v">{{ d.rows|length }}</span><span class="s">{{ d.subjects }} subject{{ 's' if d.subjects != 1 }}</span></div>
@@ -209,12 +224,18 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
       f.querySelector('[data-start]').value = t[0]; f.querySelector('[data-end]').value = t[1];
     });
   });
+  // Drop-downs with an "Other…" choice reveal a box to type anything not listed.
+  document.querySelectorAll('select[data-other]').forEach(function (sel) {
+    var box = sel.closest('.xe-f').querySelector('.xe-other');
+    function sync() { var on = sel.value === '__other'; box.hidden = !on; box.required = on && sel.required; if (on) box.focus(); }
+    sel.addEventListener('change', sync);
+  });
   document.querySelectorAll('[data-confirm]').forEach(function (b) {
     b.addEventListener('click', function (e) { if (!confirm(b.dataset.confirm)) e.preventDefault(); });
   });
   var h = location.hash && document.querySelector(location.hash);
   if (h && h.tagName === 'DETAILS') h.open = true;
-  if (location.hash === '#add') { var s = document.querySelector('#add [name=subject]'); if (s) s.focus(); }
+  
 })();
 </script>
 {% endblock %}

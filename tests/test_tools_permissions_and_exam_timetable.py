@@ -80,10 +80,16 @@ def test_exam_timetable_flow(app):
         kind='essay', venue='Main Hall')
     add(exam_date='2031-05-05', start_time='10:00', end_time='12:00', subject='Physics', paper='Paper 1 (Objective)')
     add(exam_date='2031-05-06', start_time='14:00', end_time='13:00', subject='Biology')   # ends before start
+    add(exam_date='2031-05-07', start_time='09:00', end_time='10:00', subject='__other', subject_other='Data Processing',
+        paper='__other', paper_other='Paper 4 (Project)')
     with app.app_context():
-        assert ExamTimetablePaper.query.filter_by(timetable_id=tid).count() == 2
+        assert ExamTimetablePaper.query.filter_by(timetable_id=tid).count() == 3
+        other = ExamTimetablePaper.query.filter_by(timetable_id=tid, subject='Data Processing').one()
+        assert other.paper == 'Paper 4 (Project)'
     page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
     assert 'Clash' in page and 'Mathematics' in page and 'Physics' in page
+    assert '<select class="xe-in" name="subject"' in page and '<select class="xe-in" name="paper"' in page
+    assert '<option selected>Data Processing</option>' in page        # custom subject stays selected when editing
     assert 'Biology' in page and 'Subjects with no paper yet' in page          # Biology still needs a paper
 
     page = c.get(f'/tools/exam-timetable/{tid}/print?theme=gazette').get_data(as_text=True)

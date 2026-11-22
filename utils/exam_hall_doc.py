@@ -4,8 +4,8 @@ PDF (A4 portrait, school letterhead and colours):
   page 1  overview: totals, a hall × class matrix (how many SSS1, SSS2… sit in
           each hall), gender per hall and how widely each class/arm is spread;
   then    one page per hall for the door / invigilator: hall header, class
-          breakdown, the seating chart (front of hall at the top) and the
-          attendance roster with a signature column.
+          breakdown and the attendance roster (by seat number) with a
+          signature column. No seating chart — that stays on screen.
 
 Excel: a Summary sheet (the same matrix) plus one sheet per hall.
 
@@ -265,44 +265,6 @@ def render_pdf(result, title='Exam hall allocation', subtitle=''):
         bc = h.get('by_class') or {}
         story.append(Chips([(c, bc.get(c, 0)) for c in classes] +
                            [(c, n) for c, n in bc.items() if c not in classes]))
-        seating = h.get('seating') or {}
-        rows = seating.get('rows') or []
-        if rows and seating.get('cols'):
-            cols = seating['cols']
-            cw = min(avail / cols, 82)
-            grid = []
-            for row in rows:
-                line = []
-                for cell in row:
-                    if not cell:
-                        line.append('')
-                        continue
-                    s = cell['student']
-                    ink = inks.get(s.get('class_name'), C['primary'])
-                    line.append(Paragraph(
-                        '<font name="%s" size="9.5">%d</font><br/><font size="5.8" color="%s">%s</font><br/>'
-                        '<font size="5.8" color="%s">%s</font>' % (
-                            F['Display'], cell['seat'], SLE.MUTED, esc((s.get('student_id') or '')[:14]),
-                            ink, esc(_label(s)[:16])),
-                        ParagraphStyle('seat', fontName=F['BodyBold'], fontSize=6, leading=7.4,
-                                       alignment=1, textColor=hx(SLE.INK))))
-                grid.append(line)
-            gs = [('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                  ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                  ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2)]
-            for r, row in enumerate(rows):
-                for c, cell in enumerate(row):
-                    if cell:
-                        ink = inks.get(cell['student'].get('class_name'), C['primary'])
-                        gs += [('BACKGROUND', (c, r), (c, r), hx(SLE._mix(ink, '#ffffff', .93))),
-                               ('BOX', (c, r), (c, r), .7, hx(SLE._mix(ink, '#ffffff', .55)))]
-            seat_tbl = Table(grid, colWidths=[cw] * cols, rowHeights=34, hAlign='CENTER')
-            seat_tbl.setStyle(TableStyle(gs))
-            story.append(Spacer(1, 8))
-            story.append(KeepTogether([
-                Paragraph('Seating plan <font color="%s" size="7.5">· front of hall at the top</font>' % SLE.MUTED,
-                          st['h2']),
-                seat_tbl]))
         story.append(Paragraph('Attendance roster', st['h2']))
         rd = [['Seat', 'Name', 'Student ID', 'Class', 'Sex', 'Signature']]
         for seat, s in _seats(h):
