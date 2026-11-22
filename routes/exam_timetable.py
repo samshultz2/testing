@@ -150,6 +150,8 @@ def _paper_from_form(form, paper=None, tt=None):
     if subject == '__other':
         subject = form.get('subject_other') or ''
     subject = subject.strip()[:120]
+    if tt is not None and subject:
+        subject = ET.board_subject(tt.board, subject)      # e.g. Mathematics → General Mathematics
     if not (d and s and e and subject):
         return None, 'Give the paper a date, start and end time, and subject.'
     if e <= s:

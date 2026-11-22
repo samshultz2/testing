@@ -6,7 +6,7 @@
    html2canvas cannot capture reliably). */
 
 .xts{--fs:16px;--w:794px;--h:1123px;--pad-x:54px;--pad-t:48px;--pad-b:40px;
-  --bg:#ffffff;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0d6a4e;--accent-ink:#ffffff;
+  --bg:#ffffff;--ink:#111827;--muted:#4b5563;--line:#e5e7eb;--accent:#0d6a4e;--accent-ink:#ffffff;
   --card:transparent;--chip:#eef2f7;--chip-ink:#374151;--date-ink:var(--accent);
   --font:'Inter','DM Sans',system-ui,sans-serif;--font-d:'Space Grotesk','Inter',sans-serif;
   width:var(--w);height:var(--h);box-sizing:border-box;padding:var(--pad-t) var(--pad-x) var(--pad-b);
@@ -35,22 +35,26 @@
 .xts-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:.62em}
 .xts-day{display:grid;grid-template-columns:3.9em minmax(0,1fr);gap:.85em;background:var(--card);flex:none}
 .xts-date{display:flex;flex-direction:column;align-items:center;line-height:1;text-align:center;padding-top:.2em;color:var(--date-ink)}
-.xts-date .dw{font-size:.6em;font-weight:800;letter-spacing:.14em}
-.xts-date .dn{font-family:var(--font-d);font-size:1.7em;font-weight:800;margin:.08em 0 .06em;color:var(--ink)}
-.xts-date .dm{font-size:.6em;font-weight:700;letter-spacing:.14em}
+.xts-date .dw{font-size:.64em;font-weight:800;letter-spacing:.14em}
+.xts-date .dn{font-family:var(--font-d);font-size:1.8em;font-weight:800;margin:.08em 0 .06em;color:var(--ink)}
+.xts-date .dm{font-size:.64em;font-weight:700;letter-spacing:.14em}
 .xts-papers{display:flex;flex-direction:column;min-width:0}
 .xts-p{display:grid;grid-template-columns:6.1em minmax(0,1fr);gap:.75em;padding:.4em 0;border-top:1px solid var(--line)}
 .xts-p:first-child{border-top:0}
-.xts-time b{display:block;font-size:.9em;font-weight:800;white-space:nowrap}
-.xts-time small{display:block;font-size:.68em;color:var(--muted);white-space:nowrap;margin-top:.12em}
-.xts-time em{display:block;font-style:normal;font-size:.66em;font-weight:800;margin-top:.12em;color:var(--ink)}
-.xts-subj{min-width:0}
-.xts-subj>b{display:block;font-size:.95em;font-weight:700;line-height:1.18}
-.xts-subj>span{display:block;font-size:.72em;color:var(--muted);margin-top:.1em;line-height:1.3}
-.xts-subj>.inv{font-size:.66em}
-.xts-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3em .5em;margin-top:.32em}
-.xts-kind{font-size:.58em;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:.22em .55em;border-radius:.35em;background:var(--chip);color:var(--chip-ink);white-space:nowrap}
-.xts-venue,.xts-cnt{font-size:.66em;font-weight:600;color:var(--muted);white-space:nowrap}
+.xts-time b{display:block;font-size:.96em;font-weight:800;white-space:nowrap}
+.xts-time small i{font-style:normal}
+.xts-time small .da{display:none}
+.xts-time small{display:block;font-size:.74em;color:var(--muted);white-space:nowrap;margin-top:.12em}
+.xts-time em{display:block;font-style:normal;font-size:.72em;font-weight:800;margin-top:.12em;color:var(--ink)}
+.xts-subj{min-width:0;overflow-wrap:break-word;hyphens:auto}
+.xts-subj>b{display:block;font-size:1.04em;font-weight:700;line-height:1.18}
+.xts-subj>span{display:block;font-size:.8em;color:var(--muted);margin-top:.1em;line-height:1.3}
+.xts-subj>.inv{font-size:.72em}
+.xts-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3em .5em;margin-top:.25em}
+.xts-meta:not(:has(> :not(.dup):not(.xts-cnt))){display:none}
+.xts:not(.no-cnt) .xts-meta:has(.xts-cnt){display:flex}
+.xts-kind{font-size:.64em;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.22em .55em;border-radius:.35em;background:var(--chip);color:var(--chip-ink);max-width:100%;line-height:1.25}
+.xts-venue,.xts-cnt{font-size:.72em;font-weight:600;color:var(--muted);white-space:nowrap}
 .xts-venue:before{content:'\25CF';font-size:.6em;margin-right:.35em;vertical-align:.15em;color:var(--accent)}
 .xts-foot{position:relative;z-index:1;margin-top:.9em;padding-top:.55em;border-top:1px solid var(--line);font-size:.6em;color:var(--muted);display:flex;justify-content:space-between;gap:1em}
 
@@ -58,6 +62,9 @@
 .xts.no-logo .xts-logo,.xts.no-venue .xts-venue,.xts.no-inv .inv,.xts.no-cnt .xts-cnt,.xts.no-kind .xts-kind,
 .xts.no-dur .xts-time em,.xts.no-notes .xts-notes,.xts.no-end .xts-time small{display:none}
 .xts.no-school .xts-school{display:none}
+/* the type tag only when the paper name doesn't already say it
+   ("Papers III & II: Objective & Essay" needs no OBJECTIVE & ESSAY tag) */
+.xts .xts-kind.dup{display:none}
 
 /* ---------------------------------------------------------------- themes */
 /* Timeline — cream & gold, dated */
@@ -209,3 +216,15 @@
 .xts[data-cols="3"] .xts-day{grid-template-columns:3.3em minmax(0,1fr);gap:.6em}
 .xts[data-cols="3"][data-theme="tickets"] .xts-day,.xts[data-cols="3"][data-theme="print"] .xts-day,.xts[data-cols="3"][data-theme="mono"] .xts-day{grid-template-columns:3.9em minmax(0,1fr);gap:0}
 .xts[data-cols="3"][data-theme="inline"] .xts-day{grid-template-columns:1fr}
+
+/* stacked rows — for narrow columns: the time sits on one line above the
+   subject, so subjects and papers wrap far less and the text can be larger */
+.xts.stack:not([data-theme="inline"]) .xts-p{display:block}
+.xts.stack:not([data-theme="inline"]) .xts-time{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .4em;margin-bottom:.12em}
+.xts.stack:not([data-theme="inline"]) .xts-time small,.xts.stack:not([data-theme="inline"]) .xts-time em{display:inline;margin:0}
+.xts.stack:not([data-theme="inline"]) .xts-time small .to{display:none}
+.xts.stack:not([data-theme="inline"]) .xts-time small .da{display:inline}
+.xts.stack:not([data-theme="inline"]) .xts-time{gap:0 .3em}
+.xts.stack:not([data-theme="inline"]) .xts-time em{margin-left:auto;padding:.05em .45em;border-radius:.35em;background:var(--chip);color:var(--chip-ink);white-space:nowrap}
+.xts.stack:not([data-theme="inline"]) .xts-day{grid-template-columns:3.4em minmax(0,1fr);gap:.7em}
+.xts.stack[data-theme="tickets"] .xts-day,.xts.stack[data-theme="print"] .xts-day,.xts.stack[data-theme="mono"] .xts-day{grid-template-columns:4em minmax(0,1fr);gap:0}

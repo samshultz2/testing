@@ -23,9 +23,9 @@
         <div class="xts-papers">
         {% for r in day.rows %}{% set p = r.p %}
           <div class="xts-p">
-            <div class="xts-time"><b>{{ fmt_time(p.start_time) }}</b><small>to {{ fmt_time(p.end_time) }}</small><em>{{ fmt_dur(r.minutes) }}</em></div>
+            <div class="xts-time"><b>{{ fmt_time(p.start_time) }}</b><small><i class="to">to </i><i class="da">– </i>{{ fmt_time(p.end_time) }}</small><em>{{ fmt_dur(r.minutes) }}</em></div>
             <div class="xts-subj"><b>{{ p.subject }}</b>{% if p.paper %}<span>{{ p.paper }}</span>{% endif %}{% if p.invigilators %}<span class="inv">Invigilators: {{ p.invigilators }}</span>{% endif %}
-              <div class="xts-meta">{% if p.kind and kinds.get(p.kind) %}<span class="xts-kind">{{ kinds[p.kind].split(' /')[0] }}</span>{% endif %}{% if p.venue %}<span class="xts-venue">{{ p.venue }}</span>{% endif %}<span class="xts-cnt">{{ r.count }} candidate{{ 's' if r.count != 1 }}</span></div></div>
+              <div class="xts-meta">{% if p.kind and kinds.get(p.kind) %}{% set kl = kinds[p.kind].split(' /')[0] %}{% set pl = (p.paper or '')|lower %}<span class="xts-kind{{ ' dup' if pl and (kl|lower).replace('&', ' ').split()|reject('in', pl)|list|length == 0 }}">{{ kl }}</span>{% endif %}{% if p.venue %}<span class="xts-venue">{{ p.venue }}</span>{% endif %}<span class="xts-cnt">{{ r.count }} candidate{{ 's' if r.count != 1 }}</span></div></div>
           </div>
         {% endfor %}
         </div>

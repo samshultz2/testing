@@ -289,3 +289,22 @@ def test_neco_counts_digital_technologies_as_computer_studies(app):
     page = c.get(f"/tools/exam-timetable/{ids['neco']}").get_data(as_text=True)
     sitting = page.split('<b>Sitting:</b>')[1].split('</p>')[0]
     assert 'Cand XDT1' in sitting
+
+
+def test_mathematics_is_general_mathematics(app):
+    _cand(app, 'XGM1', 'English Language,Mathematics')
+    c = _admin(app)
+    c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': 'waec', 'year': '2045'})
+    with app.app_context():
+        tid = ExamTimetable.query.filter_by(year=2045).order_by(ExamTimetable.id.desc()).first().id
+    page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
+    sel = page.split('name="subject"')[1].split('</select>')[0]
+    assert '>General Mathematics<' in sel and '>Mathematics<' not in sel
+    c.post(f'/tools/exam-timetable/{tid}/papers', data={'_csrf_token': auth_csrf(c), 'exam_date': '2045-05-05',
+           'start_time': '09:30', 'end_time': '12:30', 'subject': 'Mathematics', 'paper': 'Paper 2 (Essay)'})
+    c.post(f'/tools/exam-timetable/{tid}/paste', data={'_csrf_token': auth_csrf(c), 'action': 'save',
+           'data': '2045-05-06, 2pm, 3:30pm, Maths, Paper 1 (Objective)'})
+    with app.app_context():
+        assert {p.subject for p in ExamTimetablePaper.query.filter_by(timetable_id=tid)} == {'General Mathematics'}
+    page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
+    assert 'Cand XGM1' in page.split('<b>Sitting:</b>')[1].split('</p>')[0]     # the student's Mathematics counts

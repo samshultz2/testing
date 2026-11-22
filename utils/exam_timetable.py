@@ -29,7 +29,12 @@ def norm(s):
 # Subjects an exam body offers under another name. NECO has no Digital
 # Technologies: those candidates sit NECO Computer Studies (WAEC keeps
 # Digital Technologies).
-BOARD_SUBJECTS = {'neco': {'digital technologies': 'Computer Studies', 'digital technology': 'Computer Studies'}}
+_GEN_MATHS = {'mathematics': 'General Mathematics', 'maths': 'General Mathematics', 'math': 'General Mathematics',
+              'general maths': 'General Mathematics', 'gen maths': 'General Mathematics'}
+# Both bodies print Mathematics as "General Mathematics" on their timetables.
+BOARD_SUBJECTS = {'neco': dict(_GEN_MATHS, **{'digital technologies': 'Computer Studies',
+                                             'digital technology': 'Computer Studies'}),
+                  'waec': dict(_GEN_MATHS)}
 
 
 def board_subject(board, name):

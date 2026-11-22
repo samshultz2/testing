@@ -61,22 +61,32 @@
     var el = this.el, land = el.getAttribute('data-orient') === 'landscape';
     var tries = land ? (this.days.length < 3 ? [1, 2] : [2, 3]) : (this.days.length < 4 ? [1] : [1, 2, 3]);
     var self = this, result = null;
+    // every column count, each with normal rows and with stacked rows (time
+    // above the subject): keep whichever gives the largest text; a layout with
+    // more columns or stacking must win by a clear margin to be chosen.
     tries.forEach(function (n) {
-      var lo = 6.5, hi = land ? 22 : 24, ok = null;
-      for (var it = 0; it < 11; it++) {
-        var mid = (lo + hi) / 2;
-        el.style.setProperty('--fs', mid + 'px'); self.place(n);
-        if (self.fits()) { ok = mid; lo = mid; } else { hi = mid; }
-      }
-      if (ok == null) ok = 6.5;
-      if (!result || ok > result.fs * 1.04) result = { n: n, fs: ok };
+      [false, true].forEach(function (stack) {
+        el.classList.toggle('stack', stack);
+        var lo = 6.5, hi = land ? 26 : 28, ok = null;
+        for (var it = 0; it < 11; it++) {
+          var mid = (lo + hi) / 2;
+          el.style.setProperty('--fs', mid + 'px'); self.place(n);
+          // side-by-side time + subject needs a column at least ~25em wide;
+          // narrower columns must use the stacked rows
+          var wide = self.body.firstChild.getBoundingClientRect().width / mid >= 25;
+          if (self.fits() && (stack || wide)) { ok = mid; lo = mid; } else { hi = mid; }
+        }
+        if (ok == null) ok = 6.5;
+        if (!result || ok > result.fs * 1.05) result = { n: n, fs: ok, stack: stack };
+      });
     });
+    el.classList.toggle('stack', result.stack);
     el.style.setProperty('--fs', result.fs.toFixed(2) + 'px');
     this.place(result.n);
     // rounding can tip it over — step down until it really fits
     var f = result.fs;
     while (!this.fits() && f > 6) { f -= 0.25; el.style.setProperty('--fs', f + 'px'); this.place(result.n); }
-    return { cols: result.n, fs: f };
+    return { cols: result.n, fs: f, stack: result.stack };
   };
 
   function scaleOf(node) {
@@ -148,7 +158,7 @@
     var res = this.sheet.layout();
     var note = r.querySelector('[data-xts-note]');
     if (note) note.textContent = (p.orient === 'landscape' ? 'Landscape' : 'Portrait') + ' · ' + (res.cols === 1 ? 'one column' : res.cols + ' columns') +
-      (res.fs < 9 ? ' · small text — try landscape or hide some details' : '');
+      ' · text ' + Math.round(res.fs * 0.75) + 'pt' + (res.fs < 11 ? ' — for bigger text try landscape or hide some details' : '');
     this.fitStage();
   };
   Panel.prototype.fitStage = function (natural) {
