@@ -52,6 +52,7 @@
 .xs-p{display:grid;grid-template-columns:7.6em minmax(0,1fr) auto;gap:.8em;align-items:center;padding:.42em 0}
 .xs-time b{display:block;font-size:.92em;white-space:nowrap}
 .xs-time>span{display:block;font-size:.7em;opacity:.7;white-space:nowrap}
+.xs-time .dur{font-weight:800;opacity:.9;font-size:.68em;letter-spacing:.02em;margin-top:.1em}
 .xs-subj b{display:block;font-size:.98em;line-height:1.15}
 .xs-subj span{display:block;font-size:.74em;opacity:.75;margin-top:.1em}
 .xs-subj .inv{font-size:.66em;opacity:.65}
@@ -187,8 +188,10 @@
 #sheet[data-theme="inline"] .xs-date .dw,#sheet[data-theme="inline"] .xs-date .dm{font-size:.7em}
 #sheet[data-theme="inline"] .xs-papers{display:flex;flex-wrap:wrap;gap:.35em}
 #sheet[data-theme="inline"] .xs-p{display:flex;gap:.45em;align-items:center;background:#fff;border-radius:.6em;padding:.3em .6em .3em .35em;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+#sheet[data-theme="inline"] .xs-time{display:flex;align-items:center;gap:.35em}
+#sheet[data-theme="inline"] .xs-time .dur{margin:0;font-size:.62em;white-space:nowrap}
 #sheet[data-theme="inline"] .xs-time b{background:#1f2328;color:#fff;border-radius:.4em;padding:.1em .4em;font-size:.75em}
-#sheet[data-theme="inline"] .xs-time span,#sheet[data-theme="inline"] .xs-subj .inv,#sheet[data-theme="inline"] .xs-cnt{display:none}
+#sheet[data-theme="inline"] .xs-time>span:not(.dur),#sheet[data-theme="inline"] .xs-subj .inv,#sheet[data-theme="inline"] .xs-cnt{display:none}
 #sheet[data-theme="inline"] .xs-subj{display:flex;gap:.35em;align-items:baseline}
 #sheet[data-theme="inline"] .xs-subj b{font-size:.85em;white-space:nowrap}
 #sheet[data-theme="inline"] .xs-subj span{font-size:.7em;margin:0;white-space:nowrap}
@@ -264,7 +267,7 @@
         <label class="xp-sw">School logo<input type="checkbox" data-opt="logo" {{ 'checked' if logo else 'disabled' }}></label>
         <label class="xp-sw">Hall / venue<input type="checkbox" data-opt="venue" checked></label>
         <label class="xp-sw">Paper type<input type="checkbox" data-opt="kind" checked></label>
-        <label class="xp-sw">Duration<input type="checkbox" data-opt="dur" checked></label>
+        <label class="xp-sw">Duration (e.g. 1hr 30mins)<input type="checkbox" data-opt="dur" checked></label>
         <label class="xp-sw">Invigilators<input type="checkbox" data-opt="inv"></label>
         <label class="xp-sw">Candidates per paper<input type="checkbox" data-opt="cnt"></label>
         {% if xt.notes %}<label class="xp-sw">Notes<input type="checkbox" data-opt="notes" checked></label>{% endif %}
@@ -298,7 +301,7 @@
                 <div class="xs-papers">
                   {% for r in day.rows %}{% set p = r.p %}
                   <div class="xs-p">
-                    <div class="xs-time"><b>{{ fmt_time(p.start_time) }}</b><span>to {{ fmt_time(p.end_time) }}<span class="dur"> · {{ fmt_dur(r.minutes) }}</span></span></div>
+                    <div class="xs-time"><b>{{ fmt_time(p.start_time) }}</b><span>to {{ fmt_time(p.end_time) }}</span><span class="dur">{{ fmt_dur(r.minutes) }}</span></div>
                     <div class="xs-subj"><b>{{ p.subject }}</b>{% if p.paper %}<span>{{ p.paper }}</span>{% endif %}{% if p.invigilators %}<span class="inv">Invigilators: {{ p.invigilators }}</span>{% endif %}</div>
                     <div class="xs-meta">{% if p.kind %}<span class="xs-kind">{{ kinds[p.kind].split(' /')[0] }}</span>{% endif %}{% if p.venue %}<span class="xs-venue">{{ p.venue }}</span>{% endif %}<span class="xs-cnt">{{ r.count }} cand.</span></div>
                   </div>

@@ -42,10 +42,29 @@ def minutes(a, b):
 
 
 def fmt_dur(m):
-    if m <= 0:
+    """Exam-timetable style duration: 45mins, 1hr, 1hr 30mins, 2hrs 45mins."""
+    if not m or m <= 0:
         return '—'
-    h, mm = divmod(m, 60)
-    return ('%dh' % h if h else '') + (' %02dm' % mm if h and mm else ('%dm' % mm if mm else ''))
+    h, mm = divmod(int(m), 60)
+    parts = []
+    if h:
+        parts.append('%dhr%s' % (h, '' if h == 1 else 's'))
+    if mm:
+        parts.append('%dmin%s' % (mm, '' if mm == 1 else 's'))
+    return ' '.join(parts)
+
+
+# The sessions recent WAEC / NECO SSCE timetables use most: (start, end).
+# WAEC: essays/practicals from 9:30am, objectives from 2:00pm (often followed by
+# a short oral/listening paper). NECO: morning papers from 10:00am, afternoon
+# papers from 2:00pm or 3:00pm.
+COMMON_SESSIONS = {
+    'waec': [('09:30', '12:30'), ('09:30', '12:00'), ('09:30', '11:30'), ('09:30', '11:00'),
+             ('14:00', '15:30'), ('14:00', '15:00'), ('14:00', '17:00'), ('15:30', '16:15')],
+    'neco': [('10:00', '13:00'), ('10:00', '12:45'), ('10:00', '12:00'), ('10:00', '11:30'),
+             ('14:00', '15:30'), ('15:00', '16:30'), ('15:00', '16:00'), ('14:00', '17:00')],
+}
+DURATIONS = [45, 60, 90, 120, 150, 165, 180]
 
 
 def fmt_time(t):

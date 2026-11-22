@@ -120,3 +120,17 @@ def test_exam_timetable_flow(app):
     c.post(f'/tools/exam-timetable/{tid}/delete', data={'_csrf_token': auth_csrf(c)})
     with app.app_context():
         assert db.session.get(ExamTimetable, tid) is None
+
+
+def test_duration_wording_and_common_sessions(app):
+    from utils.exam_timetable import fmt_dur
+    assert [fmt_dur(m) for m in (45, 60, 90, 120, 165, 180)] == \
+        ['45mins', '1hr', '1hr 30mins', '2hrs', '2hrs 45mins', '3hrs']
+    c = _admin(app)
+    for board, first in (('waec', '9:30am–12:30pm'), ('neco', '10am–1pm')):
+        c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': board, 'year': '2040'})
+        with app.app_context():
+            tid = ExamTimetable.query.filter_by(board=board, year=2040).order_by(ExamTimetable.id.desc()).first().id
+        page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
+        assert 'Common %s sessions' % board.upper() in page and first in page
+        assert '<option value="90" >1hr 30mins</option>' in page or '>1hr 30mins</option>' in page

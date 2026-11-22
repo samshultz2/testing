@@ -4,17 +4,24 @@
 {% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_timetable.index') }}">WAEC / NECO Timetable</a> / <span>{{ xt.title }}</span>{% endblock %}
 
 {% macro paper_fields(p=None, default_date='', prefix='') %}
-<div class="xe-fg">
+{% set st = p.start_time.strftime('%H:%M') if p else sessions[0].start %}
+{% set en = p.end_time.strftime('%H:%M') if p else sessions[0].end %}
+{% set mins = ((p.end_time.hour * 60 + p.end_time.minute) - (p.start_time.hour * 60 + p.start_time.minute)) if p else sessions[0].minutes %}
+<div class="xe-time" data-time>
   <label class="xe-f"><span>Date</span><input class="xe-in" type="date" name="exam_date" required value="{{ p.exam_date.isoformat() if p else default_date }}"></label>
-  <label class="xe-f"><span>Starts</span><input class="xe-in" type="time" name="start_time" required value="{{ p.start_time.strftime('%H:%M') if p else '09:00' }}" data-start></label>
-  <label class="xe-f"><span>Ends</span><input class="xe-in" type="time" name="end_time" required value="{{ p.end_time.strftime('%H:%M') if p else '11:00' }}" data-end></label>
+  <p class="xe-sub">Common {{ xt.board_label }} sessions</p>
+  <div class="xe-sess" role="group" aria-label="Common {{ xt.board_label }} sessions">
+    {% for s in sessions %}<button type="button" data-t="{{ s.start }}-{{ s.end }}" class="{{ 'on' if s.start == st and s.end == en }}"><b>{{ s.label }}</b><small>{{ s.dur }}</small></button>{% endfor %}
+  </div>
+  <div class="xe-fg">
+    <label class="xe-f"><span>Starts</span><input class="xe-in" type="time" name="start_time" required value="{{ st }}" data-start></label>
+    <label class="xe-f"><span>Duration</span><select class="xe-in" data-dur aria-label="Duration">
+      {% for m in durations %}<option value="{{ m }}" {{ 'selected' if m == mins }}>{{ fmt_dur(m) }}</option>{% endfor %}
+      <option value="" {{ 'selected' if mins not in durations }}>{{ fmt_dur(mins) ~ ' (custom)' if mins not in durations else 'Custom' }}</option>
+    </select></label>
+    <label class="xe-f"><span>Ends</span><input class="xe-in" type="time" name="end_time" required value="{{ en }}" data-end></label>
+  </div>
 </div>
-{% if not p %}
-<div class="xe-quick" aria-label="Common times">
-  {% for a, b in [('08:30','10:30'), ('09:00','11:00'), ('09:30','12:30'), ('12:00','14:00'), ('14:00','16:00'), ('14:30','17:30')] %}
-  <button type="button" data-t="{{ a }}-{{ b }}">{{ a }}–{{ b }}</button>{% endfor %}
-</div>
-{% endif %}
 <div class="xe-fg two">
   {% set cur_s = p.subject if p else '' %}{% set cur_p = (p.paper or '') if p else '' %}
   <div class="xe-f"><label><span>Subject</span>
@@ -86,6 +93,14 @@
 .xe-f span{display:block;font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:.25rem}
 .xe-in{width:100%;height:40px;padding:0 .7rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
 textarea.xe-in{height:auto;padding:.6rem .7rem}
+.xe-sub{font-size:.72rem;font-weight:700;color:var(--text-secondary);margin:0 0 .35rem}
+.xe-sess{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:.35rem;margin-bottom:.7rem}
+.xe-sess button{display:flex;flex-direction:column;align-items:flex-start;gap:.05rem;border:1px solid var(--border-color);background:var(--bg-card);border-radius:10px;padding:.4rem .55rem;cursor:pointer;color:var(--text-primary);font:inherit;text-align:left}
+.xe-sess button b{font-size:.78rem;white-space:nowrap}
+.xe-sess button small{font-size:.68rem;color:var(--text-muted);font-weight:600}
+.xe-sess button:hover{border-color:var(--primary)}
+.xe-sess button.on{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--bg-card))}
+.xe-sess button.on b,.xe-sess button.on small{color:var(--primary)}
 .xe-quick{display:flex;gap:.35rem;flex-wrap:wrap;margin:-.2rem 0 .7rem}
 .xe-quick button{border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.25rem .6rem;font-size:.74rem;font-weight:700;color:var(--text-secondary);cursor:pointer}
 .xe-quick button:hover{border-color:var(--primary);color:var(--primary)}
@@ -218,11 +233,29 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
 (function () {
-  document.querySelectorAll('[data-t]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var f = b.closest('form'), t = b.dataset.t.split('-');
-      f.querySelector('[data-start]').value = t[0]; f.querySelector('[data-end]').value = t[1];
+  // Time picker: a common session sets start + end; start or duration
+  // changes recompute the end; editing the end updates the duration.
+  function hm(v) { var a = (v || '').split(':'); return a.length < 2 ? null : (+a[0]) * 60 + (+a[1]); }
+  function fmt(m) { m = ((m % 1440) + 1440) % 1440; return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + m % 60).slice(-2); }
+  function durLabel(m) { var h = Math.floor(m / 60), r = m % 60, out = [];
+    if (h) out.push(h + 'hr' + (h === 1 ? '' : 's')); if (r) out.push(r + 'min' + (r === 1 ? '' : 's')); return out.join(' ') || '—'; }
+  document.querySelectorAll('[data-time]').forEach(function (box) {
+    var st = box.querySelector('[data-start]'), en = box.querySelector('[data-end]'), du = box.querySelector('[data-dur]');
+    var custom = du.querySelector('option[value=""]');
+    function mark() {
+      var s = hm(st.value), e = hm(en.value), m = (s != null && e != null) ? e - s : null;
+      var opt = m != null && du.querySelector('option[value="' + m + '"]');
+      if (opt) { du.value = String(m); custom.textContent = 'Custom'; }
+      else { du.value = ''; custom.textContent = m > 0 ? durLabel(m) + ' (custom)' : 'Custom'; }
+      box.querySelectorAll('[data-t]').forEach(function (b) { b.classList.toggle('on', b.dataset.t === st.value + '-' + en.value); });
+    }
+    function fromDur() { var s = hm(st.value), m = parseInt(du.value, 10); if (s != null && m) en.value = fmt(s + m); mark(); }
+    box.querySelectorAll('[data-t]').forEach(function (b) {
+      b.addEventListener('click', function () { var t = b.dataset.t.split('-'); st.value = t[0]; en.value = t[1]; mark(); });
     });
+    st.addEventListener('change', function () { if (du.value) fromDur(); else mark(); });
+    du.addEventListener('change', fromDur);
+    en.addEventListener('change', mark);
   });
   // Drop-downs with an "Other…" choice reveal a box to type anything not listed.
   document.querySelectorAll('select[data-other]').forEach(function (sel) {

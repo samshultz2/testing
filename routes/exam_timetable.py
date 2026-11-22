@@ -74,6 +74,20 @@ def _paper_from_form(form, paper=None):
     return paper, None
 
 
+def _short(t):
+    return ('%d:%02d%s' % (t.hour % 12 or 12, t.minute, 'am' if t.hour < 12 else 'pm')).replace(':00', '')
+
+
+def _sessions(board):
+    out = []
+    for a, b in ET.COMMON_SESSIONS.get(board, ET.COMMON_SESSIONS['waec']):
+        s, e = _parse_time(a), _parse_time(b)
+        m = ET.minutes(s, e)
+        out.append({'start': a, 'end': b, 'minutes': m, 'dur': ET.fmt_dur(m),
+                    'label': '%s–%s' % (_short(s), _short(e))})
+    return out
+
+
 @exam_timetable_bp.route('/')
 @login_required
 def index():
@@ -122,6 +136,7 @@ def edit(tt_id):
     last = data['rows'][-1]['p'] if data['rows'] else None
     return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, subj_mine=mine, subj_rest=rest, presets=PAPER_PRESETS,
                            kinds=ET.KINDS, fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur, last=last,
+                           sessions=_sessions(tt.board), durations=ET.DURATIONS,
                            others=[t for t in scope_query(ExamTimetable.query, ExamTimetable).all() if t.id != tt.id])
 
 
