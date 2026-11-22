@@ -1,164 +1,194 @@
 {% extends "base.html" %}
-{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
+{% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_waec/_shell.html" import mw_nav with context %}
 {% block title %}Progress Trends — Mock WAEC - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>Progress Trends</span>{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
 <style>
-.tr-head{display:grid;grid-template-columns:1fr;gap:.75rem;margin-bottom:1.1rem}
-@media(min-width:700px){.tr-head{grid-template-columns:1fr 1fr}}
-.tr-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem 1.1rem}
-.tr-card .v{font-size:1.6rem;font-weight:800;font-family:var(--font-display);line-height:1.1}
-.tr-card .l{font-size:.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em;font-weight:700;margin-top:.3rem}
-.tr-card .s{font-size:.74rem;color:var(--text-muted);margin-top:.15rem}
-.dir-up{color:#047857}.dir-down{color:#dc2626}.dir-flat{color:var(--text-secondary)}
-.tr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-bottom:1rem}
-.chart-wrap{position:relative;height:260px}
-.da-note{font-size:.78rem;color:var(--text-muted);margin-top:.6rem;line-height:1.45;border-left:3px solid var(--border-color);padding-left:.6rem}
-.spark td{font-variant-numeric:tabular-nums}
-.mv{display:flex;justify-content:space-between;gap:.6rem;padding:.4rem 0;border-bottom:1px solid var(--border-color)}
-.mv .nm{font-weight:600;font-size:.84rem}.mv .badge2{font-size:.72rem;color:var(--text-muted)}
-.reco-cols{display:grid;grid-template-columns:1fr;gap:1rem}
-@media(min-width:900px){.reco-cols{grid-template-columns:repeat(3,1fr)}}
-.reco-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem}
-.reco-card h4{margin:0 0 .6rem;font-size:.95rem;display:flex;align-items:center;gap:.4rem}
-.reco-item{border-left:3px solid var(--border-color);padding:.35rem 0 .55rem .65rem;margin-bottom:.55rem}
-.reco-item .t{font-weight:700;font-size:.82rem}.reco-item .x{font-size:.78rem;color:var(--text-secondary);line-height:1.45}
-.reco-positive{border-left-color:#047857}.reco-negative{border-left-color:#dc2626}
-.reco-warning{border-left-color:#b45309}.reco-insight{border-left-color:#2563eb}
+.tr-scope{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
+.tr-scope a{display:inline-flex;align-items:center;gap:.35rem;height:34px;padding:0 .85rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:.83rem;font-weight:600;text-decoration:none;white-space:nowrap}
+.tr-scope a.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.tr-tiles .rs-tile .v i{font-size:.9rem;margin-left:.3rem}
+.tr-tiles .rs-tile .v .ar{font-size:1rem;color:var(--text-muted);font-weight:600;margin:0 .2rem}
+.dir-up{color:var(--success)}.dir-down{color:var(--danger)}.dir-flat{color:var(--text-muted)}
+.tr-mocks{display:flex;gap:.5rem;overflow-x:auto;scrollbar-width:none;margin-bottom:1rem;padding-bottom:2px}
+.tr-mocks::-webkit-scrollbar{display:none}
+.tr-mock{flex:none;display:flex;flex-direction:column;gap:.1rem;min-width:150px;padding:.65rem .85rem;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-card);text-decoration:none;color:inherit}
+.tr-mock:hover{border-color:var(--primary)}
+.tr-mock .k{font-size:.68rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--primary)}
+.tr-mock b{font-size:.88rem}
+.tr-mock small{font-size:.75rem;color:var(--text-muted)}
+.tr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:1rem;margin-bottom:1rem}
+.tr-chart{position:relative;height:250px}
+.tr-note{font-size:.78rem;color:var(--text-muted);margin:.6rem 0 0;line-height:1.45}
+.tr-tbl-wrap{overflow-x:auto}
+.tr-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:.85rem}
+.tr-tbl th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;text-align:center;padding:.55rem .6rem;border-bottom:1px solid var(--border-color);white-space:nowrap}
+.tr-tbl th:first-child,.tr-tbl td:first-child{text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:1}
+.tr-tbl td{padding:.55rem .6rem;text-align:center;border-bottom:1px solid var(--border-light,var(--border-color));white-space:nowrap;font-variant-numeric:tabular-nums}
+.tr-tbl tr:last-child td{border-bottom:0}
+.tr-tbl td.nm{font-weight:600;min-width:150px;white-space:normal}
+.tr-tbl td.latest{background:color-mix(in srgb,var(--primary) 4%,var(--bg-card));font-weight:700}
+.tr-spark{display:block;margin:0 auto}
+.tr-pane[hidden]{display:none}
+@media(max-width:600px){.tr-tbl th:nth-last-child(2),.tr-tbl td:nth-last-child(2){display:none}}
+.tr-tabs{padding:.8rem 1rem .2rem;display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}
+.tr-list{display:flex;flex-direction:column}
+.tr-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.6rem 0;border-bottom:1px solid var(--border-light,var(--border-color));text-decoration:none;color:inherit}
+.tr-row:last-child{border-bottom:0}
+a.tr-row:hover .nm{color:var(--primary)}
+.tr-row .nm{font-weight:600;font-size:.88rem}
+.tr-row small{display:block;font-size:.75rem;color:var(--text-muted)}
+.tr-delta{font-weight:800;font-size:.85rem;padding:.2rem .55rem;border-radius:999px;white-space:nowrap}
+.tr-delta.up{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
+.tr-delta.down{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.tr-reco{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:1rem}
+.tr-ri{padding:.6rem .1rem .7rem .8rem;border-left:3px solid var(--border-color);margin-bottom:.6rem}
+.tr-ri:last-child{margin-bottom:0}
+.tr-ri b{display:block;font-size:.86rem}
+.tr-ri span{font-size:.8rem;color:var(--text-secondary);line-height:1.5}
+.tr-ri.positive{border-left-color:var(--success)}.tr-ri.negative{border-left-color:var(--danger)}
+.tr-ri.warning{border-left-color:var(--warning)}.tr-ri.insight{border-left-color:var(--primary)}
+.tr-h2{font-size:1rem;margin:1.4rem 0 .7rem;display:flex;align-items:center;gap:.5rem}
+.tr-h2 i{color:var(--text-muted)}
 </style>
 {% endblock %}
 
+{% macro spark(points, w=86, h=24) -%}
+{%- set vals = points|reject('none')|list -%}
+{%- if vals|length >= 2 -%}
+{%- set lo = vals|min -%}{%- set hi = vals|max -%}{%- set rng = (hi - lo) or 1 -%}
+{%- set n = points|length -%}
+<svg class="tr-spark" width="{{ w }}" height="{{ h }}" viewBox="0 0 {{ w }} {{ h }}" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="{% for v in points %}{% if v is not none %}{{ '%.1f'|format(3 + (w - 6) * loop.index0 / ((n - 1) or 1)) }},{{ '%.1f'|format(h - 3 - (h - 6) * (v - lo) / rng) }} {% endif %}{% endfor %}"/></svg>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro trend_table(rows, first_col, unit, empty) %}
+<div class="tr-tbl-wrap"><table class="tr-tbl">
+  <thead><tr><th>{{ first_col }}</th>{% for p in d.periods %}<th title="{{ p.mock }} · {{ p.session_name }}">{{ p.label }}</th>{% endfor %}<th>Trend</th><th>Change</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr><td class="nm">{{ r.name }}</td>
+    {% for v in r.points %}<td class="{{ 'latest' if loop.last }}">{{ (v ~ unit) if v is not none else '—' }}</td>{% endfor %}
+    <td class="dir-{{ r.direction }}">{{ spark(r.points) }}</td>
+    <td class="dir-{{ r.direction }}"><b>{% if r.delta is not none %}{{ '%+g'|format(r.delta) }}{% else %}—{% endif %}</b></td></tr>
+  {% else %}<tr><td colspan="{{ d.periods|length + 3 }}" class="rs-muted" style="white-space:normal">{{ empty }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+{% endmacro %}
+
 {% block content %}
-<div class="rs bx bx-legacy">
-<div class="page-header">
-    <div>
-        <h1>Progress Trends — Mock WAEC</h1>
-        <p class="text-muted text-sm">Track credit rates, subjects, teachers and arms across mocks{% if d.meta.multi_session %} and across sessions{% endif %}.</p>
-    </div>
-    <div class="page-header-actions">
-        {% if d and not d.meta.insufficient %}
-        <a href="{{ url_for('mock_waec.trends_export', format='pdf', scope=scope if scope=='all' else '', session_id=selected_session_id) }}" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
-        <a href="{{ url_for('mock_waec.trends_export', format='excel', scope=scope if scope=='all' else '', session_id=selected_session_id) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
-        <a href="{{ url_for('mock_waec.trends_export', format='image', scope=scope if scope=='all' else '', session_id=selected_session_id) }}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> HD image</a>
-        {% endif %}
-        <a href="{{ url_for('mock_waec.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
-    </div>
-</div>
-<div class="no-print">{{ mw_nav('trends', selected_session_id or None) }}</div>
+{% set qs = {'scope': 'all'} if scope == 'all' else {'session_id': selected_session_id} %}
+<div class="rs bx">
+  {% call bx_head('fa-chart-line', 'Progress trends', 'Mock WAEC · how the cohort, subjects, teachers and arms move across mocks' ~ (' and sessions' if d and d.meta.multi_session else '')) %}
+    {% if d and not d.meta.insufficient %}
+    {{ bx_menu('Download', [
+        (url_for('mock_waec.trends_export', format='pdf', **qs), 'fa-file-pdf', 'PDF report'),
+        (url_for('mock_waec.trends_export', format='excel', **qs), 'fa-file-excel', 'Excel workbook'),
+        (url_for('mock_waec.trends_export', format='image', **qs), 'fa-image', 'HD image')], 'fa-download', True) }}
+    {% endif %}
+  {% endcall %}
+  <div class="no-print">{{ mw_nav('trends', selected_session_id or None) }}</div>
 
-<form method="get" class="filter-bar mb-3" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-    <label class="text-sm text-muted">Scope</label>
-    <select name="scope" class="form-control" style="width:auto;">
-        <option value="session" {{ 'selected' if scope != 'all' else '' }}>A single session</option>
-        <option value="all" {{ 'selected' if scope == 'all' else '' }}>All sessions (year-over-year)</option>
-    </select>
-    <select name="session_id" class="form-control" style="width:auto;">
-        {% for s in sessions %}<option value="{{ s.id }}" {{ 'selected' if s.id == selected_session_id else '' }}>{{ s.name }}</option>{% endfor %}
-    </select>
-    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
-    <span class="text-muted text-sm">Choosing “All sessions” ignores the session picker.</span>
-</form>
+  <nav class="tr-scope" aria-label="Which mocks to compare">
+    {% for s in sessions %}<a href="{{ url_for('mock_waec.trends', session_id=s.id) }}" class="{{ 'on' if scope != 'all' and s.id == selected_session_id }}">{{ s.name }}</a>{% endfor %}
+    <a href="{{ url_for('mock_waec.trends', scope='all') }}" class="{{ 'on' if scope == 'all' }}"><i class="fas fa-layer-group" aria-hidden="true"></i> All sessions</a>
+  </nav>
 
-{% if not d or d.meta.insufficient %}
-<div class="card"><div class="card-body"><div class="empty-state">
-    <i class="fas fa-chart-line"></i><h3>Not enough mocks yet</h3>
-    <p>Progress needs at least two mocks with results{{ ' in this session' if scope != 'all' else '' }}. Enter more mock results, or switch scope to “All sessions”.</p>
-    <a href="{{ url_for('mock_waec.index') }}" class="btn btn-primary"><i class="fas fa-arrow-left"></i> Mock WAEC</a>
-</div></div></div>
-{% else %}
+  {% if not d or d.meta.insufficient %}
+  <div class="rs-blank"><span><i class="fas fa-chart-line" aria-hidden="true"></i></span><h3>Not enough mocks yet</h3>
+    <p>Trends need at least two mocks with results{{ ' in this session' if scope != 'all' else '' }}. Enter results for another mock{% if scope != 'all' %}, or compare across all sessions{% endif %}.</p>
+    {% if scope != 'all' %}<a href="{{ url_for('mock_waec.trends', scope='all') }}" class="rs-btn primary"><i class="fas fa-layer-group" aria-hidden="true"></i> All sessions</a>{% endif %}</div>
+  {% else %}
+  {% set h = d.headline %}{% set c0 = d.cohort[0] %}{% set cN = d.cohort[-1] %}
+  <div class="rs-tiles bx-tiles tr-tiles">
+    <div class="rs-tile {{ 'good' if h.primary_direction == 'up' else ('bad' if h.primary_direction == 'down' else '') }}"><span class="l">{{ h.primary_label }}</span>
+      <span class="v">{{ h.primary_last }}<i class="fas fa-arrow-{{ 'up' if h.primary_direction == 'up' else ('down' if h.primary_direction == 'down' else 'right') }} dir-{{ h.primary_direction }}" aria-hidden="true"></i></span>
+      <span class="s">was {{ h.primary_first }}{% if h.primary_delta is not none %} · {{ '%+g'|format(h.primary_delta) }}{% endif %}</span></div>
+    <div class="rs-tile {{ 'good' if h.secondary_direction == 'up' else ('bad' if h.secondary_direction == 'down' else '') }}"><span class="l">{{ h.secondary_label }}</span>
+      <span class="v">{{ h.secondary_last }}<small>%</small><i class="fas fa-arrow-{{ 'up' if h.secondary_direction == 'up' else ('down' if h.secondary_direction == 'down' else 'right') }} dir-{{ h.secondary_direction }}" aria-hidden="true"></i></span>
+      <span class="s">was {{ h.secondary_first }}%{% if h.secondary_delta is not none %} · {{ '%+g'|format(h.secondary_delta) }} pts{% endif %}</span></div>
+    <div class="rs-tile"><span class="l">Credit rate</span>
+      <span class="v">{{ cN.pass_rate if cN.pass_rate is not none else '—' }}<small>%</small></span>
+      <span class="s">of all papers · was {{ c0.pass_rate if c0.pass_rate is not none else '—' }}%</span></div>
+    <div class="rs-tile"><span class="l">Mocks compared</span>
+      <span class="v">{{ d.meta.periods_count }}</span>
+      <span class="s">{{ cN.students or 0 }} students in the latest</span></div>
+  </div>
 
-<div class="tr-head">
-    <div class="tr-card">
-        <div class="v dir-{{ d.headline.primary_direction }}">{{ d.headline.primary_first }} → {{ d.headline.primary_last }}
-            <i class="fas fa-arrow-{{ 'up' if d.headline.primary_direction=='up' else 'down' if d.headline.primary_direction=='down' else 'right' }}"></i></div>
-        <div class="l">{{ d.headline.primary_label }}</div>
-        <div class="s">{% if d.headline.primary_delta is not none %}{{ '%+g'|format(d.headline.primary_delta) }} first → latest{% endif %} · {{ d.meta.periods_count }} mocks · {{ d.meta.span }}</div>
-    </div>
-    <div class="tr-card">
-        <div class="v dir-{{ d.headline.secondary_direction }}">{{ d.headline.secondary_first }} → {{ d.headline.secondary_last }}
-            <i class="fas fa-arrow-{{ 'up' if d.headline.secondary_direction=='up' else 'down' if d.headline.secondary_direction=='down' else 'right' }}"></i></div>
-        <div class="l">{{ d.headline.secondary_label }}</div>
-        <div class="s">{% if d.headline.secondary_delta is not none %}{{ '%+g'|format(d.headline.secondary_delta) }} first → latest{% endif %}</div>
-    </div>
-</div>
+  <div class="tr-mocks" role="list">
+    {% for p in d.periods %}
+    <a role="listitem" class="tr-mock" href="{{ p.deep_url }}" title="Open deep analytics for {{ p.mock }}">
+      <span class="k">{{ p.label }}</span><b>{{ p.mock }}</b>
+      <small>{{ p.session_name }}{% if p.exam_date %} · {{ p.exam_date.strftime('%d %b %Y') if p.exam_date.strftime is defined else p.exam_date }}{% endif %}</small>
+      <small>{{ p.students }} students · {{ p.metrics.avg_credits }} avg credits</small>
+    </a>
+    {% endfor %}
+  </div>
 
-<div class="tr-grid">
-    <div class="card"><div class="card-header"><h3>Cohort trajectory</h3></div>
-        <div class="card-body"><div class="chart-wrap"><canvas id="cohortChart"></canvas></div>
-        <div class="da-note">The two headline metrics across every mock. A rising line means the preparation strategy is working; a fall or plateau is a signal to change approach before the real exam.{% if d.meta.multi_session %} Points span different sessions — read as the institution's trajectory, not one class's.{% endif %}</div></div>
-    </div>
-    <div class="card"><div class="card-header"><h3>Subject credit rate over time</h3></div>
-        <div class="card-body"><div class="chart-wrap"><canvas id="subjChart"></canvas></div>
-        <div class="da-note">Each line is a subject's credit rate per mock. Falling lines are where preparation is slipping — reassign revision time toward them.</div></div>
-    </div>
-</div>
+  <div class="tr-grid">
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas fa-people-group" aria-hidden="true"></i> Cohort trajectory</h3><small>{{ d.meta.span }}</small></div>
+      <div class="tr-chart"><canvas id="cohortChart" role="img" aria-label="Average credits and five-credit rate across mocks"></canvas></div>
+      <p class="tr-note">A rising line means preparation is working; a dip or plateau is the cue to change approach before the real exam.{% if d.meta.multi_session %} Points span sessions, so read it as the school's trajectory rather than one class's.{% endif %}</p></section>
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas fa-book-open" aria-hidden="true"></i> Subject credit rate</h3><small>% of papers credited</small></div>
+      <div class="tr-chart"><canvas id="subjChart" role="img" aria-label="Credit rate per subject across mocks"></canvas></div>
+      <p class="tr-note">Falling lines are where revision time should go next.</p></section>
+  </div>
 
-<div class="card mb-3">
-    <div class="card-header"><h3>Subject trend <span class="text-muted text-sm">— biggest movement first</span></h3></div>
-    <div class="table-responsive"><table class="data-table spark">
-        <thead><tr><th>Subject</th>{% for p in d.periods %}<th title="{{ p.mock }} · {{ p.session_name }}">{{ p.label }}</th>{% endfor %}<th>Trend</th></tr></thead>
-        <tbody>
-            {% for r in d.subject_trends %}
-            <tr>
-                <td><strong>{{ r.name }}</strong></td>
-                {% for v in r.points %}<td>{{ v if v is not none else '—' }}</td>{% endfor %}
-                <td class="dir-{{ r.direction }}"><strong>{% if r.delta is not none %}{{ '%+g'|format(r.delta) }}{% endif %} {{ '↑' if r.direction=='up' else '↓' if r.direction=='down' else '→' }}</strong></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table></div>
-</div>
+  <section class="rs-card flush" style="margin-bottom:1rem">
+    <div class="tr-tabs">
+      <div class="rs-seg" role="tablist">
+        <button type="button" class="on" data-pane="subj" role="tab" aria-selected="true"><i class="fas fa-book" aria-hidden="true"></i> Subjects <em>{{ d.subject_trends|length }}</em></button>
+        <button type="button" data-pane="teach" role="tab" aria-selected="false"><i class="fas fa-chalkboard-user" aria-hidden="true"></i> Teachers <em>{{ d.teacher_trends|length }}</em></button>
+        <button type="button" data-pane="arm" role="tab" aria-selected="false"><i class="fas fa-users" aria-hidden="true"></i> Class arms <em>{{ d.arm_trends|length }}</em></button>
+      </div>
+      <small class="rs-muted" id="trPaneNote">credit rate per mock · weakest change first</small>
+    </div>
+    <div class="tr-pane" data-pane="subj" data-note="credit rate per mock · weakest change first">{{ trend_table(d.subject_trends, 'Subject', '%', 'No subject results yet.') }}</div>
+    <div class="tr-pane" data-pane="teach" data-note="pass rate per mock · weakest change first" hidden>{{ trend_table(d.teacher_trends, 'Teacher', '%', 'No teacher-attributed subjects yet. Set teachers on SSS3 class subjects.') }}</div>
+    <div class="tr-pane" data-pane="arm" data-note="average credits per student, per mock" hidden>{{ trend_table(d.arm_trends, 'Class arm', '', 'No class arms recorded yet.') }}</div>
+  </section>
 
-<div class="card mb-3">
-    <div class="card-header"><h3>Teacher trend <span class="text-muted text-sm">— pass rate per mock (a trend is stronger evidence than one sitting)</span></h3></div>
-    <div class="table-responsive"><table class="data-table spark">
-        <thead><tr><th>Teacher</th>{% for p in d.periods %}<th>{{ p.label }}</th>{% endfor %}<th>Trend</th></tr></thead>
-        <tbody>
-            {% for r in d.teacher_trends %}
-            <tr>
-                <td><strong>{{ r.name }}</strong></td>
-                {% for v in r.points %}<td>{{ v if v is not none else '—' }}</td>{% endfor %}
-                <td class="dir-{{ r.direction }}"><strong>{% if r.delta is not none %}{{ '%+g'|format(r.delta) }}{% endif %} {{ '↑' if r.direction=='up' else '↓' if r.direction=='down' else '→' }}</strong></td>
-            </tr>
-            {% else %}<tr><td colspan="{{ d.periods|length + 2 }}" class="text-muted text-sm">No teacher-attributed subjects yet. Set teachers on SSS3 Class Subjects.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table></div>
-</div>
+  <div class="tr-grid">
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas fa-arrow-trend-up dir-up" aria-hidden="true"></i> Improving</h3><small>subjects &amp; teachers</small></div>
+      <div class="tr-list">
+        {% for m in d.movers.improving[:6] %}<div class="tr-row"><div><span class="nm">{{ m.name }}</span><small>{{ m.kind|capitalize }} · now {{ m.current }}%</small></div><span class="tr-delta up">{{ '%+g'|format(m.delta) }}</span></div>
+        {% else %}<p class="rs-muted">No clear improvers yet.</p>{% endfor %}
+      </div></section>
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas fa-arrow-trend-down dir-down" aria-hidden="true"></i> Needs attention</h3><small>subjects &amp; teachers</small></div>
+      <div class="tr-list">
+        {% for m in d.movers.declining[:6] %}<div class="tr-row"><div><span class="nm">{{ m.name }}</span><small>{{ m.kind|capitalize }} · now {{ m.current }}%</small></div><span class="tr-delta down">{{ '%+g'|format(m.delta) }}</span></div>
+        {% else %}<p class="rs-muted">Nothing declining.</p>{% endfor %}
+      </div></section>
+  </div>
 
-<div class="tr-grid">
-    <div class="card"><div class="card-header"><h3><i class="fas fa-arrow-trend-up" style="color:#047857;"></i> Improving</h3></div>
-        <div class="card-body">
-            {% for m in d.movers.improving %}
-            <div class="mv"><div><div class="nm">{{ m.name }}</div><div class="badge2">{{ m.kind }} · now {{ m.current }}%</div></div><div class="dir-up"><strong>{{ '%+g'|format(m.delta) }}</strong></div></div>
-            {% else %}<p class="text-muted text-sm">No clear improvers yet.</p>{% endfor %}
-        </div>
-    </div>
-    <div class="card"><div class="card-header"><h3><i class="fas fa-arrow-trend-down" style="color:#dc2626;"></i> Declining — attention</h3></div>
-        <div class="card-body">
-            {% for m in d.movers.declining %}
-            <div class="mv"><div><div class="nm">{{ m.name }}</div><div class="badge2">{{ m.kind }} · now {{ m.current }}%</div></div><div class="dir-down"><strong>{{ '%+g'|format(m.delta) }}</strong></div></div>
-            {% else %}<p class="text-muted text-sm">Nothing declining — good.</p>{% endfor %}
-        </div>
-    </div>
-</div>
+  {% if student_moves.compared %}
+  <div class="tr-grid">
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas fa-user-plus dir-up" aria-hidden="true"></i> Students climbing</h3><small>credits {{ student_moves.first }} → {{ student_moves.last }}</small></div>
+      <div class="tr-list">
+        {% for m in student_moves.climbing %}<a class="tr-row" href="{{ m.url }}"><div><span class="nm">{{ m.name }}</span><small>{{ m.before }} → {{ m.now }} credits</small></div><span class="tr-delta up">{{ '%+d'|format(m.delta) }}</span></a>
+        {% else %}<p class="rs-muted">No student has gained credits yet.</p>{% endfor %}
+      </div></section>
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas fa-user-minus dir-down" aria-hidden="true"></i> Students slipping</h3><small>credits {{ student_moves.first }} → {{ student_moves.last }}</small></div>
+      <div class="tr-list">
+        {% for m in student_moves.slipping %}<a class="tr-row" href="{{ m.url }}"><div><span class="nm">{{ m.name }}</span><small>{{ m.before }} → {{ m.now }} credits</small></div><span class="tr-delta down">{{ '%+d'|format(m.delta) }}</span></a>
+        {% else %}<p class="rs-muted">No student has lost credits.</p>{% endfor %}
+      </div></section>
+  </div>
+  {% endif %}
 
-<h3 style="margin:1.2rem 0 .6rem;">Recommendations</h3>
-<div class="reco-cols">
-    <div class="reco-card"><h4><i class="fas fa-user-graduate" style="color:#2563eb;"></i> Students</h4>
-        {% for r in d.recommendations.students %}<div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>{% else %}<p class="text-muted text-sm">Nothing flagged.</p>{% endfor %}
-    </div>
-    <div class="reco-card"><h4><i class="fas fa-chalkboard-teacher" style="color:#0d9488;"></i> Teachers</h4>
-        {% for r in d.recommendations.teachers %}<div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>{% else %}<p class="text-muted text-sm">Nothing flagged.</p>{% endfor %}
-    </div>
-    <div class="reco-card"><h4><i class="fas fa-briefcase" style="color:#b45309;"></i> Management</h4>
-        {% for r in d.recommendations.management %}<div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>{% else %}<p class="text-muted text-sm">Nothing flagged.</p>{% endfor %}
-    </div>
-</div>
-{% endif %}
+  <h2 class="tr-h2"><i class="fas fa-lightbulb" aria-hidden="true"></i> Recommendations</h2>
+  <div class="tr-reco">
+    {% for key, icon, title in [('students', 'fa-user-graduate', 'Students'), ('teachers', 'fa-chalkboard-user', 'Teachers'), ('management', 'fa-briefcase', 'Management')] %}
+    <section class="rs-card"><div class="rs-card-h"><h3><i class="fas {{ icon }}" aria-hidden="true"></i> {{ title }}</h3></div>
+      {% for r in d.recommendations[key] %}<div class="tr-ri {{ r.tone }}"><b>{{ r.title }}</b><span>{{ r.text }}</span></div>
+      {% else %}<p class="rs-muted">Nothing flagged.</p>{% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -166,38 +196,41 @@
 {% if d and not d.meta.insufficient %}
 <script nonce="{{ csp_nonce }}" id="tr-data" type="application/json">{{ {'labels': d.periods|map(attribute='label')|list, 'cohort': d.cohort, 'primary_label': d.headline.primary_label, 'secondary_label': d.headline.secondary_label, 'subjects': d.subject_trends}|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
-(function(){
-    function draw(){
-        if(!window.Chart){return;}
-        var dataEl=document.getElementById('tr-data');
-        if(!dataEl){return;}   // node absent after an SPA swap to another page
-        var p=JSON.parse(dataEl.textContent);
-        var cs=getComputedStyle(document.documentElement);
-        var grid=cs.getPropertyValue('--border-color')||'rgba(140,140,140,.2)';
-        try{Chart.defaults.color=cs.getPropertyValue('--text-secondary')||'#667';}catch(e){}
-        var palette=['#2563eb','#047857','#b45309','#7c3aed','#dc2626','#0d9488','#c2410c','#0891b2','#9333ea','#65a30d'];
-
-        var cEl=document.getElementById('cohortChart');
-        if(cEl){new Chart(cEl,{type:'line',
-            data:{labels:p.labels,datasets:[
-                {label:p.primary_label,data:p.cohort.map(function(c){return c.primary;}),borderColor:'#2563eb',backgroundColor:'#2563eb22',tension:.3,yAxisID:'y',spanGaps:true},
-                {label:p.secondary_label,data:p.cohort.map(function(c){return c.secondary;}),borderColor:'#047857',backgroundColor:'#04785722',tension:.3,yAxisID:'y1',spanGaps:true}
-            ]},
-            options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-                plugins:{legend:{position:'bottom'}},
-                scales:{y:{position:'left',beginAtZero:true,grid:{color:grid}},
-                    y1:{position:'right',beginAtZero:true,grid:{display:false}},x:{grid:{display:false}}}}});}
-
-        var sEl=document.getElementById('subjChart');
-        if(sEl){var subs=(p.subjects||[]).slice(0,8);
-            new Chart(sEl,{type:'line',
-                data:{labels:p.labels,datasets:subs.map(function(s,i){return {label:s.name,
-                    data:s.points,borderColor:palette[i%palette.length],backgroundColor:'transparent',tension:.3,spanGaps:true};})},
-                options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-                    plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}}},
-                    scales:{y:{beginAtZero:true,max:100,grid:{color:grid}},x:{grid:{display:false}}}}});}
-    }
-    if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',draw);}else{draw();}
+(function () {
+  function tabs() {
+    var note = document.getElementById('trPaneNote');
+    document.querySelectorAll('.tr-tabs [data-pane]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.tr-tabs [data-pane]').forEach(function (x) { var on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); });
+        document.querySelectorAll('.tr-pane').forEach(function (p) { p.hidden = p.dataset.pane !== b.dataset.pane; if (!p.hidden && note) note.textContent = p.dataset.note; });
+      });
+    });
+  }
+  function draw() {
+    tabs();
+    var src = document.getElementById('tr-data');
+    if (!window.Chart || !src) return;
+    var p = JSON.parse(src.textContent), cs = getComputedStyle(document.documentElement);
+    var grid = cs.getPropertyValue('--border-color') || 'rgba(140,140,140,.2)';
+    var prim = (cs.getPropertyValue('--primary') || '#1f6b4a').trim(), acc = '#b45309';
+    var palette = [prim, '#b45309', '#2563eb', '#7c3aed', '#dc2626', '#0d9488', '#c2410c', '#0891b2'];
+    var c = document.getElementById('cohortChart');
+    if (c) new Chart(c, {type: 'line',
+      data: {labels: p.labels, datasets: [
+        {label: p.primary_label, data: p.cohort.map(function (x) { return x.primary; }), borderColor: prim, backgroundColor: prim, tension: .3, yAxisID: 'y', spanGaps: true, pointRadius: 4},
+        {label: p.secondary_label, data: p.cohort.map(function (x) { return x.secondary; }), borderColor: acc, backgroundColor: acc, borderDash: [5, 4], tension: .3, yAxisID: 'y1', spanGaps: true, pointRadius: 4}]},
+      options: {responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 10}}},
+        scales: {y: {beginAtZero: true, suggestedMax: 9, grid: {color: grid}}, y1: {position: 'right', beginAtZero: true, max: 100, grid: {display: false}}, x: {grid: {display: false}}}}});
+    var s = document.getElementById('subjChart');
+    if (s) new Chart(s, {type: 'line',
+      data: {labels: p.labels, datasets: (p.subjects || []).slice(0, 6).map(function (r, i) {
+        return {label: r.name, data: r.points, borderColor: palette[i % palette.length], backgroundColor: palette[i % palette.length], tension: .3, spanGaps: true, pointRadius: 3}; })},
+      options: {responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 10, font: {size: 10}}}},
+        scales: {y: {beginAtZero: true, max: 100, grid: {color: grid}}, x: {grid: {display: false}}}}});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', draw); else draw();
 })();
 </script>
 {% endif %}

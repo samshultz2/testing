@@ -641,10 +641,42 @@ def trends():
         p['deep_url'] = url_for('mock_waec.deep', exam_id=p['exam_id'])
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
     return render_template('mock_waec/deep_trends.html', d=data,
+                           student_moves=_student_moves(data.get('periods') or []),
                            scope='all' if session_id is None else 'session',
                            selected_session_id=session_id or '',
                            sessions=sessions,
                            compose_base=url_for('comms.compose'))
+
+
+def _student_moves(periods, limit=8):
+    """Students who sat both the first and the latest mock in the trend window,
+    ranked by the change in credits — the climbers and the slippers."""
+    if len(periods) < 2:
+        return {'climbing': [], 'slipping': [], 'first': None, 'last': None}
+    from models.mock_waec import PASS_GRADES
+    from utils.access_control import exam_student_scope
+    scope = exam_student_scope()             # own-arm only for SSS3 teachers
+    first, last = periods[0], periods[-1]
+
+    def credits(exam_id):
+        out = {}
+        rows = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
+                .join(Student).filter(Student.is_active == True).all())   # noqa: E712
+        for r in rows:
+            out.setdefault(r.student_id, [0, r.student])
+            if not r.is_absent and r.grade in PASS_GRADES:
+                out[r.student_id][0] += 1
+        return out
+    a, b = credits(first['exam_id']), credits(last['exam_id'])
+    moves = []
+    for sid, (now, st) in b.items():
+        if sid not in a or (scope is not None and sid not in scope):
+            continue
+        moves.append({'name': st.full_name, 'before': a[sid][0], 'now': now, 'delta': now - a[sid][0],
+                      'url': url_for('mock_waec.student_progress', student_id=sid)})
+    return {'climbing': sorted([m for m in moves if m['delta'] > 0], key=lambda m: (-m['delta'], m['name']))[:limit],
+            'slipping': sorted([m for m in moves if m['delta'] < 0], key=lambda m: (m['delta'], m['name']))[:limit],
+            'first': first['label'], 'last': last['label'], 'compared': len(moves)}
 
 
 @mock_waec_bp.route('/trends/export')
@@ -1414,9 +1446,81 @@ def student_progress(student_id):
     from utils.access_control import assert_exam_student
     assert_exam_student(student_id)          # own-arm only for SSS3 teachers
     progress = MockWAECAnalytics.get_student_progress(student_id)
-    prediction = MockWAECAnalytics.predict_waec(student_id)
+    prediction = MockWAECAnalytics._predict_from_progress(progress)
+    outlook = MockWAECAnalytics.subject_outlook(student_id)
     return render_template('mock_waec/student_progress.html',
-        student=student, progress=progress, prediction=prediction)
+        student=student, progress=progress, prediction=prediction,
+        **_student_progress_view(student, progress, outlook))
+
+
+def _student_progress_view(student, progress, outlook):
+    """The extra pieces the student progress page shows: a subject × mock
+    grid with the latest change and the projected WAEC grade, the latest
+    sitting's focus list (missing core, borderline 45–49, fails), the chart
+    series and the class label."""
+    from models.mock_waec import CORE_SUBJECTS, PASS_GRADES
+    sittings = (progress or {}).get('progress') or []
+    if not sittings:
+        return {'matrix': [], 'sittings': [], 'focus': {}, 'chart': None, 'klass': ''}
+    exam_ids = [p['exam_id'] for p in sittings]
+    rows = MockWAECResult.query.filter(MockWAECResult.student_id == student.id,
+                                       MockWAECResult.mock_exam_id.in_(exam_ids)).all()
+    cell = {(r.mock_exam_id, r.subject): r for r in rows}
+    subjects = sorted({r.subject for r in rows},
+                      key=lambda s: (0 if s in CORE_SUBJECTS else 1,
+                                     CORE_SUBJECTS.index(s) if s in CORE_SUBJECTS else 0, s))
+    proj = {p['subject']: p for p in ((outlook or {}).get('subject_predictions') or [])}
+    matrix = []
+    for subj in subjects:
+        cells, scores = [], []
+        for eid in exam_ids:
+            r = cell.get((eid, subj))
+            if r is None:
+                cells.append(None)
+                continue
+            ab = bool(getattr(r, 'is_absent', False))
+            cells.append({'score': None if ab else r.score, 'grade': None if ab else r.grade, 'absent': ab})
+            if not ab and r.score is not None:
+                scores.append(r.score)
+        last, prev = cells[-1], (cells[-2] if len(cells) > 1 else None)
+        change = None
+        if last and prev and last['score'] is not None and prev['score'] is not None:
+            change = round(last['score'] - prev['score'], 1)
+            change = int(change) if change == int(change) else change
+        pr = proj.get(subj)
+        matrix.append({'subject': subj, 'core': subj in CORE_SUBJECTS, 'cells': cells, 'change': change,
+                       'projected': pr['predicted_grade'] if pr else None,
+                       'projected_score': pr['predicted_score'] if pr else None})
+    latest_id = exam_ids[-1]
+    latest = [r for r in rows if r.mock_exam_id == latest_id]
+    credited = {r.subject for r in latest if r.grade in PASS_GRADES and not getattr(r, 'is_absent', False)}
+    focus = {
+        'missing_core': [s for s in CORE_SUBJECTS if s not in credited],
+        'borderline': sorted((r.subject, r.score) for r in latest
+                             if not getattr(r, 'is_absent', False) and r.score is not None and 45 <= r.score < 50),
+        'failing': sorted(r.subject for r in latest if not getattr(r, 'is_absent', False) and r.grade in ('E8', 'F9')),
+        'absent': sorted(r.subject for r in latest if getattr(r, 'is_absent', False)),
+    }
+    out_sittings = []
+    for i, p in enumerate(sittings):
+        prev = sittings[i - 1] if i else None
+        out_sittings.append({**p,
+            'd_credits': (p['credits'] - prev['credits']) if prev else None,
+            'd_average': (round(p['average_score'] - prev['average_score'], 1)
+                          if prev and p['average_score'] is not None and prev['average_score'] is not None else None),
+            'slip_url': url_for('mock_waec.result_slip', exam_id=p['exam_id'], student_id=student.id),
+            'edit_url': url_for('mock_waec.edit_student_results', exam_id=p['exam_id'], student_id=student.id),
+            'exam_url': url_for('mock_waec.view_exam', exam_id=p['exam_id'])})
+    multi = len({q['session_name'] for q in sittings}) > 1
+    labels = [('M%s' % p['exam_number']) + (' · ' + p['session_name'][-4:] if multi and p['session_name'] else '')
+              for p in sittings]
+    chart = {'labels': labels,
+             'credits': [p['credits'] for p in sittings],
+             'average': [p['average_score'] for p in sittings]}
+    klass = (_with_class([{'student': student, 'summary': None}])[0].get('klass') or '')
+    return {'matrix': matrix, 'sittings': out_sittings, 'focus': focus, 'chart': chart, 'klass': klass,
+            'exam_heads': [{'label': lbl, 'title': p['exam'] + (' · ' + p['session_name'] if p['session_name'] else '')}
+                           for lbl, p in zip(labels, sittings)]}
 
 
 # =============================================================================

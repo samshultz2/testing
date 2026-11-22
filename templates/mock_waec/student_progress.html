@@ -1,61 +1,177 @@
 {% extends "base.html" %}
-{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
-{% block title %}{{ student.full_name }} — Mock WAEC Progress - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>{{ student.full_name }}</span>{% endblock %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "mock_waec/_shell.html" import mw_nav with context %}
+{% block title %}{{ student.full_name }} — Mock WAEC progress - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.trends') }}">Progress</a> / <span>{{ student.full_name }}</span>{% endblock %}
 
 {% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.sp-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:1rem;margin-bottom:1rem}
+@media(max-width:900px){.sp-grid{grid-template-columns:1fr}}
+.sp-chart{position:relative;height:240px}
+.sp-tiles .rs-tile .d{font-size:.74rem;font-weight:700;margin-left:.35rem}
+.sp-up{color:var(--success)}.sp-down{color:var(--danger)}.sp-flat{color:var(--text-muted)}
+.sp-focus{display:flex;flex-direction:column;gap:.7rem}
+.sp-focus h4{margin:0 0 .3rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.sp-chips{display:flex;flex-wrap:wrap;gap:.35rem}
+.sp-chip{font-size:.8rem;font-weight:600;padding:.25rem .6rem;border-radius:999px;background:var(--gray-100);color:var(--text-primary)}
+.sp-chip.bad{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.sp-chip.mid{background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));color:#92400e}
+.sp-chip.good{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
+.sp-ok{font-size:.85rem;color:var(--success);font-weight:600}
+.sp-proj{display:flex;align-items:center;gap:.9rem;padding:.2rem 0 .6rem}
+.sp-proj .big{font-size:2.4rem;font-weight:800;line-height:1;font-family:var(--font-display,inherit)}
+.sp-proj small{display:block;color:var(--text-muted);font-size:.78rem}
+.sp-mx-wrap{overflow-x:auto}
+.sp-mx{width:100%;border-collapse:separate;border-spacing:0;font-size:.85rem}
+.sp-mx th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;text-align:center;padding:.55rem .5rem;border-bottom:1px solid var(--border-color);white-space:nowrap}
+.sp-mx th:first-child,.sp-mx td:first-child{text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:1}
+.sp-mx td{padding:.5rem;text-align:center;border-bottom:1px solid var(--border-light,var(--border-color));white-space:nowrap}
+.sp-mx td.subj{font-weight:600;min-width:150px}
+.sp-mx td.subj small{font-size:.62rem;font-weight:800;letter-spacing:.08em;color:var(--primary);margin-left:.4rem}
+.sp-g{display:inline-flex;align-items:center;gap:.35rem}
+.sp-g b{min-width:2.1rem;padding:.12rem 0;border-radius:6px;font-size:.74rem;font-weight:800;text-align:center}
+.sp-g .s{color:var(--text-secondary);font-variant-numeric:tabular-nums;min-width:1.4rem;text-align:right}
+.sp-g b.d{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.sp-g b.c{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.sp-g b.p{background:color-mix(in srgb,var(--warning) 18%,var(--bg-card));color:#92400e}
+.sp-g b.f{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.sp-abs{font-size:.7rem;font-weight:800;letter-spacing:.08em;color:var(--text-muted)}
+.sp-mx td.latest{background:color-mix(in srgb,var(--primary) 4%,var(--bg-card))}
+.sp-sit{display:flex;flex-direction:column}
+.sp-sit-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.6rem;align-items:center;padding:.75rem 0;border-bottom:1px solid var(--border-light,var(--border-color))}
+.sp-sit-row:last-child{border-bottom:0}
+.sp-sit-t b{display:block;font-size:.92rem}
+.sp-sit-t small{color:var(--text-muted);font-size:.78rem}
+.sp-sit-n{display:flex;gap:.3rem 1rem;font-size:.8rem;color:var(--text-secondary);margin-top:.25rem;flex-wrap:wrap}
+.sp-sit-n strong{color:var(--text-primary)}
+.sp-sit-a{display:flex;gap:.35rem}
+</style>
 {% endblock %}
+
+{% macro gcell(c) -%}
+{%- if c is none -%}<span class="sp-flat">—</span>
+{%- elif c.absent -%}<span class="sp-abs">ABS</span>
+{%- else -%}{% set g = c.grade or '' %}<span class="sp-g"><span class="s">{{ c.score|int if c.score is not none and c.score == c.score|int else (c.score if c.score is not none else '') }}</span><b class="{{ 'd' if g in ('A1','B2','B3') else ('c' if g in ('C4','C5','C6') else ('p' if g in ('D7','E8') else 'f')) }}">{{ g or '—' }}</b></span>
+{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
-<div class="rs bx bx-legacy">
-<div class="page-header"><div>
-    <h1>{{ student.full_name }}</h1>
-    <p class="text-muted text-sm">Mock WAEC progression &middot; {{ student.student_id }}</p>
-</div></div>
-<div class="no-print">{{ mw_nav('exams') }}</div>
+<div class="rs bx">
+  {% call bx_head('fa-user-graduate', student.full_name, 'Mock WAEC progress · ' ~ (student.student_id or '') ~ ((' · ' ~ klass) if klass else '') ~ ((' · ' ~ student.stream) if student.stream else '')) %}
+    <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="rs-btn ghost"><i class="fas fa-id-card" aria-hidden="true"></i><span class="rs-hide-sm">Student profile</span></a>
+    {% if sittings %}<a href="{{ sittings[-1].slip_url }}" class="rs-btn primary"><i class="fas fa-file-lines" aria-hidden="true"></i><span class="rs-hide-sm">Latest result slip</span></a>{% endif %}
+  {% endcall %}
+  <div class="no-print">{{ mw_nav('trends') }}</div>
 
-{% if not progress %}
-<div class="card"><div class="card-body"><div class="empty-state">
-    <i class="fas fa-clipboard-check"></i><h3>No Mock WAEC results</h3>
-    <p>This student has no recorded Mock WAEC sittings yet.</p>
-</div></div></div>
-{% else %}
+  {% if not progress %}
+  <div class="rs-blank"><span><i class="fas fa-clipboard-check" aria-hidden="true"></i></span><h3>No Mock WAEC results yet</h3>
+    <p>This student hasn’t sat a Mock WAEC with results entered.</p>
+    <a href="{{ url_for('mock_waec.index') }}" class="rs-btn primary"><i class="fas fa-arrow-left" aria-hidden="true"></i> Mock WAEC</a></div>
+  {% else %}
+  {% set last = sittings[-1] %}
+  <div class="rs-tiles bx-tiles sp-tiles">
+    <div class="rs-tile {{ 'good' if last.has_5_incl_core else 'bad' }}"><span class="l">Latest credits</span>
+      <span class="v">{{ last.credits }}{% if last.d_credits is not none %}<span class="d {{ 'sp-up' if last.d_credits > 0 else ('sp-down' if last.d_credits < 0 else 'sp-flat') }}">{{ '%+d'|format(last.d_credits) }}</span>{% endif %}</span>
+      <span class="s">{{ last.exam }} · best {{ progress.best_credits }}</span></div>
+    <div class="rs-tile"><span class="l">Latest average</span>
+      <span class="v">{{ last.average_score if last.average_score is not none else '—' }}<small>%</small>{% if last.d_average is not none %}<span class="d {{ 'sp-up' if last.d_average > 0 else ('sp-down' if last.d_average < 0 else 'sp-flat') }}">{{ '%+g'|format(last.d_average) }}</span>{% endif %}</span>
+      <span class="s">{{ last.distinctions }} distinction{{ '' if last.distinctions == 1 else 's' }}</span></div>
+    <div class="rs-tile {{ 'good' if last.has_5_incl_core else 'bad' }}"><span class="l">5 credits incl. Eng &amp; Maths</span>
+      <span class="v">{{ 'Yes' if last.has_5_incl_core else 'No' }}</span>
+      <span class="s">{% if last.missing_core %}needs {{ last.missing_core|join(' & ') }}{% elif last.credits < 5 %}{{ last.credits }} of 5 credits · core credited{% else %}{{ last.credits }} credits · core credited{% endif %}</span></div>
+    {% if prediction %}
+    <div class="rs-tile {{ 'good' if prediction.meets_minimum_incl_core else ('mid' if prediction.meets_minimum else 'bad') }}"><span class="l">Projected WAEC credits</span>
+      <span class="v">{{ prediction.predicted_credits }}</span>
+      <span class="s">{{ prediction.quality|capitalize }} · {{ prediction.confidence }}% confidence</span></div>
+    {% endif %}
+  </div>
 
-{% if prediction %}
-<div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-wand-magic-sparkles"></i> Real-WAEC projection</h3></div>
-    <div class="card-body d-flex gap-4" style="flex-wrap:wrap;">
-        <div><div class="text-muted text-sm">Predicted credits</div><div style="font-size:2rem;font-weight:700;">{{ prediction.predicted_credits }}</div></div>
-        <div><div class="text-muted text-sm">Outlook</div><div style="font-size:1.2rem;font-weight:600;">{{ prediction.quality }}</div>
-            <span class="badge badge-{{ 'success' if prediction.meets_minimum else 'danger' }}">{{ 'Meets 5-credit minimum' if prediction.meets_minimum else 'Below 5-credit minimum' }}</span></div>
-        <div><div class="text-muted text-sm">Trend</div><div style="font-size:1.2rem;">{{ prediction.trend|capitalize }}</div></div>
-        <div><div class="text-muted text-sm">Confidence</div><div style="font-size:1.2rem;">{{ prediction.confidence }}%</div>
-            <div class="text-sm text-muted">from {{ prediction.based_on_exams }} mock(s)</div></div>
-    </div>
-</div>
-{% endif %}
+  <div class="sp-grid">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-chart-line" aria-hidden="true"></i> Progress across mocks</h3><small>{{ progress.exam_count }} sitting{{ '' if progress.exam_count == 1 else 's' }} · trend {{ progress.trend|replace('_', ' ') }}</small></div>
+      {% if sittings|length >= 2 %}<div class="sp-chart"><canvas id="spChart" aria-label="Credits and average across mocks" role="img"></canvas></div>
+      {% else %}<p class="rs-muted">The chart appears once this student has sat two mocks.</p>{% endif %}
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Focus before WAEC</h3><small>from {{ last.exam }}</small></div>
+      <div class="sp-focus">
+        {% if focus.missing_core %}<div><h4>Core subjects not yet credited</h4><div class="sp-chips">{% for s in focus.missing_core %}<span class="sp-chip bad">{{ s }}</span>{% endfor %}</div></div>{% endif %}
+        {% if focus.borderline %}<div><h4>A few marks from a credit (45–49)</h4><div class="sp-chips">{% for s, sc in focus.borderline %}<span class="sp-chip mid">{{ s }} · {{ sc|int }}</span>{% endfor %}</div></div>{% endif %}
+        {% if focus.failing %}<div><h4>E8 / F9</h4><div class="sp-chips">{% for s in focus.failing %}<span class="sp-chip bad">{{ s }}</span>{% endfor %}</div></div>{% endif %}
+        {% if focus.absent %}<div><h4>Missed papers</h4><div class="sp-chips">{% for s in focus.absent %}<span class="sp-chip">{{ s }}</span>{% endfor %}</div></div>{% endif %}
+        {% if not (focus.missing_core or focus.borderline or focus.failing or focus.absent) %}<p class="sp-ok"><i class="fas fa-circle-check" aria-hidden="true"></i> Nothing flagged — every core subject credited and no near-misses.</p>{% endif %}
+      </div>
+    </section>
+  </div>
 
-<div class="card">
-    <div class="card-header"><h3>Sitting-by-sitting</h3></div>
-    <div class="table-responsive"><table class="data-table">
-        <thead><tr><th>Mock</th><th>Date</th><th>Credits</th><th>Distinctions</th><th>Avg score</th><th>5 credits?</th></tr></thead>
+  <section class="rs-card flush" style="margin-bottom:1rem">
+    <div class="rs-card-h" style="padding:1rem 1.1rem .4rem"><h3><i class="fas fa-table-cells" aria-hidden="true"></i> Subjects across mocks</h3><small>score and grade per mock · change since the previous one</small></div>
+    <div class="sp-mx-wrap">
+      <table class="sp-mx">
+        <thead><tr><th>Subject</th>{% for h in exam_heads %}<th title="{{ h.title }}">{{ h.label }}</th>{% endfor %}<th>Change</th><th title="Projected from this student's mocks">Projected</th></tr></thead>
         <tbody>
-            {% for p in progress.progress %}
-            <tr>
-                <td><strong>{{ p.exam }}</strong></td>
-                <td>{{ p.exam_date.strftime('%d %b %Y') if p.exam_date else '—' }}</td>
-                <td>{{ p.credits }}</td>
-                <td>{{ p.distinctions }}</td>
-                <td>{{ p.average_score if p.average_score is not none else '—' }}</td>
-                <td>{% if p.has_5_credits %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-warning">No</span>{% endif %}</td>
-            </tr>
-            {% endfor %}
+          {% for r in matrix %}
+          <tr>
+            <td class="subj">{{ r.subject }}{% if r.core %}<small>CORE</small>{% endif %}</td>
+            {% for c in r.cells %}<td class="{{ 'latest' if loop.last }}">{{ gcell(c) }}</td>{% endfor %}
+            <td>{% if r.change is not none %}<b class="{{ 'sp-up' if r.change > 0 else ('sp-down' if r.change < 0 else 'sp-flat') }}">{{ '%+g'|format(r.change) if r.change else '0' }}</b>{% else %}<span class="sp-flat">—</span>{% endif %}</td>
+            <td>{% if r.projected %}{{ gcell({'score': r.projected_score, 'grade': r.projected, 'absent': False}) }}{% else %}<span class="sp-flat">—</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
         </tbody>
-    </table></div>
-    <div class="card-body text-sm text-muted">
-        Trend: <strong>{{ progress.trend|capitalize }}</strong> ({{ progress.credit_change }} credit change) &middot;
-        best {{ progress.best_credits }} credits across {{ progress.exam_count }} sitting(s).
+      </table>
     </div>
+  </section>
+
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-list-ol" aria-hidden="true"></i> Sittings</h3><small>oldest first</small></div>
+    <div class="sp-sit">
+      {% for p in sittings %}
+      <div class="sp-sit-row">
+        <div class="sp-sit-t"><b><a href="{{ p.exam_url }}">{{ p.exam }}</a></b>
+          <small>{{ p.session_name }}{% if p.exam_date %} · {{ p.exam_date.strftime('%d %b %Y') }}{% endif %}</small>
+          <div class="sp-sit-n">
+            <span><strong>{{ p.credits }}</strong> credits{% if p.d_credits is not none and p.d_credits %} <span class="{{ 'sp-up' if p.d_credits > 0 else 'sp-down' }}">({{ '%+d'|format(p.d_credits) }})</span>{% endif %}</span>
+            <span><strong>{{ p.distinctions }}</strong> distinctions</span>
+            <span><strong>{{ p.average_score if p.average_score is not none else '—' }}%</strong> average</span>
+            <span class="{{ 'sp-up' if p.has_5_incl_core else 'sp-down' }}">{{ '5 credits incl. Eng & Maths' if p.has_5_incl_core else 'Not yet 5 incl. Eng & Maths' }}</span>
+          </div></div>
+        <div class="sp-sit-a">
+          <a href="{{ p.slip_url }}" class="rs-icon-btn" title="Result slip" aria-label="Result slip for {{ p.exam }}"><i class="fas fa-file-lines" aria-hidden="true"></i></a>
+          {% if can_write_sub('external_exams', 'mock_waec_results_create') %}<a href="{{ p.edit_url }}" class="rs-icon-btn" title="Edit results" aria-label="Edit {{ p.exam }} results"><i class="fas fa-pen" aria-hidden="true"></i></a>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if chart and sittings|length >= 2 %}
+<script nonce="{{ csp_nonce }}" id="sp-data" type="application/json">{{ chart|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  function draw() {
+    var el = document.getElementById('spChart'), src = document.getElementById('sp-data');
+    if (!window.Chart || !el || !src) return;
+    var d = JSON.parse(src.textContent), cs = getComputedStyle(document.documentElement);
+    var grid = cs.getPropertyValue('--border-color') || 'rgba(140,140,140,.2)';
+    var prim = (cs.getPropertyValue('--primary') || '#1f6b4a').trim(), acc = '#b45309';
+    new Chart(el, {type: 'line',
+      data: {labels: d.labels, datasets: [
+        {label: 'Credits', data: d.credits, borderColor: prim, backgroundColor: prim, tension: .3, yAxisID: 'y', pointRadius: 4},
+        {label: 'Average %', data: d.average, borderColor: acc, backgroundColor: acc, tension: .3, yAxisID: 'y1', pointRadius: 4, borderDash: [5, 4]}]},
+      options: {responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 10}}},
+        scales: {y: {min: 0, max: 9, ticks: {stepSize: 1}, grid: {color: grid}, title: {display: true, text: 'Credits'}},
+                 y1: {position: 'right', min: 0, max: 100, grid: {display: false}, title: {display: true, text: 'Average %'}},
+                 x: {grid: {display: false}}}}});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', draw); else draw();
+})();
+</script>
 {% endif %}
-</div>
 {% endblock %}

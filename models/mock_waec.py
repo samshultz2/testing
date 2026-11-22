@@ -227,12 +227,19 @@ class MockWAECAnalytics:
             by_exam.setdefault(r.mock_exam_id, []).append(r)
 
         progress = []
+        # Oldest sitting first: by date, then session and mock number, so a
+        # student with mocks in two sessions reads in the order they sat them.
+        import datetime as _dt
         for exam_id, results in sorted(
-                by_exam.items(), key=lambda kv: kv[1][0].exam.exam_number):
+                by_exam.items(), key=lambda kv: (kv[1][0].exam.exam_date or _dt.date.min,
+                                                 kv[1][0].exam.session_id or 0,
+                                                 kv[1][0].exam.exam_number or 0)):
             exam = results[0].exam
             s = MockWAECAnalytics._summarise(results)
             progress.append({
                 'exam': exam.display_name,
+                'exam_id': exam.id,
+                'session_name': exam.session.name if exam.session else '',
                 'exam_number': exam.exam_number,
                 'exam_date': exam.exam_date,
                 'credits': s['credits'],
