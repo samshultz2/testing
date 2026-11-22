@@ -258,13 +258,12 @@ def _palette(bw):
         g['grade'] = lambda k: (H('#E6E6E6'), H('#111111'))
         return g
     p = {'ink': H('#0B1220'), 'text': H('#1F2937'), 'muted': H('#64748B'), 'faint': H('#94A3B8'),
-         'line': H('#CBD5E1'), 'hair': H('#E8ECF1'), 'card': H('#F5F7FA'), 'accent': H('#0E7C66'),
-         'accent_soft': H('#E3F2EE'), 'fail_fg': H('#B42318'), 'fail_bg': H('#FDE8E7'),
-         'band': H('#F7F9FB'), 'gold': H('#D4A017'), 'silver': H('#94A3B8'), 'bronze': H('#C2773A'),
+         'line': H('#D5DCE4'), 'hair': H('#E8ECF1'), 'card': H('#F5F7FA'), 'accent': H('#0E7C66'),
+         'accent_soft': H('#E3F2EE'), 'fail_fg': H('#B42318'), 'fail_bg': H('#FDECEB'),
+         'band': H('#F7F9FB'), 'gold': H('#0E7C66'), 'silver': H('#0E7C66'), 'bronze': H('#0E7C66'),
          'medal_fg': H('#FFFFFF')}
-    tones = {'a': ('#DCF5EC', '#0B6B4F'), 'b': ('#E1EEFF', '#1D4ED8'), 'c': ('#FFF4D6', '#8A5A00'),
-             'd': ('#FFE9D6', '#B45309'), 'e': ('#FFE4DE', '#C2410C'), 'f': ('#FDE2E1', '#B42318')}
-    p['grade'] = lambda k: tuple(H(x) for x in tones.get(k, ('#EEF1F5', '#334155')))
+    # One accent only: grades are neutral, a failing grade is red text.
+    p['grade'] = lambda k: ((H('#FDECEB'), H('#B42318')) if k == 'f' else (H('#EEF1F5'), H('#1F2937')))
     return p
 
 
@@ -276,16 +275,14 @@ def _mix(a, b, t):
 
 
 def _heat(v, pm):
-    """Soft heat-map tint for a score: rose below the pass mark, then amber →
-    mint → green as it climbs to 100. Returns (background, text colour)."""
+    """Single-hue tint for a score: white at the pass mark rising to a soft teal
+    at 100; below the pass mark no fill, just red text (one accent + red)."""
     from reportlab.lib import colors as C
     H = C.HexColor
     if v < pm:
-        return _mix(H('#FFE4E2'), H('#FECACA'), (pm - v) / max(pm, 1)), H('#B42318')
+        return None, H('#B42318')
     t = (v - pm) / max(100 - pm, 1)
-    if t < 0.5:
-        return _mix(H('#FEF6DC'), H('#E7F6E9'), t * 2), H('#1F2937')
-    return _mix(H('#E7F6E9'), H('#BFEBD2'), (t - 0.5) * 2), H('#0B5E3F')
+    return _mix(H('#FFFFFF'), H('#CDEBE3'), t), H('#0B1220')
 
 
 def _grade_key(g):
@@ -366,7 +363,6 @@ def render_pdf(model, o):
 
     class NameCell(Flowable):
         """Initials avatar + name (+ student ID underneath)."""
-        _tones = ['#0E7C66', '#2563EB', '#7C3AED', '#DB2777', '#EA580C', '#0891B2', '#4D7C0F', '#B45309']
 
         def __init__(self, name, sub, size):
             super().__init__()
@@ -382,10 +378,9 @@ def render_pdf(model, o):
             c = self.canv
             parts = [w for w in self.name.replace('-', ' ').split() if w]
             ini = ''.join(w[0] for w in parts[:2]).upper() or '?'
-            col = C.HexColor(self._tones[sum(map(ord, self.name)) % len(self._tones)])
             cy = self.height / 2
-            c.setFillColor(_mix(col, C.white, 0.84)); c.circle(self.d / 2, cy, self.d / 2, stroke=0, fill=1)
-            c.setFillColor(col); c.setFont(F['b'], self.s * 0.78)
+            c.setFillColor(C.HexColor('#EEF1F5')); c.circle(self.d / 2, cy, self.d / 2, stroke=0, fill=1)
+            c.setFillColor(C.HexColor('#475569')); c.setFont(F['b'], self.s * 0.78)
             c.drawCentredString(self.d / 2, cy - self.s * 0.28, ini)
             x = self.d + 6
             room = self.width - x - 2
@@ -606,7 +601,8 @@ def render_pdf(model, o):
                 v = r['subjects'].get(cid)
                 if v:
                     bg, fg = _heat(v, pm)
-                    ts.append(('BACKGROUND', (i, ri), (i, ri), bg))
+                    if bg is not None:
+                        ts.append(('BACKGROUND', (i, ri), (i, ri), bg))
                     ts.append(('TEXTCOLOR', (i, ri), (i, ri), fg))
                     if v < pm and o['b_fail']:
                         ts.append(('FONTNAME', (i, ri), (i, ri), F['s']))
@@ -690,7 +686,7 @@ def render_pdf(model, o):
             st('k', fontSize=7 * sc, leading=10 * sc, textColor=P['muted'])))
         legend = []
         if aurora:
-            legend.append('score cells are tinted from red (below the pass mark of %s) through amber to green' % _n(pm))
+            legend.append('stronger scores are shaded darker; scores below the pass mark (%s) are in red' % _n(pm))
         elif o['b_fail']:
             legend.append('highlighted scores are below the pass mark (%s)' % _n(pm))
         if o['b_top']:
@@ -777,8 +773,7 @@ def _draw_hero(c, pw, ph, H, M, m, o, school, F, sc, pm, logo_path=None):
     c.saveState()
     clip = c.beginPath(); clip.rect(0, y0, pw, H)
     c.clipPath(clip, stroke=0, fill=0)                 # keep the band to the top
-    c.linearGradient(0, y0, pw, top, (C.HexColor('#0B1220'), C.HexColor('#0F2E2C'), C.HexColor('#0E5A4C')),
-                     positions=(0, 0.6, 1), extend=True)
+    c.setFillColor(C.HexColor('#0B1220')); c.rect(0, y0, pw, H, stroke=0, fill=1)
     # soft decorative rings
     c.setStrokeColor(C.Color(1, 1, 1, alpha=0.06)); c.setLineWidth(18)
     c.circle(pw - 40, top - 10, H * 0.9, stroke=1, fill=0)
@@ -806,7 +801,7 @@ def _draw_hero(c, pw, ph, H, M, m, o, school, F, sc, pm, logo_path=None):
         ty -= 6 * sc
     c.setFillColor(C.white); c.setFont(F['x'], 26 * sc)
     c.drawString(x, ty - 24 * sc, asg.display_name)
-    c.setFont(F['s'], 9.5 * sc); c.setFillColor(C.HexColor('#5EEAD4'))
+    c.setFont(F['s'], 9.5 * sc); c.setFillColor(C.white)
     lab = 'BROADSHEET'
     c.drawString(x, ty - 40 * sc, lab)
     c.setFillColor(C.Color(1, 1, 1, alpha=0.78)); c.setFont(F['r'], 9.5 * sc)
@@ -849,10 +844,10 @@ def _draw_hero(c, pw, ph, H, M, m, o, school, F, sc, pm, logo_path=None):
             order = sorted(spread, key=lambda g: (g[:1], g[1:] != '+', g))
             tot = sum(spread.values())
             wbar, xx = 112 * sc, bx
-            tones = {'a': '#34D399', 'b': '#60A5FA', 'c': '#FBBF24', 'd': '#FB923C', 'e': '#F97316', 'f': '#F87171'}
+            shade = {'a': 0.95, 'b': 0.75, 'c': 0.55, 'd': 0.4, 'e': 0.3, 'f': 0.18}
             for g in order:
                 w = wbar * spread[g] / tot
-                c.setFillColor(C.HexColor(tones.get(_grade_key(g), '#CBD5E1')))
+                c.setFillColor(C.Color(1, 1, 1, alpha=shade.get(_grade_key(g), 0.3)))
                 c.rect(xx, top - 57 * sc, max(w - 1, 0.6), 5 * sc, stroke=0, fill=1)
                 xx += w
             c.setFont(F['m'], 6.6 * sc); c.setFillColor(C.Color(1, 1, 1, alpha=0.72))

@@ -2457,7 +2457,7 @@ span.sj-teacher{cursor:default}
 .bxe-theme strong{font-size:.85rem}.bxe-theme small{font-size:.72rem;color:var(--text-muted);line-height:1.3}
 .bxe-theme .sw{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:100%;height:34px;border-radius:7px;overflow:hidden;margin-bottom:.25rem;background:#F1F4F8}
 .bxe-theme .sw i{grid-column:1/-1;display:block}
-.bxe-theme.aurora .sw i{background:linear-gradient(90deg,#0B1220,#0E5A4C)}
-.bxe-theme.aurora .sw b:nth-child(2){background:#BFEBD2}.bxe-theme.aurora .sw b:nth-child(3){background:#FEF6DC}.bxe-theme.aurora .sw b:nth-child(4){background:#FECACA}
+.bxe-theme.aurora .sw i{background:#0B1220}
+.bxe-theme.aurora .sw b:nth-child(2){background:#CDEBE3}.bxe-theme.aurora .sw b:nth-child(3){background:#E6F4F0}.bxe-theme.aurora .sw b:nth-child(4){background:#fff}
 .bxe-theme.minimal .sw i{background:#fff;border-bottom:2px solid #0B1220}
 .bxe-theme.minimal .sw b{background:#fff}

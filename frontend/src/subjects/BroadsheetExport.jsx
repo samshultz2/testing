@@ -122,7 +122,7 @@ export default function BroadsheetExport({ url, options, filter, rowsShown, onCl
               <>
                 <div className="bxe-l">Design</div>
                 <div className="bxe-themes" role="radiogroup" aria-label="Design">
-                  {[['aurora', 'Aurora', 'Dark header band, heat-mapped scores'], ['minimal', 'Minimal', 'Light and quiet, red marks only']].map(([v, l, d]) => (
+                  {[['aurora', 'Aurora', 'Dark header band, shaded scores'], ['minimal', 'Minimal', 'Light and quiet, red marks only']].map(([v, l, d]) => (
                     <button key={v} type="button" role="radio" aria-checked={o.theme === v} className={'bxe-theme ' + v + (o.theme === v ? ' on' : '')} onClick={() => set('theme', v)}>
                       <span className="sw" aria-hidden="true"><i /><b /><b /><b /></span><strong>{l}</strong><small>{d}</small></button>))}
                 </div>
