@@ -62,6 +62,7 @@ def _compute(term_id, assignment_id):
                         StudentEnrollment, StudentScore, AssessmentType,
                         SchoolSettings, TermSummary, Term)
 
+    from utils.helpers import term_roster_filter, result_divisor, get_sss3_class
     asg = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     if not asg or not term_id:
         return _empty()
@@ -74,9 +75,12 @@ def _compute(term_id, assignment_id):
     enrollments = (StudentEnrollment.query
                    .options(joinedload(StudentEnrollment.student))
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(Student.surname, Student.first_name).all())
+                   .join(Student).filter(term_roster_filter(term_id))
+                   .order_by(Student.surname, Student.first_name).all())
     if not class_subjects or not enrollments:
         return _empty()
+    _sss3 = get_sss3_class()
+    sss3_id = _sss3.id if _sss3 else None
 
     cs_ids = [cs.id for cs in class_subjects]
     sids = [e.student_id for e in enrollments]
@@ -115,7 +119,9 @@ def _compute(term_id, assignment_id):
                     failed += 1
         # A student's class average uses the full subject count (matches the
         # broadsheet), so unentered subjects count as 0 until entered.
-        avg = round(sum(assessed_totals) / n_subjects, 2) if n_subjects else 0
+        # SSS3: averaged over the WAEC subjects on the student's profile.
+        avg = (round(sum(assessed_totals) / result_divisor(e.student, n_subjects, asg.class_id, sss3_id), 2)
+               if n_subjects else 0)
         students.append({
             'id': e.student_id, 'name': e.student.full_name,
             'average': avg, 'assessed': len(assessed_totals),

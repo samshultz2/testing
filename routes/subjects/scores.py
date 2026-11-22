@@ -1,5 +1,6 @@
 """subjects blueprint — scores routes (split from the former routes/subjects.py)."""
 from routes.subjects import *  # noqa: F401,F403
+from utils.helpers import term_roster_filter, result_divisor  # noqa: E402
 
 
 def _sheet_cols(class_subject, term_id):
@@ -104,7 +105,7 @@ def scores_entry():
         class_roster = (StudentEnrollment.query
                         .options(joinedload(StudentEnrollment.student))
                         .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                        .join(Student).order_by(Student.surname, Student.first_name).all())
+                        .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
 
     # Get students and existing scores
     students_data = []
@@ -286,7 +287,7 @@ def workflow():
     steps = None
     if selected and term_id:
         enr = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=assignment_id, is_active=True).all()
+            class_arm_assignment_id=assignment_id, is_active=True).join(Student).filter(term_roster_filter(term_id)).all()
         sids = [e.student_id for e in enr]
         css = (ClassSubject.query.filter_by(
             term_id=term_id, class_id=selected.class_id, is_active=True)
@@ -395,7 +396,7 @@ def bulk_entry():
                           if can_enter_results(assignment_id, cs.subject_id)]
         enrollments = (StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True)
-            .join(Student).order_by(Student.surname, Student.first_name).all())
+            .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
 
     if request.method == 'POST' and selected and class_subjects and enrollments:
         total = {'saved': 0, 'rejected': 0, 'blocked': 0}
@@ -697,7 +698,7 @@ def score_import_template():
     enrollments = StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment_id,
         is_active=True
-    ).join(Student).order_by(Student.surname, Student.first_name).all()
+    ).join(Student).filter(term_roster_filter(assignment.term_id if assignment else None)).order_by(Student.surname, Student.first_name).all()
     
     wb = Workbook()
     ws = wb.active
@@ -804,7 +805,7 @@ def scoresheet_scan():
         # Students enrolled in this class (for matching + the picker).
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        ).join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all()
         students = [e.student for e in enrollments]
         by_student_id = {s.student_id: s for s in students}
 
@@ -884,7 +885,7 @@ def scoresheet_paste():
 
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        ).join(Student).filter(term_roster_filter(ctx['term_id'])).order_by(Student.surname, Student.first_name).all()
         students = [e.student for e in enrollments]
         by_student_id = {s.student_id: s for s in students}
 
@@ -1221,7 +1222,7 @@ def broadsheet_import():
         from utils.waec_ocr import match_students_unique
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        ).join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all()
         students = [e.student for e in enrollments]
         row_names = [(r[name_col] if name_col is not None and name_col < len(r) else '') for r in rows]
         matches = match_students_unique(row_names, students)
@@ -1404,7 +1405,7 @@ def subject_sheet_import():
         from utils.waec_ocr import match_students_unique
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True
-        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        ).join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all()
         students = [e.student for e in enrollments]
         row_names = [(r[name_col] if name_col is not None and name_col < len(r) else '') for r in rows]
         matches = match_students_unique(row_names, students)

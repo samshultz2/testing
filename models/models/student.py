@@ -85,6 +85,7 @@ class Student(db.Model):
     admitted_university_id = db.Column(db.Integer, db.ForeignKey('universities.id'))
     admitted_course_id = db.Column(db.Integer, db.ForeignKey('courses.id'))
     is_active = db.Column(db.Boolean, default=True)
+    deleted_at = db.Column(db.DateTime)                 # when moved to the trash (None = never / legacy)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
     

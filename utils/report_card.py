@@ -5,7 +5,7 @@ so both render identical numbers from a single source of truth.
 """
 from models import (
     db, StudentEnrollment, ClassArmAssignment, ClassSubject, Subject, AssessmentType,
-    SchoolSettings, StudentScore, GradeScale, TermSummary, Attendance, Week,
+    SchoolSettings, StudentScore, GradeScale, TermSummary, Attendance, Week, Student,
 )
 
 # Affective / behavioural traits shown on the report sheet, rated 1–5.
@@ -83,9 +83,13 @@ def compute_term_summaries(term_id, class_id):
     if not assignments:
         return 0
     arm_of = {a.id: a.arm_id for a in assignments}
-    enrollments = StudentEnrollment.query.filter(
+    from utils.helpers import term_roster_filter, result_divisor, get_sss3_class
+    enrollments = (StudentEnrollment.query.filter(
         StudentEnrollment.class_arm_assignment_id.in_(list(arm_of)),
-        StudentEnrollment.is_active == True).all()
+        StudentEnrollment.is_active == True)
+        .join(Student).filter(term_roster_filter(term_id)).all())
+    _sss3 = get_sss3_class()
+    sss3_id = _sss3.id if _sss3 else None
     if not enrollments:
         return 0
 
@@ -105,9 +109,10 @@ def compute_term_summaries(term_id, class_id):
     for e in enrollments:
         css = subjects_for(arm_of[e.class_arm_assignment_id])
         total, passed, failed = _subject_totals(e.student_id, css, pass_mark)
-        average = round(total / len(css), 2) if css else 0
+        n_div = result_divisor(e.student, len(css), class_id, sss3_id) if css else 0
+        average = round(total / n_div, 2) if css else 0
         rows.append({
-            'enrollment': e, 'subjects': len(css), 'total': total, 'average': average,
+            'enrollment': e, 'subjects': n_div, 'total': total, 'average': average,
             'passed': passed, 'failed': failed,
             'attendance': _attendance_pct(e.student_id, term_id, week_ids),
         })
@@ -225,7 +230,10 @@ def build_report_card(student_id, term_id):
                 subjects_failed += 1
         subjects_data.append(row)
 
-    average = round(total_score / len(class_subjects), 2) if class_subjects else 0
+    from utils.helpers import result_divisor, term_roster_filter
+    n_div = (result_divisor(db.session.get(Student, student_id), len(class_subjects), assignment.class_id)
+             if class_subjects else 0)
+    average = round(total_score / n_div, 2) if class_subjects else 0
     term_summary = TermSummary.query.filter_by(
         student_id=student_id, term_id=term_id).first()
 
@@ -233,11 +241,12 @@ def build_report_card(student_id, term_id):
     # Each subject is scored out of 100 (the CA components + exam always sum to
     # 100), so total obtainable is simply 100 × the number of subjects taken.
     PER_SUBJECT_MAX = 100
-    scores_obtainable = len(class_subjects) * PER_SUBJECT_MAX
+    scores_obtainable = n_div * PER_SUBJECT_MAX
     average_pct = round(total_score / scores_obtainable * 100, 2) if scores_obtainable else 0
     # Number in class = the roster of the student's own class arm.
-    no_in_class = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=assignment.id, is_active=True).count()
+    no_in_class = (StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment.id, is_active=True)
+        .join(Student).filter(term_roster_filter(term_id)).count())
 
     # Attendance filled straight from the term's records (no separate compute
     # needed): total times present (sessions), days present and school days.

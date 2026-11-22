@@ -673,3 +673,43 @@ def pick_current_week(weeks, on=None):
             return w
     started = [w for w in weeks if w.start_date and w.start_date <= on]
     return started[-1] if started else weeks[0]
+
+
+def term_roster_filter(term):
+    """SQLAlchemy condition for the students a term's class lists should show
+    (score entry, broadsheets, result computation): every active student, plus
+    students since moved to the trash — but only for sessions that had already
+    ended before they were deleted. A deletion with no recorded time (made
+    before the time was tracked) counts as deleted today."""
+    import datetime as _dt
+    from sqlalchemy import and_, or_
+    from models import Student, Term, db
+    if term is not None and not hasattr(term, 'session_id'):
+        term = db.session.get(Term, term)
+    active = Student.is_active == True  # noqa: E712
+    sess = getattr(term, 'session', None) if term is not None else None
+    if sess is None:
+        return active
+    ends = [d for d in [sess.end_date] + [t.end_date for t in Term.query.filter_by(session_id=sess.id)] if d]
+    if not ends:
+        return active
+    cutoff = max(ends)
+    if cutoff >= _dt.date.today():
+        return active                      # the session is still running
+    cut_dt = _dt.datetime.combine(cutoff, _dt.time.max)
+    return or_(active, and_(Student.is_active == False,  # noqa: E712
+                            or_(Student.deleted_at == None, Student.deleted_at > cut_dt)))  # noqa: E711
+
+
+def result_divisor(student, n_subjects, class_id, sss3_id=None):
+    """What a student's term total is divided by to give their average. SSS3
+    students are averaged over the WAEC subjects on their profile (when set);
+    everyone else over the class's subjects."""
+    if sss3_id is None:
+        sss3 = get_sss3_class()
+        sss3_id = sss3.id if sss3 else None
+    if sss3_id and class_id == sss3_id:
+        n = len(getattr(student, 'waec_subject_list', None) or [])
+        if n:
+            return n
+    return n_subjects

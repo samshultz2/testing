@@ -1,5 +1,6 @@
 """main blueprint — students routes (split from the former routes/main.py)."""
 from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
+from models import local_now
 from utils.search import like_term
 from utils.security import strip_tags
 from utils.web_exports import formula_guard
@@ -938,6 +939,7 @@ def delete_student(student_id):
 
     try:
         student.is_active = False
+        student.deleted_at = local_now()
         db.session.commit()
         from utils import query_cache
         query_cache.bump('dash')          # active student count changed
@@ -1329,7 +1331,7 @@ def bulk_delete_students():
     victims = Student.query.filter(Student.id.in_(ids), Student.is_active == True).all()  # noqa: E712
     deleted = Student.query.filter(
         Student.id.in_(ids), Student.is_active == True
-    ).update({Student.is_active: False}, synchronize_session=False)
+    ).update({Student.is_active: False, Student.deleted_at: local_now()}, synchronize_session=False)
     db.session.commit()
     from utils import query_cache
     query_cache.bump('dash')              # active student count changed
@@ -1355,6 +1357,7 @@ def restore_student(student_id):
     student = db.get_or_404(Student, student_id)
     assert_student_access(student)   # branch + form-teacher scope
     student.is_active = True
+    student.deleted_at = None
     db.session.commit()
     from utils import query_cache
     query_cache.bump('dash')              # active student count changed
@@ -1403,7 +1406,7 @@ def bulk_restore_students():
         return _bulk_no_selection()
     restored = _trash_scope(
         Student.query.filter(Student.id.in_(ids), Student.is_active == False)
-    ).update({Student.is_active: True}, synchronize_session=False)
+    ).update({Student.is_active: True, Student.deleted_at: None}, synchronize_session=False)
     db.session.commit()
     log_action('bulk_restore_students', f'{restored} students restored')
     if _wants_json():

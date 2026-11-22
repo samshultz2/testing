@@ -14,6 +14,7 @@ Columns are derived from the tenant's active ``AssessmentType`` rows, so a schoo
 that runs 2 CAs and no Holiday Assignment gets exactly those columns.
 """
 import io
+from utils.helpers import term_roster_filter, result_divisor  # noqa: E402
 
 from models import (db, Term, ClassArmAssignment, ClassSubject, Subject, Student,
                     StudentEnrollment, StudentScore, AssessmentType, SchoolSettings, GradeScale)
@@ -138,7 +139,7 @@ def build_model(term_id, assignment_id, min_score=None, filter_field=None):
              ).join(Subject).order_by(Subject.name).all()
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(Student.surname, Student.first_name).all())
+                   .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
     pass_mark = SchoolSettings.get('pass_mark', 50)
 
     cs_ids = [cs.id for cs in subjects]
@@ -151,11 +152,14 @@ def build_model(term_id, assignment_id, min_score=None, filter_field=None):
             totals[(s.student_id, s.class_subject_id)] = totals.get(
                 (s.student_id, s.class_subject_id), 0) + (s.score or 0)
 
+    from utils.helpers import get_sss3_class
+    _sss3 = get_sss3_class()
+    sss3_id = _sss3.id if _sss3 else None
     rows = []
     for e in enrollments:
         subj_totals = {cs.id: totals.get((e.student_id, cs.id), 0) for cs in subjects}
         grand = sum(subj_totals.values())
-        avg = round(grand / len(subjects), 2) if subjects else 0
+        avg = round(grand / result_divisor(e.student, len(subjects), asg.class_id, sss3_id), 2) if subjects else 0
         passed = sum(1 for v in subj_totals.values() if v >= pass_mark)
         failed = sum(1 for v in subj_totals.values() if 0 < v < pass_mark)
         rows.append({'student': e.student, 'subjects': subj_totals, 'total': round(grand, 1),
@@ -425,7 +429,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None, class
     from sqlalchemy.orm import contains_eager
     students = [e.student for e in (StudentEnrollment.query
                 .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                .join(Student).options(contains_eager(StudentEnrollment.student))
+                .join(Student).filter(term_roster_filter(term_id)).options(contains_eager(StudentEnrollment.student))
                 .order_by(Student.surname, Student.first_name).all())]
     cols = score_columns(subject=subject, term_id=term_id)
     filled = class_subject is not None

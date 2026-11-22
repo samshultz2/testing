@@ -1,5 +1,6 @@
 """subjects blueprint — reports routes (split from the former routes/subjects.py)."""
 from routes.subjects import *  # noqa: F401,F403
+from utils.helpers import term_roster_filter, result_divisor  # noqa: E402
 from utils.security import strip_tags
 
 
@@ -53,9 +54,11 @@ def broadsheet():
         enrollments = (StudentEnrollment.query
                        .options(joinedload(StudentEnrollment.student))
                        .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                       .join(Student).order_by(Student.surname, Student.first_name).all())
+                       .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
 
         pass_mark = SchoolSettings.get('pass_mark', 50)
+        _sss3 = get_sss3_class()
+        sss3_id = _sss3.id if _sss3 else None
 
         # Every score for the whole class in one query, indexed by (student,
         # class-subject, assessment) — replaces a query per student × subject.
@@ -100,7 +103,9 @@ def broadsheet():
                 student_row['total'] += subject_total
             
             if class_subjects:
-                student_row['average'] = round(student_row['total'] / len(class_subjects), 2)
+                div = result_divisor(enrollment.student, len(class_subjects),
+                                     selected_assignment.class_id, sss3_id)
+                student_row['average'] = round(student_row['total'] / div, 2)
             
             broadsheet_data.append(student_row)
         
@@ -216,7 +221,7 @@ def _explore_dataset(term_id, scope_ids):
                        .options(joinedload(StudentEnrollment.student))
                        .filter(StudentEnrollment.class_arm_assignment_id.in_(asg_ids),
                                StudentEnrollment.is_active == True)  # noqa: E712
-                       .join(Student).order_by(Student.surname, Student.first_name).all())
+                       .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
         student_ids = [e.student_id for e in enrollments]
 
         all_cs_ids = [cs.id for cs in cs_rows]
@@ -1205,7 +1210,7 @@ def affective():
 
     if request.method == 'POST' and selected_assignment and term_id:
         enrollments = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=assignment_id, is_active=True).all()
+            class_arm_assignment_id=assignment_id, is_active=True).join(Student).filter(term_roster_filter(term_id)).all()
         existing = {ts.student_id: ts for ts in TermSummary.query.filter(
             TermSummary.student_id.in_([e.student_id for e in enrollments]),
             TermSummary.term_id == term_id).all()}
@@ -1228,7 +1233,7 @@ def affective():
     if selected_assignment:
         enrollments = (StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True)
-            .join(Student).order_by(Student.surname, Student.first_name).all())
+            .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
         ratings = {ts.student_id: ts.affective_map
                    for ts in TermSummary.query.filter_by(term_id=term_id).all()}
         for e in enrollments:
@@ -1269,7 +1274,7 @@ def comments():
 
     if request.method == 'POST' and selected_assignment and term_id:
         enrollments = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=assignment_id, is_active=True).all()
+            class_arm_assignment_id=assignment_id, is_active=True).join(Student).filter(term_roster_filter(term_id)).all()
         existing = {ts.student_id: ts for ts in TermSummary.query.filter(
             TermSummary.student_id.in_([e.student_id for e in enrollments]),
             TermSummary.term_id == term_id).all()}
@@ -1290,7 +1295,7 @@ def comments():
     if selected_assignment:
         enrollments = (StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True)
-            .join(Student).order_by(Student.surname, Student.first_name).all())
+            .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
         summ = {ts.student_id: ts for ts in TermSummary.query.filter_by(term_id=term_id).all()}
         for e in enrollments:
             ts = summ.get(e.student_id)
@@ -1405,7 +1410,7 @@ def report_cards_pdf_batch():
     enrollments = (StudentEnrollment.query
                    .options(joinedload(StudentEnrollment.student))
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(Student.surname, Student.first_name).all())
+                   .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
     # Optional subset: ?ids=1,2,3 prints just the chosen students.
     picked = {int(x) for x in (request.args.get('ids') or '').split(',') if x.strip().isdigit()}
     if picked:
@@ -1488,7 +1493,7 @@ def export_broadsheet():
     enrollments = StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment_id,
         is_active=True
-    ).join(Student).order_by(Student.surname, Student.first_name).all()
+    ).join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all()
     
     pass_mark = SchoolSettings.get('pass_mark', 50)
     
@@ -1709,7 +1714,7 @@ def print_all_report_cards():
         n_subjects = len(class_subjects)
         enrollments = (StudentEnrollment.query
                        .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                       .join(Student).order_by(Student.surname, Student.first_name).all())
+                       .join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all())
         sids = [e.student_id for e in enrollments]
         cs_ids = [cs.id for cs in class_subjects]
         scored = {}
