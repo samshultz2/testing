@@ -25,14 +25,59 @@ exam_timetable_bp = Blueprint('exam_timetable', __name__, url_prefix='/tools/exa
 PAPER_PRESETS = {
     'waec': [('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'),
              ('Papers 2 & 1 (Essay & Objective)', 'combined'), ('Paper 3 (Practical)', 'practical'),
-             ('Paper 3 (Alternative to Practical Work)', 'practical'), ('Paper 3 (Test of Orals)', 'oral'),
-             ('Paper 3 (Listening Comprehension)', 'oral'), ('Paper 3 (Drawing)', 'practical'),
-             ('Paper 4 (Project / Coursework)', 'other')],
+             ('Paper 3 (Alternative to Practical Work)', 'alt_practical'), ('Paper 3 (Test of Orals)', 'oral'),
+             ('Paper 3 (Listening Comprehension)', 'oral'), ('Paper 3 (Drawing)', 'drawing'),
+             ('Paper 4 (Project / Coursework)', 'project')],
     'neco': [('Paper I: Practical', 'practical'), ('Paper II: Essay', 'essay'), ('Paper III: Objective', 'objective'),
-             ('Papers III & II: Objective & Essay', 'combined'), ('Paper I: Test of Orals', 'oral'),
-             ('Paper I: Listening Comprehension', 'oral'), ('Paper I: Drawing', 'practical'),
-             ('Paper IV: Project / Coursework', 'other')],
+             ('Papers III & II: Objective & Essay', 'combined'), ('Paper I: Alternative to Practical', 'alt_practical'),
+             ('Paper I: Test of Orals', 'oral'), ('Paper I: Listening Comprehension', 'oral'),
+             ('Paper I: Drawing', 'drawing'), ('Paper IV: Project / Coursework', 'project')],
 }
+
+# Subjects whose papers are named differently from the usual Objective /
+# Essay / Practical — offered first when that subject is chosen. Literature:
+# WAEC 1 Objective, 2 Prose, 3 Drama & Poetry (Prose and Objective sat back
+# to back); NECO II Drama & Poetry, III Objective, IV Prose (III & IV
+# usually sat together). English: WAEC Paper 3 is the Test of Orals.
+SUBJECT_PAPERS = {
+    'waec': {
+        'literature in english': [
+            ('Paper 1 (Objective)', 'objective'), ('Paper 2 (Prose)', 'prose'),
+            ('Papers 2 & 1 (Prose & Objective)', 'objective_prose'), ('Paper 3 (Drama & Poetry)', 'drama_poetry')],
+        'english language': [
+            ('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'),
+            ('Papers 2 & 1 (Essay & Objective)', 'combined'), ('Paper 3 (Test of Orals)', 'oral')],
+        'visual arts': [
+            ('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'),
+            ('Paper 3A (Drawing)', 'drawing'), ('Paper 3B (Craft / Design)', 'practical')],
+        'technical drawing': [
+            ('Paper 1 (Objective)', 'objective'), ('Paper 2 (Essay)', 'essay'), ('Paper 3 (Drawing)', 'drawing')],
+    },
+    'neco': {
+        'literature in english': [
+            ('Paper II: Drama & Poetry', 'drama_poetry'), ('Paper III: Objective', 'objective'),
+            ('Paper IV: Prose', 'prose'), ('Papers III & IV: Objective & Prose', 'objective_prose')],
+        'english language': [
+            ('Papers III & II: Objective & Essay', 'combined'), ('Paper II: Essay', 'essay'),
+            ('Paper III: Objective', 'objective'), ('Paper I: Test of Orals', 'oral'),
+            ('Paper I: Listening Comprehension', 'oral')],
+        'technical drawing': [
+            ('Paper I: Drawing', 'drawing'), ('Papers III & II: Objective & Essay', 'combined')],
+    },
+}
+SUBJECT_ALIASES = {'literature-in-english': 'literature in english', 'literature': 'literature in english',
+                   'english': 'english language', 'visual art': 'visual arts', 'fine art': 'visual arts',
+                   'fine arts': 'visual arts'}
+
+
+def papers_for(board, subject):
+    """The paper choices for a subject: its own names first, then the
+    body's usual papers (without repeats)."""
+    key = ET.norm(subject).replace('-', ' ')
+    key = SUBJECT_ALIASES.get(ET.norm(subject), SUBJECT_ALIASES.get(key, key))
+    own = SUBJECT_PAPERS.get(board, {}).get(key, [])
+    seen = {lbl for lbl, _k in own}
+    return own + [(lbl, k) for lbl, k in PAPER_PRESETS.get(board, PAPER_PRESETS['waec']) if lbl not in seen]
 
 
 @exam_timetable_bp.before_request
@@ -186,6 +231,9 @@ def edit(tt_id):
     subjects = mine + rest
     last = data['rows'][-1]['p'] if data['rows'] else None
     return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, subj_mine=mine, subj_rest=rest, presets=PAPER_PRESETS.get(tt.board, PAPER_PRESETS['waec']),
+                           papers_for=lambda subj: papers_for(tt.board, subj),
+                           paper_sets={k: v for k, v in SUBJECT_PAPERS.get(tt.board, {}).items()},
+                           subject_aliases=SUBJECT_ALIASES,
                            kinds=ET.KINDS, fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur, last=last,
                            sessions=_sessions(tt.board), durations=ET.DURATIONS,
                            others=[t for t in scope_query(ExamTimetable.query, ExamTimetable).all() if t.id != tt.id])

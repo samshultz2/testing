@@ -36,9 +36,9 @@
   <div class="xe-f"><label><span>Paper</span>
     <select class="xe-in" name="paper" data-other>
       <option value="" {{ 'selected' if not cur_p }}>—</option>
-      {% set labels = presets|map('first')|list %}
+      {% set plist = papers_for(cur_s) %}{% set labels = plist|map('first')|list %}
       {% if cur_p and cur_p not in labels %}<option selected>{{ cur_p }}</option>{% endif %}
-      {% for s, k in presets %}<option data-kind="{{ k }}" {{ 'selected' if s == cur_p }}>{{ s }}</option>{% endfor %}
+      {% for s, k in plist %}<option data-kind="{{ k }}" {{ 'selected' if s == cur_p }}>{{ s }}</option>{% endfor %}
       <option value="__other">Other…</option>
     </select></label>
     <input class="xe-in xe-other" type="text" name="paper_other" maxlength="120" placeholder="e.g. Paper 4 (Oral)" hidden aria-label="Other paper"></div>
@@ -78,6 +78,8 @@
 .xe-chip.k-objective{background:color-mix(in srgb,#2563eb 12%,var(--bg-card));color:#2563eb}
 .xe-chip.k-essay{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
 .xe-chip.k-combined{background:color-mix(in srgb,#0891b2 12%,var(--bg-card));color:#0891b2}
+.xe-chip.k-prose,.xe-chip.k-drama_poetry,.xe-chip.k-objective_prose{background:color-mix(in srgb,#7c3aed 12%,var(--bg-card));color:#7c3aed}
+.xe-chip.k-alt_practical,.xe-chip.k-drawing{background:color-mix(in srgb,#b45309 14%,var(--bg-card));color:#b45309}
 .xe-chip.k-practical{background:color-mix(in srgb,#b45309 14%,var(--bg-card));color:#b45309}
 .xe-chip.k-oral{background:color-mix(in srgb,#7c3aed 12%,var(--bg-card));color:#7c3aed}
 .xe-chip.clash{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
@@ -242,6 +244,7 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
 {% endblock %}
 
 {% block extra_js %}
+<script nonce="{{ csp_nonce }}" id="xe-papers" type="application/json">{{ {'general': presets, 'subjects': paper_sets, 'alias': subject_aliases}|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
 (function () {
   // Time picker: a common session sets start + end; start or duration
@@ -267,6 +270,23 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
     st.addEventListener('change', function () { if (du.value) fromDur(); else mark(); });
     du.addEventListener('change', fromDur);
     en.addEventListener('change', mark);
+  });
+  // The paper list follows the subject: Literature offers Prose, Drama &
+  // Poetry, Objective & Prose …; other subjects the body's usual papers.
+  var PS = JSON.parse(document.getElementById('xe-papers').textContent);
+  function pkey(v) { v = (v || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
+    var k = v.replace(/-/g, ' '); return PS.alias[v] || PS.alias[k] || k; }
+  document.querySelectorAll('select[name=subject]').forEach(function (sub) {
+    sub.addEventListener('change', function () {
+      var paper = sub.form.querySelector('select[name=paper]'); if (!paper) return;
+      var own = PS.subjects[pkey(sub.value)] || [], seen = {}, list = [];
+      own.forEach(function (x) { seen[x[0]] = 1; list.push(x); });
+      PS.general.forEach(function (x) { if (!seen[x[0]]) list.push(x); });
+      var keep = paper.value, other = paper.querySelector('option[value="__other"]');
+      [].slice.call(paper.options).forEach(function (o) { if (o.value !== '' && o.value !== '__other') o.remove(); });
+      list.forEach(function (x) { var o = document.createElement('option'); o.textContent = x[0]; o.dataset.kind = x[1]; paper.insertBefore(o, other); });
+      paper.value = list.some(function (x) { return x[0] === keep; }) ? keep : '';
+    });
   });
   // Picking a paper fills in its type (NECO Paper I = Practical, etc.).
   document.querySelectorAll('select[name=paper]').forEach(function (sel) {

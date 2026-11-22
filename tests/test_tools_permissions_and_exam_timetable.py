@@ -175,3 +175,26 @@ def test_exam_window_board_papers_and_crud(app):
     c.post(f'/tools/exam-timetable/{cid}/delete', data={'_csrf_token': auth_csrf(c)})
     with app.app_context():
         assert db.session.get(ExamTimetable, cid) is None
+
+
+def test_subject_specific_papers_and_types(app):
+    from routes.exam_timetable import papers_for
+    from utils.exam_timetable import KIND_LABEL
+    waec = [l for l, _k in papers_for('waec', 'Literature in English')]
+    assert waec[:4] == ['Paper 1 (Objective)', 'Paper 2 (Prose)', 'Papers 2 & 1 (Prose & Objective)',
+                        'Paper 3 (Drama & Poetry)']
+    neco = dict(papers_for('neco', 'Literature-in-English'))
+    assert neco['Paper II: Drama & Poetry'] == 'drama_poetry'
+    assert neco['Papers III & IV: Objective & Prose'] == 'objective_prose'
+    assert papers_for('waec', 'Mathematics')[0][0] == 'Paper 1 (Objective)'      # usual list otherwise
+    assert {'Drama & Poetry', 'Objective & Prose', 'Prose', 'Alternative to Practical'} <= set(KIND_LABEL.values())
+    c = _admin(app)
+    c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': 'waec', 'year': '2042'})
+    with app.app_context():
+        tid = ExamTimetable.query.filter_by(year=2042).order_by(ExamTimetable.id.desc()).first().id
+    c.post(f'/tools/exam-timetable/{tid}/papers', data={
+        '_csrf_token': auth_csrf(c), 'exam_date': '2042-05-05', 'start_time': '14:00', 'end_time': '16:30',
+        'subject': 'Literature in English', 'paper': 'Paper 3 (Drama & Poetry)', 'kind': 'drama_poetry'})
+    page = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
+    assert 'Drama &amp; Poetry' in page and 'k-drama_poetry' in page
+    assert c.get(f'/tools/exam-timetable/{tid}/print').status_code == 200

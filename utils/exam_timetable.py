@@ -13,8 +13,10 @@ import io
 from utils import student_list_export as SLE
 
 KINDS = [('objective', 'Objective'), ('essay', 'Essay / Theory'), ('combined', 'Objective & Essay'),
-         ('practical', 'Practical'),
-         ('oral', 'Oral / Listening'), ('other', 'Other')]
+         ('practical', 'Practical'), ('alt_practical', 'Alternative to Practical'),
+         ('prose', 'Prose'), ('drama_poetry', 'Drama & Poetry'), ('objective_prose', 'Objective & Prose'),
+         ('oral', 'Oral / Listening'), ('drawing', 'Drawing'), ('project', 'Project / Coursework'),
+         ('other', 'Other')]
 KIND_LABEL = dict(KINDS)
 SESSION_CUT = dt.time(12, 0)          # papers starting before noon are "morning"
 
