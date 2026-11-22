@@ -50,11 +50,7 @@ def _clock():
     """School-local weekday (0=Mon) and minutes since midnight, so the page
     can mark today and the current period without trusting the device clock."""
     from utils import timeutil as _tu
-    try:
-        n = _tu.now()
-    except Exception:
-        from datetime import datetime
-        n = datetime.now()
+    n = _tu.now()          # falls back to the server clock itself if the zone is unusable
     return {'weekday': n.weekday(), 'minutes': n.hour * 60 + n.minute}
 
 

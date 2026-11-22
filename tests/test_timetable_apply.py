@@ -18,7 +18,8 @@ def _admin(app):
 
 def _setup(app):
     with app.app_context():
-        term = Term.query.filter_by(is_active=True).first()
+        from utils.helpers import get_active_term
+        term = get_active_term()        # the term the app treats as current
         if not term:
             s = AcademicSession(name='TTA-Sess', is_active=True)
             db.session.add(s); db.session.flush()

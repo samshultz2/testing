@@ -69,12 +69,17 @@ def enroll_sss3(app, student_id):
     from models import (db, AcademicSession, Term, SchoolClass, ClassArm,
                         ClassArmAssignment, StudentEnrollment)
     with app.app_context():
-        ssn = (AcademicSession.query.filter_by(is_active=True).first()
-               or AcademicSession(name='ENR 25/26', is_active=True))
-        db.session.add(ssn); db.session.flush()
-        term = (Term.query.filter_by(is_active=True).first()
-                or Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True))
-        db.session.add(term); db.session.flush()
+        # The term the app itself treats as current (it keeps the active term
+        # inside the active session); a term merely flagged active in some
+        # other session would leave the student invisible to SSS3 lookups.
+        from utils.helpers import get_active_term
+        term = get_active_term()
+        if term is None:
+            ssn = (AcademicSession.query.filter_by(is_active=True).first()
+                   or AcademicSession(name='ENR 25/26', is_active=True))
+            db.session.add(ssn); db.session.flush()
+            term = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True)
+            db.session.add(term); db.session.flush()
         sss3 = SchoolClass.query.filter_by(name='SSS3').first() or SchoolClass(name='SSS3', level=6)
         db.session.add(sss3); db.session.flush()
         arm = ClassArm.query.first() or ClassArm(name='A', is_active=True)

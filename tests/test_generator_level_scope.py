@@ -218,8 +218,7 @@ def test_double_resolution_priority_order():
 
 def test_by_day_pdf_is_one_page_per_day(app):
     """Each weekday must fit on exactly one landscape page, even with many arms."""
-    import io
-    from pypdf import PdfReader
+    import re
     from models import GenTimetableResult, GenTimetableRule, GenSubject, Branch
     tag = next(_SEQ)
     batch = f'pdfpage{tag}'
@@ -248,7 +247,9 @@ def test_by_day_pdf_is_one_page_per_day(app):
     c.get('/generator/level/sss')
     r = c.get(f'/generator/results/{batch}/export_by_day_pdf')
     assert r.status_code == 200
-    pages = len(PdfReader(io.BytesIO(r.get_data())).pages)
+    # Count page objects directly (reportlab writes them uncompressed), so
+    # the test doesn't need a PDF-reading library the app itself never uses.
+    pages = len(re.findall(rb'/Type\s*/Page(?![s\w])', r.get_data()))
     assert pages == 5, f'expected 5 pages (one per weekday), got {pages}'
 
 

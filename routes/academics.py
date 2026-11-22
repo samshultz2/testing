@@ -53,7 +53,7 @@ def sessions_list():
     from sqlalchemy import func
     from utils.access_control import can_access_module
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
-    today = date.today()
+    today = timeutil.today()
     terms = Term.query.all()
     by_sess = {}
     for t in terms:
@@ -307,7 +307,7 @@ def terms_list():
     terms = Term.query.join(AcademicSession).order_by(
         AcademicSession.name.desc(), Term.term_number).all()
     sessions = AcademicSession.query.order_by(AcademicSession.name.desc()).all()
-    today = date.today()
+    today = timeutil.today()
     ids = [t.id for t in terms] or [-1]
     weeks = dict(db.session.query(Week.term_id, func.count(Week.id)).filter(Week.term_id.in_(ids)).group_by(Week.term_id).all())
     hols = dict(db.session.query(Holiday.term_id, func.count(Holiday.id)).filter(Holiday.term_id.in_(ids)).group_by(Holiday.term_id).all())
@@ -515,7 +515,7 @@ def term_setup():
     can_subj = can_write_module('results')
     show_fees = can_access_module('finance')
     can_fin = show_fees and can_write_module('finance')
-    today = date.today()
+    today = timeutil.today()
 
     def link(label, url):
         return {'kind': 'link', 'label': label, 'url': url}

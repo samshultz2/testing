@@ -298,7 +298,8 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label, _header_only=False
     page = landscape(A4)
     side = 10 * mm
     avail = page[0] - 2 * side - 12   # frame keeps 6pt padding each side
-    today = date.today().strftime('%d %b %Y')
+    from utils import timeutil
+    today = timeutil.today().strftime('%d %b %Y')
     report_title = 'Subject-Wise Grade Breakdown'
 
     def fit(text, font, size, width):

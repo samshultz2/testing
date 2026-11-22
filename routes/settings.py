@@ -106,7 +106,8 @@ def _settings_health():
         from utils.backup import list_backups
         bk = list_backups(current_app)
         last = max((b['modified'] for b in bk if b.get('modified')), default=None)
-        out['backup_days'] = (datetime.now() - last).days if last else None
+        from utils.backup import backup_age_days
+        out['backup_days'] = backup_age_days(last)
         out['backups'] = len(bk)
     except Exception:
         pass
@@ -1975,7 +1976,7 @@ def backup_page():
     }
 
     from flask import current_app
-    from utils.backup import list_backups
+    from utils.backup import list_backups, backup_age_days as _backup_age_days
     backups = list_backups(current_app)
     return _render({
         'page': 'backup',
@@ -1986,7 +1987,7 @@ def backup_page():
         'create_url': url_for('settings.create_backup'),
         'restore_url': url_for('settings.restore_backup'),
         'back_url': url_for('settings.index'),
-        'last_backup_days': ((datetime.now() - max(b['modified'] for b in backups)).days
+        'last_backup_days': (_backup_age_days(max(b['modified'] for b in backups))
                              if backups and all(b.get('modified') for b in backups) else None),
         'backups': [{
             'name': b['name'],

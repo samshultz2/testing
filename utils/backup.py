@@ -447,3 +447,12 @@ def auto_backup(app):
     except Exception:
         # Backups must never block app startup.
         return None
+
+
+def backup_age_days(modified):
+    """Whole days since a backup file was written. Uses the server clock on
+    purpose: ``modified`` comes from the file's mtime on this server (see
+    list_backups), so comparing it with school-timezone time would skew it."""
+    if not modified:
+        return None
+    return (datetime.now() - modified).days

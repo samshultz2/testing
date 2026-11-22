@@ -147,7 +147,9 @@ def test_filter_classes_for_user_branch_scoped(app):
                                                   term_id=term.id, branch_id=bid))
         db.session.commit()
         all_asg = ClassArmAssignment.query.all()
-    with app.test_request_context('/'):
-        session['scope'] = 'branch'; session['branch_id'] = b_id
-        result = filter_classes_for_user(all_asg)
-        assert result and all(a.branch_id == b_id for a in result)
+        # Same app context as the query above, so the rows stay attached to the
+        # session (filter_classes_for_user sorts by each row's class).
+        with app.test_request_context('/'):
+            session['scope'] = 'branch'; session['branch_id'] = b_id
+            result = filter_classes_for_user(all_asg)
+            assert result and all(a.branch_id == b_id for a in result)
