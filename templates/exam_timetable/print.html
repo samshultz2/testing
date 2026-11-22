@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% block title %}{{ xt.title }} — print - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_timetable.index') }}">WAEC / NECO Timetable</a> / <a href="{{ url_for('exam_timetable.edit', tt_id=xt.id) }}">{{ xt.title }}</a> / <span>Print</span>{% endblock %}
+
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
+<style>
+/* ---------- page chrome ---------- */
+.xp-wrap{display:grid;grid-template-columns:300px minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:980px){.xp-wrap{grid-template-columns:1fr}}
+.xp-ctl{position:sticky;top:80px;display:flex;flex-direction:column;gap:.9rem}
+@media(max-width:980px){.xp-ctl{position:static}}
+.xp-lbl{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:0 0 .45rem}
+.xp-themes{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.xp-th{border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);padding:.5rem .6rem;text-align:left;cursor:pointer;font:inherit;color:var(--text-primary)}
+.xp-th b{display:block;font-size:.84rem}
+.xp-th small{display:block;font-size:.68rem;color:var(--text-muted);line-height:1.25;margin-top:.1rem}
+.xp-th i{display:flex;gap:3px;margin-bottom:.35rem}
+.xp-th i s{display:block;width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.12)}
+.xp-th.on{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 25%,transparent)}
+.xp-sw{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.45rem 0;font-size:.88rem;font-weight:600;cursor:pointer}
+.xp-sw input{width:40px;height:22px;appearance:none;-webkit-appearance:none;border-radius:999px;background:var(--gray-200,#d4d4d8);position:relative;cursor:pointer;transition:background .15s;flex:none}
+.xp-sw input:before{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.xp-sw input:checked{background:var(--primary)}
+.xp-sw input:checked:before{left:21px}
+.xp-sw input:disabled{opacity:.4}
+.xp-acts{display:flex;flex-direction:column;gap:.45rem}
+.xp-acts .rs-btn{justify-content:center}
+.xp-stage{background:color-mix(in srgb,var(--text-primary) 6%,var(--bg-card));border-radius:18px;padding:18px;overflow:hidden;display:flex;justify-content:center}
+.xp-scale{transform-origin:top left}
+.xp-fit{font-size:.75rem;color:var(--text-muted);text-align:center;margin:.5rem 0 0}
+
+/* ---------- the sheet: A4 at 96 dpi ---------- */
+#sheet{--fs:16px;width:794px;height:1123px;box-sizing:border-box;padding:56px 58px 44px;font-size:var(--fs);position:relative;overflow:hidden;display:flex;flex-direction:column;background:#fff;color:#111;box-shadow:0 10px 40px rgba(15,23,42,.18)}
+#sheet *{box-sizing:border-box}
+.xs-head{display:flex;align-items:center;gap:.9em;margin-bottom:1em}
+.xs-logo{height:3.4em;width:auto;max-width:6em;object-fit:contain;flex:none}
+.xs-ht{flex:1;min-width:0}
+.xs-school{font-size:.72em;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
+.xs-title{margin:.12em 0 .1em;font-size:2em;line-height:1.02;font-weight:800;letter-spacing:-.02em}
+.xs-sub{font-size:.78em;opacity:.75}
+.xs-board{flex:none;font-weight:800;font-size:.8em;letter-spacing:.14em;padding:.4em .8em;border-radius:.5em;border:2px solid currentColor}
+.xs-notes{font-size:.72em;margin:-.3em 0 .9em;opacity:.85;line-height:1.4}
+.xs-days{display:flex;flex-direction:column;gap:.7em}
+.xs-day{display:grid;grid-template-columns:4.2em minmax(0,1fr);gap:.9em;break-inside:avoid}
+.xs-date{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;line-height:1;padding-top:.15em;text-align:center}
+.xs-date .dw{font-size:.62em;font-weight:800;letter-spacing:.14em}
+.xs-date .dn{font-size:1.75em;font-weight:800;margin:.08em 0}
+.xs-date .dm{font-size:.62em;font-weight:700;letter-spacing:.14em}
+.xs-papers{display:flex;flex-direction:column}
+.xs-p{display:grid;grid-template-columns:7.6em minmax(0,1fr) auto;gap:.8em;align-items:center;padding:.42em 0}
+.xs-time b{display:block;font-size:.92em;white-space:nowrap}
+.xs-time>span{display:block;font-size:.7em;opacity:.7;white-space:nowrap}
+.xs-subj b{display:block;font-size:.98em;line-height:1.15}
+.xs-subj span{display:block;font-size:.74em;opacity:.75;margin-top:.1em}
+.xs-subj .inv{font-size:.66em;opacity:.65}
+.xs-meta{display:flex;align-items:center;gap:.4em;justify-content:flex-end;flex-wrap:wrap;text-align:right}
+.xs-kind{font-size:.62em;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.2em .55em;border-radius:.4em;white-space:nowrap}
+.xs-venue{font-size:.74em;font-weight:600;white-space:nowrap}
+.xs-cnt{font-size:.66em;opacity:.7;white-space:nowrap}
+.xs-foot{margin-top:auto;padding-top:.6em;font-size:.62em;display:flex;justify-content:space-between;gap:1em;opacity:.7}
+#sheet.cols2 .xs-days{display:block;column-count:2;column-gap:1.4em}
+#sheet.cols2 .xs-day{break-inside:avoid;margin-bottom:.6em;grid-template-columns:3.6em minmax(0,1fr);gap:.6em}
+#sheet.cols2 .xs-p{grid-template-columns:5.8em minmax(0,1fr);gap:.5em}
+#sheet.cols2 .xs-time>span{white-space:normal;line-height:1.2}
+#sheet.cols2 .xs-meta{grid-column:2;justify-content:flex-start;text-align:left;margin-top:-.25em}
+#sheet.cols2[data-theme="timeline"] .xs-days:before{display:none}
+#sheet.cols2[data-theme="tickets"] .xs-day,#sheet.cols2[data-theme="print"] .xs-day,#sheet.cols2[data-theme="mono"] .xs-day{grid-template-columns:4.2em minmax(0,1fr)}
+#sheet.cols2[data-theme="print"] .xs-days{border:0}
+#sheet.cols2[data-theme="print"] .xs-day{border:2px solid #000}
+#sheet.cols2[data-theme="print"] .xs-day+.xs-day{border-top:2px solid #000}
+#sheet.cols2[data-theme="inline"] .xs-day{grid-template-columns:1fr}
+#sheet.no-logo .xs-logo{display:none}
+#sheet.no-venue .xs-venue,#sheet.no-inv .inv,#sheet.no-cnt .xs-cnt,#sheet.no-kind .xs-kind,#sheet.no-dur .dur,#sheet.no-notes .xs-notes{display:none}
+
+/* Timeline — cream & gold, dated */
+#sheet[data-theme="timeline"]{background:#fffdf8;color:#1d1b16;font-family:'DM Sans','Inter',sans-serif}
+#sheet[data-theme="timeline"]:before{content:'';position:absolute;right:-120px;top:-120px;width:360px;height:360px;border-radius:50%;background:radial-gradient(#fde7b0,transparent 68%);opacity:.8}
+#sheet[data-theme="timeline"] .xs-head{position:relative;border-bottom:2px solid #1d1b16;padding-bottom:.7em}
+#sheet[data-theme="timeline"] .xs-school{color:#a16207}
+#sheet[data-theme="timeline"] .xs-title{font-family:'Space Grotesk',sans-serif;letter-spacing:-.035em}
+#sheet[data-theme="timeline"] .xs-board{color:#a16207}
+#sheet[data-theme="timeline"] .xs-days{position:relative}
+#sheet[data-theme="timeline"] .xs-days:before{content:'';position:absolute;left:5.05em;top:.4em;bottom:.4em;border-left:2px solid #e7d9b8}
+#sheet[data-theme="timeline"] .xs-date{color:#a16207}
+#sheet[data-theme="timeline"] .xs-date .dn{font-family:'Space Grotesk',sans-serif;color:#1d1b16}
+#sheet[data-theme="timeline"] .xs-papers{position:relative;padding-left:.6em}
+#sheet[data-theme="timeline"] .xs-papers:before{content:'';position:absolute;left:-.62em;top:.62em;width:.62em;height:.62em;border-radius:50%;background:#a16207;box-shadow:0 0 0 .2em #fffdf8}
+#sheet[data-theme="timeline"] .xs-p+.xs-p{border-top:1px dashed #e7e2d6}
+#sheet[data-theme="timeline"] .xs-kind{background:#fdf1d6;color:#8a5a06}
+#sheet[data-theme="timeline"] .xs-foot{border-top:1px solid #e7e2d6}
+
+/* Tickets — one cut-out ticket per day */
+#sheet[data-theme="tickets"]{color:#14213d;background:#fff radial-gradient(#e9edf5 1px,transparent 1.2px) 0 0/.8em .8em;font-family:'Plus Jakarta Sans','Inter',sans-serif}
+#sheet[data-theme="tickets"] .xs-head{justify-content:center;text-align:center;flex-direction:column;gap:.35em}
+#sheet[data-theme="tickets"] .xs-school{color:#8d99ae}
+#sheet[data-theme="tickets"] .xs-title{font-family:'Space Grotesk',sans-serif}
+#sheet[data-theme="tickets"] .xs-board{background:#fca311;border-color:#fca311;color:#14213d}
+#sheet[data-theme="tickets"] .xs-notes{text-align:center}
+#sheet[data-theme="tickets"] .xs-day{gap:0;background:#fff;border:1.5px solid #14213d;border-radius:.8em;overflow:hidden;grid-template-columns:5.2em minmax(0,1fr)}
+#sheet[data-theme="tickets"] .xs-date{background:#14213d;color:#fff;justify-content:center;border-right:2px dashed #fff;position:relative}
+#sheet[data-theme="tickets"] .xs-date .dm{color:#fca311}
+#sheet[data-theme="tickets"] .xs-papers{padding:.15em .9em}
+#sheet[data-theme="tickets"] .xs-p+.xs-p{border-top:1px solid #e3e8ef}
+#sheet[data-theme="tickets"] .xs-kind{background:#fff4dd;color:#9a5b00}
+#sheet[data-theme="tickets"] .xs-foot{justify-content:center}
+
+/* Gazette — school newspaper */
+#sheet[data-theme="gazette"]{background:#f7f4ec;color:#111;font-family:Georgia,'Times New Roman',serif}
+#sheet[data-theme="gazette"] .xs-head{flex-direction:column;text-align:center;gap:.25em;border-top:3px double #111;border-bottom:3px double #111;padding:.55em 0;margin-bottom:.4em}
+#sheet[data-theme="gazette"] .xs-school{letter-spacing:.3em;font-size:.68em}
+#sheet[data-theme="gazette"] .xs-title{font-size:2.3em;font-weight:700}
+#sheet[data-theme="gazette"] .xs-sub{font-style:italic}
+#sheet[data-theme="gazette"] .xs-board{border:0;border-top:1px solid #111;border-bottom:1px solid #111;border-radius:0;font-size:.66em;letter-spacing:.3em}
+#sheet[data-theme="gazette"] .xs-notes{text-align:center;font-style:italic;margin:.2em 0 .8em}
+#sheet[data-theme="gazette"] .xs-day{border-top:1px solid #111;padding-top:.45em;grid-template-columns:5em minmax(0,1fr)}
+#sheet[data-theme="gazette"] .xs-date{align-items:flex-start;text-align:left}
+#sheet[data-theme="gazette"] .xs-date .dn{font-size:1.9em}
+#sheet[data-theme="gazette"] .xs-p+.xs-p{border-top:1px dotted #999}
+#sheet[data-theme="gazette"] .xs-kind{border:1px solid #111;border-radius:0;font-family:Georgia,serif;letter-spacing:.1em}
+#sheet[data-theme="gazette"] .xs-foot{border-top:3px double #111;font-style:italic}
+
+/* Swiss — bold poster type, one accent */
+#sheet[data-theme="swiss"]{background:#fff;color:#0a0a0a;font-family:'Inter',sans-serif;padding-top:48px}
+#sheet[data-theme="swiss"] .xs-head{flex-direction:column;align-items:flex-start;gap:.2em}
+#sheet[data-theme="swiss"] .xs-logo{order:-1;margin-bottom:.4em}
+#sheet[data-theme="swiss"] .xs-school{color:#ff3d00;letter-spacing:.08em}
+#sheet[data-theme="swiss"] .xs-title{font-size:3.1em;font-weight:900;letter-spacing:-.055em;line-height:.9}
+#sheet[data-theme="swiss"] .xs-board{position:absolute;right:58px;top:48px;background:#ff3d00;border-color:#ff3d00;color:#fff;border-radius:0}
+#sheet[data-theme="swiss"] .xs-day{border-top:3px solid #0a0a0a;padding-top:.4em;grid-template-columns:5em minmax(0,1fr)}
+#sheet[data-theme="swiss"] .xs-date{align-items:flex-start;text-align:left}
+#sheet[data-theme="swiss"] .xs-date .dw{color:#ff3d00}
+#sheet[data-theme="swiss"] .xs-date .dn{font-size:2.2em;font-weight:900;letter-spacing:-.05em}
+#sheet[data-theme="swiss"] .xs-p+.xs-p{border-top:1px solid #e6e6e6}
+#sheet[data-theme="swiss"] .xs-subj b{font-weight:800;letter-spacing:-.01em}
+#sheet[data-theme="swiss"] .xs-kind{background:#0a0a0a;color:#fff;border-radius:0}
+
+/* Exercise Book — ruled page, index tabs */
+#sheet[data-theme="notebook"]{background:#fff repeating-linear-gradient(#fff 0 1.84em,#cfe0f7 1.84em 1.9em);color:#1f2a44;font-family:'DM Sans','Inter',sans-serif;padding-left:88px}
+#sheet[data-theme="notebook"]:before{content:'';position:absolute;left:66px;top:0;bottom:0;border-left:2px solid #f2a3a3}
+#sheet[data-theme="notebook"] .xs-head{background:#fff;border:2px solid #1f2a44;border-right-width:5px;border-bottom-width:5px;border-radius:.8em;padding:.55em .9em}
+#sheet[data-theme="notebook"] .xs-school{color:#6b7690;font-family:'Space Grotesk',sans-serif}
+#sheet[data-theme="notebook"] .xs-title{font-family:'Space Grotesk',sans-serif;font-size:1.75em}
+#sheet[data-theme="notebook"] .xs-board{color:#1d4ed8}
+#sheet[data-theme="notebook"] .xs-day{background:#fff;border:1.5px solid #c9d3e6;border-left:.45em solid #1d4ed8;border-radius:.5em;padding:.2em .7em}
+#sheet[data-theme="notebook"] .xs-day:nth-child(4n+2){border-left-color:#0f766e}
+#sheet[data-theme="notebook"] .xs-day:nth-child(4n+3){border-left-color:#e03131}
+#sheet[data-theme="notebook"] .xs-day:nth-child(4n+4){border-left-color:#a16207}
+#sheet[data-theme="notebook"] .xs-date{font-family:'Space Grotesk',sans-serif;color:#1f2a44}
+#sheet[data-theme="notebook"] .xs-p+.xs-p{border-top:1.5px dotted #9aa5bd}
+#sheet[data-theme="notebook"] .xs-kind{background:#eef3ff;color:#1d4ed8}
+
+/* Board — big, light */
+#sheet[data-theme="board"]{background:#f4f6fb;color:#0f172a;font-family:'Inter',sans-serif}
+#sheet[data-theme="board"] .xs-head{border-bottom:2px solid #e2e8f0;padding-bottom:.6em}
+#sheet[data-theme="board"] .xs-school{color:#64748b;letter-spacing:.04em;text-transform:none;font-weight:600}
+#sheet[data-theme="board"] .xs-board{background:#1d4ed8;border-color:#1d4ed8;color:#fff;border-radius:999px}
+#sheet[data-theme="board"] .xs-day{background:#fff;border-radius:1em;padding:.45em .9em;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+#sheet[data-theme="board"] .xs-date{background:#eef2ff;border-radius:.7em;padding:.45em 0;color:#1d4ed8;align-self:start}
+#sheet[data-theme="board"] .xs-date .dn{color:#0f172a}
+#sheet[data-theme="board"] .xs-p+.xs-p{border-top:1px solid #eef2f7}
+#sheet[data-theme="board"] .xs-subj b{font-size:1.05em}
+#sheet[data-theme="board"] .xs-kind{background:#eef2ff;color:#1d4ed8;border-radius:999px}
+
+/* Quiet — clean, one accent */
+#sheet[data-theme="quiet"]{background:#fff;color:#18181b;font-family:'Inter',sans-serif}
+#sheet[data-theme="quiet"] .xs-head{border-bottom:1px solid #e4e4e7;padding-bottom:.7em}
+#sheet[data-theme="quiet"] .xs-school{color:#0f766e}
+#sheet[data-theme="quiet"] .xs-title{font-family:'Plus Jakarta Sans','Inter',sans-serif;font-size:1.65em}
+#sheet[data-theme="quiet"] .xs-sub{color:#71717a;opacity:1}
+#sheet[data-theme="quiet"] .xs-board{border:1px solid #99d5cc;color:#0f766e;font-size:.66em}
+#sheet[data-theme="quiet"] .xs-day{border-bottom:1px solid #f0f0f2;padding-bottom:.35em}
+#sheet[data-theme="quiet"] .xs-date{align-items:flex-start;text-align:left;color:#71717a}
+#sheet[data-theme="quiet"] .xs-date .dn{color:#18181b;font-weight:700}
+#sheet[data-theme="quiet"] .xs-time b{color:#0f766e}
+#sheet[data-theme="quiet"] .xs-subj b{font-weight:600}
+#sheet[data-theme="quiet"] .xs-kind{background:#f0fdfa;color:#0f766e}
+
+/* Inline — one line per paper */
+#sheet[data-theme="inline"]{background:#f6f5f2;color:#1f2328;font-family:'DM Sans','Inter',sans-serif}
+#sheet[data-theme="inline"] .xs-school{color:#6b7280;letter-spacing:.04em;text-transform:none}
+#sheet[data-theme="inline"] .xs-board{background:#1f2328;border-color:#1f2328;color:#fff;border-radius:999px}
+#sheet[data-theme="inline"] .xs-day{grid-template-columns:1fr;gap:.3em}
+#sheet[data-theme="inline"] .xs-date{flex-direction:row;gap:.4em;align-items:baseline;justify-content:flex-start}
+#sheet[data-theme="inline"] .xs-date .dn{font-size:1em;margin:0}
+#sheet[data-theme="inline"] .xs-date .dw,#sheet[data-theme="inline"] .xs-date .dm{font-size:.7em}
+#sheet[data-theme="inline"] .xs-papers{display:flex;flex-wrap:wrap;gap:.35em}
+#sheet[data-theme="inline"] .xs-p{display:flex;gap:.45em;align-items:center;background:#fff;border-radius:.6em;padding:.3em .6em .3em .35em;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+#sheet[data-theme="inline"] .xs-time b{background:#1f2328;color:#fff;border-radius:.4em;padding:.1em .4em;font-size:.75em}
+#sheet[data-theme="inline"] .xs-time span,#sheet[data-theme="inline"] .xs-subj .inv,#sheet[data-theme="inline"] .xs-cnt{display:none}
+#sheet[data-theme="inline"] .xs-subj{display:flex;gap:.35em;align-items:baseline}
+#sheet[data-theme="inline"] .xs-subj b{font-size:.85em;white-space:nowrap}
+#sheet[data-theme="inline"] .xs-subj span{font-size:.7em;margin:0;white-space:nowrap}
+#sheet[data-theme="inline"] .xs-kind{background:#ebe9e4;color:#374151}
+
+/* Print — bold sans, grey header, striped */
+#sheet[data-theme="print"]{background:#fff;color:#000;font-family:Arial,'Segoe UI',sans-serif}
+#sheet[data-theme="print"] .xs-head{background:#e5e5e5;padding:.6em .8em;margin-bottom:.7em}
+#sheet[data-theme="print"] .xs-title{font-family:'Arial Black',Arial,sans-serif;font-weight:900}
+#sheet[data-theme="print"] .xs-days{gap:0;border:2px solid #000}
+#sheet[data-theme="print"] .xs-day{gap:0;grid-template-columns:5em minmax(0,1fr)}
+#sheet[data-theme="print"] .xs-day+.xs-day{border-top:2px solid #000}
+#sheet[data-theme="print"] .xs-date{background:#e5e5e5;justify-content:center;border-right:2px solid #000}
+#sheet[data-theme="print"] .xs-p{padding:.4em .7em}
+#sheet[data-theme="print"] .xs-p:nth-child(even){background:#f3f3f3}
+#sheet[data-theme="print"] .xs-p+.xs-p{border-top:1px solid #bbb}
+#sheet[data-theme="print"] .xs-subj b{text-transform:uppercase;font-weight:900;font-size:.9em}
+#sheet[data-theme="print"] .xs-kind{border:1px solid #000;border-radius:0}
+
+/* Mono — B&W, photocopy-friendly */
+#sheet[data-theme="mono"]{background:#fff;color:#000;font-family:'Courier New',monospace}
+#sheet[data-theme="mono"] .xs-head{border:2px solid #000;padding:.6em .8em}
+#sheet[data-theme="mono"] .xs-board{border-radius:0;background:#000;color:#fff}
+#sheet[data-theme="mono"] .xs-days{gap:.5em}
+#sheet[data-theme="mono"] .xs-day{border:1px solid #000;gap:0;grid-template-columns:5em minmax(0,1fr)}
+#sheet[data-theme="mono"] .xs-date{background:#000;color:#fff;justify-content:center}
+#sheet[data-theme="mono"] .xs-p{padding:.35em .6em}
+#sheet[data-theme="mono"] .xs-p+.xs-p{border-top:1px dashed #000}
+#sheet[data-theme="mono"] .xs-kind{border:1px solid #000;border-radius:0}
+
+/* Plain — pure black & white, no shading */
+#sheet[data-theme="plain"]{background:#fff;color:#000;font-family:'Segoe UI',system-ui,sans-serif}
+#sheet[data-theme="plain"] .xs-head{border-bottom:2px solid #000;padding-bottom:.6em}
+#sheet[data-theme="plain"] .xs-board{border-width:1px;border-radius:0}
+#sheet[data-theme="plain"] .xs-day{border-bottom:1px solid #000;padding-bottom:.3em}
+#sheet[data-theme="plain"] .xs-p+.xs-p{border-top:1px solid #ccc}
+#sheet[data-theme="plain"] .xs-kind{border:1px solid #000;border-radius:0}
+
+@media print{
+  @page{size:A4 portrait;margin:0}
+  body *{visibility:hidden!important}
+  #sheet,#sheet *{visibility:visible!important}
+  #sheet{position:fixed;left:0;top:0;box-shadow:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .xp-scale{transform:none!important}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rs bx">
+  {% call bx_head('fa-print', 'Print the timetable', xt.title ~ ' · one A4 page in a theme from the timetable designer') %}
+    <a href="{{ url_for('exam_timetable.edit', tt_id=xt.id) }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">Back to papers</span></a>
+  {% endcall %}
+
+  <div class="xp-wrap">
+    <aside class="xp-ctl">
+      <section class="rs-card">
+        <p class="xp-lbl">Theme</p>
+        <div class="xp-themes" role="radiogroup" aria-label="Theme">
+          {% set sw = {'timeline': ['#fffdf8', '#a16207', '#1d1b16'], 'tickets': ['#14213d', '#fca311', '#ffffff'], 'gazette': ['#f7f4ec', '#111111', '#999999'],
+                       'swiss': ['#ffffff', '#ff3d00', '#0a0a0a'], 'notebook': ['#ffffff', '#1d4ed8', '#f2a3a3'], 'board': ['#f4f6fb', '#1d4ed8', '#0f172a'],
+                       'quiet': ['#ffffff', '#0f766e', '#18181b'], 'inline': ['#f6f5f2', '#1f2328', '#ffffff'], 'print': ['#e5e5e5', '#000000', '#ffffff'],
+                       'mono': ['#000000', '#ffffff', '#000000'], 'plain': ['#ffffff', '#000000', '#ffffff']} %}
+          {% for key, name, desc in themes %}
+          <button type="button" class="xp-th" data-theme="{{ key }}" role="radio" aria-checked="false">
+            <i aria-hidden="true">{% for c in sw[key] %}<s style="background:{{ c }}"></s>{% endfor %}</i>
+            <b>{{ name }}</b><small>{{ desc }}</small></button>
+          {% endfor %}
+        </div>
+      </section>
+      <section class="rs-card">
+        <p class="xp-lbl">Show</p>
+        <label class="xp-sw">School logo<input type="checkbox" data-opt="logo" {{ 'checked' if logo else 'disabled' }}></label>
+        <label class="xp-sw">Hall / venue<input type="checkbox" data-opt="venue" checked></label>
+        <label class="xp-sw">Paper type<input type="checkbox" data-opt="kind" checked></label>
+        <label class="xp-sw">Duration<input type="checkbox" data-opt="dur" checked></label>
+        <label class="xp-sw">Invigilators<input type="checkbox" data-opt="inv"></label>
+        <label class="xp-sw">Candidates per paper<input type="checkbox" data-opt="cnt"></label>
+        {% if xt.notes %}<label class="xp-sw">Notes<input type="checkbox" data-opt="notes" checked></label>{% endif %}
+        {% if not logo %}<p class="rs-muted" style="font-size:.74rem">No school logo uploaded yet (Settings → School info).</p>{% endif %}
+      </section>
+      <section class="rs-card xp-acts">
+        <button type="button" class="rs-btn primary" id="xpPdf"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</button>
+        <button type="button" class="rs-btn ghost" id="xpPng"><i class="fas fa-image" aria-hidden="true"></i> Download image</button>
+        <button type="button" class="rs-btn ghost" id="xpPrint"><i class="fas fa-print" aria-hidden="true"></i> Print</button>
+      </section>
+    </aside>
+
+    <div>
+      <div class="xp-stage" id="xpStage">
+        <div class="xp-scale" id="xpScale">
+          <div id="sheet" data-theme="{{ theme or 'timeline' }}" class="no-inv no-cnt{{ '' if logo else ' no-logo' }}">
+            <header class="xs-head">
+              {% if logo %}<img class="xs-logo" src="{{ logo }}" alt="" crossorigin="anonymous">{% endif %}
+              <div class="xs-ht">
+                <div class="xs-school">{{ school.name or '' }}</div>
+                <h1 class="xs-title">{{ xt.title }}</h1>
+                <div class="xs-sub">{{ d.first.strftime('%d %b') }} – {{ d.last.strftime('%d %b %Y') }} · {{ d.rows|length }} paper{{ 's' if d.rows|length != 1 }} over {{ d.days|length }} day{{ 's' if d.days|length != 1 }}</div>
+              </div>
+              <div class="xs-board">{{ xt.board_label }}</div>
+            </header>
+            {% if xt.notes %}<p class="xs-notes">{{ xt.notes }}</p>{% endif %}
+            <main class="xs-days">
+              {% for day in d.days %}
+              <section class="xs-day">
+                <div class="xs-date"><span class="dw">{{ day.date.strftime('%a')|upper }}</span><b class="dn">{{ day.date.strftime('%d') }}</b><span class="dm">{{ day.date.strftime('%b')|upper }}</span></div>
+                <div class="xs-papers">
+                  {% for r in day.rows %}{% set p = r.p %}
+                  <div class="xs-p">
+                    <div class="xs-time"><b>{{ fmt_time(p.start_time) }}</b><span>to {{ fmt_time(p.end_time) }}<span class="dur"> · {{ fmt_dur(r.minutes) }}</span></span></div>
+                    <div class="xs-subj"><b>{{ p.subject }}</b>{% if p.paper %}<span>{{ p.paper }}</span>{% endif %}{% if p.invigilators %}<span class="inv">Invigilators: {{ p.invigilators }}</span>{% endif %}</div>
+                    <div class="xs-meta">{% if p.kind %}<span class="xs-kind">{{ kinds[p.kind].split(' /')[0] }}</span>{% endif %}{% if p.venue %}<span class="xs-venue">{{ p.venue }}</span>{% endif %}<span class="xs-cnt">{{ r.count }} cand.</span></div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </section>
+              {% endfor %}
+            </main>
+            <footer class="xs-foot"><span>Check the official {{ xt.board_label }} timetable for any late changes.</span><span>{{ school.name or '' }}</span></footer>
+          </div>
+        </div>
+      </div>
+      <p class="xp-fit" id="xpFit"></p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var sheet = document.getElementById('sheet'), scaleBox = document.getElementById('xpScale'), stage = document.getElementById('xpStage');
+  var KEY = 'xtPrint', H = 1123;
+  var prefs = {};
+  try { prefs = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  var forced = {{ theme|tojson }};
+
+  // Fit everything on ONE A4 page: start large and step the text size down
+  // until the content no longer overflows the page height.
+  function fit() {
+    // Content height (header + days + footer) against the page: grow short
+    // timetables to fill the sheet, shrink long ones until they fit.
+    var head = sheet.querySelector('.xs-head'), days = sheet.querySelector('.xs-days'),
+        notes = sheet.querySelector('.xs-notes'), foot = sheet.querySelector('.xs-foot');
+    function used() {
+      var r = sheet.getBoundingClientRect(), b = days.getBoundingClientRect();
+      return (b.bottom - r.top) / (r.height / H) + foot.offsetHeight + 22;
+    }
+    function shrink() {
+      var f = 24;
+      sheet.style.setProperty('--fs', f + 'px');
+      while (used() > H - 44 && f > 7) { f -= 0.25; sheet.style.setProperty('--fs', f + 'px'); }
+      return f;
+    }
+    // One column reads best; a long timetable switches to two columns rather
+    // than shrinking the text below comfortable reading size.
+    sheet.classList.remove('cols2');
+    var fs = shrink();
+    if (fs < 12.5 && sheet.dataset.theme !== 'inline') {
+      sheet.classList.add('cols2');
+      var fs2 = shrink();
+      if (fs2 > fs) { fs = fs2; } else { sheet.classList.remove('cols2'); fs = shrink(); }
+    }
+    document.getElementById('xpFit').textContent = 'Fits on one A4 page' + (fs < 10 ? ' — small text; consider hiding some details' : '') + '.';
+    scale();
+  }
+  function scale() {
+    var w = stage.clientWidth - 36, k = Math.min(1, w / 794);
+    scaleBox.style.transform = 'scale(' + k + ')';
+    scaleBox.style.width = 794 + 'px';
+    scaleBox.style.height = H * k + 'px';
+    stage.style.height = (H * k + 36) + 'px';
+  }
+  function setTheme(t) {
+    sheet.dataset.theme = t;
+    document.querySelectorAll('.xp-th').forEach(function (b) { var on = b.dataset.theme === t; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    prefs.theme = t; save(); fit();
+  }
+  function setOpt(k, on) { sheet.classList.toggle('no-' + k, !on); prefs[k] = on; save(); }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (e) {} }
+
+  document.querySelectorAll('.xp-th').forEach(function (b) { b.addEventListener('click', function () { setTheme(b.dataset.theme); }); });
+  document.querySelectorAll('[data-opt]').forEach(function (c) {
+    var k = c.dataset.opt;
+    if (!c.disabled && typeof prefs[k] === 'boolean') c.checked = prefs[k];
+    setOpt(k, c.checked && !c.disabled);
+    c.addEventListener('change', function () { setOpt(k, c.checked); fit(); });
+  });
+  setTheme(forced || prefs.theme || sheet.dataset.theme);
+  window.addEventListener('resize', scale);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  var img = sheet.querySelector('.xs-logo'); if (img && !img.complete) img.addEventListener('load', fit);
+
+  var name = {{ (xt.title|replace(' ', '_'))|tojson }};
+  function capture() {
+    var t = scaleBox.style.transform; scaleBox.style.transform = 'none';
+    return html2canvas(sheet, {scale: 2.5, backgroundColor: null, useCORS: true, width: 794, height: H, windowWidth: 1200})
+      .then(function (c) { scaleBox.style.transform = t; return c; }, function (e) { scaleBox.style.transform = t; throw e; });
+  }
+  function busy(btn, on) { btn.disabled = on; btn.dataset.l = btn.dataset.l || btn.innerHTML; btn.innerHTML = on ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Preparing…' : btn.dataset.l; }
+  document.getElementById('xpPdf').addEventListener('click', function () {
+    var b = this; busy(b, true);
+    capture().then(function (c) {
+      var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      var pdf = new JsPDF({orientation: 'portrait', unit: 'pt', format: 'a4'});
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      pdf.addImage(c.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, pw, ph);
+      pdf.save(name + '.pdf');
+    }).catch(function () { alert('Could not make the PDF — try Print instead.'); }).then(function () { busy(b, false); });
+  });
+  document.getElementById('xpPng').addEventListener('click', function () {
+    var b = this; busy(b, true);
+    capture().then(function (c) {
+      var a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = name + '.png'; a.click();
+    }).catch(function () { alert('Could not make the image.'); }).then(function () { busy(b, false); });
+  });
+  document.getElementById('xpPrint').addEventListener('click', function () { window.print(); });
+})();
+</script>
+{% endblock %}

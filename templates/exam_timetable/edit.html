@@ -93,7 +93,7 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
     <a href="{{ url_for('exam_timetable.index') }}" class="rs-btn ghost" aria-label="All timetables"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">All timetables</span></a>
     {% if d.rows %}
     {{ bx_menu('Download', [
-        (url_for('exam_timetable.export', tt_id=xt.id, format='pdf'), 'fa-file-pdf', 'Timetable PDF · notice board'),
+        (url_for('exam_timetable.print_view', tt_id=xt.id), 'fa-palette', 'Timetable · one page, choose a theme'),
         (url_for('exam_timetable.export', tt_id=xt.id, format='candidates'), 'fa-id-card', 'Personal timetable for each candidate'),
         (url_for('exam_timetable.export', tt_id=xt.id, format='excel'), 'fa-file-excel', 'Excel · timetable + by candidate')], 'fa-download', True) }}
     {% endif %}

@@ -86,6 +86,12 @@ def test_exam_timetable_flow(app):
     assert 'Clash' in page and 'Mathematics' in page and 'Physics' in page
     assert 'Biology' in page and 'Subjects with no paper yet' in page          # Biology still needs a paper
 
+    page = c.get(f'/tools/exam-timetable/{tid}/print?theme=gazette').get_data(as_text=True)
+    assert 'data-theme="gazette"' in page and 'Download PDF' in page and 'School logo' in page
+    for key in ('timeline', 'tickets', 'swiss', 'notebook', 'board', 'quiet', 'inline', 'print', 'mono', 'plain'):
+        assert 'data-theme="%s"' % key in page                       # every designer theme offered
+    assert 'Mathematics' in page and 'Paper 2 (Essay)' in page
+
     pdf = c.get(f'/tools/exam-timetable/{tid}/export?format=pdf')
     assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
     import fitz

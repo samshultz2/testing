@@ -177,6 +177,33 @@ def delete(tt_id):
     return redirect(url_for('exam_timetable.index'))
 
 
+THEMES = [('timeline', 'Timeline', 'cream & gold, dated'), ('tickets', 'Tickets', 'one cut-out ticket per day'),
+          ('gazette', 'Gazette', 'school newspaper, black & white'), ('swiss', 'Swiss', 'bold poster type, one accent'),
+          ('notebook', 'Exercise Book', 'ruled page, index tabs'), ('board', 'Board', 'big, light, best for phones'),
+          ('quiet', 'Quiet', 'clean, calm, one accent'), ('inline', 'Inline', 'one line per paper, like a message'),
+          ('print', 'Print', 'bold sans, grey header, striped'), ('mono', 'Mono', 'B&W, photocopy-friendly'),
+          ('plain', 'Plain', 'pure black & white, no shading')]
+
+
+@exam_timetable_bp.route('/<int:tt_id>/print')
+@login_required
+def print_view(tt_id):
+    """The one-page timetable for the notice board, in the timetable
+    designer's themes; downloaded as PDF / image or printed from the page."""
+    from utils.school import logo_url, school_profile
+    tt = _tt_or_404(tt_id)
+    if not tt.papers:
+        flash('Add papers first.', 'warning')
+        return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
+    cands = ET.candidates(tt.board)
+    data = ET.analyse(tt, cands)
+    theme = request.args.get('theme')
+    return render_template('exam_timetable/print.html', xt=tt, d=data, themes=THEMES,
+                           theme=theme if theme in dict((t[0], 1) for t in THEMES) else '',
+                           school=school_profile() or {}, logo=logo_url(), kinds=dict(ET.KINDS),
+                           fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur)
+
+
 @exam_timetable_bp.route('/<int:tt_id>/export')
 @login_required
 def export(tt_id):
