@@ -26,6 +26,21 @@ def norm(s):
     return ' '.join((s or '').lower().replace('&', 'and').split())
 
 
+# Subjects an exam body offers under another name. NECO has no Digital
+# Technologies: those candidates sit NECO Computer Studies (WAEC keeps
+# Digital Technologies).
+BOARD_SUBJECTS = {'neco': {'digital technologies': 'Computer Studies', 'digital technology': 'Computer Studies'}}
+
+
+def board_subject(board, name):
+    """The name this exam body uses for a subject on a student's profile."""
+    return BOARD_SUBJECTS.get(board, {}).get(norm(name), name)
+
+
+def subject_key(board, name):
+    return norm(board_subject(board, name))
+
+
 def candidates(board):
     """The external-exam cohort with the subjects on each profile:
     [{id, name, student_id, reg_no, subjects:set(normalised), registered}]."""
@@ -35,8 +50,8 @@ def candidates(board):
         reg = (s.neco_reg_number if board == 'neco' else s.waec_reg_number) or ''
         out.append({'id': s.id, 'name': s.full_name, 'student_id': s.student_id or '',
                     'reg_no': reg.strip(), 'registered': bool(reg.strip()),
-                    'subjects': {norm(x) for x in (s.waec_subject_list or [])},
-                    'subject_names': list(s.waec_subject_list or [])})
+                    'subjects': {subject_key(board, x) for x in (s.waec_subject_list or [])},
+                    'subject_names': list(dict.fromkeys(board_subject(board, x) for x in (s.waec_subject_list or [])))})
     out.sort(key=lambda c: c['name'].lower())
     return out
 
@@ -84,7 +99,7 @@ def analyse(tt, cands):
             by_subject.setdefault(s, []).append(c)
     rows = []
     for p in papers:
-        who = by_subject.get(norm(p.subject), [])
+        who = by_subject.get(subject_key(tt.board, p.subject), [])
         rows.append({'p': p, 'count': len(who), 'cands': who, 'minutes': minutes(p.start_time, p.end_time),
                      'session': 'Morning' if p.start_time < SESSION_CUT else 'Afternoon'})
     # clashes: overlapping papers on the same day that share candidates
@@ -106,7 +121,7 @@ def analyse(tt, cands):
             days.append({'date': r['p'].exam_date, 'rows': []})
         days[-1]['rows'].append(r)
     # subjects candidates registered for but with no paper yet
-    have = {norm(p.subject) for p in papers}
+    have = {subject_key(tt.board, p.subject) for p in papers}
     names = {}
     for c in cands:
         for n in c['subject_names']:
@@ -118,7 +133,7 @@ def analyse(tt, cands):
     for c in cands:
         per_day = {}
         for r in rows:
-            if norm(r['p'].subject) in c['subjects']:
+            if subject_key(tt.board, r['p'].subject) in c['subjects']:
                 per_day[r['p'].exam_date] = per_day.get(r['p'].exam_date, 0) + 1
         worst = max(per_day.values()) if per_day else 0
         if worst >= 3:
@@ -126,7 +141,7 @@ def analyse(tt, cands):
     dates = [r['p'].exam_date for r in rows]
     return {'rows': rows, 'days': days, 'clashes': clashes, 'missing': missing, 'heavy': heavy,
             'first': min(dates) if dates else None, 'last': max(dates) if dates else None,
-            'subjects': len({norm(p.subject) for p in papers}),
+            'subjects': len({subject_key(tt.board, p.subject) for p in papers}),
             'candidates': len(cands), 'registered': sum(1 for c in cands if c['registered'])}
 
 
@@ -134,7 +149,7 @@ def personal(tt, cands, data):
     """[{candidate, rows}] — each candidate's own papers in order."""
     out = []
     for c in cands:
-        mine = [r for r in data['rows'] if norm(r['p'].subject) in c['subjects']]
+        mine = [r for r in data['rows'] if subject_key(tt.board, r['p'].subject) in c['subjects']]
         if mine:
             out.append({'c': c, 'rows': mine})
     return out
@@ -423,7 +438,7 @@ def _split(line):
     return [c.strip() for c in line.split(',')]
 
 
-def parse_paste(text, subjects, papers_for, default_year=None):
+def parse_paste(text, subjects, papers_for, default_year=None, board=None):
     """Rows of ``date, start, end, subject, paper[, venue, invigilators]``.
     ``start, end`` may be one "9:30am - 12:30pm" cell, and ``end`` may be a
     duration (2hrs 30mins). Subjects are matched to the known list (case,
@@ -468,6 +483,9 @@ def parse_paste(text, subjects, papers_for, default_year=None):
         key = norm(subj_in).replace('-', ' ')
         key = alias.get(norm(subj_in), alias.get(key, key))
         subject = known.get(key) or known.get(norm(subj_in)) or subj_in.strip()
+        if board:
+            subject = board_subject(board, subject)
+            key = norm(subject) if norm(subject) in known else key
         paper = cols[4].strip()
         kinds = dict(papers_for(subject))
         kind = kinds.get(paper) or _guess_kind(paper)

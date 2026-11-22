@@ -260,3 +260,29 @@ def test_neco_2027_geography_sitting_pastes_as_one_paper(app):
         assert [(p.exam_date.isoformat(), p.start_time.strftime('%H:%M'), p.end_time.strftime('%H:%M'), p.kind)
                 for p in ps] == [('2027-04-28', '14:00', '16:30', 'objective_practical'),
                                  ('2027-05-07', '10:00', '12:00', 'essay')]
+
+
+def test_neco_counts_digital_technologies_as_computer_studies(app):
+    _cand(app, 'XDT1', 'English Language,Mathematics,Digital Technologies')
+    c = _admin(app)
+    ids = {}
+    for board in ('neco', 'waec'):
+        c.post('/tools/exam-timetable/create', data={'_csrf_token': auth_csrf(c), 'board': board, 'year': '2044'})
+        with app.app_context():
+            ids[board] = ExamTimetable.query.filter_by(board=board, year=2044).order_by(ExamTimetable.id.desc()).first().id
+    neco = c.get(f"/tools/exam-timetable/{ids['neco']}").get_data(as_text=True)
+    sel = neco.split('name="subject"')[1].split('</select>')[0]
+    assert 'Computer Studies' in sel and 'Digital Technologies' not in sel
+    waec = c.get(f"/tools/exam-timetable/{ids['waec']}").get_data(as_text=True)
+    assert 'Digital Technologies' in waec.split('name="subject"')[1].split('</select>')[0]
+    # NECO paper for Computer Studies counts the Digital Technologies candidate; pasting
+    # "Digital Technologies" onto a NECO timetable saves it as Computer Studies.
+    c.post(f"/tools/exam-timetable/{ids['neco']}/paste", data={
+        '_csrf_token': auth_csrf(c), 'action': 'save',
+        'data': '2044-06-10, 10:00am, 1:00pm, Digital Technologies, Papers III & II: Objective & Essay'})
+    with app.app_context():
+        p = ExamTimetablePaper.query.filter_by(timetable_id=ids['neco']).one()
+        assert p.subject == 'Computer Studies'
+    page = c.get(f"/tools/exam-timetable/{ids['neco']}").get_data(as_text=True)
+    sitting = page.split('<b>Sitting:</b>')[1].split('</p>')[0]
+    assert 'Cand XDT1' in sitting

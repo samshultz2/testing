@@ -263,7 +263,8 @@ def edit(tt_id):
     cands = ET.candidates(tt.board)
     data = ET.analyse(tt, cands)
     mine = sorted({n for c in cands for n in c['subject_names']}, key=str.lower)
-    rest = sorted(set(WAEC_SUBJECTS) - set(mine), key=str.lower)
+    # Only subjects this body sets (NECO: Digital Technologies → Computer Studies).
+    rest = sorted({ET.board_subject(tt.board, x) for x in WAEC_SUBJECTS} - set(mine), key=str.lower)
     subjects = mine + rest
     last = data['rows'][-1]['p'] if data['rows'] else None
     return render_template('exam_timetable/edit.html', xt=tt, d=data, subjects=subjects, subj_mine=mine, subj_rest=rest, presets=PAPER_PRESETS.get(tt.board, PAPER_PRESETS['waec']),
@@ -351,12 +352,12 @@ def paste(tt_id):
     tt = _tt_or_404(tt_id)
     cands = ET.candidates(tt.board)
     mine = sorted({n for c in cands for n in c['subject_names']}, key=str.lower)
-    subjects = mine + sorted(set(WAEC_SUBJECTS) - set(mine), key=str.lower)
+    subjects = mine + sorted({ET.board_subject(tt.board, x) for x in WAEC_SUBJECTS} - set(mine), key=str.lower)
     text = request.form.get('data', '') if request.method == 'POST' else ''
     rows, summary = [], None
     if request.method == 'POST' and text.strip():
         rows = ET.parse_paste(text, subjects, lambda subj: papers_for(tt.board, subj),
-                              default_year=tt.year or (tt.start_date.year if tt.start_date else None))
+                              default_year=tt.year or (tt.start_date.year if tt.start_date else None), board=tt.board)
         have = {(p.exam_date, p.start_time, ET.norm(p.subject), ET.norm(p.paper or '')) for p in tt.papers}
         for r in rows:
             if r['error']:
