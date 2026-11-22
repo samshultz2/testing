@@ -59,7 +59,7 @@ def _cand(app, name, subjects):
     from models import Branch
     with app.app_context():
         s = Student(student_id=name, first_name=name, surname='Cand', gender='Female', is_active=True,
-                    branch_id=Branch.get_default().id, waec_subjects=subjects, waec_reg_number='REG' + name)
+                    branch_id=Branch.get_default().id, waec_subjects=subjects)
         db.session.add(s); db.session.commit(); sid = s.id
     enroll_sss3(app, sid)
     return sid
