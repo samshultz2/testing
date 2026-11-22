@@ -1437,11 +1437,16 @@ def file_response(doc, fmt, stem):
         return Response(render_docx(doc), headers={'Content-Disposition': 'attachment; filename="%s.docx"' % stem},
                         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     page = max(1, request.args.get('page', type=int) or 1)
-    pages, total = render_images(doc, only_page=page)
+    preview = request.args.get('preview') == '1'
+    # The export dialog's live preview: a lighter render shown inline, never cached.
+    pages, total = render_images(doc, zoom=1.25 if preview else 2.0, only_page=page)
     suffix = '' if total == 1 else '_p%d' % min(page, total)
-    return Response(pages[0], mimetype='image/png', headers={
-        'Content-Disposition': 'attachment; filename="%s%s.png"' % (stem, suffix),
-        'X-Total-Pages': str(total), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+    headers = {'X-Total-Pages': str(total), 'Access-Control-Expose-Headers': 'X-Total-Pages'}
+    if preview:
+        headers['Cache-Control'] = 'no-store'
+    else:
+        headers['Content-Disposition'] = 'attachment; filename="%s%s.png"' % (stem, suffix)
+    return Response(pages[0], mimetype='image/png', headers=headers)
 
 
 # Export-dialog column choices for score exams (JAMB / Mock JAMB) and the

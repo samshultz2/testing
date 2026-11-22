@@ -1,5 +1,5 @@
 {# Shared results export dialog (PDF / Image / Word, text size, Students List
-   or Subjects Analysis, column picker) — the design used by the WAEC / NECO,
+   or Subjects Analysis, column picker, live preview of the real document) — the design used by the WAEC / NECO,
    JSS3 / Basic, JAMB, Mock JAMB and Mock WAEC exports.
    Context: rx_title, rx_url (export endpoint; may already carry a query),
    rx_cols {'students': [(key, label, default)], 'subjects': [...]},
@@ -11,6 +11,7 @@
       <h3 id="rxExportTitle"><i class="fas fa-file-export"></i> {{ rx_title }}</h3>
       <button type="button" class="rxe-x" data-call="rxCloseExport" aria-label="Close">&times;</button>
     </div>
+    <div class="rxe-cols">
     <div class="rxe-body">
       <div class="rxe-label">Format:</div>
       <div class="rxe-grid3">
@@ -29,6 +30,10 @@
         <label class="rxe-opt"><input type="radio" name="rxType" value="students" checked data-call="rxToggleExport" data-on="change"><span>Students List</span></label>
         <label class="rxe-opt"><input type="radio" name="rxType" value="subjects" data-call="rxToggleExport" data-on="change"><span>Subjects Analysis</span></label>
       </div>
+      <button type="button" class="rxe-pvbar" id="rxPvBar" aria-controls="rxPv">
+        <span class="t"><b>Preview</b><small id="rxPvBarSub">Page 1</small></span>
+        <span class="go">Open <i class="fas fa-chevron-right" aria-hidden="true"></i></span>
+      </button>
       <div id="rxExpStudents">
         <div class="rxe-label">Student Columns:</div>
         <div class="rxe-checks">
@@ -60,12 +65,46 @@
         <button type="button" data-call="rxGenerateExport" class="btn btn-primary"><i class="fas fa-download"></i> Export</button>
       </div>
     </div>
+    <section class="rxe-pv" id="rxPv" aria-label="Live preview">
+      <div class="rxe-pv-h">
+        <button type="button" class="rxe-pv-back" id="rxPvBack" aria-label="Back to options"><i class="fas fa-arrow-left" aria-hidden="true"></i></button>
+        <b>Live preview</b>
+        <span class="rxe-pv-nav">
+          <button type="button" id="rxPvPrev" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+          <span id="rxPvPage" aria-live="polite">Page 1</span>
+          <button type="button" id="rxPvNext" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+        </span>
+      </div>
+      <div class="rxe-pv-stage">
+        <img id="rxPvImg" alt="Preview of the export" hidden>
+        <div class="rxe-pv-msg" id="rxPvMsg"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Rendering preview…</div>
+      </div>
+      <p class="rxe-pv-foot" id="rxPvFoot">The same page as the export. Word keeps this layout as an editable document.</p>
+    </section>
+    </div>
   </div>
 </div>
 
 <style>
 .rxe-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;padding:.5rem;overflow-y:auto}
-.rxe-dialog{background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border-radius:12px;max-width:520px;margin:1rem auto;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 20px 50px rgba(15,23,42,.3)}
+.rxe-dialog{background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border-radius:14px;max-width:1080px;margin:1rem auto;height:calc(100vh - 2rem);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(15,23,42,.3)}
+.rxe-cols{flex:1;min-height:0;display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr)}
+.rxe-cols>.rxe-body{overflow-y:auto;border-right:1px solid var(--border-color,#eee)}
+.rxe-pv{display:flex;flex-direction:column;min-height:0;background:var(--gray-100,#eef1f5)}
+.rxe-pv-h{display:flex;align-items:center;gap:.6rem;padding:.6rem .9rem;border-bottom:1px solid var(--border-color,#e5e7eb);background:var(--bg-card,#fff);font-size:.9rem}
+.rxe-pv-h b{flex:1}
+.rxe-pv-back{display:none;border:0;background:var(--gray-100,#f1f5f9);width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--text-secondary)}
+.rxe-pv-nav{display:inline-flex;align-items:center;gap:.35rem;font-size:.82rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.rxe-pv-nav button{border:1px solid var(--border-color,#ddd);background:var(--bg-card,#fff);width:30px;height:30px;border-radius:8px;cursor:pointer;color:var(--text-secondary)}
+.rxe-pv-nav button:disabled{opacity:.4;cursor:default}
+.rxe-pv-stage{flex:1;min-height:0;overflow:auto;padding:1rem;display:flex;justify-content:center;align-items:flex-start;position:relative}
+.rxe-pv-stage img{max-width:100%;height:auto;background:#fff;box-shadow:0 4px 18px rgba(15,23,42,.18);border-radius:4px;transition:opacity .15s}
+.rxe-pv-stage img.dim{opacity:.45}
+.rxe-pv-msg{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);background:var(--bg-card,#fff);padding:.55rem .9rem;border-radius:10px;font-size:.85rem;color:var(--text-muted);box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.rxe-pv-foot{margin:0;padding:.45rem .9rem;font-size:.72rem;color:var(--text-muted);background:var(--bg-card,#fff);border-top:1px solid var(--border-color,#e5e7eb)}
+.rxe-pvbar{display:none;width:100%;align-items:center;justify-content:space-between;gap:.6rem;border:1px solid var(--border-color,#ddd);background:var(--gray-50,#f8f9fa);border-radius:12px;padding:.65rem .8rem;margin:0 0 1rem;cursor:pointer;font:inherit;color:inherit;text-align:left}
+.rxe-pvbar .t{display:flex;flex-direction:column}.rxe-pvbar small{color:var(--text-muted);font-size:.75rem}
+.rxe-pvbar .go{color:var(--primary);font-weight:600;font-size:.85rem}
 .rxe-head{padding:1rem;border-bottom:1px solid var(--border-color,#eee);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card,#fff);z-index:1}
 .rxe-head h3{margin:0;font-size:1rem}
 .rxe-head h3 i{color:var(--primary)}
@@ -90,6 +129,15 @@
 .rxe-grid2 input.form-control{min-width:0}
 .rxe-note{font-size:.75rem;color:var(--text-muted);margin:0 0 1rem}
 .rxe-actions{display:flex;gap:.5rem}.rxe-actions .btn{flex:1}
+@media (max-width:820px){
+  .rxe-dialog{height:auto;max-height:calc(100vh - 2rem);max-width:560px}
+  .rxe-cols{display:block;overflow-y:auto}
+  .rxe-cols>.rxe-body{border-right:0;overflow:visible}
+  .rxe-pvbar{display:flex}
+  .rxe-pv{display:none}
+  .rxe-backdrop.pv-open .rxe-pv{display:flex;position:fixed;inset:0;z-index:2}
+  .rxe-backdrop.pv-open .rxe-pv-back{display:inline-flex;align-items:center;justify-content:center}
+}
 @media (max-width:600px){
   .rxe-backdrop{padding:0}
   .rxe-dialog{position:absolute;left:0;right:0;bottom:0;margin:0;max-width:none;border-radius:18px 18px 0 0;max-height:92vh}
@@ -106,15 +154,89 @@
     var m = modal();
     if (m.parentNode !== document.body) document.body.appendChild(m);   // above sticky headers
     m.style.display = 'block';
+    pv.page = 1; refresh(0);
   };
-  window.rxCloseExport = function () { modal().style.display = 'none'; };
+  window.rxCloseExport = function () { var m = modal(); m.style.display = 'none'; m.classList.remove('pv-open'); };
   window.rxToggleExport = function () {
     var t = document.querySelector('input[name="rxType"]:checked').value;
     document.getElementById('rxExpStudents').style.display = t === 'students' ? 'block' : 'none';
     document.getElementById('rxExpSubjects').style.display = t === 'subjects' ? 'block' : 'none';
+    pv.page = 1; refresh();
   };
+
+  // ---- Live preview: page N of the real document as an image, re-rendered
+  // (debounced) whenever an option changes. Word shares the PDF's layout.
+  var pv = { page: 1, total: 1, timer: null, seq: 0, url: null };
+  function $(id) { return document.getElementById(id); }
+  function exportParams(format) {
+    var type = document.querySelector('input[name="rxType"]:checked').value;
+    var sz = document.querySelector('input[name="rxSize"]:checked');
+    var p = new URLSearchParams();
+    p.set('format', format); p.set('type', type); p.set('cols', cols(type).join(','));
+    p.set('size', sz ? sz.value : 'm');
+    var mn = $('rxMin'), mx = $('rxMax');
+    if (mn && mn.value !== '') p.set('min_score', mn.value);
+    if (mx && mx.value !== '') p.set('max_score', mx.value);
+    return p;
+  }
+  function withQuery(p) { return URL_BASE + (URL_BASE.indexOf('?') === -1 ? '?' : '&') + p.toString(); }
+  function showPage() {
+    $('rxPvPage').textContent = 'Page ' + pv.page + ' of ' + pv.total;
+    $('rxPvBarSub').textContent = 'Page ' + pv.page + ' of ' + pv.total;
+    $('rxPvPrev').disabled = pv.page <= 1; $('rxPvNext').disabled = pv.page >= pv.total;
+  }
+  function refresh(delay) {
+    clearTimeout(pv.timer);
+    pv.timer = setTimeout(load, delay == null ? 350 : delay);
+  }
+  function load() {
+    if (modal().style.display === 'none') return;
+    var seq = ++pv.seq, img = $('rxPvImg'), msg = $('rxPvMsg');
+    var p = exportParams('image'); p.set('preview', '1'); p.set('page', String(pv.page));
+    img.classList.add('dim');
+    msg.hidden = false; msg.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Rendering preview…';
+    fetch(withQuery(p), { credentials: 'same-origin' }).then(function (res) {
+      if (seq !== pv.seq) return;
+      if (!res.ok) throw new Error(String(res.status));
+      pv.total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+      if (pv.page > pv.total) { pv.page = pv.total; return load(); }
+      return res.blob().then(function (b) {
+        if (seq !== pv.seq) return;
+        if (pv.url) URL.revokeObjectURL(pv.url);
+        pv.url = URL.createObjectURL(b);
+        img.src = pv.url; img.hidden = false; img.classList.remove('dim'); msg.hidden = true;
+        img.alt = 'Preview of page ' + pv.page + ' of ' + pv.total;
+        showPage();
+      });
+    }).catch(function () {
+      if (seq !== pv.seq) return;
+      img.classList.remove('dim');
+      msg.hidden = false; msg.textContent = 'Preview unavailable — the export will still work.';
+    });
+  }
+  $('rxPvPrev').addEventListener('click', function () { if (pv.page > 1) { pv.page -= 1; refresh(0); } });
+  $('rxPvNext').addEventListener('click', function () { if (pv.page < pv.total) { pv.page += 1; refresh(0); } });
+  $('rxPvBar').addEventListener('click', function () { modal().classList.add('pv-open'); });
+  $('rxPvBack').addEventListener('click', function () { modal().classList.remove('pv-open'); });
+  modal().addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t || !t.closest || !t.closest('.rxe-body')) return;
+    if (t.name === 'rxType') return;               // rxToggleExport handles it
+    if (t.name === 'rxFormat') {                   // same layout for every format
+      $('rxPvFoot').textContent = t.value === 'image' ? 'Each page downloads as a PNG image.'
+        : t.value === 'word' ? 'Word keeps this layout as an editable document.' : 'The same page as the PDF.';
+      return;
+    }
+    pv.page = 1; refresh();
+  });
+  modal().addEventListener('input', function (e) {
+    if (e.target && (e.target.id === 'rxMin' || e.target.id === 'rxMax')) { pv.page = 1; refresh(600); }
+  });
   modal().addEventListener('click', function (e) { if (e.target === this) window.rxCloseExport(); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal()) window.rxCloseExport(); });
+  document.addEventListener('keydown', function (e) {
+    var m = modal(); if (e.key !== 'Escape' || !m || m.style.display === 'none') return;
+    if (m.classList.contains('pv-open')) m.classList.remove('pv-open'); else window.rxCloseExport();
+  });
   function cols(type) {
     return Array.prototype.map.call(
       document.querySelectorAll('input[data-rx-col="' + type + '"]:checked'), function (el) { return el.value; });
@@ -143,14 +265,7 @@
   window.rxGenerateExport = function () {
     var type = document.querySelector('input[name="rxType"]:checked').value;
     var format = document.querySelector('input[name="rxFormat"]:checked').value;
-    var sz = document.querySelector('input[name="rxSize"]:checked');
-    var p = new URLSearchParams();
-    p.set('format', format); p.set('type', type); p.set('cols', cols(type).join(','));
-    p.set('size', sz ? sz.value : 'm');
-    var mn = document.getElementById('rxMin'), mx = document.getElementById('rxMax');
-    if (mn && mn.value !== '') p.set('min_score', mn.value);
-    if (mx && mx.value !== '') p.set('max_score', mx.value);
-    var url = URL_BASE + (URL_BASE.indexOf('?') === -1 ? '?' : '&') + p.toString();
+    var url = withQuery(exportParams(format));
     window.rxCloseExport();
     if (format === 'image') downloadImages(url, STEM + (type === 'subjects' ? '_subjects' : ''));
     else window.location.href = url;

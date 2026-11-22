@@ -131,5 +131,13 @@ def test_mock_waec_branded_exports(app):
     txt = _text(c.get(base + 'format=pdf&type=subjects&size=s').data)
     assert 'Subject Analysis' in txt and 'All subjects' in txt and 'CREDIT RATE' in txt
     assert c.get(base + 'format=word').data[:2] == b'PK'
+    # The dialog's live preview: a lighter page shown inline (no download), never cached,
+    # and the dialog carries the preview pane.
+    assert 'id="rxPv"' in page and 'id="rxPvBar"' in page
+    full = c.get(base + 'format=image&type=students')
+    pv = c.get(base + 'format=image&type=students&preview=1&page=1')
+    assert pv.data[:4] == b'\x89PNG' and pv.headers.get('X-Total-Pages')
+    assert 'Content-Disposition' not in pv.headers and pv.headers.get('Cache-Control') == 'no-store'
+    assert 'attachment' in full.headers.get('Content-Disposition', '') and len(pv.data) < len(full.data)
     assert c.get(base + 'format=image&type=subjects').data[:4] == b'\x89PNG'
     assert c.get(f'/mock-waec/exam/{eid}/export').data[:2] == b'PK'   # Excel unchanged
