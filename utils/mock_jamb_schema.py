@@ -63,6 +63,7 @@ def ensure_mock_jamb_schema():
             'difficulty': 'VARCHAR(10)', 'source': 'VARCHAR(20)',
             'source_ref': 'VARCHAR(40)', 'exam_year': 'VARCHAR(8)',
             'needs_image': 'BOOLEAN DEFAULT 0',
+            'image_not_needed': 'BOOLEAN DEFAULT 0',
             'syllabus_item_code': 'VARCHAR(60)',
             'syllabus_secondary_codes': 'VARCHAR(200)',
         }

@@ -1,112 +1,198 @@
 {% extends "base.html" %}
-{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
+{% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_jamb/_shell.html" import mj_nav with context %}
 {% block title %}Questions needing images — Mock JAMB - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question bank</a> / <span>Needs images</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.ni-q{border:1px solid var(--border-color);border-left:4px solid #b45309;border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.8rem}
-.ni-meta{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.72rem;margin-bottom:.4rem}
-.ni-badge{background:var(--gray-100);border-radius:999px;padding:.12rem .5rem}
-.ni-opt{font-size:.85rem;color:var(--text-secondary);margin:.1rem 0}
-.ni-opt.c{color:var(--success);font-weight:600}
-.ni-act{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.6rem}
-.ni-check-lbl{float:right;display:inline-flex;gap:.3rem;align-items:center;font-size:.72rem;color:var(--text-muted);cursor:pointer;user-select:none}
-.ni-check{width:17px;height:17px;accent-color:var(--primary,#0d6a4e)}
+.ni-intro{font-size:.84rem;color:var(--text-secondary);line-height:1.55;margin:0}
+.ni-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%;padding:.1rem 0}
+.ni-chips::-webkit-scrollbar{display:none}
+.ni-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.34rem .8rem;font-size:.8rem;font-weight:600;color:var(--text-secondary);white-space:nowrap;text-decoration:none}
+.ni-chip:hover{border-color:var(--primary);color:var(--primary)}
+.ni-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.ni-chip em{font-style:normal;opacity:.7;margin-left:.3rem}
+.ni-filter{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.75rem}
+.ni-filter select{flex:0 1 150px;min-width:0;border:1px solid var(--border-color);border-radius:12px;padding:.5rem .65rem;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.85rem}
+.ni-search{flex:1 1 220px;display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .7rem;background:var(--bg-card);color:var(--text-muted)}
+.ni-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.86rem;color:var(--text-primary);padding:.5rem 0;outline:none}
+.ni-bulk{position:sticky;top:calc(var(--header-height,56px) + 6px);z-index:5;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.6rem .8rem;margin-bottom:.8rem;border:1px solid var(--border-color);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(15,23,42,.06)}
+.ni-bulk label{display:flex;align-items:center;gap:.45rem;font-weight:650;font-size:.84rem;cursor:pointer}
+.ni-bulk .sp{flex:1;min-width:4px}
+.ni-bulk form{display:flex;flex-wrap:wrap;gap:.4rem;margin:0}
+.ni-box{width:18px;height:18px;accent-color:var(--primary,#0d6a4e);flex:none}
+.ni-list{display:flex;flex-direction:column;gap:.75rem}
+.ni-q{position:relative;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-card);padding:.9rem 1rem;transition:border-color .15s,box-shadow .15s}
+.ni-q.sel{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}
+.ni-top{display:flex;gap:.65rem;align-items:flex-start}
+.ni-top .ni-box{margin-top:.15rem}
+.ni-meta{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;flex:1;min-width:0}
+.ni-tag{font-size:.72rem;font-weight:650;border-radius:999px;padding:.15rem .55rem;background:var(--gray-100);color:var(--text-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.ni-tag.why{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
+.ni-tag.subj{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
+.ni-num{font-size:.72rem;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ni-passage{margin:.65rem 0 0;padding:.55rem .75rem;border-left:3px solid var(--border-color);font-size:.8rem;color:var(--text-secondary);background:var(--gray-50);border-radius:0 10px 10px 0}
+.ni-passage summary{cursor:pointer;font-weight:650}
+.ni-text{font-weight:600;font-size:.93rem;line-height:1.55;margin:.65rem 0 .55rem;overflow-wrap:anywhere}
+.ni-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:.35rem}
+.ni-opt{display:flex;gap:.5rem;align-items:flex-start;font-size:.84rem;color:var(--text-secondary);padding:.35rem .5rem;border-radius:10px;background:var(--gray-50);overflow-wrap:anywhere;min-width:0}
+.ni-opt b{flex:none;width:1.4rem;height:1.4rem;border-radius:7px;background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:.72rem}
+.ni-opt.key{background:color-mix(in srgb,var(--success) 10%,var(--bg-card));color:var(--text-primary)}
+.ni-opt.key b{background:var(--success);color:#fff}
+.ni-act{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;margin-top:.8rem;padding-top:.75rem;border-top:1px dashed var(--border-color)}
+.ni-act form{margin:0;display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
+.ni-up{flex:1 1 auto}
+.ni-file{position:relative;display:inline-flex;align-items:center;gap:.45rem;border:1.5px dashed var(--border-color);border-radius:12px;padding:.45rem .75rem;font-size:.82rem;font-weight:600;color:var(--text-secondary);cursor:pointer;max-width:100%;min-width:0}
+.ni-file:hover{border-color:var(--primary);color:var(--primary)}
+.ni-file input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.ni-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:14rem}
+.ni-file.has{border-style:solid;border-color:var(--primary);color:var(--primary)}
+.ni-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border-color);display:none}
+.ni-thumb.on{display:block}
+.ni-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:1rem 0}
+@media (max-width:640px){
+  .ni-q{padding:.8rem .8rem}
+  .ni-act .ni-up{width:100%}
+  .ni-act .ni-up .ni-file{flex:1}
+  .ni-act .ni-up .rs-btn{flex:none}
+  .ni-act > .rs-btn, .ni-act > form:not(.ni-up){flex:1}
+  .ni-act > form:not(.ni-up) .rs-btn{width:100%;justify-content:center}
+  .ni-act > a.rs-btn{justify-content:center}
+  .ni-bulk{position:static}
+  .ni-bulk .sp{display:none}
+  .ni-bulk form{width:100%}
+  .ni-bulk form .rs-btn{flex:1;justify-content:center}
+  .ni-filter select{flex:1 1 40%}
+}
 </style>{% endblock %}
 {% block content %}
-<div class="rs bx bx-legacy">
-<div class="page-header"><h1>Questions needing images <span class="text-muted" style="font-weight:400;font-size:1rem;">— {{ total }} flagged</span></h1>
-    <div class="page-header-actions"><a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a></div>
-</div>
-<div class="no-print">{{ mj_nav('images') }}</div>
+{% set can_fix = can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
+{% set filtered = subject_id or year or exam_body or search %}
+{% set args = {'subject_id': subject_id or none, 'year': year or none, 'exam_body': exam_body or none, 'q': search or none} %}
+<div class="rs bx">
+  {% call bx_head('fa-image', 'Questions needing images', (total ~ ' question' ~ ('' if total == 1 else 's') ~ ' waiting for a picture') if total else 'Every question that needs a picture has one') %}
+    <a href="{{ bank_url }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">Back to bank</span></a>
+  {% endcall %}
+  <div class="no-print">{{ mj_nav('images') }}</div>
 
-<div class="card mb-3"><div class="card-body">
-    <p class="text-sm text-muted" style="margin:0 0 .6rem;">These questions refer to a diagram/figure that couldn't be fetched automatically, so they're <strong>held out of exams</strong> until you add the image. Upload the figure (or mark “no image needed” if it was a false alarm) and the question re-enters the pool.</p>
-    <form method="get" class="filter-form" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;">
-        <div class="form-group"><label class="form-label">Subject</label>
-            <select name="subject_id" class="form-control" data-autosubmit><option value="">All</option>
-                {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}</select></div>
-        <div class="form-group"><label class="form-label">Year</label>
-            <select name="year" class="form-control" data-autosubmit><option value="">All</option>
-                {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year else '' }}>{{ y }}</option>{% endfor %}</select></div>
-        <div class="form-group"><label class="form-label">Exam body</label>
-            <select name="exam_body" class="form-control" data-autosubmit><option value="">All</option>
-                {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body else '' }}>{{ e }}</option>{% endfor %}</select></div>
-        <div class="form-group"><button class="btn btn-secondary"><i class="fas fa-filter"></i> Filter</button></div>
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile {{ 'mid' if total else 'good' }}"><span class="l">Need a picture</span><span class="v">{{ total }}</span><span class="s">held out of exams</span></div>
+    <div class="rs-tile"><span class="l">Subjects affected</span><span class="v">{{ subject_counts|length }}</span><span class="s">{{ subject_counts[0][1] ~ ' has the most' if subject_counts else 'none' }}</span></div>
+    <div class="rs-tile"><span class="l">Showing</span><span class="v">{{ matching }}</span><span class="s">{{ 'with these filters' if filtered else 'all of them' }}</span></div>
+    <div class="rs-tile"><span class="l">Ruled not needed</span><span class="v">{{ dismissed }}</span><span class="s">false alarms you cleared</span></div>
+  </div>
+
+  <section class="rs-card">
+    <p class="ni-intro">Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — whether it was flagged on import or its wording points at one. They're <strong>held out of exams</strong> until you add the picture. If a question reads fine without one, mark it <em>No image needed</em>.</p>
+    {% if subject_counts|length > 1 %}
+    <div class="ni-chips" role="navigation" aria-label="Subject" style="margin-top:.8rem">
+      <a class="ni-chip {{ 'on' if not subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', year=year or none, exam_body=exam_body or none, q=search or none) }}">All subjects <em>{{ total }}</em></a>
+      {% for sid, name, n in subject_counts %}<a class="ni-chip {{ 'on' if sid == subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', subject_id=sid, year=year or none, exam_body=exam_body or none, q=search or none) }}">{{ name }} <em>{{ n }}</em></a>{% endfor %}
+    </div>{% endif %}
+    <form method="get" class="ni-filter" role="search">
+      {% if subject_id %}<input type="hidden" name="subject_id" value="{{ subject_id }}">{% endif %}
+      <select name="year" data-autosubmit aria-label="Year"><option value="">Any year</option>
+        {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}</select>
+      <select name="exam_body" data-autosubmit aria-label="Exam body"><option value="">Any exam</option>
+        {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body }}>{{ e }}</option>{% endfor %}</select>
+      <label class="ni-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" name="q" value="{{ search }}" placeholder="Search question text" aria-label="Search question text"></label>
+      {% if filtered %}<a class="rs-btn ghost" href="{{ url_for('mock_jamb.bank_needs_images') }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear</a>{% endif %}
     </form>
-</div></div>
+  </section>
 
-{% if questions and can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
-<div class="card mb-3"><div class="card-body" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;">
-    <label style="display:flex;align-items:center;gap:.4rem;font-weight:600;font-size:.85rem;cursor:pointer;">
-        <input type="checkbox" id="niSelectAll"> Select all on this page</label>
-    <span id="niCount" class="text-muted text-sm">0 selected</span>
-    <span style="flex:1;min-width:8px;"></span>
-    <form method="post" id="niBulkForm" action="{{ url_for('mock_jamb.bank_needs_images_bulk') }}"
-          style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:0;">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" id="niAction" value="dismiss">
-        <input type="hidden" name="question_ids" id="niIds" value="">
-        <input type="hidden" name="subject_id" value="{{ subject_id or '' }}">
-        <input type="hidden" name="year" value="{{ year or '' }}">
-        <input type="hidden" name="exam_body" value="{{ exam_body or '' }}">
-        <button type="button" class="btn btn-primary btn-sm" data-bulk="dismiss"><i class="fas fa-check-double"></i> Selected: no image needed</button>
-        <button type="button" class="btn btn-danger btn-sm" data-bulk="delete"><i class="fas fa-trash"></i> Delete selected</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-bulk="dismiss_all"><i class="fas fa-check-double"></i> All {{ total }} matching: no image</button>
+  {% if questions and can_fix %}
+  <div class="ni-bulk">
+    <label><input type="checkbox" class="ni-box" id="niSelectAll"> Select page</label>
+    <span id="niCount" class="rs-muted" style="font-size:.82rem">0 selected</span>
+    <span class="sp"></span>
+    <form method="post" id="niBulkForm" action="{{ url_for('mock_jamb.bank_needs_images_bulk') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" id="niAction" value="dismiss">
+      <input type="hidden" name="question_ids" id="niIds" value="">
+      <input type="hidden" name="subject_id" value="{{ subject_id or '' }}">
+      <input type="hidden" name="year" value="{{ year or '' }}">
+      <input type="hidden" name="exam_body" value="{{ exam_body or '' }}">
+      <button type="button" class="rs-btn" data-bulk="dismiss" data-sel><i class="fas fa-check-double" aria-hidden="true"></i> No image needed</button>
+      <button type="button" class="rs-btn ghost danger" data-bulk="delete" data-sel><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
+      {% if not search %}<button type="button" class="rs-btn ghost" data-bulk="dismiss_all"><i class="fas fa-list-check" aria-hidden="true"></i> All {{ matching }}: no image</button>{% endif %}
     </form>
-</div></div>
-{% endif %}
+  </div>
+  {% endif %}
 
-{% for q in questions %}
-<div class="ni-q">
-    <label class="ni-check-lbl"><input type="checkbox" class="ni-check" value="{{ q.id }}"> select</label>
-    <div class="ni-meta">
-        <span class="ni-badge">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
-        {% if q.exam_year %}<span class="ni-badge">{{ q.exam_year }}</span>{% endif %}
-        {% if q.exam_body %}<span class="ni-badge">{{ q.exam_body }}</span>{% endif %}
-        {% if q.section %}<span class="ni-badge">{{ q.section|replace('_',' ')|title }}</span>{% endif %}
-        {% if q.topic %}<span class="ni-badge">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+  <div class="ni-list">
+  {% for q in questions %}
+  <article class="ni-q" data-qid="{{ q.id }}">
+    <div class="ni-top">
+      {% if can_fix %}<input type="checkbox" class="ni-box ni-check" value="{{ q.id }}" aria-label="Select question {{ (pagination.page - 1) * pagination.per_page + loop.index }}">{% endif %}
+      <div class="ni-meta">
+        <span class="ni-tag subj">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
+        {% if q.exam_year %}<span class="ni-tag">{{ q.exam_year }}</span>{% endif %}
+        {% if q.exam_body %}<span class="ni-tag">{{ q.exam_body }}</span>{% endif %}
+        {% if q.topic %}<span class="ni-tag">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+        <span class="ni-tag why"><i class="fas fa-image" aria-hidden="true"></i> {{ reasons.get(q.id) }}</span>
+      </div>
+      <span class="ni-num">#{{ (pagination.page - 1) * pagination.per_page + loop.index }}</span>
     </div>
-    <div style="font-weight:600;">{{ q.question_text | question_html }}</div>
-    {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'c' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
+    {% if q.passage and q.passage.body %}
+    <details class="ni-passage"><summary>{{ q.passage.title or 'Passage' }}</summary><div style="margin-top:.4rem">{{ q.passage.body | question_html }}</div></details>
+    {% endif %}
+    <div class="ni-text">{{ q.question_text | question_html }}</div>
+    <div class="ni-opts">
+      {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'key' if q.correct_option == opt }}"><b>{{ opt }}</b><span>{{ val }}</span></div>{% endif %}{% endfor %}
+    </div>
     <div class="ni-act">
-        {% if can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
-        <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data" style="display:flex;gap:.4rem;align-items:center;">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <input type="file" name="image" accept="image/*" class="form-control" required style="max-width:240px;">
-            <button class="btn btn-primary btn-sm"><i class="fas fa-image"></i> Add image</button>
-        </form>
-        <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams.">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="dismiss" value="1">
-            <button class="btn btn-secondary btn-sm"><i class="fas fa-check"></i> No image needed</button>
-        </form>
-        {% endif %}
-        {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
-        <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-pen"></i> Edit</a>
-        {% endif %}
+      {% if can_fix %}
+      <form class="ni-up" method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <img class="ni-thumb" alt="">
+        <label class="ni-file"><i class="fas fa-cloud-arrow-up" aria-hidden="true"></i><span>Choose picture</span><input type="file" name="image" accept="image/*" required></label>
+        <button class="rs-btn primary"><i class="fas fa-image" aria-hidden="true"></i> Add image</button>
+      </form>
+      <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="dismiss" value="1">
+        <button class="rs-btn"><i class="fas fa-check" aria-hidden="true"></i> No image needed</button>
+      </form>
+      {% endif %}
+      {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
+      <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="rs-btn ghost"><i class="fas fa-pen" aria-hidden="true"></i> Edit</a>
+      {% endif %}
     </div>
-</div>
-{% else %}
-<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-circle-check" style="color:#059669;"></i>
-    <h3>Nothing to review</h3><p>No questions are waiting for an image{{ ' with these filters' if (subject_id or year or exam_body) else '' }}.</p></div></div></div>
-{% endfor %}
+  </article>
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-circle-check" aria-hidden="true"></i></span><h3>Nothing to review</h3>
+    <p>No question is waiting for a picture{{ ' with these filters' if filtered else '' }}.</p>
+    {% if filtered %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images') }}">Show all</a>{% endif %}</div>
+  {% endfor %}
+  </div>
 
-{% if pagination and pagination.pages > 1 %}
-<div style="display:flex;gap:.4rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;">
-    {% set args = {'subject_id': subject_id or none, 'year': year or none, 'exam_body': exam_body or none} %}
-    {% if pagination.has_prev %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left"></i> Prev</a>{% endif %}
-    <span class="text-sm text-muted">Page {{ pagination.page }} of {{ pagination.pages }}</span>
-    {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
-</div>
-{% endif %}
+  {% if pagination and pagination.pages > 1 %}
+  <nav class="ni-pager" aria-label="Pages">
+    {% if pagination.has_prev %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Prev</a>{% endif %}
+    <span class="rs-muted" style="font-size:.84rem">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+  </nav>
+  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}{% include "mock_jamb/_mathjax.html" %}
 <script nonce="{{ csp_nonce }}">
 (function(){
+    var on = document.querySelector('.ni-chip.on');
+    if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+    // Picture picker: show the chosen file's name and a thumbnail.
+    document.querySelectorAll('.ni-up').forEach(function(f){
+        var inp = f.querySelector('input[type=file]'), lab = f.querySelector('.ni-file'), img = f.querySelector('.ni-thumb');
+        inp.addEventListener('change', function(){
+            var file = inp.files && inp.files[0];
+            lab.classList.toggle('has', !!file);
+            lab.querySelector('span').textContent = file ? file.name : 'Choose picture';
+            if(file && window.URL){ img.src = URL.createObjectURL(file); img.classList.add('on'); }
+            else { img.classList.remove('on'); }
+        });
+    });
     var form = document.getElementById('niBulkForm'); if(!form) return;
     var selectAll = document.getElementById('niSelectAll');
     var countEl = document.getElementById('niCount');
@@ -115,6 +201,8 @@
     function update(){
         var n = selected().length;
         countEl.textContent = n + ' selected';
+        boxes().forEach(function(c){ var card = c.closest('.ni-q'); if(card) card.classList.toggle('sel', c.checked); });
+        form.querySelectorAll('[data-sel]').forEach(function(b){ b.disabled = !n; });
         if(selectAll){ var all = boxes(); selectAll.checked = all.length > 0 && n === all.length; }
     }
     document.addEventListener('change', function(e){
@@ -127,7 +215,7 @@
         btn.addEventListener('click', function(){
             var action = btn.getAttribute('data-bulk');
             if(action === 'dismiss_all'){
-                if(!window.confirm('Mark ALL {{ total }} flagged question(s) matching the current filters as not needing an image?')) return;
+                if(!window.confirm('Mark ALL {{ matching }} question(s) matching the current filters as not needing an image?')) return;
             } else {
                 var ids = selected().map(function(c){ return c.value; });
                 if(!ids.length){ window.alert('Select at least one question first.'); return; }

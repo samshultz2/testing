@@ -1,112 +1,233 @@
 {% extends "base.html" %}
-{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
+{% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_jamb/_shell.html" import mj_nav with context %}
 {% block title %}Bank Analytics - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question Bank</a> / <span>Topic analytics</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
 <style>
-.ba-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem;margin-bottom:1rem}
-.ba-kpi{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.7rem .9rem;background:var(--gray-50)}
-.ba-kpi .v{font-size:1.5rem;font-weight:800;line-height:1}
-.ba-kpi .l{font-size:.74rem;color:var(--text-muted);margin-top:.25rem}
-.ba-table{width:100%;border-collapse:collapse;font-size:.85rem}
-.ba-table th,.ba-table td{padding:.4rem .5rem;text-align:left;border-bottom:1px solid var(--border-color);vertical-align:middle}
-.ba-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.02em;color:var(--text-muted)}
-.ba-table td.num,.ba-table th.num{text-align:right;white-space:nowrap}
-.ba-bar{position:relative;background:var(--gray-100);border-radius:var(--radius-full);height:16px;min-width:60px;overflow:hidden}
-.ba-bar > i{display:block;height:100%;background:#2563eb;border-radius:var(--radius-full)}
-.ba-scroll{overflow-x:auto}
-.pill{font-size:.68rem;font-weight:700;padding:.06rem .45rem;border-radius:var(--radius-full)}
-.pill-cold{background:rgba(37,99,235,.12);color:#2563eb}
-.pill-gap{background:rgba(220,38,38,.1);color:#dc2626}
-.pill-yr{background:var(--gray-100);color:var(--text-muted);font-weight:600}
-.ba-two{display:grid;grid-template-columns:1fr 1fr;gap:1rem}@media(max-width:760px){.ba-two{grid-template-columns:1fr}}
-.ba-chip{display:inline-block;background:var(--gray-100);border-radius:var(--radius-sm);padding:.12rem .5rem;margin:.15rem;font-size:.78rem}
-.ba-chip.gap{background:rgba(220,38,38,.08);color:#b91c1c}
-details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
+.ba-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%;padding:.1rem 0}
+.ba-chips::-webkit-scrollbar{display:none}
+.ba-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.36rem .8rem;font:inherit;font-size:.8rem;font-weight:650;color:var(--text-secondary);white-space:nowrap;text-decoration:none;cursor:pointer}
+.ba-chip:hover{border-color:var(--primary);color:var(--primary)}
+.ba-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.ba-chip em{font-style:normal;opacity:.7;margin-left:.3rem}
+.ba-banner{display:flex;gap:.7rem;align-items:flex-start;border:1px solid color-mix(in srgb,var(--primary) 30%,var(--border-color));background:color-mix(in srgb,var(--primary) 6%,var(--bg-card));border-radius:16px;padding:.75rem 1rem;font-size:.84rem;line-height:1.55;color:var(--text-secondary)}
+.ba-banner>i{color:var(--primary);margin-top:.2rem}
+.ba-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:1rem;align-items:start}
+.ba-side{display:flex;flex-direction:column;gap:1rem;min-width:0}
+.ba-tools{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:0 1rem .6rem}
+.ba-search{flex:1 1 200px;display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .7rem;background:var(--bg-card);color:var(--text-muted)}
+.ba-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.86rem;color:var(--text-primary);padding:.5rem 0;outline:none}
+.ba-topic{border-top:1px solid var(--border-light,var(--border-color))}
+.ba-topic[hidden]{display:none}
+.ba-topic>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) minmax(80px,32%) 3.4rem 1rem;gap:.8rem;align-items:center;padding:.7rem 1rem}
+.ba-topic>summary::-webkit-details-marker{display:none}
+.ba-topic>summary:hover{background:var(--gray-50)}
+.ba-topic .nm{font-weight:650;font-size:.9rem;min-width:0}
+.ba-topic .nm small{display:block;font-weight:500;font-size:.76rem;color:var(--text-muted);margin-top:.1rem}
+.ba-track{height:8px;border-radius:999px;background:var(--gray-100);overflow:hidden}
+.ba-track i{display:block;height:100%;border-radius:999px;background:var(--primary)}
+.ba-track.cold i{background:color-mix(in srgb,var(--primary) 40%,#cbd5e1)}
+.ba-pct{font-weight:800;font-size:.84rem;text-align:right;font-variant-numeric:tabular-nums}
+.ba-chev{color:var(--text-muted);font-size:.7rem;transition:transform .15s}
+.ba-topic[open]>summary .ba-chev{transform:rotate(90deg)}
+.ba-pill{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.1rem .45rem;margin-left:.35rem;vertical-align:middle;white-space:nowrap}
+.ba-pill.cold{background:color-mix(in srgb,#2563eb 12%,var(--bg-card));color:#2563eb}
+.ba-pill.gap{background:color-mix(in srgb,var(--danger) 10%,var(--bg-card));color:var(--danger)}
+.ba-subs{padding:0 1rem .8rem 1.6rem;display:flex;flex-direction:column;gap:.4rem}
+.ba-sub{display:grid;grid-template-columns:minmax(0,1fr) minmax(70px,30%) 3.4rem 1rem;gap:.8rem;align-items:center;font-size:.82rem;color:var(--text-secondary)}
+.ba-sub small{color:var(--text-muted)}
+.ba-yrs{display:flex;flex-wrap:wrap;gap:.25rem;padding:0 1rem .8rem 1.6rem}
+.ba-yr{font-size:.7rem;border-radius:6px;padding:.08rem .4rem;background:var(--gray-100);color:var(--text-muted);font-variant-numeric:tabular-nums}
+.ba-more{display:flex;justify-content:center;padding:.8rem;border-top:1px solid var(--border-light,var(--border-color))}
+.ba-empty{padding:1.2rem 1rem;color:var(--text-muted);font-size:.88rem;text-align:center}
+.ba-cols{display:flex;align-items:flex-end;gap:3px;height:120px;padding-top:.4rem}
+.ba-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:.25rem;height:100%;justify-content:flex-end}
+.ba-col i{display:block;width:100%;max-width:26px;border-radius:5px 5px 2px 2px;background:var(--primary);min-height:3px}
+.ba-col b{font-size:.62rem;color:var(--text-muted);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ba-col span{font-size:.62rem;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ba-stack{display:flex;height:14px;border-radius:999px;overflow:hidden;background:var(--gray-100);gap:2px}
+.ba-legend{list-style:none;margin:.7rem 0 0;padding:0;display:flex;flex-direction:column;gap:.2rem}
+.ba-legend li{display:grid;grid-template-columns:10px minmax(0,1fr) auto 3rem;gap:.6rem;align-items:center;font-size:.84rem;padding:.2rem 0}
+.ba-legend .sw{width:10px;height:10px;border-radius:3px}
+.ba-legend .pc{color:var(--text-muted);text-align:right;font-size:.78rem;font-variant-numeric:tabular-nums}
+.ba-focus h4{margin:.2rem 0 .45rem;font-size:.84rem;display:flex;gap:.4rem;align-items:center}
+.ba-tags{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.9rem}
+.ba-tag{font-size:.76rem;border-radius:8px;padding:.18rem .5rem;background:var(--gray-100);color:var(--text-secondary)}
+.ba-tag.gap{background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));color:var(--danger)}
+.ba-tag small{opacity:.7}
+.ba-txt{font-size:.84rem;color:var(--text-secondary);line-height:1.55}
+.ba-note{font-size:.78rem;color:var(--text-muted);line-height:1.5;margin:.6rem 0 0}
+.qb-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:.75rem;align-items:start}
+.qb-tool{border:1px solid var(--border-color);border-radius:var(--rs-r,16px);background:var(--bg-card);overflow:hidden}
+.qb-tool>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:.75rem;padding:.85rem 1rem}
+.qb-tool>summary::-webkit-details-marker{display:none}
+.qb-tool>summary .ic{width:2.3rem;height:2.3rem;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--text-secondary);flex:none}
+.qb-tool>summary .tt{flex:1;min-width:0}
+.qb-tool>summary .tt b{display:block;font-size:.92rem}
+.qb-tool>summary .tt small{display:block;font-size:.78rem;color:var(--text-muted);line-height:1.4}
+.qb-tool>summary .ch{color:var(--text-muted);font-size:.75rem;transition:transform .15s}
+.qb-tool[open]>summary .ch{transform:rotate(90deg)}
+.qb-tool .tb{padding:0 1rem 1rem}
+.qb-tool .tb form{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap}
+.qb-tool .tb .form-group{flex:1 1 160px;min-width:0}
+@media (max-width:1000px){.ba-grid{grid-template-columns:1fr}}
+@media (max-width:640px){
+  .ba-topic>summary,.ba-sub{grid-template-columns:minmax(0,1fr) 3.2rem 1rem}
+  .ba-topic>summary .ba-track,.ba-sub .ba-track{grid-column:1 / -1;grid-row:2}
+  .ba-subs,.ba-yrs{padding-left:1rem}
+}
 </style>
 {% endblock %}
 {% block content %}
+{% set can_tag = can_write_sub('external_exams', 'mock_jamb_bank_retag') %}
 <div class="rs bx bx-legacy">
-<div class="page-header">
-    <div>
-        <h1>Topic analytics</h1>
-        <p class="text-muted text-sm">Where your banked past questions cluster — by topic, sub-topic, year and exam type — and the syllabus areas that are thin, <strong>cold</strong> (not tested in recent years) or <strong>never</strong> tested, so you know what to drill with students.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a>
-    </div>
-</div>
-<div class="no-print">{{ mj_nav('topics') }}</div>
+  {% call bx_head('fa-chart-pie', 'Topic analytics', (subject.name ~ ' · ' ~ data.total ~ ' banked questions · where they cluster and what is thin') if subject and data and data.total else 'Where your banked past questions cluster, and the syllabus areas that are thin, cold or never tested.') %}
+    {% set links = [] %}
+    {% if can_tag and data and data.total %}{% set _ = links.extend([(None, None, 'Tag questions'), ('#baAuto', 'fa-wand-magic-sparkles', 'Auto-tag (classifier)'), ('#baAI', 'fa-robot', 'Tag with AI'), ('#baLocal', 'fa-microchip', 'Tag locally')]) %}{% endif %}
+    {{ bx_menu('More', links + [(None, None, 'Bank'), (bank_url, 'fa-database', 'Question bank'), (url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''), 'fa-list-ol', 'Coded syllabus'), (url_for('mock_jamb.mastery'), 'fa-graduation-cap', 'Topic mastery')]) }}
+  {% endcall %}
+  <div class="no-print">{{ mj_nav('topics') }}</div>
 
-<form method="get" class="card" style="margin-bottom:1rem;">
-    <div class="card-body" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
-        <label class="form-label mb-0">Subject</label>
-        <select name="subject_id" class="form-control" style="max-width:260px;" data-autosubmit>
-            {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}
-        </select>
-    </div>
-</form>
+  {% if subjects|length > 1 %}
+  <nav class="ba-chips" aria-label="Subject">
+    {% for s in subjects %}<a class="ba-chip {{ 'on' if s.id == subject_id }}" href="{{ url_for('mock_jamb.bank_analytics', subject_id=s.id) }}">{{ s.name }}</a>{% endfor %}
+  </nav>
+  {% endif %}
 
 {% if not subject %}
-<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subject</h3><p>Add subjects first.</p></div></div></div>
+  <div class="rs-blank"><span><i class="fas fa-book" aria-hidden="true"></i></span><h3>No subject</h3><p>Add subjects first.</p></div>
 {% elif not data or data.total == 0 %}
-<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-pie"></i><h3>No questions banked for {{ subject.name }}</h3><p>Download or add questions first, then come back for the breakdown.</p></div></div></div>
+  <div class="rs-blank"><span><i class="fas fa-chart-pie" aria-hidden="true"></i></span><h3>No questions banked for {{ subject.name }}</h3><p>Download or add questions first, then come back for the breakdown.</p>
+    <a class="rs-btn primary" href="{{ bank_url }}"><i class="fas fa-database" aria-hidden="true"></i> Open the bank</a></div>
 {% else %}
 
-<div class="ba-kpis">
-    <div class="ba-kpi"><div class="v">{{ data.total }}</div><div class="l">Questions banked</div></div>
-    <div class="ba-kpi"><div class="v">{{ data.topics|length }}</div><div class="l">Topics with questions</div></div>
-    <div class="ba-kpi"><div class="v">{{ data.gaps.topics|length }}</div><div class="l">Syllabus topics never tested</div></div>
-    <div class="ba-kpi"><div class="v">{{ data.cold_topics|length }}</div><div class="l">Cold topics{% if data.recent_years %} (not in {{ data.recent_years|join(', ') }}){% endif %}</div></div>
-    {% if data.untagged %}<div class="ba-kpi"><div class="v" style="color:#b45309;">{{ data.untagged }}</div><div class="l">Untagged ({{ 'no syllabus code' if data.coded else 'no topic' }})</div></div>{% endif %}
-</div>
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Questions banked</span><span class="v">{{ data.total }}</span><span class="s">{{ subject.name }}</span></div>
+    <div class="rs-tile"><span class="l">Topics with questions</span><span class="v">{{ data.topics|length }}</span><span class="s">{{ data.subtopics|length }} sub-topics</span></div>
+    <div class="rs-tile {{ 'bad' if data.gaps.topics else 'good' }}"><span class="l">Never tested</span><span class="v">{{ data.gaps.topics|length }}</span><span class="s">syllabus topics with no question</span></div>
+    <div class="rs-tile {{ 'mid' if data.cold_topics }}"><span class="l">Cold topics</span><span class="v">{{ data.cold_topics|length }}</span><span class="s">{% if data.recent_years %}not in {{ data.recent_years|join(', ') }}{% else %}not set recently{% endif %}</span></div>
+    {% if data.untagged %}<div class="rs-tile mid"><span class="l">Untagged</span><span class="v">{{ data.untagged }}</span><span class="s">{{ 'no syllabus code' if data.coded else 'no topic' }}</span></div>{% endif %}
+  </div>
 
-{% if data.coded %}
-<div class="card" style="margin-bottom:1rem;border-left:4px solid #0d6a4e;">
-    <div class="card-body" style="display:flex;align-items:center;gap:.6rem;">
-        <i class="fas fa-diagram-project" style="color:#0d6a4e;"></i>
-        <p class="text-sm" style="margin:0;"><strong>Sourced from the coded syllabus</strong> — the breakdown, gaps and cold checks below are built from {{ subject.name }}'s imported syllabus tree
-            (<a href="{{ url_for('mock_jamb.bank_syllabus', subject_id=subject_id) }}">manage it here</a>), not the free-text topic/sub-topic fields. Every syllabus item is counted, so a
-            never-banked item shows as a real gap. The auto-tag and local-tag tools below still fill the free-text fields other pages (weakness reports, mastery) read from — use
-            <a href="{{ url_for('mock_jamb.bank_syllabus', subject_id=subject_id) }}">Coded Syllabus Manager</a>'s AI retag to fill in syllabus codes instead.</p>
+  {% if data.coded %}
+  <div class="ba-banner"><i class="fas fa-diagram-project" aria-hidden="true"></i>
+    <div><strong>Sourced from the coded syllabus</strong> — topics, gaps and cold checks come from {{ subject.name }}'s imported syllabus tree (<a href="{{ url_for('mock_jamb.bank_syllabus', subject_id=subject_id) }}">manage it</a>), so a never-banked item shows as a real gap. The tagging tools below fill the free-text topic fields other pages read; use the <a href="{{ url_for('mock_jamb.bank_syllabus', subject_id=subject_id) }}">Coded Syllabus Manager</a>'s AI retag to fill syllabus codes.</div></div>
+  {% endif %}
+
+  <div class="ba-grid">
+    <section class="rs-card flush">
+      <div class="rs-card-h pad"><h3><i class="fas fa-layer-group" aria-hidden="true"></i> By topic</h3><small>share of the bank · tap for sub-topics</small></div>
+      <div class="ba-tools">
+        <div class="ba-chips" id="baShow" role="radiogroup" aria-label="Show">
+          <button type="button" class="ba-chip on" data-f="all">All <em>{{ data.topics|length }}</em></button>
+          {% if data.cold_topics %}<button type="button" class="ba-chip" data-f="cold">Cold <em>{{ data.cold_topics|length }}</em></button>{% endif %}
+        </div>
+        <label class="ba-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" id="baSearch" placeholder="Search topics" aria-label="Search topics"></label>
+      </div>
+      {% set tmax = (data.topics|map(attribute='count')|max) if data.topics else 1 %}
+      <div id="baTopics">
+      {% for t in data.topics %}
+      {% set subs = data.subtopics|selectattr('topic', 'equalto', t.topic)|list %}
+      <details class="ba-topic" data-cold="{{ 1 if t.cold else 0 }}" data-s="{{ (t.topic ~ ' ' ~ (subs|map(attribute='subtopic')|join(' ')))|lower }}">
+        <summary>
+          <span class="nm">{{ t.topic }}{% if not t.count %}<span class="ba-pill gap">never tested</span>{% endif %}{% if t.cold %}<span class="ba-pill cold" title="No questions from the recent years">cold</span>{% endif %}<small>{{ t.count }} question{{ '' if t.count == 1 else 's' }}{% if t.recent_year %} · last set {{ t.recent_year }}{% endif %}{% if subs %} · {{ subs|length }} sub-topic{{ '' if subs|length == 1 else 's' }}{% endif %}</small></span>
+          <span class="ba-track {{ 'cold' if t.cold }}"><i style="width:{{ [(100 * t.count / tmax)|round|int, 2]|max if t.count else 0 }}%"></i></span>
+          <span class="ba-pct">{{ t.pct }}%</span>
+          <i class="fas fa-chevron-right ba-chev" aria-hidden="true"></i>
+        </summary>
+        {% if subs %}
+        <div class="ba-subs">
+          {% for s in subs %}
+          <div class="ba-sub"><span>{{ s.subtopic }}{% if s.cold %}<span class="ba-pill cold">cold</span>{% endif %} <small>· {{ s.count }} q{% if s.recent_year %} · {{ s.recent_year }}{% endif %}</small></span>
+            <span class="ba-track {{ 'cold' if s.cold }}"><i style="width:{{ [(100 * s.count / t.count)|round|int, 2]|max if s.count and t.count else 0 }}%"></i></span><span class="ba-pct">{{ s.pct }}%</span><span></span></div>
+          {% endfor %}
+        </div>{% endif %}
+        {% if t.years %}<div class="ba-yrs">{% for y in t.years %}<span class="ba-yr">{{ y }}</span>{% endfor %}</div>{% endif %}
+      </details>
+      {% endfor %}
+      </div>
+      <div class="ba-empty" id="baNone" hidden>No topic matches.</div>
+      <div class="ba-more" id="baMore" hidden><button type="button" class="rs-btn">Show all topics</button></div>
+    </section>
+
+    <div class="ba-side">
+      <section class="rs-card ba-focus">
+        <div class="rs-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Focus areas</h3><small>what to drill</small></div>
+        {% if data.gaps.topics %}
+        <h4><span class="ba-pill gap" style="margin:0">never tested</span> no banked question at all</h4>
+        <div class="ba-tags">{% for t in data.gaps.topics %}<span class="ba-tag gap">{{ t }}</span>{% endfor %}</div>
+        {% endif %}
+        {% if data.cold_topics %}
+        <h4><span class="ba-pill cold" style="margin:0">cold</span> not set in {{ data.recent_years|join(', ') }} — due again</h4>
+        <div class="ba-tags">{% for t in data.cold_topics %}<span class="ba-tag">{{ t.topic }} <small>· {{ t.recent_year }}</small></span>{% endfor %}</div>
+        {% endif %}
+        {% if data.gaps.subtopics %}
+        <details><summary class="ba-txt" style="cursor:pointer;font-weight:700">{{ data.gaps.subtopics|length }} sub-topic{{ '' if data.gaps.subtopics|length == 1 else 's' }} never tested</summary>
+          <div class="ba-tags" style="margin-top:.5rem">{% for s in data.gaps.subtopics %}<span class="ba-tag gap">{{ s.topic }} › {{ s.subtopic }}</span>{% endfor %}</div>
+        </details>
+        {% endif %}
+        {% if not data.cold_topics and not data.gaps.topics and not data.gaps.subtopics %}
+        <p class="ba-txt" style="margin:0">No cold or never-tested topics — the bank covers this subject's syllabus well.</p>
+        {% endif %}
+      </section>
+
+      {% if data.by_year %}
+      {% set yrs = data.by_year|sort(attribute='year') %}
+      {% set ymax = (data.by_year|map(attribute='count')|max) or 1 %}
+      <section class="rs-card">
+        <div class="rs-card-h"><h3><i class="fas fa-calendar" aria-hidden="true"></i> By year</h3><small>{{ data.by_year|length }} year{{ '' if data.by_year|length == 1 else 's' }}</small></div>
+        <div class="ba-cols" role="img" aria-label="Questions per year">
+          {% for r in yrs %}<div class="ba-col" title="{{ r.year or 'Unspecified' }}: {{ r.count }}">{% if yrs|length <= 14 %}<b>{{ r.count }}</b>{% endif %}<i style="height:{{ [(100 * r.count / ymax)|round|int, 3]|max }}%"></i><span>{{ ("'" ~ (r.year|string)[-2:]) if r.year and yrs|length > 8 else (r.year or '—') }}</span></div>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if data.by_exam_body %}
+      {% set pal = ['var(--primary)', 'color-mix(in srgb,var(--primary) 45%,#cbd5e1)', '#cbd5e1', '#94a3b8'] %}
+      <section class="rs-card">
+        <div class="rs-card-h"><h3><i class="fas fa-scroll" aria-hidden="true"></i> By exam type</h3></div>
+        <div class="ba-stack" role="img" aria-label="Questions by exam type">{% for r in data.by_exam_body %}<i style="flex-grow:{{ r.count }};background:{{ pal[loop.index0 % 4] }}"></i>{% endfor %}</div>
+        <ul class="ba-legend">{% for r in data.by_exam_body %}<li><span class="sw" style="background:{{ pal[loop.index0 % 4] }}"></span><span>{{ r.body }}</span><b>{{ r.count }}</b><span class="pc">{{ (100 * r.count / data.total)|round(1) }}%</span></li>{% endfor %}</ul>
+      </section>
+      {% endif %}
     </div>
-</div>
-{% endif %}
+  </div>
 
-{% if can_write_sub('external_exams', 'mock_jamb_bank_retag') %}
-<div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
-    <div class="card-header"><h3><i class="fas fa-wand-magic-sparkles"></i> Auto-tag with the syllabus classifier</h3></div>
-    <div class="card-body">
-        <p class="text-sm text-muted" style="margin-top:0;">Runs the keyword classifier over {{ subject.name }}'s bank and fills topic/sub-topic (and a missing section) on a confident match. {% if data.untagged %}<strong>{{ data.untagged }}</strong> question(s) currently have no topic.{% else %}Every question currently has a topic.{% endif %}</p>
+  {% if can_tag %}
+  <div class="qb-tools">
+    <details class="qb-tool" id="baAuto">
+      <summary><span class="ic"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span><span class="tt"><b>Auto-tag with the classifier</b><small>{% if data.untagged %}{{ data.untagged }} question{{ '' if data.untagged == 1 else 's' }} without a topic{% else %}every question has a topic{% endif %} · free, instant</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+      <div class="tb">
+        <p class="ba-txt" style="margin-top:0">Runs the keyword classifier over {{ subject.name }}'s bank and fills topic/sub-topic (and a missing section) on a confident match.</p>
         <form method="post" action="{{ url_for('mock_jamb.bank_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             <div class="form-group mb-0"><label class="form-label">Scope</label>
-                <select name="mode" class="form-control" style="max-width:320px;">
+                <select name="mode" class="form-control" >
                     <option value="untagged">Untagged only — fill in the blanks (safe)</option>
                     <option value="all">Re-classify all — upgrade existing tags with improved keywords</option>
                 </select></div>
             {% if years %}
             <div class="form-group mb-0"><label class="form-label">Year</label>
-                <select name="year" class="form-control" style="max-width:150px;">
+                <select name="year" class="form-control" >
                     <option value="">All years</option>
                     {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
                 </select></div>
             {% endif %}
-            <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;padding-bottom:.5rem;">
+            <label class="ba-txt" style="display:inline-flex;align-items:center;gap:.4rem;padding-bottom:.5rem;">
                 <input type="checkbox" name="ensure_section" value="1"> Make still-unmatched questions drawable (assign a section)</label>
-            <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Run auto-tag</button>
+            <button class="rs-btn primary"><i class="fas fa-wand-magic-sparkles"></i> Run auto-tag</button>
         </form>
-        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> The classifier never invents a topic. Notation-only, figure-only or out-of-syllabus questions may stay untagged; ticking “make drawable” still lets them be used in exams (they just won't carry a topic label).</p>
-    </div>
-</div>
-
-<div class="card" style="margin-bottom:1rem;border-left:4px solid #2563eb;">
-    <div class="card-header"><h3><i class="fas fa-robot"></i> Tag with AI <span class="text-muted text-sm">— uses your linked Anthropic key</span></h3></div>
-    <div class="card-body">
-        <p class="text-sm text-muted" style="margin-top:0;">Sends {{ subject.name }}'s bank questions to Claude, using the key set in <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a>, and assigns each the best-matching JAMB&nbsp;syllabus topic. Re-tags the whole subject (or one year), overwriting existing topics — it only ever uses real syllabus topics, never invented ones.</p>
+        <p class="ba-note" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> The classifier never invents a topic. Notation-only, figure-only or out-of-syllabus questions may stay untagged; ticking “make drawable” still lets them be used in exams (they just won't carry a topic label).</p>
+    
+      </div>
+    </details>
+    <details class="qb-tool" id="baAI">
+      <summary><span class="ic"><i class="fas fa-robot" aria-hidden="true"></i></span><span class="tt"><b>Tag with AI</b><small>Uses your linked Anthropic key · up to 400 per run</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+      <div class="tb">
+        <p class="ba-txt" style="margin-top:0">Sends {{ subject.name }}'s bank questions to Claude, using the key set in <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a>, and assigns each the best-matching JAMB syllabus topic. Re-tags the whole subject (or one year), overwriting existing topics — only real syllabus topics, never invented ones.</p>
         {% if ai_ready %}
         <form method="post" action="{{ url_for('mock_jamb.bank_ai_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;"
               onsubmit="var b=this.querySelector('button');b.disabled=true;b.innerHTML='<i class=&quot;fas fa-spinner fa-spin&quot;></i> Tagging… this can take a moment';">
@@ -114,26 +235,26 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             {% if years %}
             <div class="form-group mb-0"><label class="form-label">Year</label>
-                <select name="year" class="form-control" style="max-width:150px;">
+                <select name="year" class="form-control" >
                     <option value="">All years</option>
                     {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
                 </select></div>
             {% endif %}
-            <button class="btn btn-sm" style="background:#2563eb;color:#fff;"><i class="fas fa-robot"></i> Tag with AI</button>
+            <button class="rs-btn primary"><i class="fas fa-robot"></i> Tag with AI</button>
         </form>
-        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> This calls your Anthropic account (a cost per run) and can take a moment for large banks — up to 400 questions per run, so pick a year to tag a big subject in passes.</p>
+        <p class="ba-note" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> This calls your Anthropic account (a cost per run) and can take a moment for large banks — up to 400 questions per run, so pick a year to tag a big subject in passes.</p>
         {% else %}
-        <p class="text-sm" style="color:#b42318;margin-bottom:0;"><i class="fas fa-triangle-exclamation"></i> No Anthropic key is active. Add one under <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a> (and make sure the <code>anthropic</code> package is installed on the server) to enable AI tagging.</p>
+        <p class="ba-txt" style="color:#b42318;margin-bottom:0;"><i class="fas fa-triangle-exclamation"></i> No Anthropic key is active. Add one under <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a> (and make sure the <code>anthropic</code> package is installed on the server) to enable AI tagging.</p>
         {% endif %}
-    </div>
-</div>
-
-<div class="card" style="margin-bottom:1rem;border-left:4px solid #0e7c66;">
-    <div class="card-header"><h3><i class="fas fa-microchip"></i> Tag locally <span class="text-muted text-sm">— offline, no key, runs in the background</span></h3></div>
-    <div class="card-body">
-        <p class="text-sm text-muted" style="margin-top:0;">Tags {{ subject.name }}'s bank with topic <b>and sub-topic</b> using an on-server model — no Anthropic key and no per-run cost, only real syllabus topics. Best for the one-off full tagging; later runs just catch newly added questions.</p>
+    
+      </div>
+    </details>
+    <details class="qb-tool" id="baLocal" {{ 'open' if local_job and local_job.status in ('running', 'queued') }}>
+      <summary><span class="ic"><i class="fas fa-microchip" aria-hidden="true"></i></span><span class="tt"><b>Tag locally</b><small>Offline, no key, runs in the background{% if local_job and local_job.status == 'running' %} · running now{% endif %}</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+      <div class="tb">
+        <p class="ba-txt" style="margin-top:0">Tags {{ subject.name }}'s bank with topic <b>and sub-topic</b> using an on-server model — no Anthropic key and no per-run cost, only real syllabus topics.</p>
         {% if local_job %}
-        <p class="text-sm" style="margin:.2rem 0 .9rem;">
+        <p class="ba-txt" style="margin:.2rem 0 .9rem;">
             {% if local_job.status == 'running' %}<i class="fas fa-spinner fa-spin"></i> Tagging in progress — {{ local_job.progress or 0 }}/{{ local_job.total or '?' }} scanned. Refresh to update.
             {% elif local_job.status == 'queued' %}<i class="fas fa-clock"></i> Queued — starting shortly. Refresh to update.
             {% elif local_job.status == 'done' %}<i class="fas fa-circle-check" style="color:#2c7a51;"></i> Last run finished{% if local_job.result %} ({{ local_job.result }}){% endif %}.
@@ -146,131 +267,66 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             <div class="form-group mb-0"><label class="form-label">Scope</label>
-                <select name="mode" class="form-control" style="max-width:300px;">
+                <select name="mode" class="form-control" >
                     <option value="untagged">Untagged only — fill blanks (safe, default)</option>
                     <option value="all">Re-tag all — overwrite existing topics</option>
                 </select></div>
             {% if years %}
             <div class="form-group mb-0"><label class="form-label">Year</label>
-                <select name="year" class="form-control" style="max-width:150px;">
+                <select name="year" class="form-control" >
                     <option value="">All years</option>
                     {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
                 </select></div>
             {% endif %}
-            <button class="btn btn-sm" style="background:#0e7c66;color:#fff;"><i class="fas fa-microchip"></i> Tag locally</button>
+            <button class="rs-btn primary"><i class="fas fa-microchip"></i> Tag locally</button>
         </form>
-        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> Runs on the server — no internet, no cost. The first full pass over a large bank can take several minutes; it tags as it goes, so you can refresh to watch progress.</p>
+        <p class="ba-note" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> Runs on the server — no internet, no cost. The first full pass over a large bank can take several minutes; it tags as it goes, so you can refresh to watch progress.</p>
         {% else %}
-        <p class="text-sm" style="color:#b25e09;margin-bottom:0;"><i class="fas fa-triangle-exclamation"></i> The <code>sentence-transformers</code> package isn't installed on the server. Install it to enable offline local tagging.</p>
+        <p class="ba-txt" style="color:#b25e09;margin-bottom:0;"><i class="fas fa-triangle-exclamation"></i> The <code>sentence-transformers</code> package isn't installed on the server. Install it to enable offline local tagging.</p>
         {% endif %}
-    </div>
-</div>
-{% endif %}
+    
+      </div>
+    </details>
+  </div>
+  {% endif %}
 
-{# ---- Topic breakdown ---- #}
-<div class="card" style="margin-bottom:1rem;">
-    <div class="card-header"><h3><i class="fas fa-layer-group"></i> By topic <span class="text-muted text-sm">— share of the bank &amp; when last set</span></h3></div>
-    <div class="card-body ba-scroll">
-        <table class="ba-table">
-            <thead><tr><th>Topic</th><th class="num">Questions</th><th class="num">Share</th><th style="width:32%;">Share of bank</th><th class="num">Last year</th><th>Years covered</th></tr></thead>
-            <tbody>
-                {% for t in data.topics %}
-                <tr>
-                    <td>{{ t.topic }}{% if t.cold %} <span class="pill pill-cold" title="No questions from the recent years">cold</span>{% endif %}</td>
-                    <td class="num">{{ t.count }}</td>
-                    <td class="num">{{ t.pct }}%</td>
-                    <td><div class="ba-bar"><i style="width:{{ t.pct }}%;{% if t.cold %}background:#93b4f5;{% endif %}"></i></div></td>
-                    <td class="num">{{ t.recent_year or '—' }}</td>
-                    <td>{% for y in t.years[:8] %}<span class="pill pill-yr">{{ y }}</span> {% endfor %}{% if t.years|length > 8 %}+{{ t.years|length - 8 }}{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="ba-two">
-    {# ---- Year distribution ---- #}
-    <div class="card">
-        <div class="card-header"><h3><i class="fas fa-calendar"></i> By year</h3></div>
-        <div class="card-body ba-scroll">
-            <table class="ba-table">
-                <thead><tr><th>Year</th><th class="num">Questions</th><th style="width:45%;"></th></tr></thead>
-                <tbody>
-                    {% set ymax = (data.by_year|map(attribute='count')|max) if data.by_year else 1 %}
-                    {% for r in data.by_year %}
-                    <tr><td>{{ r.year or 'Unspecified' }}</td><td class="num">{{ r.count }}</td>
-                        <td><div class="ba-bar"><i style="width:{{ (100 * r.count / ymax)|round(0, 'floor') }}%;background:#7c3aed;"></i></div></td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {# ---- Exam body distribution ---- #}
-    <div class="card">
-        <div class="card-header"><h3><i class="fas fa-scroll"></i> By exam type</h3></div>
-        <div class="card-body ba-scroll">
-            <table class="ba-table">
-                <thead><tr><th>Exam</th><th class="num">Questions</th><th class="num">Share</th></tr></thead>
-                <tbody>
-                    {% for r in data.by_exam_body %}
-                    <tr><td>{{ r.body }}</td><td class="num">{{ r.count }}</td>
-                        <td class="num">{{ (100 * r.count / data.total)|round(1) }}%</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-{# ---- Focus areas: cold + never-tested ---- #}
-<div class="card" style="margin:1rem 0;border-left:4px solid #dc2626;">
-    <div class="card-header"><h3><i class="fas fa-bullseye"></i> Focus areas <span class="text-muted text-sm">— what to drill with students</span></h3></div>
-    <div class="card-body">
-        {% if data.cold_topics %}
-        <p class="text-sm" style="margin:0 0 .3rem;"><strong>Cold topics</strong> — banked, but no question from the recent years ({{ data.recent_years|join(', ') }}). Due to come round again:</p>
-        <div style="margin-bottom:.8rem;">{% for t in data.cold_topics %}<span class="ba-chip">{{ t.topic }} <span class="text-muted">· last {{ t.recent_year }}</span></span>{% endfor %}</div>
-        {% endif %}
-        {% if data.gaps.topics %}
-        <p class="text-sm" style="margin:0 0 .3rem;"><strong>Never tested</strong> — syllabus topics with no banked question at all:</p>
-        <div style="margin-bottom:.5rem;">{% for t in data.gaps.topics %}<span class="ba-chip gap">{{ t }}</span>{% endfor %}</div>
-        {% endif %}
-        {% if not data.cold_topics and not data.gaps.topics %}
-        <p class="text-sm text-muted" style="margin:0;">No cold or never-tested topics — the bank covers this subject's syllabus well.</p>
-        {% endif %}
-        {% if data.gaps.subtopics %}
-        <details class="ba" style="margin-top:.6rem;"><summary class="text-sm">{{ data.gaps.subtopics|length }} sub-topic(s) never tested</summary>
-            <div style="margin-top:.4rem;">{% for s in data.gaps.subtopics %}<span class="ba-chip gap">{{ s.topic }} › {{ s.subtopic }}</span>{% endfor %}</div>
-        </details>
-        {% endif %}
-    </div>
-</div>
-
-{# ---- Sub-topic breakdown (collapsible; can be long) ---- #}
-{% if data.subtopics %}
-<div class="card" style="margin-bottom:1rem;">
-    <div class="card-header"><h3><i class="fas fa-diagram-project"></i> By sub-topic ({{ data.subtopics|length }})</h3></div>
-    <div class="card-body ba-scroll">
-        <table class="ba-table">
-            <thead><tr><th>Topic</th><th>Sub-topic</th><th class="num">Questions</th><th class="num">Share</th><th class="num">Last year</th></tr></thead>
-            <tbody>
-                {% for s in data.subtopics %}
-                <tr>
-                    {# subtopics are grouped by topic -- blank the repeated cell so several
-                       sub-topics under one topic read as a group, not as duplicate rows #}
-                    <td class="text-muted">{{ s.topic or '—' if loop.first or s.topic != loop.previtem.topic else '' }}</td>
-                    <td>{{ s.subtopic }}{% if s.cold %} <span class="pill pill-cold">cold</span>{% endif %}</td>
-                    <td class="num">{{ s.count }}</td>
-                    <td class="num">{{ s.pct }}%</td>
-                    <td class="num">{{ s.recent_year or '—' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var on = document.querySelector('nav.ba-chips .ba-chip.on');
+  if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href^="#ba"]'); if(!a) return;
+    var el = document.getElementById(a.getAttribute('href').slice(1)); if(!el) return;
+    e.preventDefault();
+    var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if(m) m.open = false;
+    el.open = true; el.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+  var box = document.getElementById('baTopics'); if(!box) return;
+  var rows = Array.prototype.slice.call(box.querySelectorAll('.ba-topic'));
+  var q = document.getElementById('baSearch'), none = document.getElementById('baNone'), more = document.getElementById('baMore');
+  var mode = 'all', LIMIT = 12, expanded = false;
+  function apply(){
+    var term = (q.value || '').trim().toLowerCase(), n = 0, match = 0;
+    rows.forEach(function(r){
+      var ok = (mode === 'all' || r.dataset.cold === '1') && (!term || r.dataset.s.indexOf(term) >= 0);
+      if(ok) match++;
+      var show = ok && (expanded || term || match <= LIMIT);
+      r.hidden = !show; if(show) n++;
+    });
+    none.hidden = !!match;
+    more.hidden = expanded || !!term || match <= LIMIT;
+  }
+  q.addEventListener('input', apply);
+  more.querySelector('button').addEventListener('click', function(){ expanded = true; apply(); });
+  document.querySelectorAll('#baShow .ba-chip').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('#baShow .ba-chip').forEach(function(x){ x.classList.toggle('on', x === b); });
+      mode = b.dataset.f; apply();
+    });
+  });
+  apply();
+})();
+</script>
 {% endif %}
 </div>
 {% endblock %}

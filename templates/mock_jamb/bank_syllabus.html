@@ -1,171 +1,235 @@
 {% extends "base.html" %}
-{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
+{% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_jamb/_shell.html" import mj_nav with context %}
 {% block title %}Syllabus - Question Bank{% endblock %}
 {% block breadcrumb %}<a href="{{ bank_url }}">Question Bank</a> / <span>Syllabus</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
 <style>
-.syl-sec{border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.8rem;overflow:hidden}
-.syl-sec-head{display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem;background:var(--gray-50);font-weight:700}
-.syl-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;background:rgba(37,99,235,.12);color:#2563eb;border-radius:var(--radius-sm);padding:.05rem .4rem}
-.syl-topic{padding:.35rem .8rem;border-top:1px dashed var(--border-color)}
-.syl-topic-name{font-weight:600;font-size:.9rem}
-.syl-item{font-size:.83rem;color:var(--text-muted);padding:.12rem 0 .12rem 1rem;display:flex;gap:.5rem}
-.syl-item .syl-code{background:var(--gray-100);color:var(--text-muted)}
-.pill{font-size:.72rem;background:var(--gray-100);border-radius:var(--radius-full);padding:.1rem .55rem}
+.sy-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%;padding:.1rem 0}
+.sy-chips::-webkit-scrollbar{display:none}
+.sy-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.36rem .8rem;font:inherit;font-size:.8rem;font-weight:650;color:var(--text-secondary);white-space:nowrap;text-decoration:none;cursor:pointer}
+.sy-chip:hover{border-color:var(--primary);color:var(--primary)}
+.sy-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.sy-chip em{font-style:normal;opacity:.7;margin-left:.3rem}
+.sy-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.7rem;background:var(--gray-100);color:var(--text-muted);border-radius:6px;padding:.08rem .4rem;white-space:nowrap}
+.sy-tools{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:0 1rem .7rem}
+.sy-search{flex:1 1 220px;display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .7rem;background:var(--bg-card);color:var(--text-muted)}
+.sy-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.86rem;color:var(--text-primary);padding:.5rem 0;outline:none}
+.sy-sec{border-top:1px solid var(--border-light,var(--border-color))}
+.sy-sec>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,28%) 4.2rem 1rem;gap:.8rem;align-items:center;padding:.8rem 1rem}
+.sy-sec>summary::-webkit-details-marker{display:none}
+.sy-sec>summary:hover{background:var(--gray-50)}
+.sy-sec .nm{font-weight:700;font-size:.92rem;min-width:0}
+.sy-sec .nm small{display:block;font-weight:500;font-size:.76rem;color:var(--text-muted);margin-top:.1rem}
+.sy-track{height:7px;border-radius:999px;background:var(--gray-100);overflow:hidden}
+.sy-track i{display:block;height:100%;border-radius:999px;background:var(--primary)}
+.sy-track.low i{background:var(--warning)}.sy-track.none i{background:var(--danger)}
+.sy-pct{font-weight:800;font-size:.84rem;text-align:right;font-variant-numeric:tabular-nums}
+.sy-chev{color:var(--text-muted);font-size:.7rem;transition:transform .15s}
+.sy-sec[open]>summary .sy-chev{transform:rotate(90deg)}
+.sy-topic{padding:.2rem 1rem .6rem 1.6rem}
+.sy-topic h4{margin:.4rem 0 .3rem;font-size:.86rem;display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
+.sy-topic h4 .n{margin-left:auto;font-size:.74rem;color:var(--text-muted);font-weight:600}
+.sy-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.6rem;align-items:center;padding:.32rem 0;font-size:.83rem;color:var(--text-secondary);border-top:1px dashed var(--border-light,var(--border-color))}
+.sy-item .q{font-size:.72rem;font-weight:700;border-radius:999px;padding:.1rem .5rem;background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary);white-space:nowrap;font-variant-numeric:tabular-nums}
+.sy-item.gap .q{background:color-mix(in srgb,var(--danger) 10%,var(--bg-card));color:var(--danger)}
+.sy-item[hidden],.sy-topic[hidden],.sy-sec[hidden]{display:none}
+.sy-empty{padding:1.2rem 1rem;color:var(--text-muted);font-size:.88rem;text-align:center}
+.sy-bp{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr));gap:.45rem}
+.sy-bp div{display:flex;justify-content:space-between;gap:.5rem;font-size:.84rem;border:1px solid var(--border-color);border-radius:11px;padding:.45rem .65rem;min-width:0}
+.sy-bp span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sy-note{font-size:.82rem;color:var(--text-secondary);line-height:1.55;margin:0 0 .8rem}
+.qb-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:.75rem;align-items:start}
+.qb-tool{border:1px solid var(--border-color);border-radius:var(--rs-r,16px);background:var(--bg-card);overflow:hidden}
+.qb-tool>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:.75rem;padding:.85rem 1rem}
+.qb-tool>summary::-webkit-details-marker{display:none}
+.qb-tool>summary .ic{width:2.3rem;height:2.3rem;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--text-secondary);flex:none}
+.qb-tool>summary .tt{flex:1;min-width:0}
+.qb-tool>summary .tt b{display:block;font-size:.92rem}
+.qb-tool>summary .tt small{display:block;font-size:.78rem;color:var(--text-muted);line-height:1.4}
+.qb-tool>summary .ch{color:var(--text-muted);font-size:.75rem;transition:transform .15s}
+.qb-tool[open]>summary .ch{transform:rotate(90deg)}
+.qb-tool .tb{padding:0 1rem 1rem;font-size:.86rem}
+.sy-batch{display:block;margin-bottom:.8rem;padding:.55rem .75rem;border-radius:11px;background:var(--gray-100);font-size:.84rem}
+@media (max-width:640px){
+  .sy-sec>summary{grid-template-columns:minmax(0,1fr) 3.6rem 1rem}
+  .sy-sec>summary .sy-track{grid-column:1 / -1;grid-row:2}
+  .sy-topic{padding-left:1rem}
+  .sy-item{grid-template-columns:minmax(0,1fr) auto}
+  .sy-item .sy-code{display:none}
+}
 </style>
 {% endblock %}
 {% block content %}
+{% set can_edit = can_write_sub('external_exams', 'mock_jamb_bank_syllabus_edit') %}
+{% set can_del = can_write_sub('external_exams', 'mock_jamb_bank_syllabus_delete') %}
 <div class="rs bx bx-legacy">
-<div class="page-header">
-  <div>
-    <h1>JAMB Syllabus</h1>
-    <p class="text-muted">Import each subject's syllabus (JSON or CSV). Every item keeps a stable code
-       (e.g. <code>MATH.NUM.1.A</code>) so re-imports reconcile by code, not by name.</p>
-  </div>
-  <div class="page-header-actions">
-    <a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a>
-  </div>
-</div>
-<div class="no-print">{{ mj_nav('syllabus') }}</div>
+  {% call bx_head('fa-list-ol', 'JAMB Syllabus', ((subject.name ~ ' · ' ~ syllabus.prefix ~ ((' v' ~ syllabus.version) if syllabus.version else '') ~ ' · ' ~ cover['items'] ~ ' items') if syllabus else ('Import each subject’s coded syllabus — every item keeps a stable code, so re-imports reconcile by code, not by name.'))) %}
+    {% set links = [] %}
+    {% if can_edit %}{% set _ = links.append(('#syImport', 'fa-file-import', 'Import a syllabus')) %}{% if syllabus %}{% set _ = links.append(('#syRetag', 'fa-wand-magic-sparkles', 'AI retag questions')) %}{% endif %}{% endif %}
+    {{ bx_menu('More', links + [(None, None, 'Bank'), (bank_url, 'fa-database', 'Question bank'), (url_for('mock_jamb.bank_analytics', subject_id=subject_id or ''), 'fa-chart-pie', 'Topic analytics')]) }}
+  {% endcall %}
+  <div class="no-print">{{ mj_nav('syllabus') }}</div>
 
-<form method="GET" action="{{ url_for('mock_jamb.bank_syllabus') }}" class="mb-3">
-  <label class="form-label">Subject</label>
-  <select name="subject_id" class="form-control" style="max-width:320px" data-autosubmit>
-    {% for s in subjects %}
-      <option value="{{ s.id }}" {% if subject and s.id == subject.id %}selected{% endif %}>{{ s.name }}</option>
+  {% if subjects|length > 1 %}
+  <nav class="sy-chips" aria-label="Subject">
+    {% for s in subjects %}<a class="sy-chip {{ 'on' if subject and s.id == subject.id }}" href="{{ url_for('mock_jamb.bank_syllabus', subject_id=s.id) }}">{{ s.name }}</a>{% endfor %}
+  </nav>
+  {% endif %}
+
+  {% if syllabus %}
+  {% set cpct = ((cover.covered / cover['items'] * 100)|round|int) if cover['items'] else 0 %}
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Syllabus items</span><span class="v">{{ cover['items'] }}</span><span class="s">{{ tree|length }} section{{ '' if tree|length == 1 else 's' }}</span></div>
+    <div class="rs-tile {{ 'good' if cpct >= 80 else 'mid' if cpct >= 40 else 'bad' }}"><span class="l">Items with questions</span><span class="v">{{ cpct }}%</span><span class="s">{{ cover.covered }} of {{ cover['items'] }} · {{ cover['items'] - cover.covered }} gaps</span></div>
+    <div class="rs-tile"><span class="l">Questions coded</span><span class="v">{{ tagged_count }}<small>/ {{ total_questions_q }}</small></span><span class="s">stand-alone bank questions</span></div>
+    <div class="rs-tile"><span class="l">Paper blueprint</span><span class="v">{{ blueprint | sum(attribute='count') if blueprint else '—' }}</span><span class="s">{{ 'questions per paper' if blueprint else 'none in this syllabus' }}</span></div>
+  </div>
+
+  <section class="rs-card flush">
+    <div class="rs-card-h pad"><h3><i class="fas fa-sitemap" aria-hidden="true"></i> Syllabus coverage</h3><small>banked questions per item</small></div>
+    <div class="sy-tools">
+      <div class="sy-chips" id="syShow" role="radiogroup" aria-label="Show">
+        <button type="button" class="sy-chip on" data-f="all">All items</button>
+        <button type="button" class="sy-chip" data-f="gap">Gaps only <em>{{ cover['items'] - cover.covered }}</em></button>
+      </div>
+      <label class="sy-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" id="sySearch" placeholder="Search topics, items or codes" aria-label="Search syllabus"></label>
+    </div>
+    <div id="syTree">
+    {% for sec in tree %}
+    {% set n_items = sec.topics|map(attribute='items')|map('length')|sum %}
+    {% set n_cov = namespace(v=0) %}{% for t in sec.topics %}{% for it in t['items'] %}{% if it.banked %}{% set n_cov.v = n_cov.v + 1 %}{% endif %}{% endfor %}{% endfor %}
+    {% set sp = ((n_cov.v / n_items * 100)|round|int) if n_items else 0 %}
+    <details class="sy-sec" {{ 'open' if loop.first }}>
+      <summary>
+        <span class="nm"><span class="sy-code">{{ sec.code }}</span> {{ sec.name }}<small>{{ sec.topics|length }} topic{{ '' if sec.topics|length == 1 else 's' }} · {{ sec.banked }} question{{ '' if sec.banked == 1 else 's' }}{% if sec.count %} · {{ sec.count }} per paper{% endif %}</small></span>
+        <span class="sy-track {{ 'none' if not n_cov.v else 'low' if sp < 50 }}"><i style="width:{{ [sp, 2]|max }}%"></i></span>
+        <span class="sy-pct">{{ n_cov.v }}/{{ n_items }}</span>
+        <i class="fas fa-chevron-right sy-chev" aria-hidden="true"></i>
+      </summary>
+      {% for t in sec.topics %}
+      <div class="sy-topic">
+        <h4><span class="sy-code">{{ t.code }}</span> {{ t.name }}<span class="n">{{ t.banked }} q</span></h4>
+        {% for it in t['items'] %}
+        <div class="sy-item {{ 'gap' if not it.banked }}" data-s="{{ (sec.name ~ ' ' ~ t.name ~ ' ' ~ it.name ~ ' ' ~ it.code)|lower }}"><span class="sy-code">{{ it.code }}</span><span>{{ it.name }}</span><span class="q">{{ it.banked if it.banked else 'gap' }}</span></div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </details>
     {% endfor %}
-  </select>
-</form>
+    </div>
+    <div class="sy-empty" id="syNone" hidden>No syllabus item matches.</div>
+  </section>
 
-{% if can_write_sub('external_exams', 'mock_jamb_bank_syllabus_edit') %}
-<div class="card mb-3">
-  <div class="card-header"><h3>Import a syllabus{% if subject %} for {{ subject.name }}{% endif %}</h3></div>
-  <div class="card-body">
+  {% if blueprint %}
+  <section class="rs-card">
+    <div class="rs-card-h"><h3><i class="fas fa-sliders" aria-hidden="true"></i> Exam blueprint</h3><small>{{ blueprint | sum(attribute='count') }} questions per paper</small></div>
+    <div class="sy-bp">
+      {% for b in blueprint %}<div><span>{{ b.label }}{% if b.passage %} <span class="sy-code">passage</span>{% endif %}</span><strong>{{ b.count }}</strong></div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-list-ol" aria-hidden="true"></i></span><h3>No syllabus for {{ subject.name if subject else 'this subject' }} yet</h3>
+    <p>Import the coded syllabus below. Questions can then be tagged to exact syllabus items, and you'll see which items the bank doesn't cover.</p>
+    {% if can_edit %}<a href="#syImport" class="rs-btn primary"><i class="fas fa-file-import" aria-hidden="true"></i> Import a syllabus</a>{% endif %}</div>
+  {% endif %}
+
+  <div class="qb-tools">
+  {% if can_edit %}
+  <details class="qb-tool" id="syImport" {{ 'open' if not syllabus }}>
+    <summary><span class="ic"><i class="fas fa-file-import" aria-hidden="true"></i></span><span class="tt"><b>Import a syllabus{% if subject %} for {{ subject.name }}{% endif %}</b><small>Bundled, uploaded or pasted JSON / CSV</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+    <div class="tb">
     <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_import') }}" enctype="multipart/form-data">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="subject_id" value="{{ subject_id }}">
-
       {% if bundled %}
       <div class="form-group">
         <label class="form-label">Quick import a bundled syllabus</label>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
           {% for slug, b in bundled.items() %}
-          <button type="submit" name="bundled" value="{{ slug }}" class="btn btn-secondary btn-sm">
-            <i class="fas fa-download"></i> {{ b.target }}
-          </button>
+          <button type="submit" name="bundled" value="{{ slug }}" class="rs-btn"><i class="fas fa-download" aria-hidden="true"></i> {{ b.target }}</button>
           {% endfor %}
         </div>
-        <span class="form-hint">Each bundled syllabus imports into <strong>its own subject</strong>
-          (e.g. Mathematics &rarr; the Mathematics subject), regardless of the one selected above.</span>
+        <span class="form-hint">Each bundled syllabus imports into <strong>its own subject</strong> (e.g. Mathematics &rarr; the Mathematics subject), whichever subject is selected.</span>
       </div>
-      <hr>
       {% endif %}
-
       <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Format</label>
-          <select name="format" class="form-control" style="max-width:160px">
-            <option value="auto">Auto-detect</option>
-            <option value="json">JSON</option>
-            <option value="csv">CSV</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Version (optional)</label>
-          <input type="text" name="version" class="form-control" style="max-width:160px" placeholder="2026">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Upload a file (.json / .csv)</label>
-          <input type="file" name="file" class="form-control" accept=".json,.csv">
-        </div>
+        <div class="form-group"><label class="form-label">Format</label>
+          <select name="format" class="form-control"><option value="auto">Auto-detect</option><option value="json">JSON</option><option value="csv">CSV</option></select></div>
+        <div class="form-group"><label class="form-label">Version (optional)</label>
+          <input type="text" name="version" class="form-control" placeholder="2026"></div>
       </div>
+      <div class="form-group"><label class="form-label">Upload a file (.json / .csv)</label>
+        <input type="file" name="file" class="form-control" accept=".json,.csv"></div>
       <div class="form-group">
         <label class="form-label">…or paste the syllabus</label>
-        <textarea name="text" class="form-control" rows="8"
-                  placeholder='{"subject":"Mathematics","prefix":"MATH","version":"2026","sections":[...]}'></textarea>
-        <span class="form-hint">JSON is preferred for hierarchical syllabi; CSV columns: <code>code,kind,name,parent,count</code>.</span>
+        <textarea name="text" class="form-control" rows="7" placeholder='{"subject":"Mathematics","prefix":"MATH","version":"2026","sections":[...]}'></textarea>
+        <span class="form-hint">JSON suits hierarchical syllabi; CSV columns: <code>code,kind,name,parent,count</code>.</span>
       </div>
-      <button type="submit" class="btn btn-primary"><i class="fas fa-file-import"></i> Import &amp; reconcile</button>
+      <button type="submit" class="rs-btn primary"><i class="fas fa-file-import" aria-hidden="true"></i> Import &amp; reconcile</button>
     </form>
-  </div>
-</div>
-{% endif %}
-
-{% if syllabus %}
-{% if can_write_sub('external_exams', 'mock_jamb_bank_syllabus_edit') %}
-<div class="card mb-3">
-  <div class="card-header"><h3>AI retag questions to this syllabus</h3></div>
-  <div class="card-body">
-    <p class="text-muted mb-3">Classify {{ subject.name }}'s bank questions against the coded syllabus above
-      using your Anthropic key (Settings &rarr; AI Vision OCR). The model may only pick from these codes —
-      it never invents a syllabus item, and marks a question <code>OUTSIDE_SYLLABUS</code> when none fits.
-      {% if total_questions_q %}<strong>{{ tagged_count }}/{{ total_questions_q }}</strong> stand-alone
-      questions already carry a code.{% endif %}</p>
-    {% if not key_set %}
-      <p class="text-muted"><i class="fas fa-triangle-exclamation"></i>
-        No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>
-    {% endif %}
-    {% if batch_job %}
-    <div class="pill" id="batchJobPill" style="display:block;margin-bottom:.8rem;padding:.5rem .7rem;background:var(--gray-100)">
-      <strong>Batch:</strong> <span id="batchJobMessage">{{ batch_job.message or batch_job.status }}</span>
-      <span id="batchJobTotal" class="text-muted">{% if batch_job.total %}({{ batch_job.total }} question(s) submitted){% endif %}</span>
     </div>
-    {% endif %}
+  </details>
 
-    <form method="POST" id="retagForm"
-          action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
+  {% if syllabus %}
+  <details class="qb-tool" id="syRetag" {{ 'open' if batch_job_in_progress }}>
+    <summary><span class="ic"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span><span class="tt"><b>AI retag questions</b><small>{{ tagged_count }}/{{ total_questions_q }} coded · tag the rest to exact syllabus items</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+    <div class="tb">
+    <p class="sy-note">Classifies {{ subject.name }}'s bank questions against this coded syllabus using your Anthropic key (Settings &rarr; AI Vision OCR). The model can only pick from these codes — it never invents an item, and marks a question <code>OUTSIDE_SYLLABUS</code> when none fits.</p>
+    {% if not key_set %}<p class="sy-note" style="color:var(--warning)"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>{% endif %}
+    {% if batch_job %}
+    <div class="sy-batch" id="batchJobPill"><strong>Batch:</strong> <span id="batchJobMessage">{{ batch_job.message or batch_job.status }}</span>
+      <span id="batchJobTotal" class="rs-muted">{% if batch_job.total %}({{ batch_job.total }} question(s) submitted){% endif %}</span></div>
+    {% endif %}
+    <form method="POST" id="retagForm" action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
           data-confirm="Retag {{ subject.name }} questions to the coded syllabus with AI? This calls your Anthropic key.">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="subject_id" value="{{ subject_id }}">
       <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Method</label>
-          <select name="__method" id="retagMethod" class="form-control" style="max-width:230px">
+        <div class="form-group"><label class="form-label">Method</label>
+          <select name="__method" id="retagMethod" class="form-control">
             <option value="inline">Inline (now, up to 400/click)</option>
             {% if batch_async %}<option value="batch">Batch (async, ~50% cheaper)</option>{% endif %}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Model</label>
-          <select name="model" class="form-control" style="max-width:220px">
+          </select></div>
+        <div class="form-group"><label class="form-label">Model</label>
+          <select name="model" class="form-control">
             <option value="">Default (Settings model)</option>
             <option value="claude-haiku-4-5">Haiku (cheapest)</option>
             <option value="claude-sonnet-4-5">Sonnet (higher quality)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Exam type</label>
-          <select name="exam_body" class="form-control" style="max-width:130px">
-            <option value="">All</option>
-            <option value="JAMB">JAMB</option>
-            <option value="WAEC">WAEC</option>
-            <option value="Both">Both</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Year</label>
-          <select name="year" class="form-control" style="max-width:130px">
-            <option value="">All years</option>
-            {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
-          </select>
-        </div>
+          </select></div>
+        <div class="form-group"><label class="form-label">Exam type</label>
+          <select name="exam_body" class="form-control"><option value="">All</option><option value="JAMB">JAMB</option><option value="WAEC">WAEC</option><option value="Both">Both</option></select></div>
+        <div class="form-group"><label class="form-label">Year</label>
+          <select name="year" class="form-control"><option value="">All years</option>{% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}</select></div>
       </div>
       <div class="form-group">
-        <label class="checkbox-label">
-          <input type="checkbox" name="force" id="retagForce" value="1">
-          <span>Re-tag already-tagged questions too (otherwise only untagged ones are tagged)</span>
-        </label>
+        <label class="checkbox-label"><input type="checkbox" name="force" id="retagForce" value="1">
+          <span>Re-tag already-tagged questions too (otherwise only untagged ones are tagged)</span></label>
       </div>
-      <button type="submit" class="btn btn-primary" {% if not key_set %}disabled{% endif %}>
-        <i class="fas fa-wand-magic-sparkles"></i> Retag with AI
-      </button>
-      <span class="form-hint">Inline runs up to 400 questions per click; batch tags the whole set at ~half price in the background.</span>
+      <button type="submit" class="rs-btn primary" {% if not key_set %}disabled{% endif %}><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Retag with AI</button>
+      <span class="form-hint">Inline runs up to 400 questions per click; batch tags the whole set at about half price in the background.</span>
     </form>
+    </div>
+  </details>
+  {% endif %}
+  {% endif %}
+
+  {% if syllabus and can_del %}
+  <details class="qb-tool">
+    <summary><span class="ic" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i></span><span class="tt"><b>Clear syllabus</b><small>Remove {{ subject.name }}'s imported syllabus — bank questions stay</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+    <div class="tb">
+    <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_clear') }}"
+          data-confirm="Clear the imported syllabus for {{ subject.name }}? Bank questions are not affected.">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="subject_id" value="{{ subject_id }}">
+      <button type="submit" class="rs-btn danger"><i class="fas fa-trash" aria-hidden="true"></i> Clear syllabus</button>
+    </form>
+    </div>
+  </details>
+  {% endif %}
   </div>
-</div>
-{% endif %}
 
 <script nonce="{{ csp_nonce }}">
 // The Method select routes to the inline or batch endpoint; the checkbox maps to
@@ -215,59 +279,44 @@
     }, 6000);
 })();
 </script>
-
-<div class="card">
-  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.75rem">
-    <h3 style="margin:0">Current syllabus <span class="text-muted" style="font-weight:400">
-      {{ syllabus.prefix }}{% if syllabus.version %} · v{{ syllabus.version }}{% endif %}
-      {% if syllabus.total_questions %} · {{ syllabus.total_questions }} questions{% endif %}</span></h3>
-    {% if can_write_sub('external_exams', 'mock_jamb_bank_syllabus_delete') %}
-    <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_clear') }}"
-          data-confirm="Clear the imported syllabus for {{ subject.name }}? Bank questions are not affected.">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="subject_id" value="{{ subject_id }}">
-      <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Clear syllabus</button>
-    </form>
-    {% endif %}
-  </div>
-  <div class="card-body">
-    {% if blueprint %}
-    <div class="syl-sec" style="margin-bottom:1.1rem">
-      <div class="syl-sec-head">Exam blueprint — question selection
-        <span class="pill" style="margin-left:auto">{{ blueprint | sum(attribute='count') }} questions</span>
-      </div>
-      <div style="padding:.5rem .8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.4rem">
-        {% for b in blueprint %}
-        <div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.85rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:.3rem .5rem">
-          <span>{{ b.label }}{% if b.passage %} <span class="pill">passage</span>{% endif %}</span>
-          <strong>{{ b.count }}</strong>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-    {% for sec in tree %}
-    <div class="syl-sec">
-      <div class="syl-sec-head">
-        <span class="syl-code">{{ sec.code }}</span>{{ sec.name }}
-        {% if sec.count %}<span class="pill">{{ sec.count }} q</span>{% endif %}
-      </div>
-      {% for t in sec.topics %}
-      <div class="syl-topic">
-        <div class="syl-topic-name"><span class="syl-code">{{ t.code }}</span> {{ t.name }}</div>
-        {% for it in t['items'] %}
-        <div class="syl-item"><span class="syl-code">{{ it.code }}</span> {{ it.name }}</div>
-        {% endfor %}
-      </div>
-      {% endfor %}
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% else %}
-<div class="card"><div class="card-body text-muted">
-  No syllabus imported for this subject yet. Import one above.
-</div></div>
-{% endif %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var on = document.querySelector('nav.sy-chips .sy-chip.on');
+  if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href^="#sy"]'); if(!a) return;
+    var el = document.getElementById(a.getAttribute('href').slice(1)); if(!el) return;
+    e.preventDefault();
+    var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if(m) m.open = false;
+    el.open = true; el.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+  var tree = document.getElementById('syTree'); if(!tree) return;
+  var q = document.getElementById('sySearch'), none = document.getElementById('syNone'), mode = 'all';
+  function apply(){
+    var term = (q.value || '').trim().toLowerCase(), shown = 0;
+    tree.querySelectorAll('.sy-sec').forEach(function(sec){
+      var secShown = 0;
+      sec.querySelectorAll('.sy-topic').forEach(function(t){
+        var n = 0;
+        t.querySelectorAll('.sy-item').forEach(function(it){
+          var ok = (mode === 'all' || it.classList.contains('gap')) && (!term || it.dataset.s.indexOf(term) >= 0);
+          it.hidden = !ok; if(ok) n++;
+        });
+        t.hidden = !n; secShown += n;
+      });
+      sec.hidden = !secShown; shown += secShown;
+      if((term || mode !== 'all') && secShown) sec.open = true;
+    });
+    none.hidden = !!shown;
+  }
+  q.addEventListener('input', apply);
+  document.querySelectorAll('#syShow .sy-chip').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('#syShow .sy-chip').forEach(function(x){ x.classList.toggle('on', x === b); });
+      mode = b.dataset.f; apply();
+    });
+  });
+})();
+</script>
 </div>
 {% endblock %}

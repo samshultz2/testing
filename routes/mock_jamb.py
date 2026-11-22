@@ -1309,6 +1309,8 @@ def bank():
         standalone = pagination.items
     from utils.myschool import on_jamb
     jamb_ok_ids = {s.id for s in subjects if on_jamb(s.name)}
+    from utils import mock_figures
+    mock_figures.sync()
     needs_image_count = MockJAMBQuestion.query.filter(
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.needs_image.is_(True)).count()
@@ -1327,8 +1329,11 @@ def bank():
                                  MockJAMBQuestion.subject_id == subject_id,
                                  MockJAMBQuestion.passage_id.is_(None),
                                  (MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == '')).count())
+    subject_counts = dict(db.session.query(MockJAMBQuestion.subject_id, func.count(MockJAMBQuestion.id))
+                          .filter(MockJAMBQuestion.mock_exam_id.is_(None))
+                          .group_by(MockJAMBQuestion.subject_id).all())
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
-                           needs_image_count=needs_image_count,
+                           needs_image_count=needs_image_count, subject_counts=subject_counts,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            pagination=pagination, q_search=q_search, jamb_ok_ids=jamb_ok_ids,
@@ -1443,6 +1448,27 @@ def bank_syllabus():
             key_set = _vision_config().get('has_key', False)
         except Exception:
             key_set = False
+    # How many banked questions sit on each code, rolled up to topics and
+    # sections, so the tree shows where the bank is thin.
+    cover = {'items': 0, 'covered': 0}
+    if tree and subject_id:
+        counts = dict(db.session.query(MockJAMBQuestion.syllabus_item_code, func.count(MockJAMBQuestion.id))
+                      .filter(MockJAMBQuestion.subject_id == subject_id,
+                              MockJAMBQuestion.mock_exam_id.is_(None),
+                              MockJAMBQuestion.syllabus_item_code.isnot(None))
+                      .group_by(MockJAMBQuestion.syllabus_item_code).all())
+        for sec in tree:
+            sec_n = counts.get(sec.get('code'), 0)
+            for t in sec.get('topics') or []:
+                t_n = counts.get(t.get('code'), 0)
+                for it in t.get('items') or []:
+                    it['banked'] = counts.get(it.get('code'), 0)
+                    t_n += it['banked']
+                    cover['items'] += 1
+                    cover['covered'] += 1 if it['banked'] else 0
+                t['banked'] = t_n
+                sec_n += t_n
+            sec['banked'] = sec_n
     from utils import jobs as _jobs
     batch_async = _jobs.async_enabled()
     batch_job = None
@@ -1457,7 +1483,7 @@ def bank_syllabus():
             batch_job = None
     return render_template('mock_jamb/bank_syllabus.html',
                            subjects=subjects, subject=subject, subject_id=subject_id,
-                           syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled,
+                           syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled, cover=cover,
                            years=years, tagged_count=tagged_count, total_questions_q=total_q,
                            key_set=key_set, batch_async=batch_async, batch_job=batch_job,
                            batch_job_in_progress=_batch_job_in_progress(batch_job),
@@ -2158,13 +2184,19 @@ def bank_delete_bulk():
 @mock_jamb_bp.route('/bank/needs-images')
 @login_required
 def bank_needs_images():
-    """Review queue of bank questions that refer to a figure we couldn't fetch.
-    Filterable by subject, year and exam body; upload the diagram (or dismiss the
-    flag) inline. Flagged questions are held out of exams until resolved."""
+    """Review queue of every bank question that needs a picture it doesn't have:
+    flagged on import, or worded around a figure ("the diagram above", "Fig. 2",
+    "the graph shown") with no image on the question or its passage. Filterable
+    by subject, year, exam body and search; upload the figure (or rule it a false
+    alarm) inline. Queued questions are held out of exams until resolved."""
+    from sqlalchemy import func
+    from utils import mock_figures
+    mock_figures.sync(force=True)
     subjects = _mock_subjects()
     subject_id = request.args.get('subject_id', type=int)
     year = (request.args.get('year') or '').strip()
     exam_body = (request.args.get('exam_body') or '').strip()
+    search = (request.args.get('q') or '').strip()
     page = max(1, request.args.get('page', 1, type=int))
 
     def _flagged():
@@ -2179,6 +2211,8 @@ def bank_needs_images():
         q = q.filter(MockJAMBQuestion.exam_year == year)
     if exam_body:
         q = q.filter(MockJAMBQuestion.exam_body == exam_body)
+    if search:
+        q = q.filter(MockJAMBQuestion.question_text.ilike('%' + search[:80] + '%'))
     q = q.order_by(MockJAMBQuestion.subject_id, MockJAMBQuestion.exam_year,
                    MockJAMBQuestion.id)
     pagination = q.paginate(page=page, per_page=20, error_out=False)
@@ -2189,10 +2223,20 @@ def bank_needs_images():
                      MockJAMBQuestion.exam_year.isnot(None))
              .distinct().order_by(MockJAMBQuestion.exam_year.desc()).all() if y]
     subj_name = {s.id: s.name for s in subjects}
-    total = _flagged().count()
+    by_subject = dict(_flagged().with_entities(MockJAMBQuestion.subject_id, func.count())
+                      .group_by(MockJAMBQuestion.subject_id).all())
+    subject_counts = sorted(((sid, subj_name.get(sid, 'Subject'), n) for sid, n in by_subject.items()),
+                            key=lambda r: (-r[2], r[1]))
+    total = sum(by_subject.values())
+    dismissed = MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.mock_exam_id.is_(None),
+        MockJAMBQuestion.image_not_needed.is_(True)).count()
+    reasons = {x.id: mock_figures.reason(x) for x in pagination.items}
     return render_template('mock_jamb/needs_images.html',
                            subjects=subjects, subject_id=subject_id, year=year,
-                           exam_body=exam_body, years=years, subj_name=subj_name,
+                           exam_body=exam_body, search=search, years=years, subj_name=subj_name,
+                           subject_counts=subject_counts, reasons=reasons, dismissed=dismissed,
+                           matching=pagination.total,
                            pagination=pagination, questions=pagination.items,
                            total=total, index_url=url_for('mock_jamb.index'),
                            bank_url=url_for('mock_jamb.bank'))
@@ -2211,6 +2255,7 @@ def bank_set_question_image(question_id):
     back = request.referrer or url_for('mock_jamb.bank_needs_images')
     if request.form.get('dismiss'):
         q.needs_image = False
+        q.image_not_needed = True
         db.session.commit()
         flash('Marked as not needing an image — it can now be used in exams.', 'success')
         return redirect(back)
@@ -2273,7 +2318,8 @@ def bank_needs_images_bulk():
         n = 0
         for i in range(0, len(ids), 400):
             n += (MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids[i:i + 400]))
-                  .update({MockJAMBQuestion.needs_image: False}, synchronize_session=False))
+                  .update({MockJAMBQuestion.needs_image: False,
+                           MockJAMBQuestion.image_not_needed: True}, synchronize_session=False))
         db.session.commit()
         flash(f'Marked {n} question(s) as not needing an image — they can now be used in exams.', 'success')
     return redirect(back)
@@ -2774,6 +2820,9 @@ def toggle_publish(exam_id):
         exam.questions_per_subject = qps if (qps and qps > 0) else None
     exam.is_published = not exam.is_published
     db.session.commit()
+    if exam.is_published:
+        from utils import mock_figures
+        mock_figures.sync(force=True)     # hold out figure questions with no picture
     flash('Online sitting opened for students.' if exam.is_published
           else 'Online sitting closed.', 'success')
     return redirect(url_for('mock_jamb.questions', exam_id=exam_id))

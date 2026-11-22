@@ -447,6 +447,8 @@ class MockJAMBQuestion(db.Model):
     # True => the question refers to a figure we couldn't fetch; it is held out
     # of exams until an admin supplies the image (see the "needs images" queue).
     needs_image = db.Column(db.Boolean, default=False)
+    # An admin ruled a figure-word match a false alarm: keep it out of the queue.
+    image_not_needed = db.Column(db.Boolean, default=False)
     option_a = db.Column(db.String(400))
     option_b = db.Column(db.String(400))
     option_c = db.Column(db.String(400))
