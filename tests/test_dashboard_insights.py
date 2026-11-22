@@ -84,7 +84,10 @@ def test_incomplete_profile_link_lists_exactly_the_flagged_students(app):
     dash_count = int(inc['title'].split()[0])
 
     listing = c.get('/api/students?incomplete=1').get_json()
-    ids = {s['student_id'] for s in listing['students']}
+    # Search for this test's two students, so others in the shared database
+    # can't push them off the first page.
+    mine = c.get('/api/students?incomplete=1&search=ZzInc').get_json()
+    ids = {s['student_id'] for s in mine['students']}
     assert 'ZZ_INC_A' in ids
     assert 'ZZ_INC_B' not in ids
     # The dashboard's count and the filtered list's total must never disagree.

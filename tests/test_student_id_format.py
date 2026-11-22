@@ -123,9 +123,8 @@ def test_two_branches_get_independent_id_sequences(app):
 
 def test_include_session_inserts_code_after_prefix(app):
     with app.app_context():
-        AcademicSession.query.update({AcademicSession.is_active: False})
-        sess = AcademicSession(name='2025/2026', is_active=True)
-        db.session.add(sess); db.session.commit()
+        from tests.conftest import use_session
+        sess, made = use_session('2025/2026')
         SchoolSettings.set('student_id_include_session', True, 'bool')
         db.session.commit()
         try:
@@ -134,22 +133,25 @@ def test_include_session_inserts_code_after_prefix(app):
             assert sid.startswith('STU2526')
         finally:
             SchoolSettings.set('student_id_include_session', False, 'bool')
-            db.session.delete(sess); db.session.commit()
+            if made:
+                db.session.delete(sess); db.session.commit()
 
 
 def test_include_session_combines_with_branch_prefix(app):
     with app.app_context():
-        AcademicSession.query.update({AcademicSession.is_active: False})
-        sess = AcademicSession(name='2026/2027', is_active=True)
+        from tests.conftest import use_session
+        sess, made = use_session('2026/2027')
         b = Branch(name='ZzIdJemila3', code='JM3')
-        db.session.add_all([sess, b]); db.session.commit()
+        db.session.add(b); db.session.commit()
         SchoolSettings.set('student_id_include_session', True, 'bool')
         db.session.commit()
         try:
             assert Student.student_id_format(b.id) == ('JM32627', 5)
         finally:
             SchoolSettings.set('student_id_include_session', False, 'bool')
-            db.session.delete(sess); db.session.delete(b); db.session.commit()
+            if made:
+                db.session.delete(sess)
+            db.session.delete(b); db.session.commit()
 
 
 def test_add_student_route_uses_the_chosen_branchs_prefix(app):
@@ -238,9 +240,9 @@ def test_new_session_restarts_numbering_for_same_branch(app):
     happens to have left behind under the plain 'STU' namespace."""
     with app.app_context():
         b = Branch(name='ZzIdSessionRestart', code='SR')
-        AcademicSession.query.update({AcademicSession.is_active: False})
-        old_sess = AcademicSession(name='2024/2025', is_active=True)
-        db.session.add_all([b, old_sess]); db.session.commit()
+        from tests.conftest import use_session
+        db.session.add(b); db.session.commit()
+        old_sess, old_made = use_session('2024/2025')
         SchoolSettings.set('student_id_include_session', True, 'bool')
         db.session.commit()
         old_id = Student.generate_student_id(b.id)
@@ -249,14 +251,16 @@ def test_new_session_restarts_numbering_for_same_branch(app):
                    is_active=True, branch_id=b.id)
         db.session.add(s); db.session.commit()
 
-        old_sess.is_active = False
-        new_sess = AcademicSession(name='2025/2026', is_active=True)
-        db.session.add(new_sess); db.session.commit()
+        new_sess, new_made = use_session('2025/2026')
         try:
             new_id = Student.generate_student_id(b.id)
             assert new_id == 'SR2526' + '1'.rjust(5, '0')   # fresh sequence, not '2'
         finally:
             SchoolSettings.set('student_id_include_session', False, 'bool')
-            db.session.delete(s); db.session.delete(old_sess); db.session.delete(new_sess)
+            db.session.delete(s)
+            if old_made:
+                db.session.delete(old_sess)
+            if new_made:
+                db.session.delete(new_sess)
             db.session.delete(b)
             db.session.commit()

@@ -109,9 +109,8 @@ def test_analytics_hub_defaults_to_live_session_even_with_no_data(app):
     that happen to have results, so it doesn't misleadingly look like an old
     year is still selected."""
     with app.app_context():
-        AcademicSession.query.update({'is_active': False})
-        db.session.add(AcademicSession(name='2099/2100', is_active=True))
-        db.session.commit()
+        from tests.conftest import use_session
+        use_session('2099/2100')
     c = _admin(app)
     body = c.get('/results/analytics').get_data(as_text=True)
     assert 'value="2100"' in body

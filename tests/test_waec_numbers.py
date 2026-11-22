@@ -136,7 +136,27 @@ def test_neco_numbers_are_checked_not_generated():
 
 def test_neco_tab_saves_centre_and_refuses_bad_numbers(app, monkeypatch):
     import routes.settings as rs
-    from models import db, Student
+    from models import db, Student, AcademicSession
+    # Saving needs an exam year, which comes from the active session. Another
+    # test may have left none active, so make sure one is (restored after).
+    with app.app_context():
+        from utils.exam_subject_config import current_exam_year
+        prev_active = [x.id for x in AcademicSession.query.filter_by(is_active=True).all()]
+        if current_exam_year() is None:
+            from tests.conftest import use_session
+            use_session('2087/2088')
+    try:
+        _neco_tab_checks(app, monkeypatch, rs, db, Student)
+    finally:
+        with app.app_context():
+            AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+            if prev_active:
+                AcademicSession.query.filter(AcademicSession.id.in_(prev_active)).update(
+                    {AcademicSession.is_active: True}, synchronize_session=False)
+            db.session.commit()
+
+
+def _neco_tab_checks(app, monkeypatch, rs, db, Student):
     c = app.test_client()
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
     page = c.get('/settings/waec-numbers?board=neco').get_data(as_text=True)

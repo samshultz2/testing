@@ -78,15 +78,17 @@ def test_branch_user_cannot_edit_other_branch_student(app):
 def test_central_admin_sees_all_and_can_filter(app):
     a_id, b_id, s_a, s_b = _setup(app)
     client = _legacy_admin(app)
-    html = client.get('/students').get_data(as_text=True)
+    # Search for just these two, so other tests' students can't push them
+    # off the first page of the list.
+    html = client.get('/students?search=SCP').get_data(as_text=True)
     assert 'SCPA1' in html and 'SCPB1' in html      # all branches
     # Narrow to branch A.
     client.get(f'/set-branch?branch_id={a_id}')
-    html = client.get('/students').get_data(as_text=True)
+    html = client.get('/students?search=SCP').get_data(as_text=True)
     assert 'SCPA1' in html and 'SCPB1' not in html
     # Back to all.
     client.get('/set-branch?branch_id=all')
-    html = client.get('/students').get_data(as_text=True)
+    html = client.get('/students?search=SCP').get_data(as_text=True)
     assert 'SCPA1' in html and 'SCPB1' in html
 
 

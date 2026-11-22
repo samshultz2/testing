@@ -95,7 +95,11 @@ def test_send_mock_scores_to_term_results(app):
 
     tok = auth_csrf(c)
     # Third term (WAEC time) is not offered and can't be written to.
-    assert f'value="{third_id}"' not in html
+    # Look only inside the term picker: other tests' sessions can share the id
+    # number and appear in the session menu.
+    import re as _re
+    term_select = _re.search(r'<select name="term_id".*?</select>', html, _re.S).group(0)
+    assert f'value="{third_id}"' not in term_select
     r = c.post(f'/mock-waec/exam/{ex_id}/to-term-results', data={'_csrf_token': tok, 'term_id': third_id})
     assert r.status_code == 302
     with app.app_context():

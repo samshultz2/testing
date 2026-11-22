@@ -32,10 +32,10 @@ def test_create_draft_campaign_queues_for_review(app):
         saved = db.session.get(Message, msg_id)
         assert saved.status == 'Draft'              # never auto-dispatched
         assert saved.recipient_count >= 1
-        rec = saved.recipients.first() if hasattr(saved.recipients, 'first') \
-            else list(saved.recipients)[0]
+        # 'all' reaches every parent in the shared test database, so find this
+        # test's parent by phone rather than assuming it comes first.
+        rec = next(r for r in saved.recipients if r.phone == '08030001111')
         assert 'Mr Bello' in rec.body               # personalised per parent
-        assert rec.phone == '08030001111'
 
 
 def test_create_draft_campaign_empty_body_returns_none(app):

@@ -22,12 +22,16 @@ def _enroll(app, class_name, level_no, student_id):
     from models import (AcademicSession, Term, SchoolClass, ClassArm,
                         ClassArmAssignment, StudentEnrollment)
     with app.app_context():
-        ssn = (AcademicSession.query.filter_by(is_active=True).first()
-               or AcademicSession(name='ENR 25/26', is_active=True))
-        db.session.add(ssn); db.session.flush()
-        term = (Term.query.filter_by(is_active=True).first()
-                or Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True))
-        db.session.add(term); db.session.flush()
+        # The term the app treats as current (active term inside the active
+        # session), not merely any term flagged active.
+        from utils.helpers import get_active_term
+        term = get_active_term()
+        if term is None:
+            ssn = (AcademicSession.query.filter_by(is_active=True).first()
+                   or AcademicSession(name='ENR 25/26', is_active=True))
+            db.session.add(ssn); db.session.flush()
+            term = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True)
+            db.session.add(term); db.session.flush()
         cls = SchoolClass.query.filter_by(name=class_name).first() or SchoolClass(name=class_name, level=level_no)
         db.session.add(cls); db.session.flush()
         arm = ClassArm.query.filter_by(name='Gold').first() or ClassArm(name='Gold', is_active=True)

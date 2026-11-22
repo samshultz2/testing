@@ -75,7 +75,7 @@ def test_term_setup_with_a_term_offers_in_place_fixes(app):
 def test_terms_list_groups_by_session_with_status_and_alerts(app):
     from models import db, AcademicSession, Term
     with app.app_context():
-        s = AcademicSession(name='2040/2041', is_active=False)
+        s = AcademicSession(name='2140/2141', is_active=False)   # a name no other test uses
         db.session.add(s); db.session.flush()
         from datetime import date
         db.session.add_all([
@@ -183,7 +183,7 @@ def test_term_view_calendar_and_break_removal(app):
 def test_class_setup_payload_and_safe_arm_removal(app):
     from models import db, AcademicSession, Term, SchoolClass, ClassArm, ClassArmAssignment, StudentEnrollment, Student
     with app.app_context():
-        s = AcademicSession(name='2070/2071', is_active=False); db.session.add(s); db.session.flush()
+        s = AcademicSession(name='2170/2171', is_active=False); db.session.add(s); db.session.flush()
         t1 = Term(session_id=s.id, term_number=1, name='First Term')
         t2 = Term(session_id=s.id, term_number=2, name='Second Term'); db.session.add_all([t1, t2]); db.session.flush()
         c = SchoolClass(name='CSX', level=88); db.session.add(c); db.session.flush()

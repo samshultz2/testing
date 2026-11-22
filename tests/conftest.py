@@ -142,3 +142,22 @@ def activate_term(term_id):
                 {AcademicSession.is_active: True}, synchronize_session=False)
         db.session.commit()
     return restore
+
+
+def use_session(name, active=True):
+    """The AcademicSession called ``name`` — reused if an earlier test already
+    made it (names are unique and the test DB is shared), else created — and,
+    when ``active``, made the only active session. Returns (session, created)
+    so a test deletes it afterwards only if it created it. Call inside an
+    app context."""
+    from models import db, AcademicSession
+    s = AcademicSession.query.filter_by(name=name).first()
+    created = s is None
+    if created:
+        s = AcademicSession(name=name)
+        db.session.add(s)
+    if active:
+        AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+    s.is_active = bool(active)
+    db.session.commit()
+    return s, created
