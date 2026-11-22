@@ -473,6 +473,19 @@ a.stu-name:hover { color:var(--primary); }
   .sl-count{width:100%;text-align:center}
   .sl-menu-pop{min-width:200px}
 }
+/* Update-from-text: field picker */
+.uf-pick{border:1px solid var(--border-color);border-radius:14px;padding:.75rem .85rem .85rem;margin:0 0 .85rem;display:flex;flex-direction:column;gap:.55rem;min-width:0}
+.uf-pick legend{padding:0 .3rem;margin:0;font-weight:700}
+.uf-group{display:flex;flex-direction:column;gap:.3rem}
+.uf-gl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.uf-chips{display:flex;flex-wrap:wrap;gap:.35rem}
+.uf-chip{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);border-radius:999px;padding:.38rem .75rem;font:inherit;font-size:.84rem;font-weight:600;cursor:pointer;line-height:1.2}
+.uf-chip i{font-size:.7rem;opacity:.7}
+.uf-chip.on{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));border-color:color-mix(in srgb,var(--primary) 45%,var(--border-color));color:var(--primary)}
+.uf-chip.on i{opacity:1}
+.uf-chip:disabled{opacity:.45;cursor:not-allowed}
+.uf-head{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.15rem;padding:.5rem .6rem;border-radius:10px;background:var(--bg-muted,var(--gray-50))}
+.uf-head code{flex:1 1 200px;min-width:0;font-size:.8rem;white-space:normal;overflow-wrap:anywhere;background:none;color:var(--text-primary)}
 </style>
 {% endblock %}
 

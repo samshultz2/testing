@@ -3,21 +3,78 @@ import { submitJson } from '../lib/forms';
 import { Modal } from '../components/ui';
 import { copyText } from '../lib/clipboard';
 
-const SAMPLE = 'Surname, First Name, Religion, Father Phone\nOkafor, Chidi, Islam, 08011112222';
+// The columns an update can change, grouped as they appear in the picker. Each
+// carries the exact heading the server recognises, a sample value and, where it
+// matters, a rule for the AI so its output parses cleanly.
+const FIELD_GROUPS = [
+  { label: 'Personal', fields: [
+    { h: 'Middle Name', ex: 'Ada' },
+    { h: 'Gender', ex: 'Male', rule: 'Gender is Male or Female.' },
+    { h: 'Date of Birth', ex: '14/03/2010', rule: 'Date of Birth as DD/MM/YYYY.' },
+    { h: 'Religion', ex: 'Christianity', rule: 'Religion is one of: Christianity, Islam, Traditional, Others.' },
+    { h: 'Home Address', ex: '"12 Aba Road, Benin"' },
+    { h: 'Hobbies', ex: 'Football' },
+  ] },
+  { label: 'Parents', fields: [
+    { h: 'Father Name', ex: 'Mr Emeka Okafor' },
+    { h: 'Father Phone', ex: '08011112222', rule: 'Phone numbers are exactly 11 digits (e.g. 08011112222), no spaces or +234.' },
+    { h: 'Mother Name', ex: 'Mrs Ngozi Okafor' },
+    { h: 'Mother Phone', ex: '08033334444', rule: 'Phone numbers are exactly 11 digits (e.g. 08011112222), no spaces or +234.' },
+  ] },
+  { label: 'Exam numbers', fields: [
+    { h: 'NIN', ex: '12345678901', rule: 'NIN is 11 digits.' },
+    { h: 'WAEC Reg Number', ex: '4250101001' },
+    { h: 'WAEC Serial Number', ex: 'WRN123456' },
+    { h: 'WAEC e-PIN', ex: '123456789012' },
+    { h: 'NECO Reg Number', ex: '2611532868CC' },
+    { h: 'NECO Token', ex: 'AB12CD34' },
+    { h: 'JAMB Reg Number', ex: '202612345678AB' },
+    { h: 'JAMB Profile Code', ex: '1234567890' },
+  ] },
+  { label: 'Name corrections', fields: [
+    { h: 'Surname', ex: 'Okafor', fix: true },
+    { h: 'First Name', ex: 'Chidi', fix: true },
+  ] },
+];
+const ALL_FIELDS = FIELD_GROUPS.flatMap((g) => g.fields);
+const MATCH = {
+  id: { cols: ['Student ID'], ex: ['STU00012'], say: 'Identify each student by "Student ID" exactly as written on the sheet.' },
+  name: { cols: ['Surname', 'First Name'], ex: ['Okafor', 'Chidi'], say: 'Identify each student by "Surname" and "First Name" exactly as written (the app matches them within the class chosen).' },
+  both: { cols: ['Student ID', 'Surname', 'First Name'], ex: ['STU00012', 'Okafor', 'Chidi'], say: 'Identify each student by "Student ID" when the sheet shows one, plus "Surname" and "First Name".' },
+};
+const PREF_KEY = 'stuUpdateFields';
 
-// A ready-made prompt for the user to hand to any chatbot, together with a photo
-// of an updated register, to get rows in exactly the format this field parses.
-const AI_PROMPT = `Read this class list / register. Output the rows to UPDATE as comma-separated values (CSV):
-- First line = the column headings, then one line per student.
-- Only include a column for something that actually needs to change — leave a cell BLANK to leave that field as it already is. Never guess a value just to fill a cell.
-- To identify each student, include "Student ID" if the sheet shows one, and/or Surname + First Name (matched within the class/arm chosen in the app).
-- For parent contacts, use "Father Phone"/"Father Name" and "Mother Phone"/"Mother Name" as separate columns when both are known — each phone number must be exactly 11 digits (Nigerian mobile format, e.g. 08011112222).
-- Use ONLY these headings, and only for columns that actually appear/need changing: Student ID, Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Home Address, Hobbies, Father Name, Father Phone, Mother Name, Mother Phone, NIN, WAEC Reg Number, WAEC Serial Number, WAEC e-PIN, NECO Reg Number, NECO Token, JAMB Reg Number, JAMB Profile Code.
+function loadPrefs() {
+  try { const v = JSON.parse(localStorage.getItem(PREF_KEY) || 'null'); if (v && Array.isArray(v.fields)) return v; } catch (_) { /* private mode */ }
+  return { fields: ['Religion', 'Father Phone', 'Mother Phone'], match: 'name' };
+}
+
+// The heading row, an example row and the AI prompt for the chosen columns.
+export function buildUpdateTemplate(chosen, match) {
+  const m = MATCH[match] || MATCH.name;
+  const picked = ALL_FIELDS.filter((f) => chosen.includes(f.h));
+  // Name corrections only work when the row is matched by Student ID.
+  const fixing = picked.some((f) => f.fix);
+  const idCols = fixing ? ['Student ID'] : m.cols;
+  const idEx = fixing ? ['STU00012'] : m.ex;
+  const cols = [...idCols, ...picked.filter((f) => !idCols.includes(f.h)).map((f) => f.h)];
+  const exRow = [...idEx, ...picked.filter((f) => !idCols.includes(f.h)).map((f) => f.ex)];
+  const head = cols.join(', ');
+  const sample = `${head}\n${exRow.join(', ')}`;
+  const rules = [...new Set(picked.map((f) => f.rule).filter(Boolean))];
+  const prompt = `Read this class list / register. Output the rows as comma-separated values (CSV):
+- The first line must be exactly these column headings, in this order:
+${head}
+- Then one line per student, in the same column order.
+- ${fixing ? 'Identify each student by "Student ID" exactly as written (it is needed because names are being corrected).' : m.say}
+- Fill only the columns listed above. If a value is missing or unreadable for a student, leave that cell BLANK (it keeps what is already saved). Never guess a value.
+${rules.map((r) => `- ${r}\n`).join('')}- If a value contains a comma, wrap it in double quotes.
 - One student per line. No numbering, no totals, no extra text, no code block.
 
 Example:
-Surname, First Name, Religion, Father Phone
-Okafor, Chidi, Islam, 08011112222`;
+${sample}`;
+  return { head, sample, prompt, cols };
+}
 
 export default function UpdateImportModal({ updateImportUrl, filters, onClose, onDone }) {
   const [classId, setClassId] = useState('');
@@ -27,15 +84,20 @@ export default function UpdateImportModal({ updateImportUrl, filters, onClose, o
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState('');
+  const [prefs, setPrefs] = useState(loadPrefs);
+  const savePrefs = (next) => { setPrefs(next); try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch (_) { /* ignore */ } };
+  const toggleField = (h) => savePrefs({ ...prefs, fields: prefs.fields.includes(h) ? prefs.fields.filter((x) => x !== h) : [...prefs.fields, h] });
+  const tpl = useMemo(() => buildUpdateTemplate(prefs.fields, prefs.match), [prefs]);
+  const fixing = prefs.fields.includes('Surname') || prefs.fields.includes('First Name');
 
   const classes = (filters && filters.classes) || [];
   const arms = (filters && filters.arms) || [];
 
-  const copyPrompt = async () => {
-    if (await copyText(AI_PROMPT)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const copy = async (what, value) => {
+    if (await copyText(value)) {
+      setCopied(what);
+      setTimeout(() => setCopied(''), 2000);
     } else {
       setErr('Your browser blocked copying. Long-press the prompt text to copy it instead.');
     }
@@ -106,6 +168,36 @@ export default function UpdateImportModal({ updateImportUrl, filters, onClose, o
             </div>
           </div>
 
+          <fieldset className="uf-pick">
+            <legend className="form-label">What are you updating?</legend>
+            {FIELD_GROUPS.map((g) => (
+              <div key={g.label} className="uf-group">
+                <span className="uf-gl">{g.label}</span>
+                <div className="uf-chips">
+                  {g.fields.map((f) => {
+                    const on = prefs.fields.includes(f.h);
+                    return (
+                      <button key={f.h} type="button" className={'uf-chip' + (on ? ' on' : '')} aria-pressed={on} onClick={() => toggleField(f.h)}>
+                        <i aria-hidden="true" className={'fas ' + (on ? 'fa-check' : 'fa-plus')} />{f.h}</button>);
+                  })}
+                </div>
+              </div>))}
+            <div className="uf-group">
+              <span className="uf-gl">Match students by</span>
+              <div className="uf-chips" role="radiogroup" aria-label="Match students by">
+                {[['name', 'Surname + First Name'], ['id', 'Student ID'], ['both', 'Both']].map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={prefs.match === k} disabled={fixing && k !== 'id'}
+                          className={'uf-chip' + ((fixing ? k === 'id' : prefs.match === k) ? ' on' : '')} onClick={() => savePrefs({ ...prefs, match: k })}>{l}</button>))}
+              </div>
+            </div>
+            {fixing && <p className="text-xs text-muted" style={{ margin: '0.2rem 0 0' }}>Correcting names needs each row matched by Student ID.</p>}
+            <div className="uf-head">
+              <code>{tpl.head}</code>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => copy('head', tpl.head)}>
+                <i aria-hidden="true" className={copied === 'head' ? 'fas fa-check' : 'fas fa-copy'} /> {copied === 'head' ? 'Copied' : 'Copy headings'}</button>
+            </div>
+          </fieldset>
+
           <p className="text-muted text-sm">
             Copy rows from a spreadsheet or type them in. The <strong>first line is the headings</strong>.
             Only include a column for something you want to change — a <strong>blank cell leaves that field
@@ -121,13 +213,16 @@ export default function UpdateImportModal({ updateImportUrl, filters, onClose, o
               Upload a photo of the updated register to any chatbot (Claude, Gemini, ChatGPT…) with this prompt,
               then paste its answer below.
             </p>
-            <pre style={{ whiteSpace: 'pre-wrap', background: 'var(--bg-muted, var(--gray-50))', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.6rem', fontSize: 'var(--text-xs)', margin: 0 }}>{AI_PROMPT}</pre>
-            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '0.4rem' }} onClick={copyPrompt}>
-              <i aria-hidden="true" className={copied ? 'fas fa-check' : 'fas fa-copy'} /> {copied ? 'Copied' : 'Copy prompt'}
+            <p className="text-xs text-muted" style={{ margin: '0 0 0.4rem' }}>
+              It asks only for the {tpl.cols.length} column{tpl.cols.length === 1 ? '' : 's'} chosen above{prefs.fields.length ? '' : ' — pick what you are updating first'}.
+            </p>
+            <pre style={{ whiteSpace: 'pre-wrap', background: 'var(--bg-muted, var(--gray-50))', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.6rem', fontSize: 'var(--text-xs)', margin: 0 }}>{tpl.prompt}</pre>
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '0.4rem' }} onClick={() => copy('prompt', tpl.prompt)} disabled={!prefs.fields.length}>
+              <i aria-hidden="true" className={copied === 'prompt' ? 'fas fa-check' : 'fas fa-copy'} /> {copied === 'prompt' ? 'Copied' : 'Copy prompt'}
             </button>
           </details>
           <textarea className="form-control" rows={10} value={text} spellCheck={false}
-                    placeholder={SAMPLE} onChange={(e) => setText(e.target.value)}
+                    placeholder={tpl.sample} onChange={(e) => setText(e.target.value)}
                     style={{ fontFamily: 'monospace', fontSize: 'var(--text-sm)' }} />
           <details style={{ marginTop: '0.5rem' }}>
             <summary className="text-sm text-muted" style={{ cursor: 'pointer' }}>Recognised headings</summary>
