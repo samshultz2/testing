@@ -1286,7 +1286,9 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              # Transcript result-slip theme (utils.mock_slip_transcript.TRANSCRIPT_OPTIONS)
              't_label', 't_exam', 't_date', 't_progress', 't_class', 't_stream', 't_gender', 't_first',
              't_change', 't_core', 't_subjects', 't_credits', 't_distinctions', 't_average', 't_five',
-             't_missing', 't_stamp', 't_footer')
+             't_missing', 't_stamp', 't_footer',
+             # Whole-class slips: linked contents page first
+             'toc')
 
 
 # Off unless asked for (?flag=1) — the Mock-readiness extras on the broadsheet.
@@ -1395,7 +1397,8 @@ def result_slips_all(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=False,
-        show_signers=True, show_theme=True, title='Results (PDF)', options=_slip_options(),
+        show_signers=True, show_theme=True, title='Results (PDF)',
+        options=[('toc', 'Contents page (names link to their page)', True)] + _slip_options(),
         pdf_url=url_for('mock_waec.result_slips_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 

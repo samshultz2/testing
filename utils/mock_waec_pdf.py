@@ -1302,6 +1302,108 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
         c.circle(PW / 2 + sgn * (tw / 2 + 12), 30.5, 1.6, stroke=0, fill=1)
 
 
+_TOC_ROWS = 34          # contents rows per A4 page
+
+
+def _wants_toc(slips, opts):
+    return len(slips) > 1 and (opts or {}).get('toc', True)
+
+
+def _toc_page_count(n):
+    return max(1, -(-n // _TOC_ROWS))
+
+
+def _toc_key(i):
+    return 'slip-%d' % i
+
+
+def _draw_toc(c, slips, exam, school, bw=False):
+    """Contents pages for a whole-class slip PDF: every student with their class
+    and page number, each row a link to that student's slip (which carries the
+    matching bookmark, see _mark_slip). Slips start right after these pages."""
+    PW, PH = A4
+    M = 46
+    n = len(slips)
+    pages = _toc_page_count(n)
+    ink = colors.black if bw else colors.HexColor('#0F172A')
+    muted = colors.HexColor('#475569') if not bw else colors.HexColor('#333333')
+    accent = colors.black if bw else colors.HexColor('#0F5132')
+    line = colors.HexColor('#CBD5E1') if not bw else colors.HexColor('#999999')
+    zebra = colors.HexColor('#F1F5F9') if not bw else colors.HexColor('#F2F2F2')
+    school_name = ((school or {}).get('name') or '').strip()
+    title = getattr(exam, 'display_name', '') or 'Mock WAEC'
+    c.bookmarkPage('contents')
+    c.addOutlineEntry('Contents', 'contents', level=0)
+    for pg in range(pages):
+        if pg:
+            c.bookmarkPage('contents-%d' % pg)
+        y = PH - M
+        c.setFillColor(accent); c.rect(M, y - 4, 36, 4, stroke=0, fill=1)
+        y -= 26
+        c.setFillColor(ink); c.setFont('Helvetica-Bold', 20)
+        c.drawString(M, y, 'Contents')
+        if pages > 1:
+            c.setFont('Helvetica', 10); c.setFillColor(muted)
+            c.drawRightString(PW - M, y, 'Page %d of %d' % (pg + 1, pages))
+        y -= 18
+        c.setFont('Helvetica', 10.5); c.setFillColor(muted)
+        sub = ' · '.join(x for x in (school_name, title, '%d student%s' % (n, '' if n == 1 else 's')) if x)
+        c.drawString(M, y, sub[:120])
+        y -= 12
+        c.setFont('Helvetica-Oblique', 8.5)
+        c.drawString(M, y, 'Tap or click a name to go to that student\'s result.')
+        y -= 18
+        # column heads
+        cx_no, cx_name, cx_cls, cx_pg = M + 4, M + 34, PW - M - 170, PW - M - 6
+        c.setFont('Helvetica-Bold', 8.5); c.setFillColor(muted)
+        c.drawString(cx_no, y, 'NO.'); c.drawString(cx_name, y, 'STUDENT')
+        c.drawString(cx_cls, y, 'CLASS'); c.drawRightString(cx_pg, y, 'PAGE')
+        y -= 6
+        c.setStrokeColor(line); c.setLineWidth(0.8); c.line(M, y, PW - M, y)
+        rh = 19
+        for k, i in enumerate(range(pg * _TOC_ROWS, min(n, (pg + 1) * _TOC_ROWS))):
+            st = slips[i]['student']
+            top = y - k * rh
+            base = top - 13.5
+            if k % 2:
+                c.setFillColor(zebra); c.rect(M, top - rh, PW - 2 * M, rh, stroke=0, fill=1)
+            page_no = pages + i + 1
+            name = (getattr(st, 'full_name', '') or '').strip() or '—'
+            klass = slips[i].get('klass') or ''
+            c.setFillColor(muted); c.setFont('Helvetica', 9.5)
+            c.drawString(cx_no, base, str(i + 1))
+            c.setFillColor(accent if not bw else ink); c.setFont('Helvetica-Bold', 10.5)
+            nm = name
+            while nm and stringWidth(nm, 'Helvetica-Bold', 10.5) > cx_cls - cx_name - 14:
+                nm = nm[:-1]
+            if nm != name:
+                nm = nm.rstrip() + '…'
+            c.drawString(cx_name, base, nm)
+            nw = stringWidth(nm, 'Helvetica-Bold', 10.5)
+            c.setFillColor(muted); c.setFont('Helvetica', 9.5)
+            c.drawString(cx_cls, base, klass[:28])
+            c.setFillColor(ink); c.setFont('Helvetica-Bold', 10)
+            c.drawRightString(cx_pg, base, str(page_no))
+            # dotted leader from the name to the class column
+            c.setStrokeColor(line); c.setLineWidth(0.6); c.setDash(1, 2.5)
+            if cx_name + nw + 8 < cx_cls - 8:
+                c.line(cx_name + nw + 6, base + 1, cx_cls - 8, base + 1)
+            c.setDash()
+            # the whole row links to the student's page
+            c.linkRect('', _toc_key(i), (M, top - rh, PW - M, top), relative=0, thickness=0)
+        c.showPage()
+    return pages
+
+
+def _mark_slip(c, slips, i):
+    """Bookmark the current page as student ``i``'s slip (contents link target)
+    and add it to the PDF's outline so viewers list every student."""
+    st = slips[i]['student']
+    c.bookmarkPage(_toc_key(i))
+    c.addOutlineEntry((getattr(st, 'full_name', '') or 'Student %d' % (i + 1)).strip(), _toc_key(i), level=0)
+
+
+
 def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False, theme='classic'):
     """One A4 designed "Competence Result" statement per student. ``opts`` toggles
     the identity/banner/summary blocks; ``signers`` chooses the signature line(s).
@@ -1320,7 +1422,12 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False, t
         c.drawCentredString(PW / 2, PH / 2, 'No results to print.')
         c.showPage(); c.save(); buf.seek(0)
         return buf
-    for slip in slips:
+    toc = _wants_toc(slips, opts)
+    if toc:
+        _draw_toc(c, slips, exam, school, bw=bw)
+    for i, slip in enumerate(slips):
+        if toc:
+            _mark_slip(c, slips, i)
         _draw_competence_slip(c, PW, PH, slip['student'], slip['summary'],
                               exam, school, opts, signers, F, bw=bw)
         c.showPage()
@@ -1357,7 +1464,12 @@ def _modern_slips_pdf(slips, exam, school, opts, signers, bw, theme='modern'):
     buf = io.BytesIO()
     c = _canvas.Canvas(buf, pagesize=A4)
     c.setTitle('Results — %s' % exam.display_name)
-    for slip in slips:
+    toc = _wants_toc(slips, opts)
+    if toc:
+        _draw_toc(c, slips, exam, school, bw=bw)
+    for i, slip in enumerate(slips):
+        if toc:
+            _mark_slip(c, slips, i)
         st = slip['student']
         extra = {'prev_results': prev_subjects.get(st.id)} if theme == 'transcript' else {}
         draw_modern_slip(c, st, slip['summary'] or {'results': []}, exam, school, opts=opts,
