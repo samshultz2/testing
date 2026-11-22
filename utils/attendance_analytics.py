@@ -37,21 +37,40 @@ def _pct(present, opened):
     return round(present / opened * 100, 2) if opened else 0.0
 
 
-def _student_pct_map(caa_ids, week_ids, school_days_count):
-    """{enrollment_id: (present_sessions, student_id, caa_id)} for a set of classes."""
+def _present_by_enrollment(enrollment_ids, week_ids, school_days):
+    """Present sessions per enrollment, counting only real school days.
+
+    A register row on a weekend, a holiday or a day that hasn't happened yet
+    isn't in the denominator (``school_days``), so counting it in the
+    numerator pushed students past 100%. Duplicate rows for the same day
+    are merged (a session counts once)."""
+    present = {eid: 0 for eid in enrollment_ids}
+    if not week_ids or not present:
+        return present
+    days = set(school_days)
+    seen = {}
+    for a in Attendance.query.filter(
+            Attendance.enrollment_id.in_(list(present)),
+            Attendance.week_id.in_(week_ids)).all():
+        if a.enrollment_id not in present or a.date not in days:
+            continue
+        k = (a.enrollment_id, a.date)
+        m, n = seen.get(k, (False, False))
+        seen[k] = (m or bool(a.morning_present), n or bool(a.afternoon_present))
+    for (eid, _d), (m, n) in seen.items():
+        present[eid] += int(m) + int(n)
+    return present
+
+
+def _student_pct_map(caa_ids, week_ids, school_days):
+    """(enrollments, {enrollment_id: present_sessions}, opened) for a set of classes."""
     enrollments = (StudentEnrollment.query
                    .filter(StudentEnrollment.class_arm_assignment_id.in_(caa_ids or [-1]),
                            StudentEnrollment.is_active == True,  # noqa: E712
                            StudentEnrollment.student.has(is_active=True))  # exclude departed
                    .all())
-    present = {e.id: 0 for e in enrollments}
-    if week_ids:
-        for a in Attendance.query.filter(
-                Attendance.enrollment_id.in_(list(present) or [-1]),
-                Attendance.week_id.in_(week_ids)).all():
-            if a.enrollment_id in present:
-                present[a.enrollment_id] += (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
-    opened = school_days_count * 2
+    present = _present_by_enrollment([e.id for e in enrollments], week_ids, school_days)
+    opened = len(school_days) * 2
     return enrollments, present, opened
 
 
@@ -101,7 +120,7 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
     marked = marked_class_ids(term.id, caa_ids)
     unmarked = sorted((c for c in accessible_caas if c.id not in marked), key=lambda c: c.display_name)
     enrollments, present, opened_per_student = _student_pct_map(
-        [cid for cid in caa_ids if cid in marked], week_ids, n_days)
+        [cid for cid in caa_ids if cid in marked], week_ids, school_days)
     caa_by_id = {c.id: c for c in accessible_caas}
     unmarked_rows = []
     if unmarked:
@@ -161,10 +180,13 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
     weekday_days = {i: 0 for i in range(5)}
     for d in school_days:
         weekday_days[d.weekday()] += 1
+    day_set = set(school_days)
     if week_ids and enrollments:
         for a in Attendance.query.filter(
                 Attendance.enrollment_id.in_([e.id for e in enrollments]),
                 Attendance.week_id.in_(week_ids)).all():
+            if a.date not in day_set:
+                continue
             s = (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
             if a.week_id in week_present:
                 week_present[a.week_id] += s
@@ -210,25 +232,11 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
     improved = []
     prev = _prev_term(term)
     if prev and enrollments:
-        prev_weeks = Week.query.filter_by(term_id=prev.id).all()
-        prev_week_ids = [w.id for w in prev_weeks]
-        prev_days = len(_term_school_days(prev.id))
-        student_ids = [e.student_id for e in enrollments]
-        prev_enr = (StudentEnrollment.query
-                    .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                    .filter(ClassArmAssignment.term_id == prev.id,
-                            StudentEnrollment.student_id.in_(student_ids)).all())
-        prev_by_student = {}
-        if prev_enr and prev_week_ids and prev_days:
-            prev_present = {e.id: 0 for e in prev_enr}
-            for a in Attendance.query.filter(
-                    Attendance.enrollment_id.in_(list(prev_present)),
-                    Attendance.week_id.in_(prev_week_ids)).all():
-                if a.enrollment_id in prev_present:
-                    prev_present[a.enrollment_id] += (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
-            prev_open = prev_days * 2
-            for e in prev_enr:
-                prev_by_student[e.student_id] = _pct(prev_present.get(e.id, 0), prev_open)
+        # Same per-student % the profile shows: school days only, merged
+        # across arms, and classes whose register was never taken that term
+        # are left out (no data is not 0%).
+        from utils.attendance_profile import bulk_term_percentages
+        prev_by_student = bulk_term_percentages(list({e.student_id for e in enrollments}), prev.id)
         for e in enrollments:
             if e.student_id in prev_by_student:
                 cur = _pct(present.get(e.id, 0), opened_per_student)

@@ -285,6 +285,10 @@ def get_termly_attendance_summary(class_arm_assignment_id, term_id):
     enrollments = _active_enrollments(class_arm_assignment_id)
     records_by_enrollment = {}
     for a in _load_attendance([e.id for e in enrollments], week_ids=[w.id for w in weeks]):
+        # Weekend / holiday rows aren't school days (not in times-opened), so
+        # counting them could push a student past 100%.
+        if a.date.weekday() >= 5 or a.date in holiday_dates:
+            continue
         records_by_enrollment.setdefault(a.enrollment_id, []).append(a)
 
     students_data = []

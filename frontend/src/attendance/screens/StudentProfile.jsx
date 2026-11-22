@@ -123,13 +123,14 @@ export default function StudentProfile() {
                   </div>
                   <TermCalendar calendar={d.focus.calendar} />
                 </Card>)}
-              <Card icon="fa-calendar-days" title="Term by term" flush>
+              <Card icon="fa-calendar-days" title="Term by term" flush className="sp2-terms">
                 {d.terms.length === 0 ? <p className="ak-empty">No attendance recorded yet.</p> : (
                   <ul className="ak-people">
                     {d.terms.map((t) => (
                       <li key={t.enrollment_id} className="ak-person">
-                        <span className="ak-pmain"><span className="ak-pname">{t.term} <span className="ak-dim">· {t.session}</span>
-                          <small>{t.class} · {t.full_days} present · {t.late_days} late · {t.absent_days} absent</small></span></span>
+                        <span className="ak-pmain"><span className="ak-pname">{t.term}
+                          <small>{t.session} · {t.class}</small>
+                          <small>{t.full_days} present · {t.late_days} late · {t.absent_days} absent</small></span></span>
                         <span className={'ak-pct ' + pctTone(t.percentage)}>{fmtPct(t.percentage)}</span>
                       </li>))}
                   </ul>)}

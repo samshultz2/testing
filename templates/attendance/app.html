@@ -615,6 +615,18 @@ button.ak-band{cursor:pointer}
   .sp2-acts{flex-direction:row;width:100%}
   .sp2-acts .ak-btn{flex:1;justify-content:center}
   .sp2-acts .ak-btn span{display:inline}
+  /* Student profile hero: avatar + name on top with the ring beside them,
+     status chip and actions full-width underneath. */
+  .ak-hero.sp2{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"av k ring" "av n ring" "chip chip chip" "acts acts acts";column-gap:.75rem;row-gap:.55rem}
+  .sp2 .sp2-av{grid-area:av;width:54px;height:54px;font-size:1.1rem}
+  .sp2 .ak-kick{grid-area:k;grid-column:auto;font-size:.66rem}
+  .sp2 .ak-hero-t>strong{grid-area:n;grid-column:auto;font-size:1.05rem;line-height:1.25;overflow-wrap:anywhere}
+  .sp2 .ak-hero-t>.ak-chip{grid-area:chip;justify-self:stretch;white-space:normal;justify-content:flex-start;text-align:left;line-height:1.35}
+  .ak-hero.sp2 .ak-ring{grid-area:ring;grid-row:auto;width:74px!important;height:74px!important}
+  .sp2 .ak-ring>div{width:80%;height:80%}
+  .sp2 .ak-ring b{font-size:1rem}.sp2 .ak-ring b.long{font-size:.8rem}.sp2 .ak-ring small{font-size:.5rem}
+  .sp2-terms .ak-dim{white-space:nowrap}
+  .sp2 .sp2-acts{grid-area:acts}
   .ak-thr button{flex:1}
 }
 @media print{.ak-tiles{display:grid!important}.md-bar,.ak-toolbar-r,.sp2-acts{display:none!important}}
