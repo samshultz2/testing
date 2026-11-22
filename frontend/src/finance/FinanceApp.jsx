@@ -245,29 +245,63 @@ function RecordPayment({ d, notify }) {
   return (
     <Shell d={d} icon="fa-cash-register" title="Take payment" sub={sub}
       actions={<TermPick d={d} onChange={(v) => goWith({ term_id: v, assignment_id: d.assignment_id })} />}>
-      {d.student ? <PayDesk d={d} notify={notify} /> : <FindStudent d={d} goWith={goWith} />}
+      {d.student ? <PayDesk d={d} notify={notify} /> : <FindStudent d={d} goWith={goWith} notify={notify} />}
     </Shell>
   );
 }
 
-function FindStudent({ d, goWith }) {
-  const [mode, setMode] = useState(d.assignment_id || !d.search_url ? 'class' : 'class');
+// The students chosen for a multi-student payment, kept per term in
+// sessionStorage so picking from several classes (each its own page load)
+// keeps the selection.
+function useBasket(termId) {
+  const key = 'fnBasket|' + (termId || '');
+  const read = () => { try { return JSON.parse(sessionStorage.getItem(key) || '[]'); } catch (_) { return []; } };
+  const [list, setList] = useState(read);
+  useEffect(() => { setList(read()); }, [key]);
+  const save = (next) => { setList(next); try { sessionStorage.setItem(key, JSON.stringify(next)); } catch (_) { /* private mode */ } };
+  const has = (id) => list.some((x) => x.id === id);
+  return {
+    list, has,
+    toggle: (s) => save(has(s.id) ? list.filter((x) => x.id !== s.id) : [...list, s]),
+    addMany: (rows) => save([...list, ...rows.filter((r) => !has(r.id))]),
+    removeMany: (ids) => save(list.filter((x) => !ids.includes(x.id))),
+    clear: () => save([]),
+  };
+}
+
+function FindStudent({ d, goWith, notify }) {
+  const [mode, setMode] = useState('class');
   const [q, setQ] = useState('');
   const [show, setShow] = useState('owing');
+  const basket = useBasket(d.term_id);
+  const [multi, setMulti] = useState(() => basket.list.length > 0);
+  const [bulk, setBulk] = useState(false);
   const roster = d.roster || [];
   const owing = roster.filter((r) => r.balance > 0.005);
   const paid = roster.filter((r) => r.balance <= 0.005);
   const list = (show === 'owing' ? owing : show === 'paid' ? paid : roster)
     .filter((r) => !q || (r.full_name + ' ' + r.student_id).toLowerCase().includes(q.toLowerCase()));
+  const cur = (d.assignments || []).find((a) => String(a.id) === String(d.assignment_id));
+  const asItem = (r) => ({ id: r.id, full_name: r.full_name || r.name, student_id: r.student_id || r.sid, gender: r.gender || '', cls: r.cls || (cur ? cur.display_name : '') });
+  const allOn = list.length > 0 && list.every((r) => basket.has(r.id));
+  if (bulk) return <BulkDesk d={d} basket={basket} notify={notify} onBack={() => setBulk(false)} />;
   return (
     <>
       <div className="rs-pick">
-        <Seg value={mode} onChange={setMode} label="Find a student" options={[
-          { value: 'class', label: 'Pick a class', icon: 'fa-users' }, { value: 'search', label: 'Search by name', icon: 'fa-magnifying-glass' }]} />
+        <div className="fn-pick-h">
+          <Seg value={mode} onChange={setMode} label="Find a student" options={[
+            { value: 'class', label: 'Pick a class', icon: 'fa-users' }, { value: 'search', label: 'Search by name', icon: 'fa-magnifying-glass' }]} />
+          <button type="button" className={'rs-btn sm' + (multi ? ' primary' : '')} aria-pressed={multi}
+                  onClick={() => setMulti((m) => !m)} title="Record the same payment for several students">
+            <i className={'fas ' + (multi ? 'fa-square-check' : 'fa-list-check')} aria-hidden="true" /><span>{multi ? 'Selecting several' : 'Select several'}</span></button>
+        </div>
+        {multi && <p className="fn-note"><i className="fas fa-circle-info" aria-hidden="true" /> Tick students in any class or from search, then record one payment for all of them. Each gets their own receipt.</p>}
         {mode === 'class' ? (
           <ClassArmPicker assignments={d.assignments || []} value={d.assignment_id}
             onPick={(v) => goWith({ term_id: d.term_id, assignment_id: v })} />
-        ) : <StudentSearch url={d.search_url} termId={d.term_id} onPick={(id) => goWith({ student_id: id, term_id: d.term_id })} />}
+        ) : <StudentSearch url={d.search_url} termId={d.term_id}
+              picked={multi ? basket.has : null}
+              onPick={(id, s) => (multi ? basket.toggle(asItem(s)) : goWith({ student_id: id, term_id: d.term_id }))} />}
       </div>
 
       {mode === 'class' && (d.assignment_id ? (roster.length ? (
@@ -277,21 +311,197 @@ function FindStudent({ d, goWith }) {
             <Seg value={show} onChange={setShow} label="Show" options={[
               { value: 'owing', label: 'Owing', count: owing.length }, { value: 'all', label: 'All', count: roster.length }, { value: 'paid', label: 'Paid', count: paid.length }]} />
           </div>
+          {multi && list.length > 0 && (
+            <label className="fn-row fn-selall">
+              <input type="checkbox" checked={allOn} onChange={() => (allOn ? basket.removeMany(list.map((r) => r.id)) : basket.addMany(list.map(asItem)))} />
+              <span><b>{allOn ? 'Untick' : 'Tick'} all {list.length}</b> {show === 'owing' ? 'owing' : show === 'paid' ? 'paid' : ''} in {cur ? cur.display_name : 'this class'}</span>
+            </label>)}
           <div className="fn-list">
-            {list.map((r) => (
+            {list.map((r) => (multi ? (
+              <label key={r.id} className={'fn-row fn-tap fn-check' + (basket.has(r.id) ? ' on' : '')}>
+                <input type="checkbox" checked={basket.has(r.id)} onChange={() => basket.toggle(asItem(r))} aria-label={'Select ' + r.full_name} />
+                <Avatar name={r.full_name} gender={r.gender} />
+                <div className="fn-row-t"><strong>{r.full_name}</strong><span>{r.student_id}{r.billed ? ` · paid ${nairaShort(r.paid)} of ${nairaShort(r.billed)}` : ''}</span></div>
+                <b className={'fn-amt ' + (r.balance > 0.005 ? 'bad' : 'good')}>{r.balance > 0.005 ? naira(r.balance) : 'Paid'}</b>
+              </label>
+            ) : (
               <A key={r.id} to={r.pick_url} className="fn-row fn-tap">
                 <Avatar name={r.full_name} gender={r.gender} />
                 <div className="fn-row-t"><strong>{r.full_name}</strong><span>{r.student_id}{r.billed ? ` · paid ${nairaShort(r.paid)} of ${nairaShort(r.billed)}` : ''}</span>
                   {r.billed > 0 && <Meter value={r.paid} max={r.billed} />}</div>
                 <b className={'fn-amt ' + (r.balance > 0.005 ? 'bad' : 'good')}>{r.balance > 0.005 ? naira(r.balance) : 'Paid'}</b>
                 <i className="fas fa-chevron-right fn-chev" aria-hidden="true" />
-              </A>))}
+              </A>)))}
             {!list.length && <p className="rs-muted fn-pad">No students match.</p>}
           </div>
         </Card>
       ) : <Blank icon="fa-users" title="No students in this class">There are no active students in this class arm for the selected term.</Blank>)
         : <Blank icon="fa-hand-pointer" title="Pick a class, then an arm, to see who owes what"><p>Or switch to <b>Search by name</b> to jump straight to a student.</p></Blank>)}
+
+      {multi && basket.list.length > 0 && (
+        <Bar>
+          <div className="rs-bar-t"><b>{basket.list.length} selected</b>
+            <small>{[...new Set(basket.list.map((x) => x.cls).filter(Boolean))].slice(0, 3).join(', ') || 'Ready to record'}</small></div>
+          <button type="button" className="rs-btn ghost" onClick={basket.clear}>Clear</button>
+          <button type="button" className="rs-btn primary" onClick={() => { setBulk(true); window.scrollTo({ top: 0 }); }}>
+            <i className="fas fa-cash-register" aria-hidden="true" />Record payment</button>
+        </Bar>)}
     </>
+  );
+}
+
+// One payment for several students: the same amount each (or each one's
+// balance), optionally for a single fee item. One receipt per student.
+function BulkDesk({ d, basket, notify, onBack }) {
+  const nav = useNav();
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState('');
+  const ids = basket.list.map((x) => x.id);
+  useEffect(() => {
+    if (!ids.length) { setRows([]); return; }
+    let live = true;
+    fetch(`${d.preview_url}?term_id=${d.term_id || ''}&ids=${ids.join(',')}`, { credentials: 'same-origin' })
+      .then((r) => r.json()).then((j) => { if (live) setRows(j.students || []); })
+      .catch(() => { if (live) setErr('Could not load the chosen students.'); });
+    return () => { live = false; };
+  }, [ids.join(',')]);
+  const [f, setF] = useState({ mode: 'fixed', amount: '', fee_item_id: '', payment_date: d.today, method: (d.methods || ['Cash'])[0], reference: '', received_by: d.current_user || '', notes: '' });
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const [busy, setBusy] = useState(false);
+  const [more, setMore] = useState(false);
+  if (err) return <Blank icon="fa-triangle-exclamation" title={err}><button type="button" className="rs-btn sm" onClick={onBack}>Back</button></Blank>;
+  if (!rows) return <Card><p className="rs-muted">Loading the chosen students…</p></Card>;
+
+  // Fee items on at least one chosen student's bill.
+  const items = {};
+  rows.forEach((r) => r.items.forEach((it) => { (items[it.id] = items[it.id] || { id: it.id, name: it.name, n: 0 }).n += 1; }));
+  const itemList = Object.values(items).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  const item = f.fee_item_id ? items[f.fee_item_id] : null;
+  const amt = num(f.amount);
+  const lineFor = (r) => {
+    if (!r.has_bill) return { amt: 0, bad: 'No class this term' };
+    const it = item ? r.items.find((x) => String(x.id) === String(f.fee_item_id)) : null;
+    if (item && !it) return { amt: 0, bad: `Not billed for ${item.name}` };
+    if (f.mode === 'fixed') return { amt, over: (it ? it.left : r.balance) < amt - 0.005 };
+    const owe = it ? Math.min(it.left, r.balance) : r.balance;   // never more than they owe overall
+    return owe > 0.005 ? { amt: Math.round(owe * 100) / 100 } : { amt: 0, skip: true };
+  };
+  const lines = rows.map((r) => ({ r, ...lineFor(r) }));
+  const bad = lines.filter((l) => l.bad);
+  const toPay = lines.filter((l) => !l.bad && !l.skip && l.amt > 0);
+  const total = toPay.reduce((t, l) => t + l.amt, 0);
+  const over = toPay.filter((l) => l.over).length;
+  const quick = [5000, 10000, 20000, 50000];
+  const submit = async (e) => {
+    if (e) e.preventDefault();
+    if (bad.length) { notify('error', `Remove ${bad.length} student${bad.length === 1 ? '' : 's'} who can't take this payment first.`); return; }
+    if (!toPay.length) { notify('error', f.mode === 'fixed' ? 'Enter a positive amount.' : 'None of the chosen students owe anything.'); return; }
+    if (over && !await confirm(`${over} student${over === 1 ? '' : 's'} will be overpaid (the amount is more than they owe). Record anyway?`)) return;
+    if (!await confirm(`Record ${naira(total)} — ${toPay.length} payment${toPay.length === 1 ? '' : 's'} by ${f.method}?`)) return;
+    setBusy(true);
+    const r = await submitJson(d.bulk_url, { ...f, student_ids: toPay.map((l) => l.r.id).join(','), term_id: d.term_id });
+    setBusy(false);
+    if (r.ok) { basket.clear(); nav.go(r.redirect); } else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <form id="fnBulkForm" className="fn-desk" onSubmit={submit}>
+      <Card flush icon="fa-users" title={`${rows.length} student${rows.length === 1 ? '' : 's'}`}
+            right={<button type="button" className="rs-btn sm ghost" onClick={onBack}><i className="fas fa-arrow-left" aria-hidden="true" /><span>Add or change</span></button>}>
+        {bad.length > 0 && (
+          <div className="fn-badbar" role="alert">
+            <span><i className="fas fa-triangle-exclamation" aria-hidden="true" /> {bad.length} student{bad.length === 1 ? ' can’t' : 's can’t'} take this payment{item ? ` (not billed for ${item.name})` : ''}.</span>
+            <button type="button" className="rs-btn sm" onClick={() => basket.removeMany(bad.map((l) => l.r.id))}>Remove {bad.length === 1 ? 'them' : `all ${bad.length}`}</button>
+          </div>)}
+        <div className="fn-list">
+          {lines.map(({ r, amt: a, bad: b, skip, over: o }) => (
+            <div key={r.id} className={'fn-row' + (b ? ' fn-bad' : skip ? ' off' : '')}>
+              <Avatar name={r.full_name} gender={r.gender} />
+              <div className="fn-row-t"><strong>{r.full_name}</strong>
+                <span>{r.class || r.student_id}{r.has_bill ? ` · owes ${naira(r.balance)}` : ''}</span>
+                {b && <span className="fn-warn"><i className="fas fa-triangle-exclamation" aria-hidden="true" /> {b}</span>}
+                {skip && <span className="fn-mini">Nothing owed — skipped</span>}</div>
+              {!b && !skip && <b className={'fn-amt' + (o ? ' mid' : '')}>{a > 0 ? naira(a) : '—'}{o && <small>more than owed</small>}</b>}
+              <button type="button" className="fn-x" onClick={() => basket.toggle({ id: r.id })} aria-label={'Remove ' + r.full_name} title="Remove"><i className="fas fa-xmark" aria-hidden="true" /></button>
+            </div>))}
+          {!rows.length && <p className="rs-muted fn-pad">No students chosen. <button type="button" className="rs-link" onClick={onBack}>Pick some</button></p>}
+        </div>
+      </Card>
+
+      <section className="rs-card fn-form">
+        <div className="rs-card-h"><h3><i className="fas fa-money-bill-wave" aria-hidden="true" />Payment for each student</h3></div>
+        <div className="fn-lbl">How much?</div>
+        <div className="fn-seg2"><Seg value={f.mode} onChange={(v) => set('mode', v)} label="Amount" options={[
+          { value: 'fixed', label: 'Same amount each', icon: 'fa-equals' },
+          { value: 'balance', label: item ? 'What each owes for it' : 'Each one’s balance', icon: 'fa-scale-balanced' }]} /></div>
+        {f.mode === 'fixed' ? (
+          <>
+            <label className="fn-big"><span>₦</span>
+              <input type="number" inputMode="decimal" min="0" step="50" value={f.amount} onChange={(e) => set('amount', e.target.value)} aria-label="Amount per student in naira" placeholder="0" autoFocus /></label>
+            <div className="fn-quick">{quick.map((v) => (
+              <button type="button" key={v} className={'rs-chip' + (amt === v ? ' on' : '')} onClick={() => set('amount', String(v))}>{nairaShort(v)}</button>))}</div>
+          </>
+        ) : <p className="fn-after">Each student pays exactly what they still owe{item ? ` for ${item.name}` : ''}; anyone who owes nothing is skipped.</p>}
+        {itemList.length > 0 && (
+          <label className="rs-sel"><span>What’s it for?</span>
+            <select value={f.fee_item_id} onChange={(e) => set('fee_item_id', e.target.value)}>
+              <option value="">The whole bill</option>
+              {itemList.map((it) => <option key={it.id} value={it.id}>{it.name}{it.n < rows.length ? ` (on ${it.n} of ${rows.length} bills)` : ''}</option>)}
+            </select></label>)}
+        <div className="fn-lbl">Method</div>
+        <Seg value={f.method} onChange={(v) => set('method', v)} label="Payment method"
+          options={(d.methods || []).map((m) => ({ value: m, label: m, icon: METHOD_IC[m] }))} />
+        <div className="fn-fields">
+          <label className="rs-sel"><span>Date</span><input type="date" value={f.payment_date} onChange={(e) => set('payment_date', e.target.value)} /></label>
+          <label className="rs-sel"><span>Reference / teller no.</span><input type="text" value={f.reference} onChange={(e) => set('reference', e.target.value)} placeholder="Optional · same on every receipt" /></label>
+        </div>
+        <button type="button" className="rs-link" onClick={() => setMore((m) => !m)}><i className={'fas fa-chevron-' + (more ? 'up' : 'down')} aria-hidden="true" /> {more ? 'Fewer details' : 'Received by & notes'}</button>
+        {more && (
+          <div className="fn-fields">
+            <label className="rs-sel"><span>Received by</span><input type="text" value={f.received_by} onChange={(e) => set('received_by', e.target.value)} placeholder="Bursar name" /></label>
+            <label className="rs-sel"><span>Notes</span><input type="text" value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Optional" /></label>
+          </div>)}
+        <Bar>
+          <div className="rs-bar-t"><b>{naira(total)}</b><small>{toPay.length} payment{toPay.length === 1 ? '' : 's'}{f.mode === 'fixed' && amt > 0 ? ` × ${naira(amt)}` : ''} · {f.method}</small></div>
+          <button type="submit" form="fnBulkForm" className="rs-btn primary" disabled={busy || !toPay.length || bad.length > 0}>
+            <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" />{busy ? 'Saving…' : `Record ${toPay.length || ''}`.trim()}</button>
+        </Bar>
+      </section>
+    </form>
+  );
+}
+
+// After a multi-student payment: every receipt, with one PDF for them all.
+function PaymentBatch({ d }) {
+  return (
+    <Shell d={d} icon="fa-receipt" title="Payments recorded" sub={`${d.payments.length} receipts · ${naira(d.total)}${d.term_name ? ' · ' + d.term_name : ''}`}
+      actions={<>
+        {d.pdf_all_url && <a className="rs-btn" href={d.pdf_all_url}><i className="fas fa-file-pdf" aria-hidden="true" /><span>All receipts (PDF)</span></a>}
+        <A to={d.record_url} className="rs-btn primary"><i className="fas fa-cash-register" aria-hidden="true" /><span>Take another payment</span></A>
+      </>}>
+      <div className="fn-strip">
+        <span className="fn-strip-t"><b>{naira(d.total)}</b> from {d.payments.length} student{d.payments.length === 1 ? '' : 's'}</span>
+        {d.method && <span className="fn-pill"><i className={'fas ' + (METHOD_IC[d.method] || 'fa-wallet')} aria-hidden="true" />{d.method}</span>}
+        {d.date && <span className="fn-pill"><i className="fas fa-calendar" aria-hidden="true" />{d.date}</span>}
+        {d.reference && <span className="fn-pill"><i className="fas fa-hashtag" aria-hidden="true" />{d.reference}</span>}
+      </div>
+      <Card flush>
+        {d.payments.length ? (
+          <div className="fn-list">
+            {d.payments.map((p) => (
+              <div key={p.id} className="fn-row">
+                <Avatar name={p.student} gender={p.gender} />
+                <div className="fn-row-t"><strong>{p.student}</strong><span>{p.receipt_no} · {p.student_id}{p.item ? ' · ' + p.item : ''}</span>
+                  <span className={p.balance > 0.005 ? 'bad' : 'good'}>{p.balance > 0.005 ? `${naira(p.balance)} still owed` : 'Fully paid'}</span></div>
+                <b className="fn-amt">{naira(p.amount)}</b>
+                <span className="fn-acts">
+                  <A to={p.receipt_url} className="rs-btn sm ghost" title="Open receipt"><i className="fas fa-receipt" aria-hidden="true" /><span>Receipt</span></A>
+                  <a href={p.pdf_url} className="rs-btn sm ghost" title="Download PDF" aria-label={'PDF receipt for ' + p.student}><i className="fas fa-file-pdf" aria-hidden="true" /></a>
+                </span>
+              </div>))}
+          </div>
+        ) : <Blank icon="fa-receipt" title="No receipts here"><A to={d.payments_url} className="rs-btn sm">All payments</A></Blank>}
+      </Card>
+    </Shell>
   );
 }
 
@@ -337,7 +547,7 @@ function ClassArmPicker({ assignments, value, onPick }) {
   );
 }
 
-function StudentSearch({ url, termId, onPick }) {
+function StudentSearch({ url, termId, onPick, picked }) {
   const [text, setText] = useState('');
   const [list, setList] = useState(null);
   const tRef = useRef();
@@ -358,10 +568,11 @@ function StudentSearch({ url, termId, onPick }) {
       {list && (
         <div className="fn-list fn-results">
           {list.length ? list.map((s) => (
-            <button type="button" key={s.id} className="fn-row fn-tap" onClick={() => onPick(s.id)}>
+            <button type="button" key={s.id} className={'fn-row fn-tap' + (picked && picked(s.id) ? ' fn-on' : '')} onClick={() => onPick(s.id, s)} aria-pressed={picked ? picked(s.id) : undefined}>
               <Avatar name={s.name} />
-              <div className="fn-row-t"><strong>{s.name}</strong><span>{s.sid}{s.cls ? ' · ' + s.cls : ''}</span></div>
-              <i className="fas fa-chevron-right fn-chev" aria-hidden="true" />
+              <div className="fn-row-t"><strong>{s.name}</strong><span>{s.sid}{s.cls ? ' · ' + s.cls : ''}{picked && !s.cls ? <em className="fn-warn"> · no class this term</em> : null}</span></div>
+              {picked ? <i className={'fas fn-chev ' + (picked(s.id) ? 'fa-square-check fn-ok' : 'fa-square-plus')} aria-hidden="true" />
+                : <i className="fas fa-chevron-right fn-chev" aria-hidden="true" />}
             </button>)) : <p className="rs-muted fn-pad">No matches.</p>}
         </div>)}
     </div>
@@ -1405,7 +1616,7 @@ function Accounting({ d }) {
 }
 
 const SCREENS = { dashboard: Dashboard, collections: Collections, items: Items, structure: Structure,
-  payments: Payments, record_payment: RecordPayment, statement: Statement, defaulters: Defaulters,
+  payments: Payments, record_payment: RecordPayment, payment_batch: PaymentBatch, statement: Statement, defaulters: Defaulters,
   expenses: Expenses, reports: Reports, edit_payment: EditPayment, overview: Ledger, accounting: Accounting };
 
 export default function FinanceApp({ data }) {

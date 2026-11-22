@@ -911,9 +911,9 @@ _SUBSECTION_ENDPOINTS = {
         # not independently grantable (see MODULE_SUBSECTIONS note above).
     },
     'finance': {
-        'payments_view': {'collections', 'payments_list', 'receipt', 'receipt_pdf', 'statement'},
+        'payments_view': {'collections', 'payments_list', 'receipt', 'receipt_pdf', 'statement', 'payment_batch', 'receipts_pdf'},
         'payments_export': {'collections_export'},
-        'payments_create': {'record_payment', 'payment_link', 'search_students'},
+        'payments_create': {'record_payment', 'payment_link', 'search_students', 'bulk_preview', 'record_payment_bulk'},
         'payments_edit': {'edit_payment'},
         'payments_delete': {'delete_payment'},
         'discounts_create': {'add_discount'},

@@ -60,6 +60,30 @@ def receipt_pdf(payment, bill, school):
                             leftMargin=14 * mm, rightMargin=14 * mm,
                             topMargin=12 * mm, bottomMargin=12 * mm,
                             title=f'Receipt {payment.receipt_no}')
+    doc.build(_receipt_flowables(payment, bill, school))
+    buf.seek(0)
+    return buf, f'receipt-{payment.receipt_no}.pdf'
+
+
+def receipts_pdf(pairs, school, title='Receipts'):
+    """Several receipts in one PDF, one per A5 page. ``pairs`` = [(payment, bill)]."""
+    from reportlab.platypus import PageBreak
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A5,
+                            leftMargin=14 * mm, rightMargin=14 * mm,
+                            topMargin=12 * mm, bottomMargin=12 * mm, title=title)
+    el = []
+    for i, (payment, bill) in enumerate(pairs):
+        if i:
+            el.append(PageBreak())
+        el.extend(_receipt_flowables(payment, bill, school))
+    doc.build(el)
+    buf.seek(0)
+    return buf
+
+
+def _receipt_flowables(payment, bill, school):
+    """The flowables for one receipt page."""
     ss = getSampleStyleSheet()
     body, _bold = _fonts()
     _SIGN['v'] = 'N' if body == 'Helvetica' else '₦'      # no ₦ glyph -> plain N, never a box
@@ -161,6 +185,4 @@ def receipt_pdf(payment, bill, school):
     el.append(Spacer(1, 12))
     el.append(Paragraph(f'Received by: {pdf_escape(payment.received_by) or "__________"}', muted))
 
-    doc.build(el)
-    buf.seek(0)
-    return buf, f'receipt-{payment.receipt_no}.pdf'
+    return el

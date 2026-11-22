@@ -691,11 +691,196 @@ def record_payment():
                    for r in roster],
         'self_url': url_for('finance.record_payment'),
         'submit_url': url_for('finance.record_payment'),
+        'bulk_url': url_for('finance.record_payment_bulk'),
+        'preview_url': url_for('finance.bulk_preview'),
         'search_url': url_for('finance.search_students'),
         'urls': {'statement': (url_for('finance.statement', student_id=student.id, term_id=term_id) if student else ''),
                  'structure': (url_for('finance.structure', term_id=term_id, class_id=bill['class_id']) if bill else ''),
                  'change_student': url_for('finance.record_payment', term_id=term_id or '', assignment_id=assignment_id or '')},
     })
+
+
+def _ids_arg(raw):
+    out = []
+    for x in str(raw or '').replace(' ', '').split(','):
+        if x.isdigit() and int(x) not in out:
+            out.append(int(x))
+    return out
+
+
+@finance_bp.route('/payments/bulk-preview')
+@login_required
+def bulk_preview():
+    """JSON: each chosen student's class, balance and bill items for the term —
+    what the multi-student payment form shows before saving."""
+    term_id = request.args.get('term_id', type=int) or _active_term_id()
+    ids = _ids_arg(request.args.get('ids'))[:500]
+    from utils.branch_scope import can_access_branch
+    out = []
+    for st in Student.query.filter(Student.id.in_(ids or [-1]), Student.is_active == True).all():  # noqa: E712
+        if not can_access_branch(st.branch_id):
+            continue
+        b = student_bill(st.id, term_id) if term_id else None
+        cls = ''
+        if b and b.get('class_id'):
+            enr = (StudentEnrollment.query
+                   .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                   .filter(StudentEnrollment.student_id == st.id, StudentEnrollment.is_active == True,  # noqa: E712
+                           ClassArmAssignment.term_id == term_id).first())
+            cls = enr.class_arm_assignment.display_name if enr else ''
+        bj = _bill_json(b)
+        out.append({'id': st.id, 'full_name': st.full_name, 'student_id': st.student_id,
+                    'gender': st.gender or '', 'class': cls, 'has_bill': bool(b and b.get('class_id')),
+                    'balance': bj['balance'] if bj else 0, 'payable': bj['payable'] if bj else 0,
+                    'paid': bj['paid'] if bj else 0,
+                    'items': [{'id': l['id'], 'name': l['name'], 'amount': l['amount'], 'left': l['left']}
+                              for l in (bj['lines'] if bj else [])]})
+    order = {sid: i for i, sid in enumerate(ids)}
+    out.sort(key=lambda r: order.get(r['id'], 0))
+    return jsonify({'term_id': term_id, 'students': out})
+
+
+@finance_bp.route('/payments/record-bulk', methods=['POST'])
+@login_required   # finance CRUD: gated like record_payment (payments_create)
+def record_payment_bulk():
+    """Record one payment per chosen student in a single step — the same amount
+    for each, or each student's outstanding balance — optionally against one
+    fee item. Everything is checked first; nothing is saved if any student
+    fails, so a batch is never half-recorded."""
+    term_id = request.form.get('term_id', type=int)
+    ids = _ids_arg(request.form.get('student_ids'))
+    mode = request.form.get('mode') or 'fixed'          # fixed | balance
+    amount = request.form.get('amount', type=float)
+    fee_item_id = request.form.get('fee_item_id', type=int)
+    back = url_for('finance.record_payment', term_id=term_id or '')
+    if not term_id or not ids:
+        return _err('Choose a term and at least one student.', back)
+    if len(ids) > 500:
+        return _err('Record at most 500 students at a time.', back)
+    if mode == 'fixed' and not (amount and amount > 0):
+        return _err('Enter a positive amount.', back)
+    reference = (request.form.get('reference') or '').strip() or None
+    pay_date = _parse_date(request.form.get('payment_date'))
+    method = request.form.get('method') or 'Cash'
+    received_by = (request.form.get('received_by') or '').strip() or None
+    notes = (request.form.get('notes') or '').strip() or None
+    from utils.branch_scope import can_access_branch
+    from utils.finance import student_placement, structure_items
+
+    students = {st.id: st for st in Student.query.filter(Student.id.in_(ids), Student.is_active == True).all()}  # noqa: E712
+    plan, problems = [], []
+    for sid in ids:
+        st = students.get(sid)
+        if not st:
+            problems.append(f'student #{sid} was not found')
+            continue
+        if not can_access_branch(st.branch_id):
+            problems.append(f'{st.full_name} is in another branch')
+            continue
+        b = student_bill(sid, term_id)
+        if not (b and b.get('class_id')):
+            problems.append(f'{st.full_name} has no class this term')
+            continue
+        amt = round(amount, 2) if mode == 'fixed' else round(max(b['balance'], 0), 2)
+        item_left = None
+        if fee_item_id:
+            cid, aid = student_placement(sid, term_id)
+            on_bill = {it.id: amt_ for it, amt_ in structure_items(term_id, cid, aid)}
+            if fee_item_id not in on_bill:
+                problems.append(f'{st.full_name} is not billed for that fee item')
+                continue
+            item_left = max(on_bill[fee_item_id] - (b.get('item_paid') or {}).get(fee_item_id, 0.0), 0)
+            if mode == 'balance':       # never more than they owe overall
+                amt = round(max(min(item_left, b['balance']), 0), 2)
+        if amt <= 0:
+            continue                                     # nothing owed — skipped, not an error
+        if reference and FeePayment.query.filter_by(student_id=sid, term_id=term_id, reference=reference).first():
+            problems.append(f'{st.full_name} already has a payment with reference "{reference}"')
+            continue
+        plan.append((st, amt))
+    if problems:
+        head = '; '.join(problems[:5]) + (f' and {len(problems) - 5} more' if len(problems) > 5 else '')
+        return _err(f'Nothing was recorded — {head}.', back)
+    if not plan:
+        return _err('Nothing to record — none of the chosen students owe anything'
+                    + (' for that item.' if fee_item_id else '.'), back)
+
+    created = []
+    for st, amt in plan:
+        p = FeePayment(student_id=st.id, term_id=term_id, amount=amt, payment_date=pay_date,
+                       method=method, reference=reference, received_by=received_by, notes=notes,
+                       receipt_no=next_receipt_no(), branch_id=st.branch_id)
+        if fee_item_id:
+            p.items.append(FeePaymentItem(fee_item_id=fee_item_id, amount=amt))
+        db.session.add(p)
+        db.session.flush()
+        created.append(p)
+    db.session.commit()
+    from utils import query_cache
+    query_cache.bump('dash')
+    from utils.audit import log_action
+    total = sum(p.amount for p in created)
+    log_action('finance.payment_bulk',
+               detail=f'{len(created)} payments, {total:g} total ({created[0].receipt_no}–{created[-1].receipt_no})')
+    skipped = len(ids) - len(created)
+    msg = (f'Recorded {len(created)} payment{"s" if len(created) != 1 else ""} · ₦{total:,.2f}'
+           + (f' · {skipped} skipped (nothing owed)' if skipped else '') + '.')
+    return _ok(msg, url_for('finance.payment_batch', ids=','.join(str(p.id) for p in created)))
+
+
+def _batch_payments(raw):
+    from utils.branch_scope import can_access_branch
+    ids = _ids_arg(raw)[:500]
+    rows = FeePayment.query.filter(FeePayment.id.in_(ids or [-1])).all()
+    rows = [p for p in rows if can_access_branch(p.branch_id)]
+    order = {pid: i for i, pid in enumerate(ids)}
+    rows.sort(key=lambda p: order.get(p.id, 0))
+    return rows
+
+
+@finance_bp.route('/payments/batch')
+@login_required
+def payment_batch():
+    """The receipts from one multi-student payment."""
+    rows = _batch_payments(request.args.get('ids'))
+    ids = ','.join(str(p.id) for p in rows)
+    term = db.session.get(Term, rows[0].term_id) if rows else None
+    return _render({
+        'page': 'payment_batch', 'nav': _nav_urls(),
+        'term_name': term.full_name if term else '',
+        'total': sum(p.amount for p in rows),
+        'method': rows[0].method if rows else '', 'date': rows[0].payment_date.strftime('%d %b %Y') if rows else '',
+        'reference': rows[0].reference if rows else '',
+        'payments': [{'id': p.id, 'receipt_no': p.receipt_no, 'amount': p.amount,
+                      'student': p.student.full_name if p.student else '—',
+                      'student_id': p.student.student_id if p.student else '',
+                      'gender': (p.student.gender or '') if p.student else '',
+                      'item': ', '.join(i.fee_item.name for i in p.items if i.fee_item) if p.items else '',
+                      'balance': student_bill(p.student_id, p.term_id)['balance'] if p.student_id else 0,
+                      'receipt_url': url_for('finance.receipt', payment_id=p.id),
+                      'pdf_url': url_for('finance.receipt_pdf', payment_id=p.id)} for p in rows],
+        'pdf_all_url': url_for('finance.receipts_pdf', ids=ids) if rows else '',
+        'record_url': url_for('finance.record_payment', term_id=rows[0].term_id if rows else ''),
+        'payments_url': url_for('finance.payments_list'),
+    })
+
+
+@finance_bp.route('/payments/receipts.pdf')
+@login_required
+def receipts_pdf():
+    """All receipts from a batch in one PDF, one per page."""
+    rows = _batch_payments(request.args.get('ids'))
+    if not rows:
+        return _err('No receipts to download.', url_for('finance.payments_list'))
+    from models import SchoolSettings
+    school = {k: SchoolSettings.get('school_' + k, 'My School' if k == 'name' else '')
+              for k in ('name', 'address', 'phone', 'motto')}
+    from utils.receipt_pdf import receipts_pdf as _make
+    buf = _make([(p, student_bill(p.student_id, p.term_id)) for p in rows], school,
+                title=f'Receipts {rows[0].receipt_no}–{rows[-1].receipt_no}')
+    from flask import send_file
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'receipts-{rows[0].receipt_no}-{rows[-1].receipt_no}.pdf')
 
 
 @finance_bp.route('/payments/search')

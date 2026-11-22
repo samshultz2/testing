@@ -73,6 +73,26 @@
 /* lists */
 .fn-list{display:flex;flex-direction:column}
 .fn-row{display:flex;align-items:center;gap:.75rem;padding:.7rem 1.1rem;border-bottom:1px solid var(--border-light,var(--border-color));color:inherit;text-decoration:none;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left;font:inherit}
+/* multi-student payments */
+.fn-pick-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.fn-check{cursor:pointer}.fn-check input,.fn-selall input{width:18px;height:18px;accent-color:var(--primary);flex:none}
+.fn-check.on{background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
+.fn-selall{cursor:pointer;background:var(--gray-50,#f8fafc);font-size:.88rem}
+.fn-on{background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
+.fn-ok{color:var(--primary)!important;font-size:1.05rem!important}
+.fn-row .fn-chev.fa-square-plus{font-size:1.05rem}
+.fn-x{border:0;background:var(--gray-100);width:30px;height:30px;border-radius:50%;flex:none;cursor:pointer;color:var(--text-muted)}
+.fn-x:hover{background:color-mix(in srgb,var(--danger) 14%,var(--bg-card));color:var(--danger)}
+.fn-bad{background:color-mix(in srgb,var(--danger) 6%,var(--bg-card))}
+.fn-warn{color:var(--danger)!important;font-weight:600}
+.fn-amt.mid{color:var(--warning)}
+.fn-note.bad{color:var(--danger)}
+.fn-acts{display:flex;gap:.3rem;flex:none}
+.fn-seg2 .rs-seg{display:grid;grid-template-columns:1fr 1fr;width:100%}.fn-seg2 .rs-seg button{justify-content:center;white-space:normal;text-align:center;line-height:1.25}
+.fn-badbar{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.7rem 1.1rem;background:color-mix(in srgb,var(--danger) 8%,var(--bg-card));color:var(--danger);font-size:.88rem;font-weight:600;border-bottom:1px solid var(--border-color)}
+.fn-warn{font-style:normal}
+.fn-row-t .bad{color:var(--danger)}.fn-row-t .good{color:var(--success)}
+@media (max-width:759px){.fn-acts .rs-btn span{display:none}.fn-pick-h .rs-btn{width:100%;justify-content:center}}
 .fn-row:last-child{border-bottom:0}
 .fn-row.off{opacity:.6}
 .fn-tap{cursor:pointer}
