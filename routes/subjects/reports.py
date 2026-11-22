@@ -137,6 +137,8 @@ def broadsheet():
                   'passed': r['subjects_passed'], 'failed': r['subjects_failed']}
                  for r in broadsheet_data],
         'self_url': url_for('subjects.broadsheet'),
+        'export_options': [{'key': k, 'label': l, 'on': on, 'group': g}
+                           for k, l, on, g in __import__('utils.broadsheet_doc', fromlist=['OPTIONS']).OPTIONS],
         'urls': {'compute': url_for('subjects.compute_summaries'),
                  'bulk_entry': url_for('subjects.bulk_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'affective': url_for('subjects.affective', term_id=term_id or '', assignment_id=assignment_id or ''),
@@ -1464,150 +1466,46 @@ def export_broadsheet():
         flash('You do not have access to that class.', 'error')
         return redirect(url_for('subjects.broadsheet'))
 
-    # Non-Excel formats are rendered by the shared exporter (PDF / Word / HD image).
-    if fmt in ('pdf', 'word', 'docx', 'image', 'png'):
-        from utils import broadsheet_export as bx
-        from utils.web_exports import pdf_response, docx_response, png_response
-        base = (selected_assignment.display_name or 'broadsheet').replace(' ', '_')
-        stem = f"broadsheet_{base}_{selected_term.name.replace(' ', '_')}"
-        if fmt == 'pdf':
-            data = bx.broadsheet_pdf(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
-            return pdf_response(data, f'{stem}.pdf', inline=False)
-        if fmt in ('word', 'docx'):
-            data = bx.broadsheet_docx(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
-            return docx_response(data, f'{stem}.docx')
-        data = bx.broadsheet_png(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
-        return png_response(data, f'{stem}.png', inline=False)
-
-    # Get data (same as broadsheet view)
-    class_subjects = ClassSubject.query.filter_by(
-        term_id=term_id,
-        class_id=selected_assignment.class_id,
-        is_active=True
-    ).filter(
-        (ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected_assignment.arm_id)
-    ).join(Subject).order_by(Subject.name).all()
-    
-    assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
-    
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=assignment_id,
-        is_active=True
-    ).join(Student).filter(term_roster_filter(term_id)).order_by(Student.surname, Student.first_name).all()
-    
-    pass_mark = SchoolSettings.get('pass_mark', 50)
-    
-    # Build data
-    broadsheet_data = []
-    for enrollment in enrollments:
-        student_row = {
-            'student': enrollment.student,
-            'subjects': {},
-            'total': 0,
-            'average': 0
-        }
-        
-        for cs in class_subjects:
-            scores = StudentScore.query.filter_by(
-                student_id=enrollment.student_id,
-                class_subject_id=cs.id
-            ).all()
-            
-            subject_total = sum(s.score for s in scores)
-            student_row['subjects'][cs.id] = subject_total
-            student_row['total'] += subject_total
-        
-        if class_subjects:
-            student_row['average'] = round(student_row['total'] / len(class_subjects), 2)
-        
-        broadsheet_data.append(student_row)
-    
-    # Sort by average and stamp the (arm) position BEFORE any filtering so a
-    # filtered export still shows each student's true position in the arm.
-    broadsheet_data.sort(key=lambda x: x['average'], reverse=True)
-    for i, r in enumerate(broadsheet_data, 1):
-        r['position'] = i
-    if min_score is not None:
-        def _passes(r):
-            if filter_field == 'average':
-                v = r['average']
-            elif filter_field == 'total':
-                v = r['total']
+    # Every format is the same designed document (utils.broadsheet_doc), built on
+    # the shared broadsheet model — same ranking and averages as the page.
+    from utils import broadsheet_export as bx
+    from utils import broadsheet_doc as bd
+    from utils.web_exports import pdf_response, docx_response
+    model = bx.build_model(term_id, assignment_id, min_score=min_score, filter_field=filter_field)
+    if not model:
+        flash('Invalid selection.', 'error')
+        return redirect(url_for('subjects.broadsheet'))
+    opts = bd.parse_opts(request.args)
+    if fmt == 'pdf':
+        return pdf_response(bd.render_pdf(model, opts), bd.filename(model, 'pdf'), inline=False)
+    if fmt in ('word', 'docx'):
+        return docx_response(bd.render_docx(model, opts), bd.filename(model, 'docx'))
+    if fmt in ('image', 'png'):
+        pdf = bd.render_pdf(model, opts)
+        page = request.args.get('page', type=int)
+        preview = request.args.get('preview') == '1'
+        if preview or page:
+            # One page (the dialog's live preview, or a page-by-page download).
+            pngs, total = bd.render_png_pages(pdf, page=page or 1, zoom=1.3 if preview else 2.4)
+            headers = {'X-Total-Pages': str(total), 'Access-Control-Expose-Headers': 'X-Total-Pages'}
+            if preview:
+                headers['Cache-Control'] = 'no-store'
             else:
-                try:
-                    v = r['subjects'].get(int(filter_field))
-                except (TypeError, ValueError):
-                    v = None
-            return v is not None and v >= min_score
-        broadsheet_data = [r for r in broadsheet_data if _passes(r)]
-
-    # Create Excel
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Broadsheet"
-    
-    # Styles
-    header_font = Font(bold=True, size=12)
-    header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
-    header_font_white = Font(bold=True, color='FFFFFF')
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin')
-    )
-    
-    # Title
-    ws['A1'] = f"{selected_assignment.display_name} - Broadsheet"
-    ws['A1'].font = Font(bold=True, size=14)
-    ws['A2'] = f"{selected_term.full_name}"
-    
-    # Headers
-    row = 4
-    headers = ['Pos', 'Student Name', 'Student ID']
-    for cs in class_subjects:
-        headers.append(cs.subject.short_name or cs.subject.name[:5])
-    headers.extend(['Total', 'Average', 'Grade'])
-    
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=row, column=col, value=header)
-        cell.font = header_font_white
-        cell.fill = header_fill
-        cell.border = thin_border
-        cell.alignment = Alignment(horizontal='center')
-    
-    # Data rows
-    for idx, data in enumerate(broadsheet_data, 1):
-        row += 1
-        ws.cell(row=row, column=1, value=data.get('position', idx)).border = thin_border
-        ws.cell(row=row, column=2, value=formula_guard(data['student'].full_name)).border = thin_border
-        ws.cell(row=row, column=3, value=data['student'].student_id).border = thin_border
-        
-        col = 4
-        for cs in class_subjects:
-            score = data['subjects'].get(cs.id, 0)
-            cell = ws.cell(row=row, column=col, value=score if score else '')
-            cell.border = thin_border
-            cell.alignment = Alignment(horizontal='center')
-            col += 1
-        
-        ws.cell(row=row, column=col, value=data['total']).border = thin_border
-        ws.cell(row=row, column=col+1, value=data['average']).border = thin_border
-        ws.cell(row=row, column=col+2, value=GradeScale.get_grade(data['average']) if data['average'] else '').border = thin_border
-    
-    # Auto-width columns
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except Exception:
-                pass
-        ws.column_dimensions[column].width = min(max_length + 2, 30)
-    
-    filename = f"broadsheet_{selected_assignment.display_name.replace(' ', '_')}_{selected_term.name}.xlsx"
-
-    return xlsx_response(wb, filename)
+                stem = bd.filename(model, 'png')[:-4]
+                headers['Content-Disposition'] = 'attachment; filename="%s%s.png"' % (
+                    stem, '' if total == 1 else '_p%d' % min(page, total))
+            return Response(pngs[0], mimetype='image/png', headers=headers)
+        pngs, total = bd.render_png_pages(pdf, zoom=2.4)
+        if total == 1:
+            return Response(pngs[0], mimetype='image/png', headers={
+                'Content-Disposition': 'attachment; filename="%s"' % bd.filename(model, 'png')})
+        from utils.broadsheet_export import zip_pngs
+        stem = bd.filename(model, 'png')[:-4]
+        return Response(zip_pngs(pngs, stem), mimetype='application/zip', headers={
+            'Content-Disposition': 'attachment; filename="%s.zip"' % stem})
+    return Response(bd.render_xlsx(model, opts),
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': 'attachment; filename="%s"' % bd.filename(model, 'xlsx')})
 
 
 @subjects_bp.route('/broadsheet/blank-sheet')

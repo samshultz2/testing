@@ -8,7 +8,12 @@ from config import Config
 from models import db, Student
 from models.models_school_exams import (SchoolExamResult, SchoolExamCandidate, ExamScheme,
                                         normalise_bands, get_scheme)
+import pytest
+
 from tests.conftest import login_token, auth_csrf
+
+# Start each test from no active session (as when this file runs alone).
+pytestmark = pytest.mark.usefixtures('no_active_session')
 
 
 def _admin(app):
@@ -28,9 +33,13 @@ def _enroll(app, class_name, level_no, student_id):
         term = get_active_term()
         if term is None:
             ssn = (AcademicSession.query.filter_by(is_active=True).first()
-                   or AcademicSession(name='ENR 25/26', is_active=True))
+                   or AcademicSession.query.filter_by(name='ENR 25/26').first()
+                   or AcademicSession(name='ENR 25/26'))
+            ssn.is_active = True
             db.session.add(ssn); db.session.flush()
-            term = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True)
+            term = (Term.query.filter_by(session_id=ssn.id, term_number=1).first()
+                    or Term(session_id=ssn.id, term_number=1, name='First Term'))
+            term.is_active = True
             db.session.add(term); db.session.flush()
         cls = SchoolClass.query.filter_by(name=class_name).first() or SchoolClass(name=class_name, level=level_no)
         db.session.add(cls); db.session.flush()
@@ -303,6 +312,11 @@ def test_entered_students_are_hidden_from_add_and_grid(app):
 
 
 def test_broadsheet_page_and_exports_like_waec(app):
+    # The JSS3 cohort is the class of the session that sits the year, so use the
+    # current session's exam year (where _enroll puts the students), not a fixed one.
+    with app.app_context():
+        from utils.helpers import session_exam_year, get_active_session
+        Y = session_exam_year(get_active_session()) or 2049
     import fitz
     from models.models import RateLimitHit
     c = _admin(app)
@@ -312,7 +326,7 @@ def test_broadsheet_page_and_exports_like_waec(app):
         _enroll(app, 'JSS3', 3, sid)
     tok = auth_csrf(c)
     for sid, scores in ((a, ['72', '66']), (b, ['48', '55'])):
-        c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': 2049,
+        c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': Y,
                'subject[]': ['Mathematics', 'English Studies'], 'score[]': scores, 'grade[]': ['', '']})
     with app.app_context():
         # Start from a clean export allowance (earlier tests share this admin).
@@ -320,14 +334,14 @@ def test_broadsheet_page_and_exports_like_waec(app):
         db.session.commit()
         top = db.session.query(db.func.max(RateLimitHit.id)).scalar() or 0
     try:
-        html = c.get('/jss3-exams/state/broadsheet?year=2049').get_data(as_text=True)
+        html = c.get(f'/jss3-exams/state/broadsheet?year={Y}').get_data(as_text=True)
         assert 'Tester Bsheetada' in html and 'Custom download' in html and 'id="bsSize"' in html
-        pdf = c.get('/jss3-exams/state/broadsheet.pdf?year=2049&size=A3')
+        pdf = c.get(f'/jss3-exams/state/broadsheet.pdf?year={Y}&size=A3')
         assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
         with fitz.open(stream=pdf.data, filetype='pdf') as d:
             txt = ' '.join(p.get_text() for p in d)
         assert 'Broadsheet' in txt and 'Tester Bsheetada' in txt and 'Avg %' in txt
-        base = '/jss3-exams/state/broadsheet/download?year=2049'
+        base = f'/jss3-exams/state/broadsheet/download?year={Y}'
         csv = c.get(base + '&format=csv&order=position&names=first').get_data(as_text=True)
         lines = csv.strip().splitlines()
         assert lines[0].startswith('S/N,Candidate,English Studies,Mathematics')
@@ -625,6 +639,11 @@ def test_compare_page_exports_state_vs_federal_as_pdf_and_image(app):
 
 
 def test_school_exam_bulk_entry_grades_scores_and_candidate(app):
+    # Enter for the current session's exam year: _enroll puts the students in
+    # that session's JSS3 class, which is the cohort the entry page accepts.
+    with app.app_context():
+        from utils.helpers import session_exam_year, get_active_session
+        Y = session_exam_year(get_active_session()) or 2061
     """New entry page: many candidates at once, grade or score per subject,
     candidate details; cleared subjects removed; bad rows reported."""
     from models.models_school_exams import SchoolExamCandidate
@@ -635,25 +654,25 @@ def test_school_exam_bulk_entry_grades_scores_and_candidate(app):
         _enroll(app, 'Basic 6', 0, sid) if False else _enroll(app, 'JSS3', 3, sid)
     H = {'X-Requested-With': 'fetch'}
     r = c.post('/jss3-exams/state/add', headers=H, data={
-        '_csrf_token': auth_csrf(c), 'bulk': '1', 'exam_year': 2061, 'sids': [a, b],
+        '_csrf_token': auth_csrf(c), 'bulk': '1', 'exam_year': Y, 'sids': [a, b],
         f'subj_{a}': ['English Studies', 'Mathematics', 'Basic Science'], f'score_{a}': ['72', '', ''],
         f'grade_{a}': ['', 'C', ''], f'cand_{a}': '1', f'exam_number_{a}': 'BE123', f'total_score_{a}': '',
         f'placement_{a}': 'SSS1 Science', f'admitted_{a}': 'yes', f'remarks_{a}': '',
         f'subj_{b}': ['Mathematics', 'Mathematics'], f'score_{b}': ['50', '60'], f'grade_{b}': ['', '']}).get_json()
     assert r['ok'] and r['added'] == 1 and r['problems']
     with app.app_context():
-        got = {x.subject: (x.score, x.grade) for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=2061)}
+        got = {x.subject: (x.score, x.grade) for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=Y)}
         assert got == {'English Studies': (72, 'A'), 'Mathematics': (None, 'C')}
-        cand = SchoolExamCandidate.query.filter_by(student_id=a, exam_year=2061, body='state').one()
+        cand = SchoolExamCandidate.query.filter_by(student_id=a, exam_year=Y, body='state').one()
         assert cand.exam_number == 'BE123' and cand.admitted is True
     # Clearing Maths removes it.
     r = c.post('/jss3-exams/state/add', headers=H, data={
-        '_csrf_token': auth_csrf(c), 'bulk': '1', 'exam_year': 2061, 'sids': [a],
+        '_csrf_token': auth_csrf(c), 'bulk': '1', 'exam_year': Y, 'sids': [a],
         f'subj_{a}': ['English Studies', 'Mathematics'], f'score_{a}': ['72', ''], f'grade_{a}': ['', '']}).get_json()
     assert r['updated'] == 1
     with app.app_context():
-        assert {x.subject for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=2061)} == {'English Studies'}
-    d = c.get('/jss3-exams/state/add?year=2061', headers=H).get_json()
+        assert {x.subject for x in SchoolExamResult.query.filter_by(student_id=a, exam_year=Y)} == {'English Studies'}
+    d = c.get(f'/jss3-exams/state/add?year={Y}', headers=H).get_json()
     assert d['exam'] == 'school' and d['grades'] and d['benchmark'] and d['bands'][0]['grade'] == 'A'
 
 
@@ -677,12 +696,19 @@ def test_entry_lists_only_the_sessions_cohort(app):
         db.session.add(caa); db.session.flush()
         db.session.add(StudentEnrollment(student_id=cur, class_arm_assignment_id=caa.id, is_active=True))
         db.session.commit()
+    # 'old' sits in the current session's JSS3 class (via _enroll), so enter its
+    # result for the current session's exam year rather than a fixed 2078 that a
+    # later active session (left by other tests) would put out of reach.
+    with app.app_context():
+        from utils.helpers import session_exam_year, get_active_session
+        Y = session_exam_year(get_active_session()) or 2078
+    assert Y != 2081
     tok = auth_csrf(c)
     # 'old' has results only for another year and wasn't in the 2080/2081 class.
-    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': old, 'exam_year': 2078,
+    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': old, 'exam_year': Y,
            'subject[]': ['Mathematics'], 'score[]': ['60'], 'grade[]': ['']})
     H = {'X-Requested-With': 'fetch'}
     ids = {s['id'] for s in c.get('/jss3-exams/state/add?year=2081', headers=H).get_json()['students']}
     assert cur in ids and old not in ids
-    ids68 = {s['id'] for s in c.get('/jss3-exams/state/add?year=2078', headers=H).get_json()['students']}
+    ids68 = {s['id'] for s in c.get(f'/jss3-exams/state/add?year={Y}', headers=H).get_json()['students']}
     assert old in ids68 and cur not in ids68

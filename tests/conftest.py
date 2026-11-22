@@ -76,9 +76,13 @@ def enroll_sss3(app, student_id):
         term = get_active_term()
         if term is None:
             ssn = (AcademicSession.query.filter_by(is_active=True).first()
-                   or AcademicSession(name='ENR 25/26', is_active=True))
+                   or AcademicSession.query.filter_by(name='ENR 25/26').first()
+                   or AcademicSession(name='ENR 25/26'))
+            ssn.is_active = True
             db.session.add(ssn); db.session.flush()
-            term = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True)
+            term = (Term.query.filter_by(session_id=ssn.id, term_number=1).first()
+                    or Term(session_id=ssn.id, term_number=1, name='First Term'))
+            term.is_active = True
             db.session.add(term); db.session.flush()
         sss3 = SchoolClass.query.filter_by(name='SSS3').first() or SchoolClass(name='SSS3', level=6)
         db.session.add(sss3); db.session.flush()
@@ -161,3 +165,28 @@ def use_session(name, active=True):
     s.is_active = bool(active)
     db.session.commit()
     return s, created
+
+
+@pytest.fixture()
+def no_active_session(app):
+    """Run a test with no session or term active — the state these tests see when
+    run on their own — and put the previous flags back afterwards. Other tests
+    leave assorted sessions active in the shared database, which changes which
+    exam year a page treats as current."""
+    from models import db, Term, AcademicSession
+    with app.app_context():
+        prev_t = [t.id for t in Term.query.filter_by(is_active=True).all()]
+        prev_s = [s.id for s in AcademicSession.query.filter_by(is_active=True).all()]
+        Term.query.update({Term.is_active: False}, synchronize_session=False)
+        AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+        db.session.commit()
+    yield
+    with app.app_context():
+        Term.query.update({Term.is_active: False}, synchronize_session=False)
+        AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+        if prev_t:
+            Term.query.filter(Term.id.in_(prev_t)).update({Term.is_active: True}, synchronize_session=False)
+        if prev_s:
+            AcademicSession.query.filter(AcademicSession.id.in_(prev_s)).update(
+                {AcademicSession.is_active: True}, synchronize_session=False)
+        db.session.commit()

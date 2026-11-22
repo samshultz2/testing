@@ -4,7 +4,11 @@ import uuid
 from config import Config
 from models import db, Student, WAECResult, JAMBResult
 from models.models_school_exams import SchoolExamResult, SchoolExamCandidate
+import pytest
+
 from tests.conftest import login_token, auth_csrf, enroll_sss3
+
+pytestmark = pytest.mark.usefixtures('no_active_session')
 
 
 def _admin(app):

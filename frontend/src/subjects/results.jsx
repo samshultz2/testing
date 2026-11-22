@@ -9,6 +9,7 @@ import { csrfToken } from '../lib/api';
 import { useNav, navParams } from '../lib/section';
 import { confirm } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import BroadsheetExport from './BroadsheetExport';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 export function useMedia(query) {
@@ -872,6 +873,7 @@ export function Broadsheet({ d, notify }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(null);
   const [showFilter, setShowFilter] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const compute = async () => {
     if (!await confirm("Work out and save term results and class positions for this class? This updates each student's report card.")) return;
     const r = await submitJson(d.urls.compute, { term_id: d.term_id, assignment_id: d.assignment_id });
@@ -895,17 +897,10 @@ export function Broadsheet({ d, notify }) {
   }).filter((x) => x.avg != null);
   const weakest = subjAvg.slice().sort((a, b) => a.avg - b.avg)[0];
   const u = d.urls || {};
-  const withParams = (href) => {
-    if (!href || !hasFilter) return href;
-    return href + (href.includes('?') ? '&' : '?') + `min_score=${encodeURIComponent(minVal)}&filter_field=${encodeURIComponent(field)}`;
-  };
   const menu = [
     canWrite(d, 'scores_tools') && { icon: 'fa-ranking-star', label: 'Work out results & positions', onClick: compute },
     { heading: hasFilter ? `Download (${rows.length} filtered)` : 'Download' },
-    u.export && { icon: 'fa-file-excel', label: 'Excel', href: withParams(u.export), native: true, download: true },
-    u.export_pdf && { icon: 'fa-file-pdf', label: 'PDF', href: withParams(u.export_pdf), native: true, download: true },
-    u.export_word && { icon: 'fa-file-word', label: 'Word', href: withParams(u.export_word), native: true, download: true },
-    u.export_image && { icon: 'fa-file-image', label: 'HD image', href: withParams(u.export_image), native: true, download: true },
+    u.export && { icon: 'fa-file-export', label: 'Export: PDF, image, Word, Excel…', onClick: () => setShowExport(true) },
     { heading: 'More' },
     canWrite(d, 'scores_tools') && u.blank_sheet && { icon: 'fa-file-lines', label: 'Print blank score sheet', href: u.blank_sheet, native: true, target: '_blank' },
     u.analytics && { icon: 'fa-chart-column', label: 'Class analytics', href: u.analytics },
@@ -916,8 +911,12 @@ export function Broadsheet({ d, notify }) {
   return (
     <div className="rs">
       <Head icon="fa-table" title="Broadsheet" sub={subLine(d) || 'Every subject and position for a class'}>
+        {n > 0 && u.export && <button type="button" className="rs-btn" onClick={() => setShowExport(true)}><i className="fas fa-file-export" aria-hidden="true" /><span className="rs-hide-sm">Export</span></button>}
         {n > 0 && <Menu items={menu} label="Actions" />}
       </Head>
+      {showExport && <BroadsheetExport url={u.export} options={d.export_options || []} rowsShown={rows.length}
+                                       filter={hasFilter ? { min: minVal, field, label: `${fieldLabel} ≥ ${minVal}` } : null}
+                                       onClose={() => setShowExport(false)} />}
       <Picker d={d} go={go} termBlank />
       <Flow d={d} current="broadsheet" />
       {n ? (<>
