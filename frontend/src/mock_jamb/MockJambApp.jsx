@@ -1249,324 +1249,227 @@ function Validation({ d }) {
   );
 }
 
-const BAND = { critical: '#dc2626', weak: '#b45309', fair: '#0d9488', strong: '#047857', unknown: '#64748b' };
-const FLAG = {
-  strong: { bg: 'rgba(4,120,87,.14)', c: '#047857' }, solid: { bg: 'rgba(13,148,136,.14)', c: '#0d9488' },
-  watch: { bg: 'rgba(180,83,9,.14)', c: '#b45309' }, support: { bg: 'rgba(220,38,38,.14)', c: '#dc2626' },
-  insufficient: { bg: 'rgba(107,122,116,.16)', c: '#6b7a74' }, unassigned: { bg: 'rgba(107,122,116,.16)', c: '#6b7a74' },
-};
-const RECO = { positive: '#047857', negative: '#dc2626', warning: '#b45309', insight: '#2563eb' };
+const TONE_K = { blue: '', teal: '', green: 'good', amber: 'mid', red: 'bad' };
+const BAND_T = { critical: 'bad', weak: 'mid', fair: 'ok', strong: 'good', unknown: 'mute' };
+const FLAG_T = { strong: 'good', solid: 'ok', watch: 'mid', support: 'bad', insufficient: 'mute', unassigned: 'mute' };
+const DIR_T = { up: 'good', down: 'bad', flat: 'mute' };
+const sgn = (v) => (v == null ? '' : (v > 0 ? '+' : '') + v);
+const pctW = (v) => Math.max(0, Math.min(100, v || 0));
+
+function MBar({ value, tone, max = 100 }) {
+  return <span className="dp-track"><i className={'t-' + (tone || 'ok')} style={{ width: Math.max(value ? 2 : 0, pctW((value || 0) / max * 100)) + '%' }} /></span>;
+}
+
+function Recos({ recos }) {
+  return (
+    <div className="dp-reco">
+      {[['students', 'Students', 'fa-user-graduate'], ['teachers', 'Teachers', 'fa-chalkboard-user'], ['management', 'Management', 'fa-briefcase']].map(([k, label, icon]) => (
+        <div key={k}><h4><i className={'fas ' + icon} aria-hidden="true" /> {label}</h4>
+          {(recos[k] || []).length === 0 ? <p className="rs-muted dp-small">Nothing flagged.</p> : recos[k].map((r, i) => (
+            <div key={i} className={'dp-ri ' + (r.tone || '')}><b>{r.title}</b><span>{r.text}</span></div>))}
+        </div>))}
+    </div>
+  );
+}
+
+function Spark({ points, max = 100 }) {
+  const pts = points.map((v, i) => [i, v]).filter(([, v]) => v != null);
+  if (pts.length < 2) return <span className="dp-spark" />;
+  const n = Math.max(points.length - 1, 1);
+  const xy = pts.map(([i, v]) => [(i / n) * 100, 28 - (Math.max(0, Math.min(max, v)) / max) * 26]);
+  const last = xy[xy.length - 1];
+  return (
+    <svg className="dp-spark" viewBox="-2 -2 104 32" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points={xy.map((p) => p.join(',')).join(' ')} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={last[0]} cy={last[1]} r="2.6" fill="currentColor" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
 
 function Deep({ d }) {
   const deep = d.deep;
-  const distRef = useRef();
-  const subjRef = useRef();
-  const armRef = useRef();
   const empty = !deep || (deep.meta && deep.meta.empty);
-
-  useEffect(() => {
-    if (empty || !window.Chart) return;
-    const charts = [];
-    const grid = 'rgba(140,140,140,.2)';
-    if (distRef.current) {
-      const dd = deep.distribution;
-      const cols = ['#047857', '#0d9488', '#2563eb', '#b45309', '#dc2626'];
-      charts.push(new window.Chart(distRef.current, {
-        type: 'bar',
-        data: { labels: dd.map((x) => x.band), datasets: [{ data: dd.map((x) => x.count), backgroundColor: cols, borderRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: grid } }, x: { grid: { display: false } } } },
-      }));
-    }
-    if (subjRef.current && deep.subjects.length) {
-      charts.push(new window.Chart(subjRef.current, {
-        type: 'bar',
-        data: { labels: deep.subjects.map((s) => s.subject), datasets: [{ data: deep.subjects.map((s) => s.pass_rate), backgroundColor: deep.subjects.map((s) => BAND[s.band] || '#64748b'), borderRadius: 4 }] },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, max: 100, grid: { color: grid } }, y: { grid: { display: false } } } },
-      }));
-    }
-    if (armRef.current && deep.arms.length) {
-      charts.push(new window.Chart(armRef.current, {
-        type: 'bar',
-        data: { labels: deep.arms.map((a) => a.arm), datasets: [{ label: 'JAMB mean', data: deep.arms.map((a) => a.jamb_mean), backgroundColor: '#2563eb', borderRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: grid } }, x: { grid: { display: false } } } },
-      }));
-    }
-    return () => charts.forEach((c) => c.destroy());
-  }, [deep, empty]);
-
-  const actions = (
+  const [tab, setTab] = useState('subjects');
+  const [open, setOpen] = useState(null);
+  const exp = canWrite(d, 'mock_jamb_analytics_export');
+  const sub = [d.exam.display_name, d.exam.exam_date, d.exam.session_name].filter(Boolean).join(' · ');
+  const head = (
     <>
-      {canWrite(d, 'mock_jamb_analytics_export') && <>
-      <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" title="PDF" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
-      <a href={d.urls.export_excel} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
-      <a href={d.urls.export_image} className="btn btn-info btn-sm" title="HD image" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
-      </>}
-      {d.urls.items && <a href={d.urls.items} className="btn btn-outline btn-sm" title="Item &amp; topic analysis" data-native><i aria-hidden="true" className="fas fa-microscope" /> Items</a>}
-      {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline btn-sm" title="Progress trends"><i aria-hidden="true" className="fas fa-chart-line" /> Trends</a>}
-      <a href={d.urls.view} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
+      <Head icon="fa-brain" title="Deep analytics" sub={sub}>
+        {!empty && exp && <Menu label="Download" items={[
+          { href: d.urls.export_pdf, icon: 'fa-file-pdf', label: 'PDF report', native: true, download: true },
+          { href: d.urls.export_excel, icon: 'fa-file-excel', label: 'Excel workbook', native: true, download: true },
+          { href: d.urls.export_image, icon: 'fa-image', label: 'HD image', native: true, download: true }]} />}
+        <Menu items={[
+          d.urls.items && { href: d.urls.items, icon: 'fa-microscope', label: 'Item & topic analysis', native: true },
+          d.urls.trends && { href: d.urls.trends, icon: 'fa-chart-line', label: 'Progress trends' },
+          { href: d.urls.view, icon: 'fa-users', label: 'Results' }]} />
+      </Head>
+      <ExamNav d={d} active="deep" />
     </>
   );
-
-  const header = (<>
-    <div className="page-header">
-      <div><h1>Deep Analytics — {d.exam.display_name}</h1>
-        <p className="text-muted text-sm">{d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''} · per subject · per teacher · per class arm</p></div>
-      <div className="page-header-actions">{actions}</div>
-    </div>
-    <ExamNav d={d} active="deep" />
-  </>);
-
   if (empty) {
-    return <>{header}<Empty icon="fa-brain" title="No results yet"><p className="text-muted">Enter scores to unlock per-subject, per-teacher and per-arm deep analytics.</p><a href={d.urls.view} className="btn btn-primary mt-2">Enter results</a></Empty></>;
+    return <>{head}<Blank icon="fa-brain" title="No results yet"><p>Enter scores to unlock per-subject, per-teacher and per-arm analytics.</p>
+      <a href={d.urls.view} className="rs-btn primary">Enter results</a></Blank></>;
   }
-
-  const kpiBorder = { blue: '#2563eb', teal: '#0d9488', green: '#047857', amber: '#b45309' };
+  const dist = deep.distribution || [];
+  const dmax = Math.max(1, ...dist.map((x) => x.count));
+  const dtot = dist.reduce((a, x) => a + x.count, 0) || 1;
+  const DT = ['good', 'good', 'ok', 'mid', 'bad'];
+  const armMax = Math.max(1, ...deep.arms.map((a) => a.jamb_mean || 0));
+  const seg = deep.segments || { critical: [], at_risk: [], honour: [] };
+  const tabs = [
+    { value: 'subjects', label: 'Subjects', icon: 'fa-book', count: deep.subjects.length },
+    { value: 'teachers', label: 'Teachers', icon: 'fa-chalkboard-user', count: deep.teachers.length },
+    { value: 'students', label: 'Students', icon: 'fa-user-graduate', count: seg.critical.length + seg.at_risk.length },
+    { value: 'reco', label: 'What to do', icon: 'fa-lightbulb' }];
+  const tog = (k) => setOpen(open === k ? null : k);
   return (
     <>
-      {header}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.75rem', marginBottom: '1.1rem' }}>
-        {deep.kpis.map((k, i) => (
-          <div key={i} className="card" style={{ padding: '.9rem 1rem', borderTop: `3px solid ${kpiBorder[k.tone] || '#2563eb'}` }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>{k.value}</div>
-            <div style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--text-secondary)', marginTop: '.35rem' }}>{k.label}</div>
-            <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', marginTop: '.15rem' }}>{k.sub}</div>
-          </div>
-        ))}
+      {head}
+      <Tiles items={deep.kpis.map((k) => ({ label: k.label, value: k.value, sub: k.sub, tone: TONE_K[k.tone] }))} />
+      <div className="dp-grid">
+        <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-chart-column" aria-hidden="true" /> Score bands</h3><small>{dtot} candidates</small></div>
+          <div className="dp-bars">{dist.map((x, i) => (
+            <div key={x.band} className="dp-bar"><span className="nm">{x.band}</span><MBar value={x.count} max={dmax} tone={DT[i]} />
+              <span className="v">{x.count}<small>{Math.round((x.count / dtot) * 100)}%</small></span></div>))}</div>
+        </section>
+        <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-book" aria-hidden="true" /> Subject pass rate</h3><small>weakest first</small></div>
+          <div className="dp-bars">{deep.subjects.map((s) => (
+            <div key={s.subject} className="dp-bar"><span className="nm">{s.subject}</span><MBar value={s.pass_rate} tone={BAND_T[s.band]} />
+              <span className={'v t-' + BAND_T[s.band]}>{s.pass_rate == null ? '—' : s.pass_rate + '%'}</span></div>))}</div>
+        </section>
+        {deep.arms.length > 0 && <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-layer-group" aria-hidden="true" /> Class arms</h3><small>JAMB mean, best first</small></div>
+          <div className="dp-bars">{deep.arms.map((a) => (
+            <div key={a.arm} className="dp-bar"><span className="nm">{a.arm}<small>{a.students} students · {a.above_200_rate == null ? '—' : a.above_200_rate + '%'} ≥200 · {a.pass_rate == null ? '—' : a.pass_rate + '%'} pass</small></span>
+              <MBar value={a.jamb_mean} max={armMax} /><span className="v">{a.jamb_mean == null ? '—' : a.jamb_mean}</span></div>))}</div>
+        </section>}
       </div>
 
-      <div className="charts-row">
-        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-column" /> Score distribution</h3></div><div className="chart-body" style={{ height: 230 }}><canvas ref={distRef} /></div></div>
-        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-bar" /> Subject pass rate</h3></div><div className="chart-body" style={{ height: 230 }}><canvas ref={subjRef} /></div></div>
-        {deep.arms.length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Class-arm JAMB mean</h3></div><div className="chart-body" style={{ height: 230 }}><canvas ref={armRef} /></div></div>}
-      </div>
-
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Subject league — weakest first</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table"><thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>N</th><th>Mean</th><th>SD</th><th>Pass %</th><th>Strong %</th><th>Verdict</th><th style={{ textAlign: 'left' }}>Recommended action</th></tr></thead>
-            <tbody>{deep.subjects.map((s) => (
-              <tr key={s.subject}><td><strong>{s.subject}</strong></td><td className="text-center">{s.n}</td><td className="text-center">{s.mean == null ? '—' : s.mean}</td><td className="text-center">{s.sd}</td>
-                <td className="text-center" style={{ color: BAND[s.band], fontWeight: 700 }}>{s.pass_rate == null ? '—' : s.pass_rate}%</td>
-                <td className="text-center">{s.distinction_rate == null ? '—' : s.distinction_rate}%</td>
-                <td className="text-center" style={{ color: BAND[s.band], fontWeight: 700 }}>{s.band_label}</td>
-                <td style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>{s.recommendation}</td></tr>
-            ))}</tbody></table>
-        </div></div>
-
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> Teacher effectiveness <span className="text-muted text-sm">— evidence-based, one mock</span></h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="data-table"><thead><tr><th style={{ textAlign: 'left' }}>Teacher</th><th style={{ textAlign: 'left' }}>Subjects</th><th>Students</th><th>Mean</th><th>Pass %</th><th>Δ cohort</th><th style={{ textAlign: 'left' }}>Verdict &amp; action</th><th /></tr></thead>
-            <tbody>{deep.teachers.map((t, i) => {
-              const f = FLAG[t.flag] || FLAG.insufficient;
-              return (
-                <tr key={i}><td><strong>{t.teacher}</strong></td><td className="text-sm">{t.subjects.join(', ')}</td><td className="text-center">{t.students}</td>
-                  <td className="text-center">{t.mean == null ? '—' : t.mean}</td><td className="text-center">{t.pass_rate == null ? '—' : t.pass_rate}%</td>
-                  <td className="text-center" style={{ color: t.delta == null ? 'inherit' : t.delta >= 0 ? '#047857' : '#dc2626', fontWeight: 700 }}>{t.delta == null ? '—' : (t.delta > 0 ? '+' : '') + t.delta}</td>
-                  <td><span style={{ display: 'inline-block', fontSize: '.68rem', fontWeight: 700, padding: '.15rem .5rem', borderRadius: 999, background: f.bg, color: f.c }}>{t.verdict}</span>
-                    <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: '.3rem' }}>{t.recommendation}</div></td>
-                  <td>{t.staff_id && <a href={`${d.compose_base}?to=staff&staff_ids=${t.staff_id}`} className="btn btn-sm btn-outline" title="Message this teacher" data-native><i aria-hidden="true" className="fas fa-paper-plane" /></a>}</td></tr>
-              );
-            })}</tbody></table>
-        </div>
-        <div className="card-body" style={{ paddingTop: 0, fontSize: '.78rem', color: 'var(--text-muted)' }}>Subject results are attributed to the SSS3 subject teacher for each candidate's arm. No HR decision should rest on one mock — confirm across sittings and against intake ability.</div>
-      </div>
-
-      {deep.arms.length > 0 && (
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> Class-arm league — best first</h3></div>
-          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-            <table className="data-table"><thead><tr><th>#</th><th style={{ textAlign: 'left' }}>Class arm</th><th>Students</th><th>JAMB mean</th><th>≥200</th><th>Subject pass</th></tr></thead>
-              <tbody>{deep.arms.map((a, i) => (
-                <tr key={a.arm}><td className="text-center">{i + 1}</td><td><strong>{a.arm}</strong></td><td className="text-center">{a.students}</td>
-                  <td className="text-center">{a.jamb_mean == null ? '—' : a.jamb_mean}</td><td className="text-center">{a.above_200_rate == null ? '—' : a.above_200_rate}%</td><td className="text-center">{a.pass_rate == null ? '—' : a.pass_rate}%</td></tr>
-              ))}</tbody></table>
-          </div></div>
-      )}
-
-      <div className="charts-row">
-        {[['critical', 'Critical — urgent', '#dc2626'], ['at_risk', 'At risk — borderline', '#b45309'], ['honour', 'Honour roll — stretch', '#047857']].map(([key, title, col]) => (
-          <div key={key} className="card"><div className="card-header"><h3 style={{ color: col }}>{title}</h3></div>
-            <div className="card-body" style={{ maxHeight: 340, overflow: 'auto' }}>
-              {deep.segments[key].length === 0 ? <p className="text-muted text-sm">None.</p> : deep.segments[key].map((x) => (
-                <div key={x.student_id} style={{ display: 'flex', justifyContent: 'space-between', gap: '.6rem', padding: '.4rem 0', borderBottom: '1px solid var(--border-color)' }}>
-                  <div><div style={{ fontWeight: 600, fontSize: '.84rem' }}>{x.name}</div><div style={{ fontSize: '.74rem', color: 'var(--text-muted)' }}>{x.note}</div></div>
-                  <div style={{ fontWeight: 700, whiteSpace: 'nowrap', color: col, fontSize: '.8rem' }}>{x.metric}</div>
-                </div>
-              ))}
-            </div></div>
-        ))}
-      </div>
-
-      <h3 style={{ margin: '1.2rem 0 .6rem' }}>Recommendations</h3>
-      <div className="charts-row">
-        {[['students', 'Students', 'fa-user-graduate', '#2563eb'], ['teachers', 'Teachers', 'fa-chalkboard-teacher', '#0d9488'], ['management', 'Management', 'fa-briefcase', '#b45309']].map(([bucket, title, icon, col]) => (
-          <div key={bucket} className="card"><div className="card-header"><h3><i aria-hidden="true" className={`fas ${icon}`} style={{ color: col }} /> {title}</h3></div>
-            <div className="card-body">
-              {deep.recommendations[bucket].length === 0 ? <p className="text-muted text-sm">Nothing flagged.</p> : deep.recommendations[bucket].map((r, i) => (
-                <div key={i} style={{ borderLeft: `3px solid ${RECO[r.tone] || '#64748b'}`, padding: '.35rem 0 .55rem .65rem', marginBottom: '.55rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '.82rem' }}>{r.title}</div>
-                  <div style={{ fontSize: '.78rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{r.text}</div>
-                </div>
-              ))}
-            </div></div>
-        ))}
-      </div>
+      <section className="rs-card flush">
+        <div className="dp-tabs"><Seg options={tabs} value={tab} onChange={(v) => { setTab(v); setOpen(null); }} label="Analysis" /></div>
+        {tab === 'subjects' && <div className="dp-list">{deep.subjects.map((s) => (
+          <div key={s.subject} className={'dp-row' + (open === s.subject ? ' open' : '')}>
+            <button type="button" className="dp-sum" onClick={() => tog(s.subject)} aria-expanded={open === s.subject}>
+              <span className="nm">{s.subject}<small>{s.n} candidates · mean {s.mean == null ? '—' : s.mean} · SD {s.sd}</small></span>
+              <MBar value={s.pass_rate} tone={BAND_T[s.band]} />
+              <span className={'pct t-' + BAND_T[s.band]}>{s.pass_rate == null ? '—' : s.pass_rate + '%'}</span>
+              <span className={'dp-pill ' + BAND_T[s.band]}>{s.band_label}</span>
+              <i className="fas fa-chevron-right dp-chev" aria-hidden="true" />
+            </button>
+            {open === s.subject && <div className="dp-det">
+              <div className="dp-facts"><span><b>{s.pass_rate == null ? '—' : s.pass_rate + '%'}</b> passed</span><span><b>{s.distinction_rate == null ? '—' : s.distinction_rate + '%'}</b> strong</span><span><b>{s.mean == null ? '—' : s.mean}</b> mean</span><span><b>{s.sd}</b> spread (SD)</span></div>
+              <p>{s.recommendation}</p></div>}
+          </div>))}</div>}
+        {tab === 'teachers' && <>
+          <div className="dp-list">{deep.teachers.map((t, i) => (
+            <div key={i} className={'dp-row' + (open === 't' + i ? ' open' : '')}>
+              <button type="button" className="dp-sum" onClick={() => tog('t' + i)} aria-expanded={open === 't' + i}>
+                <span className="nm">{t.teacher}<small>{t.subjects.join(', ')} · {t.students} students</small></span>
+                <MBar value={t.pass_rate} tone={FLAG_T[t.flag]} />
+                <span className={'pct ' + (t.delta == null ? '' : t.delta >= 0 ? 't-good' : 't-bad')} title="Compared with the cohort">{t.delta == null ? '—' : sgn(t.delta)}</span>
+                <span className={'dp-pill ' + (FLAG_T[t.flag] || 'mute')}>{t.verdict}</span>
+                <i className="fas fa-chevron-right dp-chev" aria-hidden="true" />
+              </button>
+              {open === 't' + i && <div className="dp-det">
+                <div className="dp-facts"><span><b>{t.pass_rate == null ? '—' : t.pass_rate + '%'}</b> pass</span><span><b>{t.mean == null ? '—' : t.mean}</b> mean</span><span><b>{t.delta == null ? '—' : sgn(t.delta)}</b> vs cohort</span></div>
+                <p>{t.recommendation}</p>
+                {t.staff_id && <a href={`${d.compose_base}?to=staff&staff_ids=${t.staff_id}`} className="rs-btn" data-native><i className="fas fa-paper-plane" aria-hidden="true" /> Message {t.teacher}</a>}
+              </div>}
+            </div>))}</div>
+          <p className="dp-note">Subject results are attributed to the SSS3 subject teacher for each candidate's arm. No HR decision should rest on one mock — confirm across sittings and against intake ability.</p>
+        </>}
+        {tab === 'students' && <div className="dp-segs">
+          {[['critical', 'Critical — urgent', 'bad', 'fa-circle-exclamation'], ['at_risk', 'At risk — borderline', 'mid', 'fa-triangle-exclamation'], ['honour', 'Honour roll — stretch', 'good', 'fa-star']].map(([k, title, tone, icon]) => (
+            <div key={k} className="dp-seg"><h4 className={'t-' + tone}><i className={'fas ' + icon} aria-hidden="true" /> {title}<em>{seg[k].length}</em></h4>
+              {seg[k].length === 0 ? <p className="rs-muted dp-small">None.</p> : seg[k].map((x) => (
+                <div key={x.student_id} className="dp-st"><div><b>{x.name}</b><small>{x.note}</small></div><span className={'t-' + tone}>{x.metric}</span></div>))}
+            </div>))}
+        </div>}
+        {tab === 'reco' && <Recos recos={deep.recommendations} />}
+      </section>
     </>
   );
 }
 
-const PALETTE = ['#2563eb', '#047857', '#b45309', '#7c3aed', '#dc2626', '#0d9488', '#c2410c', '#0891b2', '#9333ea', '#65a30d'];
-const arrow = (dir) => (dir === 'up' ? 'fa-arrow-up' : dir === 'down' ? 'fa-arrow-down' : 'fa-arrow-right');
-const dirColor = (dir) => (dir === 'up' ? '#047857' : dir === 'down' ? '#dc2626' : 'var(--text-secondary)');
-
 function Trends({ d }) {
   const nav = useNav();
   const t = d.trends;
-  const cohortRef = useRef();
-  const subjRef = useRef();
   const insufficient = !t || (t.meta && t.meta.insufficient);
-  const labels = insufficient ? [] : t.periods.map((p) => p.label);
-
-  useEffect(() => {
-    if (insufficient || !window.Chart) return;
-    const charts = [];
-    const grid = 'rgba(140,140,140,.2)';
-    if (cohortRef.current) {
-      charts.push(new window.Chart(cohortRef.current, {
-        type: 'line',
-        data: { labels, datasets: [
-          { label: t.headline.primary_label, data: t.cohort.map((c) => c.primary), borderColor: '#2563eb', backgroundColor: '#2563eb22', tension: 0.3, yAxisID: 'y', spanGaps: true },
-          { label: t.headline.secondary_label, data: t.cohort.map((c) => c.secondary), borderColor: '#047857', backgroundColor: '#04785722', tension: 0.3, yAxisID: 'y1', spanGaps: true },
-        ] },
-        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-          plugins: { legend: { position: 'bottom' } },
-          scales: { y: { position: 'left', beginAtZero: true, grid: { color: grid } }, y1: { position: 'right', beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } } },
-      }));
-    }
-    if (subjRef.current) {
-      const subs = t.subject_trends.slice(0, 8);
-      charts.push(new window.Chart(subjRef.current, {
-        type: 'line',
-        data: { labels, datasets: subs.map((s, i) => ({ label: s.name, data: s.points, borderColor: PALETTE[i % PALETTE.length], backgroundColor: 'transparent', tension: 0.3, spanGaps: true })) },
-        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-          scales: { y: { beginAtZero: true, max: 100, grid: { color: grid } }, x: { grid: { display: false } } } },
-      }));
-    }
-    return () => charts.forEach((c) => c.destroy());
-  }, [t, insufficient]);
-
-  const go = (scope, sessionId) => {
-    const params = scope === 'all' ? { scope: 'all' } : { session_id: sessionId };
-    navParams(nav.go, d.urls.self, params);
-  };
-
-  const header = (<>
-    <div className="page-header">
-      <div><h1>Progress Trends — Mock JAMB</h1>
-        <p className="text-muted text-sm">Track mean score, subjects, teachers and arms across mocks{t && t.meta.multi_session ? ' and across sessions' : ''}.</p></div>
-      <div className="page-header-actions">
-        {!insufficient && canWrite(d, 'mock_jamb_analytics_export') && <>
-          <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
-          <a href={d.urls.export_excel} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
-          <a href={d.urls.export_image} className="btn btn-info btn-sm" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
-        </>}
-        <a href={d.urls.index} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
-      </div>
-    </div>
-    <MjNav d={d} active="trends" />
-  </>);
-
-  const selector = (
-    <div className="filter-form mb-3" style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-      <label className="text-sm text-muted">Scope</label>
-      <select className="form-control" style={{ width: 'auto' }} value={d.scope}
-              onChange={(e) => go(e.target.value, d.selected_session_id)}>
-        <option value="session">A single session</option>
-        <option value="all">All sessions (year-over-year)</option>
-      </select>
-      {d.scope !== 'all' && (
-        <select className="form-control" style={{ width: 'auto' }} value={d.selected_session_id || ''}
-                onChange={(e) => go('session', e.target.value)}>
-          {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-      )}
-      <span className="text-muted text-sm">“All sessions” tracks year-over-year across cohorts.</span>
-    </div>
+  const [tab, setTab] = useState('subjects');
+  const go = (scope, sessionId) => navParams(nav.go, d.urls.self, scope === 'all' ? { scope: 'all' } : { session_id: sessionId });
+  const exp = canWrite(d, 'mock_jamb_analytics_export');
+  const head = (
+    <>
+      <Head icon="fa-chart-line" title="Progress trends" sub={insufficient ? 'Mean score, subjects, teachers and arms across mocks' : `${t.meta.periods_count} mocks · ${t.meta.span}`}>
+        {!insufficient && exp && <Menu label="Download" items={[
+          { href: d.urls.export_pdf, icon: 'fa-file-pdf', label: 'PDF report', native: true, download: true },
+          { href: d.urls.export_excel, icon: 'fa-file-excel', label: 'Excel workbook', native: true, download: true },
+          { href: d.urls.export_image, icon: 'fa-image', label: 'HD image', native: true, download: true }]} />}
+      </Head>
+      <MjNav d={d} active="trends" />
+      <section className="rs-card dp-scope">
+        <Seg options={[{ value: 'session', label: 'One session', icon: 'fa-calendar' }, { value: 'all', label: 'All sessions', icon: 'fa-layer-group' }]}
+             value={d.scope} onChange={(v) => go(v, d.selected_session_id || (d.sessions[0] || {}).id)} label="Scope" />
+        {d.scope !== 'all' && <div className="dp-chips" role="radiogroup" aria-label="Session">
+          {d.sessions.map((s) => <button key={s.id} type="button" className={'dp-chip' + (String(s.id) === String(d.selected_session_id) ? ' on' : '')} onClick={() => go('session', s.id)}>{s.name}</button>)}
+        </div>}
+      </section>
+    </>
   );
-
   if (insufficient) {
-    return <>{header}{selector}<Empty icon="fa-chart-line" title="Not enough mocks yet"><p className="text-muted">Progress needs at least two mocks with results{d.scope !== 'all' ? ' in this session' : ''}. Add more mock results, or switch scope to “All sessions”.</p></Empty></>;
+    return <>{head}<Blank icon="fa-chart-line" title="Not enough mocks yet"><p>Progress needs at least two mocks with results{d.scope !== 'all' ? ' in this session' : ''}. Add more mock results, or switch to “All sessions”.</p></Blank></>;
   }
-
-  const hb = (lbl, first, last, delta, dir) => (
-    <div className="card" style={{ padding: '1rem 1.1rem' }}>
-      <div style={{ fontSize: '1.6rem', fontWeight: 800, lineHeight: 1.1, color: dirColor(dir) }}>
-        {first} → {last} <i aria-hidden="true" className={`fas ${arrow(dir)}`} /></div>
-      <div style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--text-secondary)', marginTop: '.3rem' }}>{lbl}</div>
-      <div style={{ fontSize: '.74rem', color: 'var(--text-muted)', marginTop: '.15rem' }}>{delta == null ? '' : `${delta > 0 ? '+' : ''}${delta} first → latest`}</div>
-    </div>
-  );
-
-  const trendTable = (title, rows, note) => (
-    <div className="card mb-3"><div className="card-header"><h3>{title}</h3></div>
-      <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-        <table className="data-table"><thead><tr><th style={{ textAlign: 'left' }}>Name</th>{labels.map((l, i) => <th key={i}>{l}</th>)}<th>Trend</th></tr></thead>
-          <tbody>{rows.length === 0 ? (
-            <tr><td colSpan={labels.length + 2} className="text-muted text-sm">{note}</td></tr>
-          ) : rows.map((r) => (
-            <tr key={r.name}><td><strong>{r.name}</strong></td>
-              {r.points.map((v, i) => <td key={i} className="text-center">{v == null ? '—' : v}</td>)}
-              <td className="text-center" style={{ color: dirColor(r.direction), fontWeight: 700 }}>
-                {r.delta == null ? '' : (r.delta > 0 ? '+' : '') + r.delta} {r.direction === 'up' ? '↑' : r.direction === 'down' ? '↓' : '→'}</td></tr>
-          ))}</tbody></table>
-      </div></div>
-  );
-
+  const h = t.headline;
+  const tiles = [
+    { label: h.primary_label, value: `${h.primary_first} → ${h.primary_last}`, sub: h.primary_delta == null ? '' : `${sgn(h.primary_delta)} first → latest`, tone: DIR_T[h.primary_direction] === 'mute' ? '' : DIR_T[h.primary_direction] === 'bad' ? 'bad' : 'good' },
+    { label: h.secondary_label, value: `${h.secondary_first} → ${h.secondary_last}`, sub: h.secondary_delta == null ? '' : `${sgn(h.secondary_delta)} first → latest`, tone: DIR_T[h.secondary_direction] === 'mute' ? '' : DIR_T[h.secondary_direction] === 'bad' ? 'bad' : 'good' },
+    { label: 'Improving', value: t.movers.improving.length, sub: 'subjects, teachers, arms', tone: t.movers.improving.length ? 'good' : '' },
+    { label: 'Declining', value: t.movers.declining.length, sub: 'need attention', tone: t.movers.declining.length ? 'bad' : '' }];
+  const prim = t.cohort.map((c) => c.primary);
+  const pmax = Math.max(1, ...prim.filter((v) => v != null));
+  const rows = (list, empty) => (list.length === 0 ? <div className="dp-empty">{empty}</div> : (
+    <div className="dp-list">{list.map((r) => {
+      const last = [...r.points].reverse().find((v) => v != null);
+      const tone = DIR_T[r.direction] || 'mute';
+      return (
+        <div key={r.name} className="dp-trow">
+          <span className="nm">{r.name}<small>{r.points.map((v) => (v == null ? '—' : v)).join(' → ')}</small></span>
+          <span className={'dp-sp t-' + tone}><Spark points={r.points} /></span>
+          <span className="pct">{last == null ? '—' : last + '%'}</span>
+          <span className={'dp-pill ' + tone}><i className={'fas ' + (r.direction === 'up' ? 'fa-arrow-up' : r.direction === 'down' ? 'fa-arrow-down' : 'fa-arrow-right')} aria-hidden="true" /> {r.delta == null ? '—' : sgn(r.delta)}</span>
+        </div>);
+    })}</div>));
   return (
     <>
-      {header}
-      {selector}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: '.75rem', marginBottom: '1.1rem' }}>
-        {hb(t.headline.primary_label, t.headline.primary_first, t.headline.primary_last, t.headline.primary_delta, t.headline.primary_direction)}
-        {hb(t.headline.secondary_label, t.headline.secondary_first, t.headline.secondary_last, t.headline.secondary_delta, t.headline.secondary_direction)}
+      {head}
+      <Tiles items={tiles} />
+      <div className="dp-grid two">
+        <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-chart-line" aria-hidden="true" /> {h.primary_label} by mock</h3><small>{t.meta.span}</small></div>
+          <div className="dp-cols" role="img" aria-label={h.primary_label + ' by mock'}>
+            {t.periods.map((p, i) => (
+              <a key={i} className="dp-col" href={p.deep_url} title={`${p.label}: ${prim[i] == null ? '—' : prim[i]}`}>
+                <b>{prim[i] == null ? '—' : prim[i]}</b><i style={{ height: Math.max(3, ((prim[i] || 0) / pmax) * 100) + '%' }} /><span>{p.label}</span></a>))}
+          </div>
+          <p className="dp-note" style={{ padding: 0, margin: '.6rem 0 0' }}>{h.secondary_label}: {t.cohort.map((c) => (c.secondary == null ? '—' : c.secondary)).join(' → ')} · tap a mock for its deep analytics.</p>
+        </section>
+        <section className="rs-card"><div className="rs-card-h"><h3><i className="fas fa-arrows-up-down" aria-hidden="true" /> Biggest movers</h3><small>first → latest</small></div>
+          {[['improving', 'good', 'fa-arrow-trend-up', 'No clear improvers yet.'], ['declining', 'bad', 'fa-arrow-trend-down', 'Nothing declining — good.']].map(([k, tone, icon, none]) => (
+            <div key={k} className="dp-seg" style={{ padding: 0, marginBottom: '.6rem' }}><h4 className={'t-' + tone}><i className={'fas ' + icon} aria-hidden="true" /> {k === 'improving' ? 'Improving' : 'Declining'}<em>{t.movers[k].length}</em></h4>
+              {t.movers[k].length === 0 ? <p className="rs-muted dp-small">{none}</p> : t.movers[k].slice(0, 6).map((m, i) => (
+                <div key={i} className="dp-st"><div><b>{m.name}</b><small>{m.kind} · now {m.current}%</small></div><span className={'t-' + tone}>{sgn(m.delta)}</span></div>))}
+            </div>))}
+        </section>
       </div>
-      <div style={{ fontSize: '.8rem', color: 'var(--text-muted)', marginBottom: '.6rem' }}>{t.meta.periods_count} mocks · {t.meta.span}</div>
-
-      <div className="charts-row">
-        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Cohort trajectory</h3></div><div className="chart-body" style={{ height: 260 }}><canvas ref={cohortRef} /></div></div>
-        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Subject pass rate over time</h3></div><div className="chart-body" style={{ height: 260 }}><canvas ref={subjRef} /></div></div>
-      </div>
-
-      {trendTable('Subject trend — biggest movement first', t.subject_trends, '')}
-      {trendTable('Teacher trend — pass rate per mock', t.teacher_trends, 'No teacher-attributed subjects yet. Set teachers on SSS3 Class Subjects.')}
-
-      <div className="charts-row">
-        {[['improving', 'Improving', 'fa-arrow-trend-up', '#047857'], ['declining', 'Declining — attention', 'fa-arrow-trend-down', '#dc2626']].map(([key, title, icon, col]) => (
-          <div key={key} className="card"><div className="card-header"><h3><i aria-hidden="true" className={`fas ${icon}`} style={{ color: col }} /> {title}</h3></div>
-            <div className="card-body">
-              {t.movers[key].length === 0 ? <p className="text-muted text-sm">{key === 'improving' ? 'No clear improvers yet.' : 'Nothing declining — good.'}</p> : t.movers[key].map((m, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '.6rem', padding: '.4rem 0', borderBottom: '1px solid var(--border-color)' }}>
-                  <div><div style={{ fontWeight: 600, fontSize: '.84rem' }}>{m.name}</div><div style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{m.kind} · now {m.current}%</div></div>
-                  <div style={{ fontWeight: 700, color: col }}>{m.delta > 0 ? '+' : ''}{m.delta}</div>
-                </div>
-              ))}
-            </div></div>
-        ))}
-      </div>
-
-      <h3 style={{ margin: '1.2rem 0 .6rem' }}>Recommendations</h3>
-      <div className="charts-row">
-        {[['students', 'Students', 'fa-user-graduate', '#2563eb'], ['teachers', 'Teachers', 'fa-chalkboard-teacher', '#0d9488'], ['management', 'Management', 'fa-briefcase', '#b45309']].map(([bucket, title, icon, col]) => (
-          <div key={bucket} className="card"><div className="card-header"><h3><i aria-hidden="true" className={`fas ${icon}`} style={{ color: col }} /> {title}</h3></div>
-            <div className="card-body">
-              {t.recommendations[bucket].length === 0 ? <p className="text-muted text-sm">Nothing flagged.</p> : t.recommendations[bucket].map((r, i) => (
-                <div key={i} style={{ borderLeft: `3px solid ${RECO[r.tone] || '#64748b'}`, padding: '.35rem 0 .55rem .65rem', marginBottom: '.55rem' }}>
-                  <div style={{ fontWeight: 700, fontSize: '.82rem' }}>{r.title}</div>
-                  <div style={{ fontSize: '.78rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{r.text}</div>
-                </div>
-              ))}
-            </div></div>
-        ))}
-      </div>
+      <section className="rs-card flush">
+        <div className="dp-tabs"><Seg options={[
+          { value: 'subjects', label: 'Subjects', icon: 'fa-book', count: t.subject_trends.length },
+          { value: 'teachers', label: 'Teachers', icon: 'fa-chalkboard-user', count: t.teacher_trends.length },
+          { value: 'reco', label: 'What to do', icon: 'fa-lightbulb' }]} value={tab} onChange={setTab} label="Trends" /></div>
+        {tab === 'subjects' && <>{rows(t.subject_trends, 'No subject trends yet.')}<p className="dp-note">Pass rate per mock, biggest movement first.</p></>}
+        {tab === 'teachers' && rows(t.teacher_trends, 'No teacher-attributed subjects yet. Set teachers on SSS3 Class Subjects.')}
+        {tab === 'reco' && <Recos recos={t.recommendations} />}
+      </section>
     </>
   );
 }

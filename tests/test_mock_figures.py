@@ -46,14 +46,15 @@ def test_queue_lists_unflagged_figure_questions_and_sync_round_trip(app):
         db.session.add(s); db.session.flush()
         worded = _q(s.id, 'In the diagram above, find angle PQR.')
         plain = _q(s.id, 'Solve 2x + 3 = 11.')
-        has_img = _q(s.id, 'Use the graph below.', image_url='/static/x.png')
-        p = MockJAMBPassage(subject_id=s.id, body='Study the figure below.', image_url='/static/p.png')
+        has_img = _q(s.id, 'Use the graph below.', image_url='/static/img/logo-mark.svg')
+        gone = _q(s.id, 'Name the parts.', image_url='/static/uploads/mock_jamb/gone-%s.png' % uuid.uuid4().hex)
+        p = MockJAMBPassage(subject_id=s.id, body='Study the figure below.', image_url='/static/favicon.ico')
         db.session.add(p); db.session.flush()
         via_passage = _q(s.id, 'What does the passage show?', passage_id=p.id)
         flagged = _q(s.id, 'Name this organ.', needs_image=True, source='myschool')
-        db.session.add_all([worded, plain, has_img, via_passage, flagged]); db.session.commit()
+        db.session.add_all([worded, plain, has_img, gone, via_passage, flagged]); db.session.commit()
         ids = dict(worded=worded.id, plain=plain.id, has_img=has_img.id, passage=via_passage.id,
-                   flagged=flagged.id, subject=s.id)
+                   flagged=flagged.id, gone=gone.id, subject=s.id)
         mock_figures.sync(force=True)
         get = lambda k: db.session.get(MockJAMBQuestion, ids[k])
         db.session.expire_all()
@@ -61,6 +62,8 @@ def test_queue_lists_unflagged_figure_questions_and_sync_round_trip(app):
         assert not get('plain').needs_image and not get('has_img').needs_image
         assert not get('passage').needs_image                       # passage carries the picture
         assert get('flagged').needs_image is True
+        assert get('gone').needs_image is True                      # its file is missing
+        assert mock_figures.reason(get('gone')) == 'Picture file is missing'
         assert mock_figures.reason(get('worded')).startswith('Mentions')
         assert mock_figures.reason(get('flagged')) == 'Flagged on import'
 
@@ -100,3 +103,42 @@ def test_bulk_dismiss_marks_not_needed(app):
         for qid in ids:
             q = db.session.get(MockJAMBQuestion, qid)
             assert q.needs_image is False and q.image_not_needed is True
+
+
+def test_fix_degrees():
+    from utils.mock_figures import fix_degrees
+    assert fix_degrees('185 o') == '185°' and fix_degrees('22.5o') == '22.5°'
+    assert fix_degrees('zero') == 'zero' and fix_degrees('2 or 3') == '2 or 3' and fix_degrees(None) is None
+
+
+def test_import_copies_outside_pictures_and_repair(app, monkeypatch):
+    """A pasted link to another site's picture is saved on this server; one that
+    can't be downloaded sends the question to the needs-images list. The repair
+    button does the same for links already in the bank, and fixes '185 o'."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils import mock_figures
+    monkeypatch.setattr(mock_figures, 'save_copy',
+                        lambda url: None if 'bad' in url else '/static/img/logo-mark.svg')
+    with app.app_context():
+        s = Subject(name='FigImp ' + uuid.uuid4().hex[:6], is_active=True)
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    rows = ('Q good? | 185 o | 200 o | b | c | A | | | | 2020 | https://myschool.ng/storage/good.png\n'
+            'Q bad? | a | b | c | d | A | | | | 2020 | https://myschool.ng/storage/bad.png')
+    c.post('/mock-jamb/bank/import', data={'_csrf_token': _csrf(c), 'subject_id': sid, 'rows': rows})
+    with app.app_context():
+        good = MockJAMBQuestion.query.filter_by(subject_id=sid, question_text='Q good?').one()
+        bad = MockJAMBQuestion.query.filter_by(subject_id=sid, question_text='Q bad?').one()
+        assert good.image_url == '/static/img/logo-mark.svg' and good.option_a == '185°'
+        assert bad.image_url is None and bad.needs_image is True
+        old = MockJAMBQuestion(mock_exam_id=None, subject_id=sid, question_text='Old link',
+                               option_a='90 o', option_b='b', option_c='c', option_d='d', correct_option='A',
+                               marks=1, image_url='https://myschool.ng/storage/old.png')
+        db.session.add(old); db.session.commit()
+        oid = old.id
+    r = c.post('/mock-jamb/bank/images/repair', data={'_csrf_token': _csrf(c)}, follow_redirects=True)
+    assert 'saved' in r.get_data(as_text=True)
+    with app.app_context():
+        o = db.session.get(MockJAMBQuestion, oid)
+        assert o.image_url == '/static/img/logo-mark.svg' and o.option_a == '90°'

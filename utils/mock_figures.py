@@ -45,11 +45,13 @@ def _has(v):
 
 def needs_image(q):
     """Does this bank question (with its passage) still need a picture?"""
-    if _has(q.image_url) or getattr(q, 'image_not_needed', False):
+    if _has(q.image_url):
+        return local_missing(q.image_url)          # a picture whose file is gone
+    if getattr(q, 'image_not_needed', False):
         return False
     p = q.passage
     if p is not None and _has(p.image_url):
-        return False
+        return local_missing(p.image_url)
     if q.needs_image:
         return True
     return mentions_figure(q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
@@ -61,7 +63,9 @@ def _candidates():
     cols = (Q.question_text, Q.option_a, Q.option_b, Q.option_c, Q.option_d, P.body)
     likes = [func.lower(c).like('%' + w + '%') for w in _LIKE for c in cols]
     return (Q.query.outerjoin(P, Q.passage_id == P.id)
-            .filter(Q.mock_exam_id.is_(None), or_(Q.needs_image.is_(True), *likes)))
+            .filter(Q.mock_exam_id.is_(None),
+                    or_(Q.needs_image.is_(True), Q.image_url.ilike('/static/%'),
+                        P.image_url.ilike('/static/%'), *likes)))
 
 
 _last = {}
@@ -90,11 +94,19 @@ def sync(force=False, every=60):
                 {Q.needs_image: val}, synchronize_session=False)
     if on or off:
         db.session.commit()
+    try:
+        fix_all_degrees()
+    except Exception:
+        db.session.rollback()
     return len(on)
 
 
 def reason(q):
     """A short phrase explaining why the question is in the queue."""
+    if _has(q.image_url) and local_missing(q.image_url):
+        return 'Picture file is missing'
+    if q.passage is not None and _has(q.passage.image_url) and local_missing(q.passage.image_url):
+        return 'Passage picture file is missing'
     if q.needs_image and (q.source or '') not in ('', 'manual', 'paste') and not mentions_figure(
             q.question_text, q.option_a, q.option_b, q.option_c, q.option_d):
         return 'Flagged on import'
@@ -109,3 +121,112 @@ def reason(q):
             return 'Mentions “%s”%s' % (w if len(w) < 30 else w[:28] + '…',
                                          ' in its passage' if t is texts[-1] and t else '')
     return 'Flagged on import'
+
+
+# ---------------------------------------------------------------------------
+# Broken pictures: a figure whose file is gone, or one still pointing at another
+# website (myschool.ng and most sites block their images from showing on other
+# domains, so the picture shows as a broken icon).
+
+_DEG_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*[oº˚]\s*$")
+
+
+def fix_degrees(text):
+    """'185 o' → '185°' — myschool renders the degree sign as a superscript 'o',
+    which is lost when the text is copied."""
+    if not text:
+        return text
+    m = _DEG_RE.match(text)
+    return (m.group(1) + '°') if m else text
+
+
+def is_external(url):
+    return bool(url) and url.strip().lower().startswith(('http://', 'https://', '//'))
+
+
+def local_missing(url):
+    """True for a /static/… picture whose file is not on this server."""
+    import os
+    from flask import current_app
+    if not url or is_external(url) or url.startswith('data:'):
+        return False
+    static_url = (current_app.static_url_path or '/static').rstrip('/') + '/'
+    if not url.startswith(static_url):
+        return False
+    rel = url[len(static_url):].split('?', 1)[0]
+    path = os.path.normpath(os.path.join(current_app.static_folder, rel))
+    if not path.startswith(os.path.normpath(current_app.static_folder)):
+        return False
+    return not os.path.isfile(path)
+
+
+def save_copy(url):
+    """Download a picture from another site (or a data: URI) and keep a copy on
+    this server. Returns the local URL, or None when it can't be fetched."""
+    from utils.myschool_harvest import _rehost_image
+    if url and url.startswith('//'):
+        url = 'https:' + url
+    return _rehost_image(url) if url else None
+
+
+def external_count():
+    from models import MockJAMBQuestion as Q, MockJAMBPassage as P
+    q = Q.query.filter(or_(Q.image_url.ilike('http://%'), Q.image_url.ilike('https://%'),
+                           Q.image_url.ilike('//%'))).count()
+    p = P.query.filter(or_(P.image_url.ilike('http://%'), P.image_url.ilike('https://%'),
+                           P.image_url.ilike('//%'))).count()
+    return q + p
+
+
+def repair(limit=40, budget_s=40):
+    """Copy pictures hosted on other websites onto this server, and fix '185 o'
+    degree options. A picture that can't be downloaded is removed and its
+    question goes to the needs-images queue (bank) so someone uploads it.
+    Works in batches; returns {saved, failed, left, degrees}."""
+    from models import db, MockJAMBQuestion as Q, MockJAMBPassage as P
+    ext = or_(Q.image_url.ilike('http://%'), Q.image_url.ilike('https://%'), Q.image_url.ilike('//%'))
+    start = time.monotonic()
+    saved = failed = 0
+    rows = Q.query.filter(ext).order_by(Q.id).limit(limit).all()
+    pext = or_(P.image_url.ilike('http://%'), P.image_url.ilike('https://%'), P.image_url.ilike('//%'))
+    prow = P.query.filter(pext).order_by(P.id).limit(max(0, limit - len(rows))).all()
+    for obj in rows + prow:
+        if time.monotonic() - start > budget_s:
+            break
+        new = save_copy(obj.image_url)
+        if new:
+            obj.image_url = new
+            saved += 1
+        else:
+            obj.image_url = None
+            if isinstance(obj, Q):
+                obj.needs_image = True
+                obj.image_not_needed = False
+            else:
+                for q in obj.questions:
+                    q.needs_image = True
+                    q.image_not_needed = False
+            failed += 1
+        db.session.commit()
+    degrees = fix_all_degrees()
+    return {'saved': saved, 'failed': failed, 'left': external_count(), 'degrees': degrees}
+
+
+def fix_all_degrees():
+    """Turn '185 o' options into '185°' across all Mock JAMB questions."""
+    from models import db, MockJAMBQuestion as Q
+    degrees = 0
+    pats = [f'%{d}{sp}{o}' for d in '0123456789' for sp in ('', ' ') for o in ('o', 'º', '˚')]
+    ends = [c.like(pat) for c in (Q.option_a, Q.option_b, Q.option_c, Q.option_d) for pat in pats]
+    for q in Q.query.filter(or_(*ends)).limit(5000).all():
+        changed = False
+        for col in ('option_a', 'option_b', 'option_c', 'option_d'):
+            v = getattr(q, col)
+            nv = fix_degrees(v)
+            if nv != v:
+                setattr(q, col, nv)
+                changed = True
+        degrees += 1 if changed else 0
+    if degrees:
+        db.session.commit()
+    return degrees

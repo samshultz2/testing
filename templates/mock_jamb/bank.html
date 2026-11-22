@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_figure.html" import qfig, qfig_js with context %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
 {% from "mock_jamb/_shell.html" import mj_nav with context %}
 {% block title %}Question Bank - {{ app_name }}{% endblock %}
@@ -139,6 +140,13 @@
     <a href="{{ url_for('mock_jamb.bank_needs_images') }}" class="rs-btn"><i class="fas fa-list-check" aria-hidden="true"></i> Review &amp; add images</a></div>
   {% endif %}
 
+{% if external_images and can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
+  <div class="qb-alert"><i class="fas fa-link-slash" aria-hidden="true"></i>
+    <span><strong>{{ external_images }}</strong> picture{{ '' if external_images == 1 else 's' }} {{ 'still links' if external_images == 1 else 'still link' }} to another website (usually myschool.ng), which blocks them — they show as broken images. Save copies on this server; any that can't be downloaded move to the needs-images list.</span>
+    <form method="post" action="{{ url_for('mock_jamb.bank_images_repair') }}" style="margin:0">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="rs-btn primary"><i class="fas fa-wrench" aria-hidden="true"></i> Fix broken pictures</button></form></div>
+  {% endif %}
   {% if coverage %}
   <section class="rs-card">
     <div class="rs-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Section coverage</h3><small>stock vs one JAMB paper · tap to filter</small></div>
@@ -219,7 +227,7 @@
   <span class="qb-n">{{ n }}</span>
   <div class="qb-body">
     <div class="qb-tx">{{ q.question_text | question_html }}</div>
-    {% if q.image_url %}<img src="{{ q.image_url }}" alt="Figure for question {{ n }}" class="qb-img" loading="lazy">{% endif %}
+    {% if q.image_url %}{{ qfig(q.image_url, 'Figure for question ' ~ n, fix=url_for('mock_jamb.bank_edit_question', question_id=q.id)) }}{% endif %}
     <div class="qb-opts">
       {% for opt, val in q.options %}{% if val %}<div class="qb-opt {{ 'key' if q.correct_option == opt }}"><b>{{ opt }}</b><span>{{ val | question_html }}</span></div>{% endif %}{% endfor %}
     </div>
@@ -258,7 +266,7 @@
         <button class="rs-btn ghost danger qb-ic" title="Delete passage" aria-label="Delete passage"><i class="fas fa-trash" aria-hidden="true"></i></button>
       </form>{% endif %}
     </div>
-    {% if p.image_url %}<img src="{{ p.image_url }}" alt="Passage figure" class="qb-img" style="margin:.7rem 1rem 0">{% endif %}
+    {% if p.image_url %}{{ qfig(p.image_url, 'Passage figure', style='margin:.7rem 1rem 0') }}{% endif %}
     <div class="qb-pbody">{{ p.body | question_html }}</div>
     <div class="qb-list">{% for q in grp.questions %}{{ show_q(q, loop.index) }}{% endfor %}</div>
     {% if can_edit %}<details class="qb-add"><summary><i class="fas fa-plus" aria-hidden="true"></i> Add a question to this passage</summary>
@@ -642,4 +650,4 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{% endblock %}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{% endblock %}

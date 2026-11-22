@@ -309,13 +309,19 @@ def test_paste_import_accepts_image_url(app):
     with app.app_context():
         s = Subject(name='PasteImgSubj', is_active=True); db.session.add(s); db.session.commit()
         sid = s.id
+    from utils import mock_figures
+    import pytest as _pt
+    mp = _pt.MonkeyPatch()
+    mp.setattr(mock_figures, 'save_copy', lambda url: '/static/uploads/mock_jamb/copied.png')
     c = _admin(app)
     row = 'What is shown? | a | b | c | d | A | | | | 2020 | https://example.com/fig.png'
     c.post('/mock-jamb/bank/import', data={'_csrf_token': _csrf(c), 'subject_id': sid, 'rows': row},
            follow_redirects=True)
     with app.app_context():
         q = MockJAMBQuestion.query.filter_by(subject_id=sid, mock_exam_id=None).first()
-        assert q and q.image_url == 'https://example.com/fig.png' and q.exam_year == '2020'
+        # pictures on other sites are copied onto this server (they hotlink-block)
+        assert q and q.image_url == '/static/uploads/mock_jamb/copied.png' and q.exam_year == '2020'
+    mp.undo()
 
 
 # ---- in-app harvest: saves + dedupes by source_ref -------------------------

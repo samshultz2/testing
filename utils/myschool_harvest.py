@@ -83,6 +83,11 @@ def start_harvest(subjects, exam='jamb', year_min=None, year_max=None, max_pages
     return _public(state)
 
 
+def _deg(text):
+    from utils.mock_figures import fix_degrees
+    return fix_degrees(text)
+
+
 def _rehost_image(url):
     """Re-host a genuine question figure locally as PNG; returns its static URL, or
     None. Handles both a hosted URL (``/storage/classroom/…`` NuxtImg) and an inline
@@ -223,8 +228,8 @@ def _process_one(cell, qid, state, session):
         exam_body=_exam_body(state.get('exam')),
         passage_id=(passage.id if passage else None),
         question_text=p['stem'],
-        option_a=_cap(p['options'][0], 400), option_b=_cap(p['options'][1], 400),
-        option_c=_cap(p['options'][2], 400), option_d=_cap(p['options'][3], 400),
+        option_a=_cap(_deg(p['options'][0]), 400), option_b=_cap(_deg(p['options'][1]), 400),
+        option_c=_cap(_deg(p['options'][2]), 400), option_d=_cap(_deg(p['options'][3]), 400),
         correct_option=_cap(p['correct'], 1),
         marks=1, topic=_cap(top, 100), subtopic=_cap(sub, 120),
         exam_year=_cap(str(cell['year']), 8),

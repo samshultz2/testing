@@ -1,0 +1,40 @@
+{# Question / passage pictures. A picture that fails to load (a file that is
+   gone, or a link to a site that blocks hotlinking) is swapped for a clear
+   note — with a "fix" link for staff — instead of a broken-image icon. #}
+{% macro qfig(url, alt, cls='qb-img', fix=None, style=None) -%}
+<img src="{{ url }}" alt="{{ alt }}" class="{{ cls }}" loading="lazy" referrerpolicy="no-referrer" data-qfig{% if fix %} data-fix="{{ fix }}"{% endif %}{% if style %} style="{{ style }}"{% endif %}>
+{%- endmacro %}
+
+{% macro qfig_js(staff=True) -%}
+<style>
+.qfig-broken{display:inline-flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.5rem 0;padding:.5rem .75rem;border:1px dashed color-mix(in srgb,var(--warning,#b45309) 55%,var(--border-color,#e2e8f0));border-radius:10px;background:color-mix(in srgb,var(--warning,#b45309) 7%,var(--bg-card,#fff));font-size:.82rem;color:var(--text-secondary,#475569)}
+.qfig-broken i{color:var(--warning,#b45309)}
+.qfig-broken a{font-weight:700}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  if (window.__qfig) return; window.__qfig = 1;
+  var STAFF = {{ 'true' if staff else 'false' }};
+  function swap(img){
+    if (!img || img.__qfigDone) return; img.__qfigDone = 1;
+    var box = document.createElement('span');
+    box.className = 'qfig-broken';
+    box.setAttribute('role', 'note');
+    var ext = /^https?:|^\/\//i.test(img.getAttribute('src') || '');
+    box.innerHTML = '<i class="fas fa-image" aria-hidden="true"></i><span></span>';
+    box.querySelector('span').textContent = STAFF
+      ? (ext ? "Picture didn't load — it's linked from another website that blocks it." : "Picture didn't load — the file is missing.")
+      : 'The picture for this question could not be shown.';
+    var fix = img.getAttribute('data-fix');
+    if (STAFF && fix) { var a = document.createElement('a'); a.href = fix; a.textContent = 'Upload it'; box.appendChild(a); }
+    img.replaceWith(box);
+  }
+  document.addEventListener('error', function(e){
+    var t = e.target; if (t && t.tagName === 'IMG' && t.hasAttribute('data-qfig')) swap(t);
+  }, true);
+  function scan(){ document.querySelectorAll('img[data-qfig]').forEach(function(i){ if (i.complete && i.naturalWidth === 0 && i.getAttribute('src')) swap(i); }); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scan); else scan();
+  window.addEventListener('load', scan);
+})();
+</script>
+{%- endmacro %}

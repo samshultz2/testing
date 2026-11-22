@@ -1311,6 +1311,7 @@ def bank():
     jamb_ok_ids = {s.id for s in subjects if on_jamb(s.name)}
     from utils import mock_figures
     mock_figures.sync()
+    external_images = mock_figures.external_count()
     needs_image_count = MockJAMBQuestion.query.filter(
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.needs_image.is_(True)).count()
@@ -1334,6 +1335,7 @@ def bank():
                           .group_by(MockJAMBQuestion.subject_id).all())
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
                            needs_image_count=needs_image_count, subject_counts=subject_counts,
+                           external_images=external_images,
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            pagination=pagination, q_search=q_search, jamb_ok_ids=jamb_ok_ids,
@@ -2030,7 +2032,8 @@ def bank_import():
     seen = {_norm(q.question_text) for q in MockJAMBQuestion.query.filter_by(
         subject_id=subject_id, mock_exam_id=None).all()}
 
-    added = skipped = duplicates = 0
+    from utils import mock_figures
+    added = skipped = duplicates = rehosted = 0
     for line in raw.splitlines():
         line = line.strip()
         if not line:
@@ -2053,15 +2056,31 @@ def bank_import():
         topic = parts[7] if len(parts) > 7 and parts[7] else None
         subtopic = parts[8] if len(parts) > 8 and parts[8] else None
         year = (parts[9].strip()[:8] if len(parts) > 9 and parts[9].strip() else default_year)
-        # optional 11th column: a figure URL (kept as-is; may be hotlink-blocked).
-        image = (parts[10].strip()[:300] if len(parts) > 10 and parts[10].strip()
-                 and parts[10].strip().lower().startswith(('http://', 'https://', '/')) else None)
+        # optional 11th column: a figure URL or data: image. Pictures on other
+        # sites are copied onto this server (most block hotlinking, so a raw
+        # link shows as a broken image); one that can't be fetched sends the
+        # question to the needs-images queue.
+        raw_img = parts[10].strip() if len(parts) > 10 else ''
+        image, img_failed = None, False
+        if raw_img.lower().startswith(('http://', 'https://', '//', 'data:image/')):
+            if rehosted < 40:
+                rehosted += 1
+                image = mock_figures.save_copy(raw_img)
+                img_failed = image is None
+            elif not raw_img.lower().startswith('data:'):
+                image = raw_img[:300]            # copied later by "Fix broken pictures"
+            else:
+                img_failed = True
+        elif raw_img.startswith('/'):
+            image = raw_img[:300]
+        a, b, c, d = (mock_figures.fix_degrees(x) for x in (a, b, c, d))
         base += 1
         db.session.add(MockJAMBQuestion(
             mock_exam_id=None, subject_id=subject_id, section=section, exam_body=exam_body,
             question_text=text, option_a=a, option_b=b, option_c=c, option_d=d,
             correct_option=correct, marks=1, topic=topic, subtopic=subtopic,
-            exam_year=year, image_url=image, source='paste', order=base))
+            exam_year=year, image_url=image, source='paste', order=base,
+            needs_image=img_failed))
         added += 1
     db.session.commit()
     msg = f'Imported {added} question(s).'
@@ -2232,11 +2251,12 @@ def bank_needs_images():
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.image_not_needed.is_(True)).count()
     reasons = {x.id: mock_figures.reason(x) for x in pagination.items}
+    external = mock_figures.external_count()
     return render_template('mock_jamb/needs_images.html',
                            subjects=subjects, subject_id=subject_id, year=year,
                            exam_body=exam_body, search=search, years=years, subj_name=subj_name,
                            subject_counts=subject_counts, reasons=reasons, dismissed=dismissed,
-                           matching=pagination.total,
+                           matching=pagination.total, external=external,
                            pagination=pagination, questions=pagination.items,
                            total=total, index_url=url_for('mock_jamb.index'),
                            bank_url=url_for('mock_jamb.bank'))
@@ -2325,6 +2345,31 @@ def bank_needs_images_bulk():
     return redirect(back)
 
 
+@mock_jamb_bp.route('/bank/images/repair', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_images_repair():
+    """Save copies of question pictures that still point at another website
+    (they show as broken images — sites like myschool.ng block hotlinking).
+    Works in batches; a picture that can't be downloaded goes to the
+    needs-images queue. Also turns '185 o' options into '185°'."""
+    from utils import mock_figures
+    r = mock_figures.repair()
+    mock_figures.sync(force=True)
+    parts = []
+    if r['saved']:
+        parts.append(f"saved {r['saved']} picture(s) on this server")
+    if r['failed']:
+        parts.append(f"{r['failed']} couldn't be downloaded and are now in the needs-images list")
+    if r['degrees']:
+        parts.append(f"fixed the degree sign in {r['degrees']} question(s)")
+    msg = ('Done — ' + '; '.join(parts) + '.') if parts else 'Nothing to fix.'
+    if r['left']:
+        msg += f" {r['left']} still to go — click again to continue."
+    flash(msg, 'success' if not r['failed'] else 'warning')
+    return redirect(request.referrer or url_for('mock_jamb.bank_needs_images'))
+
+
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])
 @login_required
 @csrf_protect
@@ -2391,7 +2436,13 @@ def questions(exam_id):
         standalone = pagination.items
         qcount = MockJAMBQuestion.query.filter_by(
             mock_exam_id=exam_id, subject_id=subject_id).count()
+    subject_counts = dict(db.session.query(MockJAMBQuestion.subject_id, func.count(MockJAMBQuestion.id))
+                          .filter(MockJAMBQuestion.mock_exam_id == exam_id)
+                          .group_by(MockJAMBQuestion.subject_id).all())
+    bank_count = MockJAMBQuestion.query.filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                                               MockJAMBQuestion.subject_id == subject_id).count() if subject_id else 0
     return render_template('mock_jamb/questions.html', exam=exam, subjects=subjects,
+                           subject_counts=subject_counts, bank_count=bank_count,
                            subject=subject, subject_id=subject_id, passages=passages,
                            standalone=standalone, qcount=qcount, pagination=pagination,
                            topic_tree=_subject_topic_tree(subject_id),

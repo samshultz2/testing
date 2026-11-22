@@ -185,7 +185,7 @@ body{background:#eef2f7}
         <button type="button" class="q-flag" data-flag aria-pressed="false"><i class="fas fa-flag"></i> <span>Flag</span></button>
     </div>
     <div class="qh">{{ qd.q.question_text | question_html }}</div>
-    {% if qd.q.image_url %}<img src="{{ qd.q.image_url }}" alt="figure" loading="lazy">{% endif %}
+    {% if qd.q.image_url %}<img src="{{ qd.q.image_url }}" alt="figure" loading="lazy" referrerpolicy="no-referrer" data-qfig>{% endif %}
     {% for letter, text in qd.options %}
     <label class="mjs-opt">
         <input type="radio" name="q{{ qd.q.id }}" value="{{ letter }}" {{ 'checked' if saved.get(qd.q.id) == letter else '' }}>
@@ -220,7 +220,7 @@ body{background:#eef2f7}
         {% for g in s.groups %}{% set gid = 's' ~ sid ~ 'g' ~ loop.index %}
         <div class="mjs-passage" data-g="{{ gid }}">
             {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <small>({{ g.passage.kind_label }})</small></div>{% endif %}
-            {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" loading="lazy">{% endif %}
+            {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" loading="lazy" referrerpolicy="no-referrer" data-qfig>{% endif %}
             <div class="pbody">{{ g.passage.body | question_html }}</div>
         </div>
         {% for qd in g.questions %}{% set ns.n = ns.n + 1 %}{{ qcard(qd, ns.n, s.count, sid, gid) }}{% endfor %}
@@ -308,6 +308,7 @@ body{background:#eef2f7}
 {% endif %}
 {% endblock %}
 {% block scripts %}
+{% from "mock_jamb/_figure.html" import qfig_js with context %}{{ qfig_js(False) }}
 {% if show_math %}{% include 'mock_jamb/_mathjax.html' %}{% endif %}
 <script nonce="{{ csp_nonce }}">
 (function(){

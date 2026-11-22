@@ -4753,6 +4753,13 @@
 ]
 ],
 [
+"mock_jamb.bank_images_repair",
+"/mock-jamb/bank/images/repair",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bank_import",
 "/mock-jamb/bank/import",
 [
