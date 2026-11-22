@@ -1,0 +1,183 @@
+{# The export panel shared by the Download modal (editor) and the full print
+   page: tabs for the one-page timetable / candidate timetables / Excel, the
+   timetable's options (theme, orientation, paper, what to show) and a live
+   preview of the sheet. Needs exam-timetable-sheet.css/.js on the page. #}
+{% macro sheet(xt, d, school, logo, kinds, fmt_time, fmt_dur) %}
+<div class="xts no-inv no-cnt{{ '' if logo else ' no-logo' }}" data-theme="timeline" data-orient="portrait" data-paper="a4">
+  <header class="xts-head">
+    {% if logo %}<img class="xts-logo" src="{{ logo }}" alt="" crossorigin="anonymous">{% endif %}
+    <div class="xts-ht">
+      <div class="xts-school">{{ school.name or '' }}</div>
+      <div class="xts-title">{{ xt.title }}</div>
+      <div class="xts-sub">{% if d.first %}{{ d.first.strftime('%d %b') }} – {{ d.last.strftime('%d %b %Y') }} · {% endif %}{{ d.rows|length }} paper{{ 's' if d.rows|length != 1 }} over {{ d.days|length }} day{{ 's' if d.days|length != 1 }}</div>
+    </div>
+    <div class="xts-badge">{{ xt.board_label }}</div>
+  </header>
+  {% if xt.notes %}<p class="xts-notes">{{ xt.notes }}</p>{% endif %}
+  <div class="xts-rule"></div>
+  <div class="xts-body">
+    <div class="xts-col">
+    {% for day in d.days %}
+      <section class="xts-day">
+        <div class="xts-date"><span class="dw">{{ day.date.strftime('%a')|upper }}</span><span class="dn">{{ day.date.strftime('%d') }}</span><span class="dm">{{ day.date.strftime('%b')|upper }}</span></div>
+        <div class="xts-papers">
+        {% for r in day.rows %}{% set p = r.p %}
+          <div class="xts-p">
+            <div class="xts-time"><b>{{ fmt_time(p.start_time) }}</b><small>to {{ fmt_time(p.end_time) }}</small><em>{{ fmt_dur(r.minutes) }}</em></div>
+            <div class="xts-subj"><b>{{ p.subject }}</b>{% if p.paper %}<span>{{ p.paper }}</span>{% endif %}{% if p.invigilators %}<span class="inv">Invigilators: {{ p.invigilators }}</span>{% endif %}
+              <div class="xts-meta">{% if p.kind and kinds.get(p.kind) %}<span class="xts-kind">{{ kinds[p.kind].split(' /')[0] }}</span>{% endif %}{% if p.venue %}<span class="xts-venue">{{ p.venue }}</span>{% endif %}<span class="xts-cnt">{{ r.count }} candidate{{ 's' if r.count != 1 }}</span></div></div>
+          </div>
+        {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+    </div>
+  </div>
+  <footer class="xts-foot"><span>Check the official {{ xt.board_label }} timetable for any late changes.</span><span>{{ school.name or '' }}</span></footer>
+</div>
+{% endmacro %}
+
+{% macro panel(xt, d, school, logo, kinds, fmt_time, fmt_dur, themes, full_url=None) %}
+{% set sw = {'timeline': ['#fffdf8', '#a16207', '#1d1b16'], 'tickets': ['#14213d', '#fca311', '#ffffff'], 'gazette': ['#f7f4ec', '#111111', '#999999'],
+             'swiss': ['#ffffff', '#ff3d00', '#0a0a0a'], 'notebook': ['#ffffff', '#1d4ed8', '#f2a3a3'], 'board': ['#f4f6fb', '#1d4ed8', '#0f172a'],
+             'quiet': ['#ffffff', '#0f766e', '#18181b'], 'inline': ['#f6f5f2', '#1f2328', '#ffffff'], 'print': ['#e5e5e5', '#000000', '#ffffff'],
+             'mono': ['#000000', '#ffffff', '#000000'], 'plain': ['#ffffff', '#000000', '#ffffff']} %}
+<div class="xtp" data-xts-panel>
+  <div class="xtp-tabs" role="tablist">
+    <button type="button" class="on" data-xtp-tab="sheet" role="tab" aria-selected="true"><i class="fas fa-table-list" aria-hidden="true"></i> Timetable</button>
+    <button type="button" data-xtp-tab="cand" role="tab" aria-selected="false"><i class="fas fa-id-card" aria-hidden="true"></i> Candidates</button>
+    <button type="button" data-xtp-tab="xlsx" role="tab" aria-selected="false"><i class="fas fa-file-excel" aria-hidden="true"></i> Excel</button>
+  </div>
+
+  <div class="xtp-pane" data-xtp-pane="sheet">
+    <div class="xtp-grid">
+      <div class="xtp-ctl">
+        <p class="xtp-lbl">Theme</p>
+        <div class="xtp-themes" role="radiogroup" aria-label="Theme">
+          {% for key, name, desc in themes %}
+          <button type="button" class="xtp-th" data-xts-theme="{{ key }}" role="radio" aria-checked="false" title="{{ desc }}">
+            <i aria-hidden="true">{% for c in sw[key] %}<s style="background:{{ c }}"></s>{% endfor %}</i><b>{{ name }}</b></button>
+          {% endfor %}
+        </div>
+        <p class="xtp-lbl">Page</p>
+        <div class="xtp-seg" role="group" aria-label="Orientation">
+          <button type="button" data-xts-set="orient" data-v="portrait"><span class="pg p"></span> Portrait</button>
+          <button type="button" data-xts-set="orient" data-v="landscape"><span class="pg l"></span> Landscape</button>
+        </div>
+        <div class="xtp-seg" role="group" aria-label="Paper size">
+          <button type="button" data-xts-set="paper" data-v="a4">A4</button>
+          <button type="button" data-xts-set="paper" data-v="letter">Letter</button>
+        </div>
+        <p class="xtp-lbl">Show</p>
+        <div class="xtp-sws">
+          <label class="xtp-sw">School logo<input type="checkbox" data-xts-opt="logo" {{ 'checked' if logo else 'disabled' }}></label>
+          <label class="xtp-sw">School name<input type="checkbox" data-xts-opt="school" checked></label>
+          <label class="xtp-sw">Hall / venue<input type="checkbox" data-xts-opt="venue" checked></label>
+          <label class="xtp-sw">Paper type<input type="checkbox" data-xts-opt="kind" checked></label>
+          <label class="xtp-sw">End time<input type="checkbox" data-xts-opt="end" checked></label>
+          <label class="xtp-sw">Duration (1hr 30mins)<input type="checkbox" data-xts-opt="dur" checked></label>
+          <label class="xtp-sw">Invigilators<input type="checkbox" data-xts-opt="inv"></label>
+          <label class="xtp-sw">Candidates per paper<input type="checkbox" data-xts-opt="cnt"></label>
+          {% if xt.notes %}<label class="xtp-sw">Notes<input type="checkbox" data-xts-opt="notes" checked></label>{% endif %}
+        </div>
+        {% if not logo %}<p class="xtp-hint">No school logo uploaded yet (Settings → School info).</p>{% endif %}
+      </div>
+      <div class="xtp-prev">
+        <div class="xtp-stage" data-xts-stage data-max-h="640"><div class="xtp-frame"><div data-xts-scale>{{ sheet(xt, d, school, logo, kinds, fmt_time, fmt_dur) }}</div></div></div>
+        <p class="xtp-note" data-xts-note></p>
+      </div>
+    </div>
+    <div class="xtp-foot">
+      {% if full_url %}<a href="{{ full_url }}" class="rs-btn ghost xtp-full"><i class="fas fa-up-right-from-square" aria-hidden="true"></i> Full page</a>{% endif %}
+      <span class="xtp-sp"></span>
+      <button type="button" class="rs-btn ghost" data-xts-do="print"><i class="fas fa-print" aria-hidden="true"></i> Print</button>
+      <button type="button" class="rs-btn ghost" data-xts-do="png"><i class="fas fa-image" aria-hidden="true"></i> Image</button>
+      <button type="button" class="rs-btn primary" data-xts-do="pdf"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</button>
+    </div>
+  </div>
+
+  <div class="xtp-pane" data-xtp-pane="cand" hidden>
+    <div class="xtp-info"><span class="ic"><i class="fas fa-id-card" aria-hidden="true"></i></span>
+      <div><b>A personal timetable for every candidate</b><p>Each candidate’s own papers only — date, time, subject, paper and hall — with their name, student ID and {{ xt.board_label }} registration number. Several to a page, ready to cut and hand out.</p>
+        <p class="xtp-hint">{{ d.candidates }} candidate{{ 's' if d.candidates != 1 }} · {{ d.registered }} with a {{ xt.board_label }} reg. no.</p></div></div>
+    <div class="xtp-foot"><span class="xtp-sp"></span><a class="rs-btn primary" href="{{ url_for('exam_timetable.export', tt_id=xt.id, format='candidates') }}"><i class="fas fa-file-pdf" aria-hidden="true"></i> Download PDF</a></div>
+  </div>
+
+  <div class="xtp-pane" data-xtp-pane="xlsx" hidden>
+    <div class="xtp-info"><span class="ic"><i class="fas fa-file-excel" aria-hidden="true"></i></span>
+      <div><b>Excel workbook</b><p>Two sheets: the full timetable (date, day, times, duration, subject, paper, type, hall, invigilators, candidates) and one row per candidate per paper — easy to sort, filter or mail-merge.</p></div></div>
+    <div class="xtp-foot"><span class="xtp-sp"></span><a class="rs-btn primary" href="{{ url_for('exam_timetable.export', tt_id=xt.id, format='excel') }}"><i class="fas fa-file-excel" aria-hidden="true"></i> Download Excel</a></div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro panel_css() %}
+<link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/exam-timetable-sheet.css') }}">
+<style>
+.xtp-tabs{display:flex;gap:.3rem;padding:.25rem;background:var(--gray-100);border-radius:13px;margin-bottom:1rem;overflow-x:auto;scrollbar-width:none}
+.xtp-tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;height:38px;padding:0 .8rem;border:0;border-radius:10px;background:none;font:inherit;font-weight:700;font-size:.86rem;color:var(--text-muted);cursor:pointer;white-space:nowrap}
+.xtp-tabs button.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.xtp-grid{display:grid;grid-template-columns:290px minmax(0,1fr);gap:1.1rem;align-items:start}
+@media(max-width:860px){.xtp-grid{grid-template-columns:1fr}.xtp-prev{order:-1}}
+.xtp-lbl{font-size:.7rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);margin:.9rem 0 .45rem}
+.xtp-lbl:first-child{margin-top:0}
+.xtp-themes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.35rem}
+.xtp-th{border:1px solid var(--border-color);border-radius:11px;background:var(--bg-card);padding:.4rem .45rem;text-align:left;cursor:pointer;font:inherit;color:var(--text-primary);min-width:0}
+.xtp-th b{display:block;font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xtp-th i{display:flex;gap:2px;margin-bottom:.3rem}
+.xtp-th i s{display:block;width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,.14)}
+.xtp-th.on{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 25%,transparent)}
+.xtp-th.on b{color:var(--primary)}
+.xtp-seg{display:flex;gap:.25rem;padding:.25rem;background:var(--gray-100);border-radius:12px;margin-bottom:.4rem}
+.xtp-seg button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;height:36px;border:0;border-radius:9px;background:none;font:inherit;font-weight:700;font-size:.84rem;color:var(--text-muted);cursor:pointer}
+.xtp-seg button.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.xtp-seg .pg{display:inline-block;border:2px solid currentColor;border-radius:2px}
+.xtp-seg .pg.p{width:11px;height:15px}.xtp-seg .pg.l{width:15px;height:11px}
+.xtp-sws{display:flex;flex-direction:column}
+.xtp-sw{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.38rem 0;font-size:.86rem;font-weight:600;cursor:pointer;color:var(--text-primary)}
+.xtp-sw input{width:38px;height:22px;appearance:none;-webkit-appearance:none;border-radius:999px;background:var(--gray-200,#d4d4d8);position:relative;cursor:pointer;transition:background .15s;flex:none;margin:0}
+.xtp-sw input:before{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.xtp-sw input:checked{background:var(--primary)}
+.xtp-sw input:checked:before{left:19px}
+.xtp-sw input:disabled{opacity:.4}
+.xtp-hint{font-size:.74rem;color:var(--text-muted);margin:.3rem 0 0}
+.xtp-stage{background:repeating-conic-gradient(color-mix(in srgb,var(--text-primary) 5%,var(--bg-card)) 0 25%,color-mix(in srgb,var(--text-primary) 8%,var(--bg-card)) 0 50%) 0 0/22px 22px;border-radius:16px;padding:12px;display:flex;justify-content:center;overflow:hidden}
+.xtp-frame{position:relative;overflow:hidden;box-shadow:0 10px 34px rgba(15,23,42,.22);border-radius:2px;flex:none}
+[data-xts-scale]{transform-origin:top left;position:absolute;left:0;top:0}
+.xtp-note{font-size:.75rem;color:var(--text-muted);text-align:center;margin:.5rem 0 0}
+.xtp-foot{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--border-color)}
+.xtp-sp{flex:1}
+.xtp-info{display:flex;gap:.9rem;align-items:flex-start;padding:.4rem 0}
+.xtp-info .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary);font-size:1.15rem;flex:none}
+.xtp-info b{display:block;font-size:1rem;margin-bottom:.3rem}
+.xtp-info p{margin:0;font-size:.86rem;color:var(--text-secondary);line-height:1.5}
+@media(max-width:560px){.xtp-foot .rs-btn{flex:1;justify-content:center}.xtp-foot .xtp-full{flex-basis:100%}.xtp-sp{display:none}}
+</style>
+{% endmacro %}
+
+{% macro panel_js(filename, theme='') %}
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
+<script src="{{ bundle_url('js/exam-timetable-sheet.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+window.XTP = function (root) {
+  root.querySelectorAll('[data-xtp-tab]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      root.querySelectorAll('[data-xtp-tab]').forEach(function (x) { var on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', on); });
+      root.querySelectorAll('[data-xtp-pane]').forEach(function (p) { p.hidden = p.getAttribute('data-xtp-pane') !== b.getAttribute('data-xtp-tab'); });
+      if (b.getAttribute('data-xtp-tab') === 'sheet' && root._panel) root._panel.apply();
+    });
+  });
+  root._panel = root._panel || new window.XTSheet.Panel(root, {filename: {{ filename|tojson }}, theme: {{ theme|tojson }}});
+  // make sure every font the themes use is loaded before the final layout
+  if (document.fonts && document.fonts.load) {
+    var p = root._panel;
+    Promise.all(['800 16px "Space Grotesk"', '400 16px Inter', '700 16px Inter', '400 16px "DM Sans"', '700 16px "DM Sans"',
+                 '400 16px "Plus Jakarta Sans"', '800 16px "Plus Jakarta Sans"'].map(function (f) { return document.fonts.load(f).catch(function () {}); }))
+      .then(function () { p.apply(); });
+  }
+  return root._panel;
+};
+</script>
+{% endmacro %}

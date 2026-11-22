@@ -56,7 +56,7 @@
             <div class="bx-menu-pop" role="menu">
               <a role="menuitem" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}"><i class="fas fa-list" aria-hidden="true"></i><span>Open papers</span></a>
               <a role="menuitem" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}#details"><i class="fas fa-pen" aria-hidden="true"></i><span>Edit details</span></a>
-              {% if r.papers %}<a role="menuitem" href="{{ url_for('exam_timetable.print_view', tt_id=r.t.id) }}"><i class="fas fa-print" aria-hidden="true"></i><span>Print / download</span></a>{% endif %}
+              {% if r.papers %}<a role="menuitem" href="{{ url_for('exam_timetable.edit', tt_id=r.t.id) }}#download"><i class="fas fa-download" aria-hidden="true"></i><span>Download / print</span></a>{% endif %}
               <form method="POST" action="{{ url_for('exam_timetable.duplicate', tt_id=r.t.id) }}"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit" role="menuitem"><i class="fas fa-copy" aria-hidden="true"></i><span>Make a copy</span></button></form>
               <form method="POST" action="{{ url_for('exam_timetable.delete', tt_id=r.t.id) }}" data-confirm="Delete “{{ r.t.title }}” and all its papers?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit" role="menuitem" class="bx-danger"><i class="fas fa-trash" aria-hidden="true"></i><span>Delete</span></button></form>
             </div>

@@ -273,6 +273,7 @@ def edit(tt_id):
                            subject_aliases=SUBJECT_ALIASES,
                            kinds=ET.KINDS, fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur, last=last,
                            sessions=_sessions(tt.board), durations=ET.DURATIONS,
+                           **_export_ctx(tt),
                            others=[t for t in scope_query(ExamTimetable.query, ExamTimetable).all() if t.id != tt.id])
 
 
@@ -429,23 +430,27 @@ THEMES = [('timeline', 'Timeline', 'cream & gold, dated'), ('tickets', 'Tickets'
           ('plain', 'Plain', 'pure black & white, no shading')]
 
 
+def _export_ctx(tt):
+    """What the export panel needs (Download modal and full print page)."""
+    from utils.school import logo_url, school_profile
+    return {'school': school_profile() or {}, 'logo': logo_url(), 'themes': THEMES, 'kind_map': dict(ET.KINDS),
+            'export_name': re.sub(r'[^A-Za-z0-9]+', '_', tt.title).strip('_')[:60] or 'exam_timetable'}
+
+
 @exam_timetable_bp.route('/<int:tt_id>/print')
 @login_required
 def print_view(tt_id):
     """The one-page timetable for the notice board, in the timetable
     designer's themes; downloaded as PDF / image or printed from the page."""
-    from utils.school import logo_url, school_profile
     tt = _tt_or_404(tt_id)
     if not tt.papers:
         flash('Add papers first.', 'warning')
         return redirect(url_for('exam_timetable.edit', tt_id=tt.id))
-    cands = ET.candidates(tt.board)
-    data = ET.analyse(tt, cands)
+    data = ET.analyse(tt, ET.candidates(tt.board))
     theme = request.args.get('theme')
-    return render_template('exam_timetable/print.html', xt=tt, d=data, themes=THEMES,
+    return render_template('exam_timetable/print.html', xt=tt, d=data,
                            theme=theme if theme in dict((t[0], 1) for t in THEMES) else '',
-                           school=school_profile() or {}, logo=logo_url(), kinds=dict(ET.KINDS),
-                           fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur)
+                           fmt_time=ET.fmt_time, fmt_dur=ET.fmt_dur, **_export_ctx(tt))
 
 
 @exam_timetable_bp.route('/<int:tt_id>/export')

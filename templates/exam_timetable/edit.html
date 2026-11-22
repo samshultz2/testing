@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu, bx_menu_js with context %}
+{% from "exam_timetable/_export_panel.html" import panel, panel_css, panel_js with context %}
 {% block title %}{{ xt.title }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_timetable.index') }}">WAEC / NECO Timetable</a> / <span>{{ xt.title }}</span>{% endblock %}
 
@@ -54,6 +55,18 @@
 {% endmacro %}
 
 {% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{% if d.rows %}{{ panel_css() }}
+<style>
+.xtm{position:fixed;inset:0;z-index:1500;display:flex;align-items:center;justify-content:center;padding:24px}
+.xtm[hidden]{display:none}
+.xtm-bg{position:absolute;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(3px)}
+.xtm-box{position:relative;width:min(1100px,100%);max-height:calc(100vh - 48px);overflow:auto;background:var(--bg-card);color:var(--text-primary);border-radius:20px;box-shadow:0 24px 60px rgba(15,23,42,.35);padding:1.1rem 1.2rem 1.2rem}
+.xtm-h{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.8rem}
+.xtm-h h3{margin:0;font-size:1.1rem;display:flex;align-items:center;gap:.5rem}
+.xtm-x{width:38px;height:38px;border-radius:11px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;font-size:1rem}
+@media(max-width:860px){.xtm{padding:0;align-items:flex-end}.xtm-box{max-height:94vh;border-radius:20px 20px 0 0;padding:1rem .9rem calc(1rem + env(safe-area-inset-bottom))}}
+body.xtm-open{overflow:hidden}
+</style>{% endif %}
 <style>
 .xe-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:1rem;align-items:start}
 @media(max-width:1000px){.xe-grid{grid-template-columns:1fr}.xe-side{order:-1}}
@@ -136,10 +149,7 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
   {% call bx_head('fa-calendar-check', xt.title, xt.board_label ~ ' SSCE' ~ ((' ' ~ xt.year) if xt.year else '') ~ ((' · exams ' ~ xt.start_date.strftime('%d %b') ~ ' – ' ~ xt.end_date.strftime('%d %b %Y')) if xt.start_date and xt.end_date else (' · ' ~ d.first.strftime('%d %b') ~ ' – ' ~ d.last.strftime('%d %b %Y') if d.first else ''))) %}
     <a href="{{ url_for('exam_timetable.index') }}" class="rs-btn ghost" aria-label="All timetables"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">All timetables</span></a>
     {% if d.rows %}
-    {{ bx_menu('Download', [
-        (url_for('exam_timetable.print_view', tt_id=xt.id), 'fa-palette', 'Timetable · one page, choose a theme'),
-        (url_for('exam_timetable.export', tt_id=xt.id, format='candidates'), 'fa-id-card', 'Personal timetable for each candidate'),
-        (url_for('exam_timetable.export', tt_id=xt.id, format='excel'), 'fa-file-excel', 'Excel · timetable + by candidate')], 'fa-download', True) }}
+    <button type="button" class="rs-btn primary" data-xtm-open aria-haspopup="dialog"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></button>
     {% endif %}
   {% endcall %}
   {{ bx_menu_js() }}
@@ -250,9 +260,34 @@ textarea.xe-in{height:auto;padding:.6rem .7rem}
     </aside>
   </div>
 </div>
+{% if d.rows %}
+<div class="xtm" id="xtm" hidden>
+  <div class="xtm-bg" data-xtm-close></div>
+  <div class="xtm-box" role="dialog" aria-modal="true" aria-labelledby="xtmT">
+    <div class="xtm-h"><h3 id="xtmT"><i class="fas fa-download" aria-hidden="true" style="color:var(--primary)"></i> Download timetable</h3>
+      <button type="button" class="xtm-x" data-xtm-close aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
+    {{ panel(xt, d, school, logo, kind_map, fmt_time, fmt_dur, themes, url_for('exam_timetable.print_view', tt_id=xt.id)) }}
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+{% if d.rows %}{{ panel_js(export_name) }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var m = document.getElementById('xtm'); if (!m) return;
+  document.body.appendChild(m);                // outside the page wrappers: app styles can't reach the sheet
+  var last = null;
+  function open() { last = document.activeElement; m.hidden = false; document.body.classList.add('xtm-open');
+    var p = window.XTP(m); p.apply(); m.querySelector('.xtm-x').focus(); }
+  function close() { m.hidden = true; document.body.classList.remove('xtm-open'); if (last) last.focus(); }
+  document.querySelectorAll('[data-xtm-open]').forEach(function (b) { b.addEventListener('click', open); });
+  m.querySelectorAll('[data-xtm-close]').forEach(function (b) { b.addEventListener('click', close); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !m.hidden) close(); });
+  if (location.hash === '#download') open();
+})();
+</script>{% endif %}
 <script nonce="{{ csp_nonce }}" id="xe-papers" type="application/json">{{ {'general': presets, 'subjects': paper_sets, 'alias': subject_aliases}|tojson }}</script>
 <script nonce="{{ csp_nonce }}">
 (function () {

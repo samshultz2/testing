@@ -1,0 +1,211 @@
+/* WAEC / NECO exam timetable — the printable sheet (one page).
+   Self-contained: every colour and font is set here, so the app's own theme
+   (dark mode, headings, links) never leaks onto the printout. Size:
+   A4/Letter at 96 dpi, portrait or landscape; the days are laid out in 1-3
+   real column boxes by exam-timetable-sheet.js (not CSS multi-column, which
+   html2canvas cannot capture reliably). */
+
+.xts{--fs:16px;--w:794px;--h:1123px;--pad-x:54px;--pad-t:48px;--pad-b:40px;
+  --bg:#ffffff;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#0d6a4e;--accent-ink:#ffffff;
+  --card:transparent;--chip:#eef2f7;--chip-ink:#374151;--date-ink:var(--accent);
+  --font:'Inter','DM Sans',system-ui,sans-serif;--font-d:'Space Grotesk','Inter',sans-serif;
+  width:var(--w);height:var(--h);box-sizing:border-box;padding:var(--pad-t) var(--pad-x) var(--pad-b);
+  position:relative;overflow:hidden;display:flex;flex-direction:column;
+  background:var(--bg);color:var(--ink);font:400 var(--fs)/1.3 var(--font);
+  -webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left}
+.xts[data-paper="letter"]{--w:816px;--h:1056px}
+.xts[data-orient="landscape"]{--w:1123px;--h:794px;--pad-x:46px;--pad-t:38px;--pad-b:30px}
+.xts[data-orient="landscape"][data-paper="letter"]{--w:1056px;--h:816px}
+.xts *,.xts *:before,.xts *:after{box-sizing:border-box}
+.xts :where(div,span,b,i,em,small,p,section,header,footer,img){margin:0;padding:0;border:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:none;background:none;text-shadow:none}
+
+/* header */
+.xts-head{display:flex;align-items:center;gap:.9em;position:relative;z-index:1}
+.xts-logo{height:3.3em;width:auto;max-width:6em;object-fit:contain;flex:none}
+.xts-ht{flex:1;min-width:0}
+.xts-school{font-size:.7em;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.xts-title{font-family:var(--font-d);font-size:1.95em;line-height:1.03;font-weight:800;letter-spacing:-.025em;margin:.12em 0 .14em;color:var(--ink)}
+.xts-sub{font-size:.76em;color:var(--muted)}
+.xts-badge{flex:none;align-self:flex-start;font-weight:800;font-size:.78em;letter-spacing:.16em;padding:.42em .85em;border-radius:.45em;background:var(--accent);color:var(--accent-ink)}
+.xts-notes{position:relative;z-index:1;font-size:.72em;line-height:1.45;color:var(--muted);margin-top:.7em}
+.xts-rule{height:0;margin:.85em 0 .9em;border-top:2px solid var(--ink)}
+
+/* body: N column boxes */
+.xts-body{flex:1;min-height:0;display:flex;gap:1.3em;position:relative;z-index:1}
+.xts-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:.62em}
+.xts-day{display:grid;grid-template-columns:3.9em minmax(0,1fr);gap:.85em;background:var(--card);flex:none}
+.xts-date{display:flex;flex-direction:column;align-items:center;line-height:1;text-align:center;padding-top:.2em;color:var(--date-ink)}
+.xts-date .dw{font-size:.6em;font-weight:800;letter-spacing:.14em}
+.xts-date .dn{font-family:var(--font-d);font-size:1.7em;font-weight:800;margin:.08em 0 .06em;color:var(--ink)}
+.xts-date .dm{font-size:.6em;font-weight:700;letter-spacing:.14em}
+.xts-papers{display:flex;flex-direction:column;min-width:0}
+.xts-p{display:grid;grid-template-columns:6.1em minmax(0,1fr);gap:.75em;padding:.4em 0;border-top:1px solid var(--line)}
+.xts-p:first-child{border-top:0}
+.xts-time b{display:block;font-size:.9em;font-weight:800;white-space:nowrap}
+.xts-time small{display:block;font-size:.68em;color:var(--muted);white-space:nowrap;margin-top:.12em}
+.xts-time em{display:block;font-style:normal;font-size:.66em;font-weight:800;margin-top:.12em;color:var(--ink)}
+.xts-subj{min-width:0}
+.xts-subj>b{display:block;font-size:.95em;font-weight:700;line-height:1.18}
+.xts-subj>span{display:block;font-size:.72em;color:var(--muted);margin-top:.1em;line-height:1.3}
+.xts-subj>.inv{font-size:.66em}
+.xts-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.3em .5em;margin-top:.32em}
+.xts-kind{font-size:.58em;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:.22em .55em;border-radius:.35em;background:var(--chip);color:var(--chip-ink);white-space:nowrap}
+.xts-venue,.xts-cnt{font-size:.66em;font-weight:600;color:var(--muted);white-space:nowrap}
+.xts-venue:before{content:'\25CF';font-size:.6em;margin-right:.35em;vertical-align:.15em;color:var(--accent)}
+.xts-foot{position:relative;z-index:1;margin-top:.9em;padding-top:.55em;border-top:1px solid var(--line);font-size:.6em;color:var(--muted);display:flex;justify-content:space-between;gap:1em}
+
+/* options */
+.xts.no-logo .xts-logo,.xts.no-venue .xts-venue,.xts.no-inv .inv,.xts.no-cnt .xts-cnt,.xts.no-kind .xts-kind,
+.xts.no-dur .xts-time em,.xts.no-notes .xts-notes,.xts.no-end .xts-time small{display:none}
+.xts.no-school .xts-school{display:none}
+
+/* ---------------------------------------------------------------- themes */
+/* Timeline — cream & gold, dated */
+.xts[data-theme="timeline"]{--bg:#fffdf8;--ink:#1d1b16;--muted:#78716c;--line:#eee6d3;--accent:#a16207;--chip:#fdf1d6;--chip-ink:#8a5a06;--font:'DM Sans','Inter',sans-serif}
+.xts[data-theme="timeline"]:before{content:'';position:absolute;right:-140px;top:-140px;width:380px;height:380px;border-radius:50%;background:radial-gradient(#fde7b0,transparent 68%);opacity:.75}
+.xts[data-theme="timeline"] .xts-badge{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.xts[data-theme="timeline"] .xts-papers{position:relative;padding-left:1em;border-left:2px solid #e7d9b8}
+.xts[data-theme="timeline"] .xts-papers:before{content:'';position:absolute;left:-.42em;top:.55em;width:.7em;height:.7em;border-radius:50%;background:var(--accent);box-shadow:0 0 0 .2em var(--bg)}
+.xts[data-theme="timeline"] .xts-p{border-top:1px dashed #e7e2d6}
+.xts[data-theme="timeline"] .xts-p:first-child{border-top:0}
+
+/* Tickets — one cut-out ticket per day */
+.xts[data-theme="tickets"]{--bg:#ffffff;--ink:#14213d;--muted:#6b7690;--line:#e3e8ef;--accent:#14213d;--accent-ink:#fca311;--chip:#fff4dd;--chip-ink:#9a5b00;--date-ink:#ffffff;--font:'Plus Jakarta Sans','Inter',sans-serif;
+  background-image:radial-gradient(#e9edf5 1px,transparent 1.2px);background-size:.8em .8em}
+.xts[data-theme="tickets"] .xts-head{flex-direction:column;text-align:center;gap:.35em}
+.xts[data-theme="tickets"] .xts-badge{align-self:center;background:#fca311;color:#14213d}
+.xts[data-theme="tickets"] .xts-school{color:var(--muted)}
+.xts[data-theme="tickets"] .xts-notes{text-align:center}
+.xts[data-theme="tickets"] .xts-rule{border-top:2px dashed #c9d1de}
+.xts[data-theme="tickets"] .xts-day{gap:0;grid-template-columns:4.6em minmax(0,1fr);border:1.5px solid #14213d;border-radius:.8em;overflow:hidden;background:#fff}
+.xts[data-theme="tickets"] .xts-date{background:#14213d;justify-content:center;padding:.5em 0;border-right:2px dashed #fff}
+.xts[data-theme="tickets"] .xts-date .dn{color:#fff}
+.xts[data-theme="tickets"] .xts-date .dm{color:#fca311}
+.xts[data-theme="tickets"] .xts-papers{padding:.1em .85em}
+
+/* Gazette — school newspaper, black & white */
+.xts[data-theme="gazette"]{--bg:#f7f4ec;--ink:#111111;--muted:#555555;--line:#bdb8ab;--accent:#111111;--accent-ink:#f7f4ec;--chip:transparent;--chip-ink:#111;--date-ink:#111;--font:Georgia,'Times New Roman',serif;--font-d:Georgia,'Times New Roman',serif}
+.xts[data-theme="gazette"] .xts-head{flex-direction:column;text-align:center;gap:.25em;border-top:3px double #111;border-bottom:3px double #111;padding:.55em 0}
+.xts[data-theme="gazette"] .xts-title{font-size:2.2em;font-weight:700}
+.xts[data-theme="gazette"] .xts-sub{font-style:italic}
+.xts[data-theme="gazette"] .xts-badge{align-self:center;background:transparent;color:#111;border-top:1px solid #111;border-bottom:1px solid #111;border-radius:0;font-size:.64em;letter-spacing:.32em}
+.xts[data-theme="gazette"] .xts-notes{text-align:center;font-style:italic}
+.xts[data-theme="gazette"] .xts-rule{border-top:0;margin:.4em 0}
+.xts[data-theme="gazette"] .xts-day{border-top:1.5px solid #111;padding-top:.4em}
+.xts[data-theme="gazette"] .xts-date{align-items:flex-start;text-align:left}
+.xts[data-theme="gazette"] .xts-p{border-top:1px dotted #999}
+.xts[data-theme="gazette"] .xts-kind{box-shadow:inset 0 0 0 1px #111;border-radius:0}
+.xts[data-theme="gazette"] .xts-venue:before{color:#111}
+.xts[data-theme="gazette"] .xts-foot{border-top:3px double #111;font-style:italic}
+
+/* Swiss — bold poster type, one accent */
+.xts[data-theme="swiss"]{--ink:#0a0a0a;--muted:#6b6b6b;--line:#e6e6e6;--accent:#ff3d00;--chip:#0a0a0a;--chip-ink:#fff;--date-ink:#ff3d00}
+.xts[data-theme="swiss"] .xts-head{align-items:flex-start}
+.xts[data-theme="swiss"] .xts-title{font-family:'Inter',sans-serif;font-size:2.9em;font-weight:900;letter-spacing:-.055em;line-height:.92}
+.xts[data-theme="swiss"] .xts-badge{border-radius:0}
+.xts[data-theme="swiss"] .xts-rule{border-top-width:4px}
+.xts[data-theme="swiss"] .xts-day{border-top:3px solid #0a0a0a;padding-top:.35em}
+.xts[data-theme="swiss"] .xts-col>.xts-day:first-child{border-top:0;padding-top:0}
+.xts[data-theme="swiss"] .xts-date{align-items:flex-start;text-align:left}
+.xts[data-theme="swiss"] .xts-date .dn{font-family:'Inter',sans-serif;font-size:2em;font-weight:900;letter-spacing:-.05em}
+.xts[data-theme="swiss"] .xts-subj>b{font-weight:800}
+.xts[data-theme="swiss"] .xts-kind{border-radius:0}
+
+/* Exercise Book — ruled page, index tabs */
+.xts[data-theme="notebook"]{--ink:#1f2a44;--muted:#6b7690;--line:#c9d3e6;--accent:#1d4ed8;--chip:#eef3ff;--chip-ink:#1d4ed8;--date-ink:#1f2a44;--font:'DM Sans','Inter',sans-serif;
+  background-image:repeating-linear-gradient(#fff 0 1.84em,#d6e4f7 1.84em 1.9em);padding-left:calc(var(--pad-x) + 26px)}
+.xts[data-theme="notebook"]:before{content:'';position:absolute;left:calc(var(--pad-x) + 6px);top:0;bottom:0;border-left:2px solid #f2a3a3}
+.xts[data-theme="notebook"] .xts-head{background:#fff;border:2px solid #1f2a44;border-right-width:5px;border-bottom-width:5px;border-radius:.8em;padding:.55em .9em}
+.xts[data-theme="notebook"] .xts-title{font-size:1.7em}
+.xts[data-theme="notebook"] .xts-badge{background:#fff;color:#1d4ed8;box-shadow:inset 0 0 0 2px #1d4ed8}
+.xts[data-theme="notebook"] .xts-rule{border:0;margin:.5em 0}
+.xts[data-theme="notebook"] .xts-day{background:#fff;border:1.5px solid #c9d3e6;border-left:.42em solid #1d4ed8;border-radius:.55em;padding:.35em .75em .35em .5em}
+.xts[data-theme="notebook"] .xts-day.t1{border-left-color:#0f766e}
+.xts[data-theme="notebook"] .xts-day.t2{border-left-color:#e03131}
+.xts[data-theme="notebook"] .xts-day.t3{border-left-color:#a16207}
+.xts[data-theme="notebook"] .xts-p{border-top:1.5px dotted #9aa5bd}
+.xts[data-theme="notebook"] .xts-p:first-child{border-top:0}
+.xts[data-theme="notebook"] .xts-foot{border-top:0}
+
+/* Board — big, light */
+.xts[data-theme="board"]{--bg:#f4f6fb;--ink:#0f172a;--muted:#64748b;--line:#eef2f7;--accent:#1d4ed8;--chip:#eef2ff;--chip-ink:#1d4ed8;--date-ink:#1d4ed8}
+.xts[data-theme="board"] .xts-school{color:var(--muted);letter-spacing:.04em;text-transform:none;font-weight:600}
+.xts[data-theme="board"] .xts-badge{border-radius:999px}
+.xts[data-theme="board"] .xts-rule{border-top:2px solid #e2e8f0}
+.xts[data-theme="board"] .xts-day{background:#fff;border-radius:1em;padding:.45em .85em .45em .45em;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.xts[data-theme="board"] .xts-date{background:#eef2ff;border-radius:.7em;padding:.45em 0;align-self:start}
+.xts[data-theme="board"] .xts-kind{border-radius:999px}
+
+/* Quiet — clean, one accent */
+.xts[data-theme="quiet"]{--ink:#18181b;--muted:#71717a;--line:#f0f0f2;--accent:#0f766e;--chip:#f0fdfa;--chip-ink:#0f766e;--date-ink:#71717a;--font-d:'Plus Jakarta Sans','Inter',sans-serif}
+.xts[data-theme="quiet"] .xts-title{font-size:1.65em}
+.xts[data-theme="quiet"] .xts-badge{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1px #99d5cc;font-size:.64em}
+.xts[data-theme="quiet"] .xts-rule{border-top:1px solid #e4e4e7}
+.xts[data-theme="quiet"] .xts-day{border-bottom:1px solid var(--line);padding-bottom:.35em}
+.xts[data-theme="quiet"] .xts-date{align-items:flex-start;text-align:left}
+.xts[data-theme="quiet"] .xts-date .dn{font-weight:700}
+.xts[data-theme="quiet"] .xts-time b{color:var(--accent)}
+.xts[data-theme="quiet"] .xts-subj>b{font-weight:600}
+
+/* Inline — one line per paper, like a message */
+.xts[data-theme="inline"]{--bg:#f6f5f2;--ink:#1f2328;--muted:#6b7280;--accent:#1f2328;--chip:#ebe9e4;--chip-ink:#374151;--date-ink:#1f2328;--font:'DM Sans','Inter',sans-serif}
+.xts[data-theme="inline"] .xts-school{color:var(--muted);letter-spacing:.04em;text-transform:none}
+.xts[data-theme="inline"] .xts-badge{border-radius:999px}
+.xts[data-theme="inline"] .xts-rule{border-top:1px solid #dcd9d2}
+.xts[data-theme="inline"] .xts-day{grid-template-columns:1fr;gap:.3em}
+.xts[data-theme="inline"] .xts-date{flex-direction:row;gap:.4em;align-items:baseline;padding:0}
+.xts[data-theme="inline"] .xts-date .dn{font-size:1em;margin:0}
+.xts[data-theme="inline"] .xts-date .dw,.xts[data-theme="inline"] .xts-date .dm{font-size:.7em}
+.xts[data-theme="inline"] .xts-papers{gap:.3em}
+.xts[data-theme="inline"] .xts-p{display:flex;align-items:center;gap:.5em;background:#fff;border:0;border-radius:.6em;padding:.32em .6em .32em .35em;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.xts[data-theme="inline"] .xts-time{display:flex;align-items:center;gap:.4em;flex:none}
+.xts[data-theme="inline"] .xts-time b{background:#1f2328;color:#fff;border-radius:.4em;padding:.12em .45em;font-size:.76em}
+.xts[data-theme="inline"] .xts-time small{display:none}
+.xts[data-theme="inline"] .xts-time em{margin:0;font-size:.62em}
+.xts[data-theme="inline"] .xts-subj{display:flex;flex-wrap:wrap;align-items:baseline;gap:.1em .45em}
+.xts[data-theme="inline"] .xts-subj>b{font-size:.86em}
+.xts[data-theme="inline"] .xts-subj>span{font-size:.7em;margin:0}
+.xts[data-theme="inline"] .xts-meta{margin:0}
+
+/* Print — bold sans, grey header, striped */
+.xts[data-theme="print"]{--ink:#000;--muted:#444;--line:#bbbbbb;--accent:#000;--chip:transparent;--chip-ink:#000;--date-ink:#000;--font:Arial,'Segoe UI',sans-serif;--font-d:'Arial Black',Arial,sans-serif}
+.xts[data-theme="print"] .xts-head{background:#e5e5e5;padding:.6em .8em}
+.xts[data-theme="print"] .xts-school{color:#000}
+.xts[data-theme="print"] .xts-rule{border:0;margin:.5em 0}
+.xts[data-theme="print"] .xts-col{gap:0;border:2px solid #000;align-self:flex-start}
+.xts[data-theme="print"] .xts-day{gap:0;grid-template-columns:4.4em minmax(0,1fr)}
+.xts[data-theme="print"] .xts-day+.xts-day{border-top:2px solid #000}
+.xts[data-theme="print"] .xts-date{background:#e5e5e5;justify-content:center;border-right:2px solid #000;padding:.4em 0}
+.xts[data-theme="print"] .xts-p{padding:.4em .6em}
+.xts[data-theme="print"] .xts-p:nth-child(even){background:#f3f3f3}
+.xts[data-theme="print"] .xts-subj>b{text-transform:uppercase;font-weight:900;font-size:.86em}
+.xts[data-theme="print"] .xts-kind{box-shadow:inset 0 0 0 1px #000;border-radius:0}
+.xts[data-theme="print"] .xts-venue:before{color:#000}
+
+/* Mono — B&W, photocopy-friendly */
+.xts[data-theme="mono"]{--ink:#000;--muted:#333;--line:#000;--accent:#000;--chip:transparent;--chip-ink:#000;--date-ink:#fff;--font:'Courier New',monospace;--font-d:'Courier New',monospace}
+.xts[data-theme="mono"] .xts-head{border:2px solid #000;padding:.6em .8em}
+.xts[data-theme="mono"] .xts-school{color:#000}
+.xts[data-theme="mono"] .xts-badge{border-radius:0}
+.xts[data-theme="mono"] .xts-rule{border:0;margin:.5em 0}
+.xts[data-theme="mono"] .xts-day{border:1px solid #000;gap:0;grid-template-columns:4.4em minmax(0,1fr)}
+.xts[data-theme="mono"] .xts-date{background:#000;justify-content:center;padding:.4em 0}
+.xts[data-theme="mono"] .xts-date .dn{color:#fff}
+.xts[data-theme="mono"] .xts-p{padding:.35em .6em;border-top:1px dashed #000}
+.xts[data-theme="mono"] .xts-p:first-child{border-top:0}
+.xts[data-theme="mono"] .xts-kind{box-shadow:inset 0 0 0 1px #000;border-radius:0}
+.xts[data-theme="mono"] .xts-venue:before{color:#000}
+
+/* Plain — pure black & white, no shading */
+.xts[data-theme="plain"]{--ink:#000;--muted:#333;--line:#cccccc;--accent:#000;--chip:transparent;--chip-ink:#000;--date-ink:#000;--font:'Segoe UI',system-ui,sans-serif}
+.xts[data-theme="plain"] .xts-school{color:#000}
+.xts[data-theme="plain"] .xts-badge{background:transparent;color:#000;box-shadow:inset 0 0 0 1px #000;border-radius:0}
+.xts[data-theme="plain"] .xts-day{border-bottom:1px solid #000;padding-bottom:.3em}
+.xts[data-theme="plain"] .xts-kind{box-shadow:inset 0 0 0 1px #000;border-radius:0}
+.xts[data-theme="plain"] .xts-venue:before{color:#000}
+
+/* tighter rows in 3 columns */
+.xts[data-cols="3"] .xts-p{grid-template-columns:5.2em minmax(0,1fr);gap:.55em}
+.xts[data-cols="3"] .xts-day{grid-template-columns:3.3em minmax(0,1fr);gap:.6em}
+.xts[data-cols="3"][data-theme="tickets"] .xts-day,.xts[data-cols="3"][data-theme="print"] .xts-day,.xts[data-cols="3"][data-theme="mono"] .xts-day{grid-template-columns:3.9em minmax(0,1fr);gap:0}
+.xts[data-cols="3"][data-theme="inline"] .xts-day{grid-template-columns:1fr}

@@ -93,9 +93,12 @@ def test_exam_timetable_flow(app):
     assert 'Biology' in page and 'Subjects with no paper yet' in page          # Biology still needs a paper
 
     page = c.get(f'/tools/exam-timetable/{tid}/print?theme=gazette').get_data(as_text=True)
-    assert 'data-theme="gazette"' in page and 'Download PDF' in page and 'School logo' in page
-    for key in ('timeline', 'tickets', 'swiss', 'notebook', 'board', 'quiet', 'inline', 'print', 'mono', 'plain'):
-        assert 'data-theme="%s"' % key in page                       # every designer theme offered
+    assert 'theme: "gazette"' in page and 'Download PDF' in page and 'School logo' in page
+    assert 'data-xts-set="orient" data-v="landscape"' in page and 'data-v="letter"' in page
+    for key in ('timeline', 'tickets', 'gazette', 'swiss', 'notebook', 'board', 'quiet', 'inline', 'print', 'mono', 'plain'):
+        assert 'data-xts-theme="%s"' % key in page                   # every designer theme offered
+    editor = c.get(f'/tools/exam-timetable/{tid}').get_data(as_text=True)
+    assert 'id="xtm"' in editor and 'data-xtm-open' in editor and 'Candidates per paper' in editor
     assert 'Mathematics' in page and 'Paper 2 (Essay)' in page
 
     pdf = c.get(f'/tools/exam-timetable/{tid}/export?format=pdf')
