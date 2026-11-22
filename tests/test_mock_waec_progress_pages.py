@@ -52,7 +52,19 @@ def test_student_progress_empty_state(app):
 
 
 def test_trends_lists_class_arms_and_student_moves(app):
-    html = _admin(app).get('/mock-waec/trends?scope=all').get_data(as_text=True)
+    # Seed its own two mocks so the page has trends to show, whatever other
+    # tests ran first (it used to rely on their leftover data).
+    sess = _session(app)
+    n = 900 + int(uuid.uuid4().int % 90)
+    first = _mk(app, sess, n, date(2019, 1, 10))          # earliest in the window
+    second = _mk(app, sess, n + 1, date(2029, 12, 1))     # latest in the window
+    sid = _student(app, 'PT' + uuid.uuid4().hex[:5].upper(), 'Climb', 'Trend')
+    enroll_sss3(app, sid)
+    _res(app, first, sid, [('English Language', 40, 'E8', False), ('Mathematics', 38, 'F9', False)])
+    _res(app, second, sid, [('English Language', 72, 'B2', False), ('Mathematics', 66, 'B3', False)])
+    # Its own session, so other tests' mocks (some undated) can't change which
+    # sittings count as first and latest.
+    html = _admin(app).get(f'/mock-waec/trends?session_id={sess}').get_data(as_text=True)
+    assert 'Not enough mocks yet' not in html
     assert 'Class arms' in html and 'Progress trends' in html
-    if 'Not enough mocks yet' not in html:
-        assert 'Students climbing' in html or 'Students slipping' in html
+    assert 'Students climbing' in html and 'Climb' in html

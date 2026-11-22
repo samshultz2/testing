@@ -1,6 +1,7 @@
 """Exam Trends page (utils.exam_yoy): per-year measures, the year-over-year
 comparison with its "real change or chance" test, subject movement, the
 action list, and the page itself for every exam."""
+import re
 import uuid
 
 from config import Config
@@ -181,4 +182,10 @@ def test_mock_waec_and_mock_jamb_sittings(app):
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
     for k in ('mock_waec', 'mock_jamb'):
         body = c.get('/results/analytics/trends?exam=' + k).get_data(as_text=True)
-        assert 'Mock-to-mock comparison' in body and 'All 3 sittings' in body, k
+        assert 'Mock-to-mock comparison' in body, k
+        # Other tests add their own mock sittings to the shared database, so
+        # the page lists at least this test's three, and still compares the
+        # two newest (this test's, dated far in the future).
+        n = re.search(r'All (\d+) sittings', body)
+        assert n and int(n.group(1)) >= 3, k
+        assert re.search(r'data-tr-view="two"[^>]*>[^<]*M1 vs [^<]*M2', body), k

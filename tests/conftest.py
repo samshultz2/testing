@@ -87,3 +87,53 @@ def enroll_sss3(app, student_id):
             db.session.add(StudentEnrollment(
                 student_id=student_id, class_arm_assignment_id=caa.id, is_active=True))
         db.session.commit()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits(request):
+    """Every test starts with an empty rate-limit history. The session-wide app
+    shares one database, and every test signs in as the same admin, so per-user
+    caps on exports (PDF/Excel/…) used to fill up part-way through a full run
+    and later tests got 429s depending on test order. Tests that exercise a
+    limiter make their own hits inside the test, so clearing first is safe."""
+    if 'app' in request.fixturenames or 'auth_client' in request.fixturenames or 'client' in request.fixturenames:
+        app = request.getfixturevalue('app')
+        from sqlalchemy import text
+        from models import db
+        from utils.security import login_limiter
+        with app.app_context():
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('DELETE FROM rate_limit_hits'))
+            except Exception:
+                pass
+        with login_limiter._lock:
+            login_limiter._attempts.clear()
+    yield
+
+
+def activate_term(term_id):
+    """Make ``term_id`` and its session the only active term/session (the app
+    keeps the active term inside the active session, so flagging the term alone
+    isn't enough if another test left a different session active). Returns a
+    restore() that puts the previous flags back. Call inside an app context."""
+    from models import db, Term, AcademicSession
+    prev_terms = [t.id for t in Term.query.filter_by(is_active=True).all()]
+    prev_sess = [s.id for s in AcademicSession.query.filter_by(is_active=True).all()]
+    term = db.session.get(Term, term_id)
+    Term.query.update({Term.is_active: False}, synchronize_session=False)
+    AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+    Term.query.filter_by(id=term_id).update({Term.is_active: True}, synchronize_session=False)
+    AcademicSession.query.filter_by(id=term.session_id).update({AcademicSession.is_active: True}, synchronize_session=False)
+    db.session.commit()
+
+    def restore():
+        Term.query.update({Term.is_active: False}, synchronize_session=False)
+        AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+        if prev_terms:
+            Term.query.filter(Term.id.in_(prev_terms)).update({Term.is_active: True}, synchronize_session=False)
+        if prev_sess:
+            AcademicSession.query.filter(AcademicSession.id.in_(prev_sess)).update(
+                {AcademicSession.is_active: True}, synchronize_session=False)
+        db.session.commit()
+    return restore

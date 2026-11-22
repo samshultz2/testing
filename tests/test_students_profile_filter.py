@@ -20,7 +20,8 @@ def _seed(app):
     tag = uuid.uuid4().hex[:5].upper()
     with app.app_context():
         bid = Branch.get_default().id
-        term = Term.query.filter_by(is_active=True).first()
+        from utils.helpers import get_active_term
+        term = get_active_term()          # the term the app treats as current
         if not term:
             sess = AcademicSession(name=f'PF{tag}', is_active=True); db.session.add(sess); db.session.flush()
             term = Term(session_id=sess.id, term_number=1, name='First Term', is_active=True)

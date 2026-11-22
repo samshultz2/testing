@@ -4,17 +4,16 @@ import re
 from config import Config
 from models import (db, Branch, AcademicSession, Term, SchoolClass, ClassArm,
                     ClassArmAssignment, Student, StudentEnrollment, User)
-from tests.conftest import login_token
+from tests.conftest import login_token, activate_term
+
+_restore = []
 
 
 def _setup(app):
     with app.app_context():
         existing = Term.query.filter_by(name='SF-Term').first()
         if existing:
-            existing.is_active = True
-            for t in Term.query.filter(Term.is_active == True, Term.id != existing.id).all():
-                t.is_active = False
-            db.session.commit()
+            _restore.append(activate_term(existing.id))
             cas = ClassArmAssignment.query.filter_by(term_id=existing.id).order_by(
                 ClassArmAssignment.id).all()
             return dict(class_a=cas[0].class_id, class_b=cas[1].class_id)
@@ -42,15 +41,14 @@ def _setup(app):
             StudentEnrollment(student_id=sb.id, class_arm_assignment_id=ca_b.id, is_active=True),
         ])
         db.session.commit()
+        _restore.append(activate_term(term.id))
         return dict(class_a=classes[0].id, class_b=classes[1].id)
 
 
 def _teardown(app):
     with app.app_context():
-        t = Term.query.filter_by(name='SF-Term').first()
-        if t:
-            t.is_active = False
-            db.session.commit()
+        while _restore:
+            _restore.pop()()
 
 
 def _admin(app):
