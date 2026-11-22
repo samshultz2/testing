@@ -1,132 +1,167 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
 {% block title %}Exam Hall Allocator - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Tools</span> <span>Exam Hall Allocator</span>{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <span>Exam Hall Allocator</span>{% endblock %}
 
-{% block extra_css %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.eh-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-@media (min-width: 900px) { .eh-grid { grid-template-columns: 1.2fr 1fr; } }
-.eh-card { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
-.eh-card h3 { font-size: 1rem; margin: 0 0 .75rem 0; }
-.cls-list { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
-@media (max-width: 560px) { .cls-list { grid-template-columns: 1fr; } }
-.cls-item { display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: .85rem; }
-.cls-item .cnt { margin-left: auto; color: var(--text-muted); font-size: .78rem; font-weight: 600; }
-.hall-row { display: grid; grid-template-columns: 1.4fr .8fr auto auto; gap: .5rem; align-items: center; margin-bottom: .5rem; }
-.hall-row input[type=text], .hall-row input[type=number] { padding: .5rem; border: 1px solid #ddd; border-radius: 6px; width: 100%; }
-.hall-row .main-pick { font-size: .72rem; color: var(--text-muted); text-align: center; }
-.eh-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
-.muted { color: var(--text-muted); font-size: .8rem; }
-.linkbtn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: .82rem; padding: 0; }
+.eh-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:1rem;align-items:start}
+@media(max-width:960px){.eh-grid{grid-template-columns:1fr}}
+.eh-step{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:.75rem;font-weight:800;flex:none}
+.eh-card h3{gap:.55rem}
+.eh-cls{display:flex;flex-direction:column;gap:.9rem}
+.eh-cls-row h4{display:flex;align-items:center;justify-content:space-between;margin:0 0 .45rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.eh-cls-row h4 button{border:0;background:none;color:var(--primary);font:inherit;font-size:.75rem;font-weight:700;cursor:pointer;text-transform:none;letter-spacing:0}
+.eh-arms{display:flex;flex-wrap:wrap;gap:.45rem}
+.eh-arm{position:relative}
+.eh-arm input{position:absolute;opacity:0;pointer-events:none}
+.eh-arm span{display:inline-flex;align-items:center;gap:.45rem;height:38px;padding:0 .85rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card);font-size:.86rem;font-weight:600;cursor:pointer;user-select:none}
+.eh-arm span em{font-style:normal;font-size:.72rem;font-weight:800;color:var(--text-muted);background:var(--gray-100);border-radius:999px;padding:.05rem .45rem}
+.eh-arm input:checked+span{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
+.eh-arm input:checked+span em{background:var(--primary);color:#fff}
+.eh-arm input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
+.eh-tools{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.9rem}
+.eh-sep{border:0;border-top:1px solid var(--border-color);margin:1rem 0}
+.eh-lbl{display:block;font-size:.75rem;font-weight:700;color:var(--text-secondary);margin:0 0 .4rem}
+.eh-quick{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:.5rem;align-items:end;margin-bottom:1rem}
+@media(max-width:520px){.eh-quick{grid-template-columns:repeat(3,minmax(0,1fr))}.eh-quick .rs-btn{grid-column:1/-1}}
+.eh-quick label{font-size:.7rem;color:var(--text-muted);font-weight:700;display:block;margin-bottom:.25rem}
+.eh-in{width:100%;height:40px;padding:0 .7rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.9rem}
+.eh-halls{display:flex;flex-direction:column;gap:.45rem}
+.eh-hall{display:grid;grid-template-columns:minmax(0,1fr) 92px auto 36px;gap:.45rem;align-items:center}
+.eh-main{display:inline-flex;align-items:center;gap:.3rem;font-size:.74rem;font-weight:700;color:var(--text-muted);cursor:pointer;white-space:nowrap}
+.eh-main input{accent-color:var(--primary)}
+.eh-del{width:36px;height:36px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-muted);cursor:pointer}
+.eh-opt{display:flex;gap:.7rem;align-items:flex-start;padding:.7rem 0;border-top:1px solid var(--border-light,var(--border-color))}
+.eh-opt:first-of-type{border-top:0}
+.eh-opt input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--primary);flex:none}
+.eh-opt b{display:block;font-size:.88rem}
+.eh-opt small{display:block;color:var(--text-muted);font-size:.78rem;line-height:1.45}
+.eh-bar{position:sticky;bottom:0;z-index:5;margin-top:1rem;display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;padding:.8rem 1rem;border:1px solid var(--border-color);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(8px);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+.eh-bar .n{display:flex;gap:1.2rem;font-size:.86rem;color:var(--text-secondary)}
+.eh-bar .n b{font-size:1.1rem;color:var(--text-primary)}
+.eh-bar .warn{color:var(--danger);font-weight:700}
+@media(max-width:768px){.eh-bar{bottom:72px}}
+.eh-plans{display:flex;flex-direction:column}
+.eh-plan{display:flex;align-items:center;gap:.8rem;padding:.7rem 0;border-bottom:1px solid var(--border-light,var(--border-color));text-decoration:none;color:inherit}
+.eh-plan:last-child{border-bottom:0}
+.eh-plan .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary);flex:none}
+.eh-plan b{display:block;font-size:.9rem}
+.eh-plan small{color:var(--text-muted);font-size:.78rem}
+.eh-plan .go{margin-left:auto;color:var(--text-muted)}
+a.eh-plan:hover b{color:var(--primary)}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
-  <div>
-    <h1 style="font-size:1.25rem;margin:0;"><i class="fas fa-chair"></i> Exam Hall Allocator</h1>
-    <p class="muted" style="margin:.25rem 0 0;">Spread each class &amp; arm across halls to reduce malpractice. The Main hall (bigger capacity) automatically takes proportionally more candidates.</p>
-  </div>
+<div class="rs bx">
+  {% call bx_head('fa-chair', 'Exam Hall Allocator', 'Spread every class and arm across your halls to cut copying — bigger halls take more, seats keep classmates apart') %}{% endcall %}
+
+  {% if plans %}
+  <section class="rs-card" style="margin-bottom:1rem">
+    <div class="rs-card-h"><h3><i class="fas fa-bookmark" aria-hidden="true"></i> Saved allocations</h3><small>{{ plans|length }} saved</small></div>
+    <div class="eh-plans">
+      {% for p in plans %}
+      <a class="eh-plan" href="{{ url_for('exam_halls.view_plan', plan_id=p.id) }}">
+        <span class="ic"><i class="fas fa-table-cells-large" aria-hidden="true"></i></span>
+        <span><b>{{ p.name }}</b><small>{{ p.total_students }} candidates · {{ p.hall_count }} hall{{ '' if p.hall_count == 1 else 's' }}{% if p.term %} · {{ p.term.full_name }}{% endif %} · {{ p.created_at.strftime('%d %b %Y, %H:%M') if p.created_at else '' }}</small></span>
+        <i class="fas fa-chevron-right go" aria-hidden="true"></i>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if not has_term %}
+  <div class="rs-blank"><span><i class="fas fa-calendar-xmark" aria-hidden="true"></i></span><h3>No active term</h3><p>Set an active term first, then come back to allocate halls.</p></div>
+  {% elif not assignments %}
+  <div class="rs-blank"><span><i class="fas fa-users-slash" aria-hidden="true"></i></span><h3>No classes with students</h3><p>No class arm in your branch has enrolled students this term.</p></div>
+  {% else %}
+  <form method="POST" action="{{ url_for('exam_halls.allocate') }}" id="ehForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="eh-grid">
+      <section class="rs-card eh-card">
+        <div class="rs-card-h"><h3><span class="eh-step">1</span> Who is sitting</h3><small><span id="ehSel">0</span> selected</small></div>
+        <div class="eh-tools">
+          <button type="button" class="rs-btn ghost" data-eh="all"><i class="fas fa-check-double" aria-hidden="true"></i> Select all</button>
+          <button type="button" class="rs-btn ghost" data-eh="none"><i class="fas fa-xmark" aria-hidden="true"></i> Clear</button>
+        </div>
+        <div class="eh-cls">
+          {% for cname, arms in assignments|groupby('class_name') %}
+          <div class="eh-cls-row">
+            <h4><span>{{ cname }} · {{ arms|sum(attribute='count') }}</span><button type="button" data-class-all="{{ loop.index }}">All {{ cname }}</button></h4>
+            <div class="eh-arms" data-class="{{ loop.index }}">
+              {% for a in arms %}
+              <label class="eh-arm"><input type="checkbox" name="assignments" value="{{ a.id }}" data-count="{{ a.count }}"><span>{{ a.arm or a.label }}<em>{{ a.count }}</em></span></label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <hr class="eh-sep">
+        <label class="eh-lbl" for="ehCand">Candidates</label>
+        <select name="candidate_set" id="ehCand" class="eh-in">
+          {% for val, label in candidate_sets.items() %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+        </select>
+        <label class="eh-lbl" style="margin-top:.9rem">Only these streams <span style="font-weight:500;color:var(--text-muted)">(optional)</span></label>
+        <div class="eh-arms">
+          {% for st in streams %}<label class="eh-arm"><input type="checkbox" name="streams" value="{{ st }}"><span>{{ st }}</span></label>{% endfor %}
+        </div>
+      </section>
+
+      <div>
+        <section class="rs-card eh-card" style="margin-bottom:1rem">
+          <div class="rs-card-h"><h3><span class="eh-step">2</span> Halls</h3><small><span id="ehSeats">0</span> seats</small></div>
+          <div class="eh-quick">
+            <div><label for="hallCount">Halls</label><input class="eh-in" type="number" id="hallCount" min="1" max="40" value="3"></div>
+            <div><label for="mainCap">Main hall seats</label><input class="eh-in" type="number" id="mainCap" min="1" value="120"></div>
+            <div><label for="stdCap">Other halls</label><input class="eh-in" type="number" id="stdCap" min="1" value="40"></div>
+            <button type="button" class="rs-btn ghost" id="genHalls"><i class="fas fa-rotate" aria-hidden="true"></i> Fill in</button>
+          </div>
+          <div class="eh-halls" id="hallRows"></div>
+          <button type="button" class="rs-btn ghost" id="addHall" style="margin-top:.6rem"><i class="fas fa-plus" aria-hidden="true"></i> Add hall</button>
+        </section>
+
+        <section class="rs-card eh-card">
+          <div class="rs-card-h"><h3><span class="eh-step">3</span> Seating</h3></div>
+          <div class="eh-opt" style="align-items:center">
+            <div style="flex:1"><b>Seats per row</b><small>Used to draw each hall's seating plan.</small></div>
+            <input class="eh-in" type="number" name="seats_per_row" min="2" max="20" value="5" style="width:84px">
+          </div>
+          <label class="eh-opt"><input type="checkbox" name="balance_gender" checked><span><b>Balance boys and girls</b><small>Each hall gets a similar mix.</small></span></label>
+          <label class="eh-opt"><input type="checkbox" name="diversify_classes"><span><b>Spread each class evenly across every hall</b><small>With 3+ classes, reserves each class's seats across halls first so no hall ends up thin on one class.</small></span></label>
+          <p class="rs-muted" style="margin-top:.4rem;font-size:.78rem">Seats are numbered so classmates never sit side by side, in front, behind or diagonally where it can be avoided.</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="eh-bar">
+      <div class="n"><span><b id="ehBarC">0</b> candidates</span><span><b id="ehBarS">0</b> seats</span><span id="ehWarn" class="warn" hidden>Not enough seats</span></div>
+      <button type="submit" class="rs-btn primary"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Allocate halls</button>
+    </div>
+  </form>
+  {% endif %}
 </div>
-
-{% if not has_term %}
-  <div class="eh-card"><p class="muted" style="margin:0;">No active term is set. Set an active term first, then come back to allocate halls.</p></div>
-{% elif not assignments %}
-  <div class="eh-card"><p class="muted" style="margin:0;">No classes with enrolled students were found for the active term in your branch.</p></div>
-{% else %}
-<form method="POST" action="{{ url_for('exam_halls.allocate') }}">
-  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-  <div class="eh-grid">
-    <!-- Classes & arms -->
-    <div class="eh-card">
-      <h3>1. Classes &amp; arms to seat</h3>
-      <div style="margin-bottom:.6rem;">
-        <button type="button" class="linkbtn" data-eh="all">Select all</button> ·
-        <button type="button" class="linkbtn" data-eh="none">Clear</button>
-      </div>
-      <div class="cls-list">
-        {% for a in assignments %}
-        <label class="cls-item">
-          <input type="checkbox" name="assignments" value="{{ a.id }}" class="eh-cls">
-          <span>{{ a.label }}</span>
-          <span class="cnt">{{ a.count }}</span>
-        </label>
-        {% endfor %}
-      </div>
-      <p class="muted" style="margin:.6rem 0 0;">Total selected: <strong id="ehSel">0</strong> candidates <span class="muted">(before the filters below)</span></p>
-
-      <hr style="border:none;border-top:1px solid #eee;margin:.9rem 0;">
-      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.35rem;">Candidate set</label>
-      <select name="candidate_set" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;font-size:.85rem;">
-        {% for val, label in candidate_sets.items() %}
-        <option value="{{ val }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-      <label style="font-size:.8rem;font-weight:600;display:block;margin:.75rem 0 .35rem;">Limit to streams <span class="muted">(optional)</span></label>
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-        {% for st in streams %}
-        <label class="cls-item" style="flex:0 0 auto;"><input type="checkbox" name="streams" value="{{ st }}"> {{ st }}</label>
-        {% endfor %}
-      </div>
-      <p class="muted" style="margin:.5rem 0 0;">Use this to seat only WAEC/JAMB-registered candidates, or a single stream — the tool then fits internal exams, WAEC and JAMB.</p>
-    </div>
-
-    <!-- Halls -->
-    <div class="eh-card">
-      <h3>2. Halls <span class="muted" style="font-weight:400;">— you choose how many</span></h3>
-      <div style="display:flex;align-items:end;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;">
-        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Number of halls</label>
-          <input type="number" id="hallCount" min="1" max="40" value="3" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
-        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Main capacity</label>
-          <input type="number" id="mainCap" min="1" value="120" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
-        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Other capacity</label>
-          <input type="number" id="stdCap" min="1" value="40" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
-        <button type="button" class="btn btn-secondary btn-sm" id="genHalls">Generate</button>
-      </div>
-      <div class="hall-row" style="font-weight:600;font-size:.72rem;color:var(--text-muted);">
-        <div>Hall name</div><div>Capacity</div><div class="main-pick">Main</div><div></div>
-      </div>
-      <div id="hallRows"></div>
-      <button type="button" class="linkbtn" id="addHall"><i class="fas fa-plus"></i> Add hall</button>
-
-      <div style="display:flex;align-items:end;gap:.5rem;margin-top:.9rem;">
-        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Seats per row</label>
-          <input type="number" name="seats_per_row" min="2" max="20" value="5" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
-        <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;padding-bottom:.4rem;">
-          <input type="checkbox" name="balance_gender" checked> Balance gender per hall
-        </label>
-      </div>
-      <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;margin-top:.5rem;">
-        <input type="checkbox" name="diversify_classes"> Spread each class evenly across every hall
-      </label>
-      <p class="muted" style="margin:.25rem 0 0;">With 3+ classes selected, reserves each class's seats across halls by capacity first, so no single hall ends up thin on one class just because of how its arms happened to round off. Makes no difference with only 1–2 classes selected.</p>
-      <p class="muted" style="margin:.5rem 0 0;">Mark your biggest room as <strong>Main</strong> with a larger capacity (2–3× a normal hall) — candidates are shared in proportion to capacity. Within each hall, seats are numbered so classmates (same class, any arm) don't sit next to each other — including diagonally.</p>
-    </div>
-  </div>
-
-  <div class="eh-actions">
-    <button type="submit" class="btn btn-primary"><i class="fas fa-wand-magic-sparkles"></i> Allocate halls</button>
-  </div>
-</form>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
 (function () {
   var rows = document.getElementById('hallRows');
+  if (!rows) return;
   var n = 0;
+  function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstChild; }
+  function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
   function addHall(name, cap, main) {
     var i = n++;
-    var div = document.createElement('div');
-    div.className = 'hall-row';
-    div.innerHTML =
-      '<input type="text" name="hall_name" placeholder="Hall ' + (i + 1) + '" value="' + (name || '') + '">' +
-      '<input type="number" name="hall_capacity" min="1" placeholder="seats" value="' + (cap || '') + '">' +
-      '<div class="main-pick"><input type="radio" name="main_hall" value="' + i + '"' + (main ? ' checked' : '') + '></div>' +
-      '<button type="button" class="linkbtn eh-del" title="Remove">&times;</button>';
-    rows.appendChild(div);
-    div.querySelector('.eh-del').addEventListener('click', function () { div.remove(); });
+    var row = el('<div class="eh-hall">' +
+      '<input class="eh-in" type="text" name="hall_name" aria-label="Hall name" placeholder="Hall ' + (i + 1) + '" value="' + esc(name) + '">' +
+      '<input class="eh-in" type="number" name="hall_capacity" aria-label="Seats" min="1" placeholder="Seats" value="' + (cap || '') + '">' +
+      '<label class="eh-main"><input type="radio" name="main_hall" value="' + i + '"' + (main ? ' checked' : '') + '> Main</label>' +
+      '<button type="button" class="eh-del" aria-label="Remove hall"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>');
+    rows.appendChild(row);
+    row.querySelector('.eh-del').addEventListener('click', function () { row.remove(); recount(); });
+    row.querySelector('[name=hall_capacity]').addEventListener('input', recount);
   }
   function generate() {
     var k = Math.max(1, Math.min(40, parseInt(document.getElementById('hallCount').value, 10) || 1));
@@ -135,28 +170,35 @@
     rows.innerHTML = ''; n = 0;
     addHall('Main Hall', mainCap, true);
     for (var i = 2; i <= k; i++) addHall('Hall ' + i, stdCap, false);
+    recount();
   }
-  generate();       // sensible starting point from the defaults above
-  document.getElementById('genHalls').addEventListener('click', generate);
-  document.getElementById('addHall').addEventListener('click', function () { addHall('', '', false); });
-
-  var boxes = Array.prototype.slice.call(document.querySelectorAll('.eh-cls'));
-  var sel = document.getElementById('ehSel');
+  var boxes = [].slice.call(document.querySelectorAll('input[name=assignments]'));
   function recount() {
-    var t = 0;
-    boxes.forEach(function (b) {
-      if (b.checked) {
-        var c = b.closest('.cls-item').querySelector('.cnt');
-        t += parseInt(c.textContent, 10) || 0;
-      }
-    });
-    sel.textContent = t;
+    var c = 0, s = 0;
+    boxes.forEach(function (b) { if (b.checked) c += parseInt(b.dataset.count, 10) || 0; });
+    document.querySelectorAll('[name=hall_capacity]').forEach(function (i) { s += parseInt(i.value, 10) || 0; });
+    document.getElementById('ehSel').textContent = c;
+    document.getElementById('ehBarC').textContent = c;
+    document.getElementById('ehBarS').textContent = s;
+    document.getElementById('ehSeats').textContent = s;
+    document.getElementById('ehWarn').hidden = !(c > s);
   }
+  generate();
+  document.getElementById('genHalls').addEventListener('click', generate);
+  document.getElementById('addHall').addEventListener('click', function () { addHall('', '', false); recount(); });
   boxes.forEach(function (b) { b.addEventListener('change', recount); });
   document.querySelectorAll('[data-eh]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var on = btn.getAttribute('data-eh') === 'all';
+      var on = btn.dataset.eh === 'all';
       boxes.forEach(function (b) { b.checked = on; });
+      recount();
+    });
+  });
+  document.querySelectorAll('[data-class-all]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var group = [].slice.call(document.querySelectorAll('[data-class="' + btn.dataset.classAll + '"] input'));
+      var on = !group.every(function (b) { return b.checked; });
+      group.forEach(function (b) { b.checked = on; });
       recount();
     });
   });

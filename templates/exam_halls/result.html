@@ -1,165 +1,230 @@
 {% extends "base.html" %}
-{% block title %}Hall Allocation - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('exam_halls.index') }}">Exam Hall Allocator</a> <span>Result</span>{% endblock %}
+{% from "results/_board_shell.html" import bx_head, bx_menu, bx_menu_js with context %}
+{% block title %}{{ plan.name if plan else 'Hall allocation' }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> / <a href="{{ url_for('exam_halls.index') }}">Exam Hall Allocator</a> / <span>{{ 'Saved' if plan else 'Result' }}</span>{% endblock %}
 
-{% block extra_css %}
+{% macro carry(p, with_seed=True) -%}
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+{% for a in p.assignments or [] %}<input type="hidden" name="assignments" value="{{ a }}">{% endfor %}
+{% for h in p.hall_name or [] %}<input type="hidden" name="hall_name" value="{{ h }}">{% endfor %}
+{% for c in p.hall_capacity or [] %}<input type="hidden" name="hall_capacity" value="{{ c }}">{% endfor %}
+<input type="hidden" name="main_hall" value="{{ p.main_hall }}">
+{% if p.balance_gender %}<input type="hidden" name="balance_gender" value="on">{% endif %}
+{% if p.diversify_classes %}<input type="hidden" name="diversify_classes" value="on">{% endif %}
+<input type="hidden" name="candidate_set" value="{{ p.candidate_set or 'all' }}">
+{% for st in p.streams or [] %}<input type="hidden" name="streams" value="{{ st }}">{% endfor %}
+<input type="hidden" name="seats_per_row" value="{{ p.seats_per_row or 5 }}">
+{% if with_seed %}<input type="hidden" name="seed" value="{{ p.seed }}">{% endif %}
+{%- endmacro %}
+
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.eh-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .6rem; margin-bottom: 1rem; }
-.eh-stat { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; padding: .75rem; text-align: center; }
-.eh-stat .v { font-size: 1.4rem; font-weight: 700; }
-.eh-stat .l { font-size: .72rem; color: var(--text-muted); }
-.hall-card { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 1rem; overflow: hidden; break-inside: avoid; }
-.hall-head { padding: .7rem 1rem; background: #007bff; color: #fff; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; }
-.hall-head.main { background: #0f172a; }
-.hall-head h3 { margin: 0; font-size: 1rem; }
-.hall-head .meta { font-size: .8rem; opacity: .95; }
-.hall-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
-.hall-tbl th, .hall-tbl td { padding: .4rem .6rem; border-bottom: 1px solid #eee; text-align: left; }
-.hall-tbl th { background: var(--gray-50); font-weight: 600; }
-.hall-tbl td.c, .hall-tbl th.c { text-align: center; }
-.grp-badge { display: inline-block; font-size: .72rem; padding: .1rem .4rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 5px; margin: .1rem; }
-.mix { font-size: .78rem; color: var(--text-muted); }
-.seat-grid { border-collapse: separate; border-spacing: 5px; margin: 0 auto .5rem; }
-.seat { width: 78px; height: 48px; border: 1px solid #cbd5e1; border-radius: 6px; background: var(--gray-50); text-align: center; vertical-align: middle; padding: 3px; }
-.seat.empty { background: transparent; border: 1px dashed #e5e7eb; }
-.seat .sn { display: block; font-weight: 700; font-size: .82rem; }
-.seat .sid { display: block; font-size: .62rem; color: var(--text-muted); }
-.seat .sarm { display: block; font-size: .62rem; color: #007bff; }
-@media print {
-  .seat { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .no-print { display: none !important; }
-  .hall-card { border: 1px solid #999; page-break-inside: avoid; }
-  .hall-head { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.eh-save{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;padding:.85rem 1rem;border:1px dashed color-mix(in srgb,var(--primary) 45%,var(--border-color));border-radius:16px;background:color-mix(in srgb,var(--primary) 5%,var(--bg-card));margin-bottom:1rem}
+.eh-save p{margin:0;flex:1 1 220px;font-size:.86rem;color:var(--text-secondary)}
+.eh-save p b{color:var(--text-primary)}
+.eh-in{height:40px;padding:0 .75rem;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.9rem;min-width:0;flex:1 1 240px}
+.eh-saved{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:700;color:var(--success);background:color-mix(in srgb,var(--success) 12%,var(--bg-card));padding:.3rem .7rem;border-radius:999px}
+.eh-tbl-wrap{overflow-x:auto}
+.eh-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:.86rem}
+.eh-tbl th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);font-weight:700;padding:.6rem;text-align:center;border-bottom:1px solid var(--border-color);white-space:nowrap}
+.eh-tbl th:first-child,.eh-tbl td:first-child{text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:1}
+.eh-tbl td{padding:.6rem;text-align:center;border-bottom:1px solid var(--border-light,var(--border-color));font-variant-numeric:tabular-nums;white-space:nowrap}
+.eh-tbl tfoot td,.eh-tbl tfoot td:first-child{font-weight:800;background:color-mix(in srgb,var(--primary) 6%,var(--bg-card));border-bottom:0}
+.eh-tbl td.nm{font-weight:700}
+.eh-tbl .zero{color:var(--text-muted)}
+.eh-tbl .tot{font-weight:800}
+.eh-main{font-size:.6rem;font-weight:800;letter-spacing:.08em;color:var(--primary);margin-left:.4rem}
+.eh-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.35rem;vertical-align:middle}
+.eh-hall{margin-bottom:1rem}
+.eh-hh{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
+.eh-hh h3{margin:0;font-size:1.15rem;display:flex;align-items:center;gap:.5rem}
+.eh-hh .tag{font-size:.62rem;font-weight:800;letter-spacing:.08em;background:var(--primary);color:#fff;border-radius:6px;padding:.15rem .4rem}
+.eh-hh .cap{text-align:right}
+.eh-hh .cap b{font-size:1.4rem;font-weight:800}
+.eh-hh .cap small{display:block;font-size:.76rem;color:var(--text-muted)}
+.eh-meter{height:6px;border-radius:99px;background:var(--gray-100);overflow:hidden;margin:.25rem 0 0 auto;width:140px}
+.eh-meter i{display:block;height:100%;background:var(--primary)}
+.eh-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.7rem}
+.eh-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:999px;font-size:.8rem;font-weight:600;background:var(--gray-100)}
+.eh-chip b{font-weight:800}
+.eh-chip.ok{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
+.eh-chip.warn{background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));color:#92400e}
+.eh-front{text-align:center;font-size:.66rem;font-weight:800;letter-spacing:.18em;color:var(--text-muted);margin:.3rem 0 .4rem;padding:.35rem;border-radius:8px;background:var(--gray-100)}
+.eh-seats{overflow-x:auto;padding-bottom:.3rem}
+.eh-grid{display:grid;gap:6px;margin:0 auto;width:max-content}
+.eh-seat{width:84px;min-height:54px;border-radius:10px;border:1px solid var(--border-color);padding:5px 4px;text-align:center;line-height:1.15;background:var(--bg-card)}
+.eh-seat .n{display:block;font-weight:800;font-size:.9rem}
+.eh-seat .i{display:block;font-size:.62rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eh-seat .c{display:block;font-size:.64rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eh-seat.empty{border-style:dashed;background:transparent}
+.eh-roster summary{cursor:pointer;font-weight:700;font-size:.86rem;color:var(--primary);padding:.7rem 0 .3rem;list-style:none}
+.eh-roster summary::-webkit-details-marker{display:none}
+.eh-roster summary i{transition:transform .15s}
+.eh-roster[open] summary i{transform:rotate(90deg)}
+.eh-roster table{width:100%;border-collapse:collapse;font-size:.84rem}
+.eh-roster th{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);text-align:left;padding:.45rem .5rem;border-bottom:1px solid var(--border-color)}
+.eh-roster td{padding:.45rem .5rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.eh-roster td.s{font-weight:800;width:3rem}
+.eh-print-head{display:none;text-align:center;margin-bottom:1rem}
+.eh-print-head b{display:block;font-size:1.1rem}
+.eh-actions form{display:inline}
+@media(max-width:640px){.eh-seat{width:70px}.eh-hh .cap{text-align:left}.eh-meter{margin-left:0}}
+@media print{
+  .no-print,.rs-head-a,.eh-save,.sidebar,.topbar{display:none!important}
+  .eh-print-head{display:block}
+  .eh-hall{page-break-before:always}
+  .eh-roster{display:block}.eh-roster summary{display:none}
+  .eh-seat{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
-  <h1 style="font-size:1.2rem;margin:0;"><i class="fas fa-chair"></i> Hall Allocation</h1>
-  <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
-    <a href="{{ url_for('exam_halls.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Change</a>
-    <form method="POST" action="{{ url_for('exam_halls.allocate') }}" style="display:inline;" title="Shuffle into a different arrangement">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      {% for a in payload.assignments %}<input type="hidden" name="assignments" value="{{ a }}">{% endfor %}
-      {% for h in payload.hall_name %}<input type="hidden" name="hall_name" value="{{ h }}">{% endfor %}
-      {% for c in payload.hall_capacity %}<input type="hidden" name="hall_capacity" value="{{ c }}">{% endfor %}
-      <input type="hidden" name="main_hall" value="{{ payload.main_hall }}">
-      {% if payload.balance_gender %}<input type="hidden" name="balance_gender" value="on">{% endif %}
-      {% if payload.diversify_classes %}<input type="hidden" name="diversify_classes" value="on">{% endif %}
-      <input type="hidden" name="candidate_set" value="{{ payload.candidate_set }}">
-      {% for st in payload.streams %}<input type="hidden" name="streams" value="{{ st }}">{% endfor %}
-      <input type="hidden" name="seats_per_row" value="{{ payload.seats_per_row }}">
-      {# no seed -> a fresh arrangement each time #}
-      <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-shuffle"></i> Regenerate</button>
-    </form>
-    <button type="button" class="btn btn-secondary btn-sm" data-print><i class="fas fa-print"></i> Print</button>
-    <form method="POST" action="{{ url_for('exam_halls.pdf') }}" style="display:inline;">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      {% for a in payload.assignments %}<input type="hidden" name="assignments" value="{{ a }}">{% endfor %}
-      {% for h in payload.hall_name %}<input type="hidden" name="hall_name" value="{{ h }}">{% endfor %}
-      {% for c in payload.hall_capacity %}<input type="hidden" name="hall_capacity" value="{{ c }}">{% endfor %}
-      <input type="hidden" name="main_hall" value="{{ payload.main_hall }}">
-      {% if payload.balance_gender %}<input type="hidden" name="balance_gender" value="on">{% endif %}
-      {% if payload.diversify_classes %}<input type="hidden" name="diversify_classes" value="on">{% endif %}
-      <input type="hidden" name="candidate_set" value="{{ payload.candidate_set }}">
-      {% for st in payload.streams %}<input type="hidden" name="streams" value="{{ st }}">{% endfor %}
-      <input type="hidden" name="seats_per_row" value="{{ payload.seats_per_row }}">
-      <input type="hidden" name="seed" value="{{ payload.seed }}">
-      <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-file-pdf"></i> PDF (one hall per page)</button>
-    </form>
-  </div>
-</div>
-
-<div style="text-align:center;margin:0 0 1rem;">
-  <div style="font-size:1.1rem;font-weight:800;color:var(--text-primary);">{{ school_name|upper }}</div>
-  {% if branch %}<div style="font-size:.85rem;font-weight:600;color:var(--text-muted);">{{ branch|upper }}</div>{% endif %}
-  <div style="font-size:.85rem;color:#007bff;font-weight:600;">EXAM HALL ALLOCATION{% if term %} — {{ term }}{% endif %}</div>
-</div>
-
-<div class="eh-summary">
-  <div class="eh-stat"><div class="v">{{ result.total_students }}</div><div class="l">Candidates</div></div>
-  <div class="eh-stat"><div class="v">{{ result.halls|length }}</div><div class="l">Halls</div></div>
-  <div class="eh-stat"><div class="v">{{ result.total_capacity }}</div><div class="l">Total seats</div></div>
-  <div class="eh-stat"><div class="v">{{ result.groups|length }}</div><div class="l">Class/arms</div></div>
-</div>
-
-<!-- Spread check: how thinly each class/arm is scattered -->
-<div class="hall-card no-print">
-  <div class="hall-head" style="background:var(--gray-50);color:var(--text-primary);"><h3>Spread per class / arm</h3><span class="meta" style="color:var(--text-muted);">most in any one hall → lower is better</span></div>
-  <table class="hall-tbl">
-    <thead><tr><th>Class / Arm</th><th class="c">Students</th><th class="c">Halls used</th><th class="c">Most in one hall</th></tr></thead>
-    <tbody>
-      {% for g in result.groups %}
-      <tr><td>{{ g.key }}</td><td class="c">{{ g.size }}</td><td class="c">{{ g.halls_used }}/{{ result.halls|length }}</td><td class="c">{{ g.max_in_hall }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-{% for hall in result.halls %}
-<div class="hall-card">
-  <div class="hall-head {% if hall.is_main %}main{% endif %}">
-    <h3>{{ hall.name }}{% if hall.is_main %} <span style="font-size:.7rem;opacity:.85;">(MAIN)</span>{% endif %}</h3>
-    <span class="meta">{{ hall.count }}/{{ hall.capacity }} seats · {{ hall.gender.Female }}F / {{ hall.gender.Male }}M{% if hall.gender.Other %} / {{ hall.gender.Other }} other{% endif %}</span>
-  </div>
-  <div style="padding:.5rem 1rem;" class="no-print">
-    {% for key, cnt in hall.by_group.items() %}<span class="grp-badge">{{ key }}: {{ cnt }}</span>{% endfor %}
-    {% if hall.seating %}
-      <span class="grp-badge" style="background:{% if hall.seating.conflicts %}#fef3c7{% else %}#dcfce7{% endif %};">
-        Same-class neighbours: {{ hall.seating.conflicts }}</span>
+{% set palette = ['#0d6a4e', '#2563eb', '#b45309', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#dc2626', '#4f46e5', '#c2410c'] %}
+{% set classes = result.classes or [] %}
+{% set ink = {} %}{% for c in classes %}{% set _ = ink.update({c: palette[loop.index0 % palette|length]}) %}{% endfor %}
+<div class="rs bx">
+  {% call bx_head('fa-chair', plan.name if plan else 'Hall allocation', (term ~ ' · ' if term else '') ~ result.total_students ~ ' candidates in ' ~ (result.halls|length) ~ ' halls' ~ (' · saved ' ~ plan.created_at.strftime('%d %b %Y') if plan and plan.created_at else '')) %}
+    <div class="eh-actions" style="display:flex;gap:.4rem;flex-wrap:wrap">
+    {% if plan %}
+      {{ bx_menu('Download', [
+          (url_for('exam_halls.export_plan', plan_id=plan.id, format='pdf'), 'fa-file-pdf', 'PDF · overview + one page per hall'),
+          (url_for('exam_halls.export_plan', plan_id=plan.id, format='excel'), 'fa-file-excel', 'Excel · summary + a sheet per hall')], 'fa-download', True) }}
+    {% else %}
+      <details class="bx-menu">
+        <summary class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></summary>
+        <div class="bx-menu-pop" role="menu">
+          <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="pdf"><button type="submit" role="menuitem"><i class="fas fa-file-pdf" aria-hidden="true"></i><span>PDF · overview + one page per hall</span></button></form>
+          <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="excel"><button type="submit" role="menuitem"><i class="fas fa-file-excel" aria-hidden="true"></i><span>Excel · summary + a sheet per hall</span></button></form>
+        </div>
+      </details>
+      <form method="POST" action="{{ url_for('exam_halls.allocate') }}" title="Shuffle into a different arrangement">{{ carry(payload, False) }}<button type="submit" class="rs-btn ghost"><i class="fas fa-shuffle" aria-hidden="true"></i><span class="rs-hide-sm">Regenerate</span></button></form>
     {% endif %}
+      <button type="button" class="rs-btn ghost" data-print aria-label="Print"><i class="fas fa-print" aria-hidden="true"></i><span class="rs-hide-sm">Print</span></button>
+    </div>
+  {% endcall %}
+  {{ bx_menu_js() }}
+
+  <div class="eh-print-head"><b>{{ school_name|upper }}</b>{% if branch %}<span>{{ branch|upper }}</span><br>{% endif %}<span>EXAM HALL ALLOCATION{% if term %} — {{ term }}{% endif %}</span></div>
+
+  {% if plan %}
+  <div class="eh-save no-print">
+    <span class="eh-saved"><i class="fas fa-circle-check" aria-hidden="true"></i> Saved</span>
+    <form method="POST" action="{{ url_for('exam_halls.rename_plan', plan_id=plan.id) }}" style="display:flex;gap:.5rem;flex:1 1 320px">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input class="eh-in" type="text" name="plan_name" value="{{ plan.name }}" maxlength="150" aria-label="Name">
+      <button type="submit" class="rs-btn ghost"><i class="fas fa-pen" aria-hidden="true"></i> Rename</button>
+    </form>
+    <a href="{{ url_for('exam_halls.index') }}" class="rs-btn ghost"><i class="fas fa-plus" aria-hidden="true"></i> New allocation</a>
+    <form method="POST" action="{{ url_for('exam_halls.delete_plan', plan_id=plan.id) }}" data-confirm="Delete this saved allocation?">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="rs-btn ghost" style="color:var(--danger)"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
+    </form>
+  </div>
+  {% else %}
+  <form method="POST" action="{{ url_for('exam_halls.save') }}" class="eh-save no-print">
+    {{ carry(payload) }}
+    <p><b>Happy with this arrangement?</b> Save it to reopen, print or export later — exactly as shown.</p>
+    <input class="eh-in" type="text" name="plan_name" value="{{ default_name }}" maxlength="150" aria-label="Name for this allocation">
+    <button type="submit" class="rs-btn primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save</button>
+    <a href="{{ url_for('exam_halls.index') }}" class="rs-btn ghost"><i class="fas fa-sliders" aria-hidden="true"></i> Change</a>
+  </form>
+  {% endif %}
+
+  {% set fill = (100 * result.total_students / result.total_capacity)|round|int if result.total_capacity else 0 %}
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Candidates</span><span class="v">{{ result.total_students }}</span><span class="s">{{ result.groups|length }} class arm{{ '' if result.groups|length == 1 else 's' }}</span></div>
+    <div class="rs-tile"><span class="l">Halls</span><span class="v">{{ result.halls|length }}</span><span class="s">{{ (result.halls|selectattr('is_main')|list|length) }} main</span></div>
+    <div class="rs-tile"><span class="l">Seats</span><span class="v">{{ result.total_capacity }}</span><span class="s">{{ fill }}% filled</span></div>
+    <div class="rs-tile"><span class="l">Classes</span><span class="v">{{ classes|length }}</span><span class="s">{{ classes|join(', ') }}</span></div>
   </div>
 
-  {% if hall.students %}
-  {% if hall.seating and hall.seating.rows %}
-  <!-- Seating chart: front of hall at the top -->
-  <div style="padding:.25rem 1rem 0;">
-    <div class="mix" style="text-align:center;margin:.25rem 0;">⟵ FRONT OF HALL ⟶</div>
-    <div style="overflow-x:auto;">
-      <table class="seat-grid">
-        {% for row in hall.seating.rows %}
-        <tr>
-          {% for cell in row %}
-          {% if cell %}
-          <td class="seat" title="{{ cell.student.name }} — {{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}">
-            <span class="sn">{{ cell.seat }}</span>
-            <span class="sid">{{ cell.student.student_id }}</span>
-            <span class="sarm">{{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}</span>
-          </td>
-          {% else %}<td class="seat empty"></td>{% endif %}
-          {% endfor %}
-        </tr>
+  <section class="rs-card flush" style="margin-bottom:1rem">
+    <div class="rs-card-h" style="padding:1rem 1.1rem .3rem"><h3><i class="fas fa-table" aria-hidden="true"></i> Candidates per hall</h3><small>how many of each class sit in each hall</small></div>
+    <div class="eh-tbl-wrap">
+      <table class="eh-tbl">
+        <thead><tr><th>Hall</th>{% for c in classes %}<th><span class="eh-dot" style="background:{{ ink[c] }}"></span>{{ c }}</th>{% endfor %}<th>Girls</th><th>Boys</th><th>Total</th><th>Seats</th></tr></thead>
+        <tbody>
+        {% for h in result.halls %}
+          <tr><td class="nm">{{ h.name }}{% if h.is_main %}<span class="eh-main">MAIN</span>{% endif %}</td>
+            {% for c in classes %}{% set v = (h.by_class or {}).get(c, 0) %}<td class="{{ 'zero' if not v }}">{{ v or '–' }}</td>{% endfor %}
+            <td>{{ h.gender.Female }}</td><td>{{ h.gender.Male }}</td><td class="tot">{{ h.count }}</td><td class="zero">{{ h.capacity }}</td></tr>
         {% endfor %}
+        </tbody>
+        <tfoot><tr><td>Total</td>
+          {% for c in classes %}<td>{% set ns = namespace(t=0) %}{% for h in result.halls %}{% set ns.t = ns.t + (h.by_class or {}).get(c, 0) %}{% endfor %}{{ ns.t }}</td>{% endfor %}
+          {% set g = namespace(f=0, m=0) %}{% for h in result.halls %}{% set g.f = g.f + h.gender.Female %}{% set g.m = g.m + h.gender.Male %}{% endfor %}
+          <td>{{ g.f }}</td><td>{{ g.m }}</td><td>{{ result.total_students }}</td><td>{{ result.total_capacity }}</td></tr></tfoot>
       </table>
     </div>
-  </div>
-  {% endif %}
-  <table class="hall-tbl">
-    <thead><tr><th class="c">Seat</th><th>Student ID</th><th>Name</th><th>Class/Arm</th><th class="c">Gender</th></tr></thead>
-    <tbody>
-      {% for row in hall.seating.rows %}{% for cell in row %}{% if cell %}
-      <tr>
-        <td class="c">{{ cell.seat }}</td>
-        <td>{{ cell.student.student_id }}</td>
-        <td>{{ cell.student.name }}</td>
-        <td>{{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}</td>
-        <td class="c">{{ cell.student.gender }}</td>
-      </tr>
-      {% endif %}{% endfor %}{% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="mix" style="padding:.75rem 1rem;">No candidates assigned.</p>
-  {% endif %}
+  </section>
+
+  <details class="rs-card no-print" style="margin-bottom:1rem">
+    <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:.6rem"><h3 style="margin:0;font-size:.98rem"><i class="fas fa-shuffle" aria-hidden="true" style="color:var(--text-muted)"></i> Spread per class arm</h3><small class="rs-muted">most in any one hall — lower is better</small></summary>
+    <div class="eh-tbl-wrap" style="margin-top:.6rem">
+      <table class="eh-tbl">
+        <thead><tr><th>Class arm</th><th>Candidates</th><th>Halls used</th><th>Most in one hall</th></tr></thead>
+        <tbody>{% for g in result.groups %}<tr><td class="nm">{{ g.key }}</td><td>{{ g.size }}</td><td>{{ g.halls_used }} / {{ result.halls|length }}</td><td>{{ g.max_in_hall }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </details>
+
+  {% for hall in result.halls %}
+  <section class="rs-card eh-hall">
+    <div class="eh-hh">
+      <h3>{{ hall.name }}{% if hall.is_main %}<span class="tag">MAIN</span>{% endif %}</h3>
+      <div class="cap"><b>{{ hall.count }}</b> <span class="rs-muted">/ {{ hall.capacity }} seats</span>
+        <div class="eh-meter" aria-hidden="true"><i style="width:{{ (100 * hall.count / hall.capacity)|round|int if hall.capacity else 0 }}%"></i></div>
+        <small>{{ hall.gender.Female }} girls · {{ hall.gender.Male }} boys{% if hall.gender.Other %} · {{ hall.gender.Other }} other{% endif %}</small></div>
+    </div>
+    <div class="eh-chips">
+      {% for c in classes %}{% set v = (hall.by_class or {}).get(c, 0) %}{% if v %}<span class="eh-chip"><span class="eh-dot" style="background:{{ ink[c] }}"></span>{{ c }} <b>{{ v }}</b></span>{% endif %}{% endfor %}
+      {% if hall.seating %}<span class="eh-chip {{ 'warn' if hall.seating.conflicts else 'ok' }} no-print" title="Pairs of classmates in neighbouring seats">Same-class neighbours: {{ hall.seating.conflicts }}</span>{% endif %}
+    </div>
+
+    {% if hall.count %}
+      {% if hall.seating and hall.seating.rows %}
+      <div class="eh-front">FRONT OF HALL</div>
+      <div class="eh-seats">
+        <div class="eh-grid" style="grid-template-columns:repeat({{ hall.seating.cols }},auto)">
+          {% for row in hall.seating.rows %}{% for cell in row %}
+            {% if cell %}{% set s = cell.student %}{% set k = ink.get(s.class_name, '#64748b') %}
+            <div class="eh-seat" style="border-color:color-mix(in srgb,{{ k }} 45%,var(--border-color));background:color-mix(in srgb,{{ k }} 7%,var(--bg-card))" title="{{ s.name }} — {{ s.class_name }}{% if s.arm %} {{ s.arm }}{% endif %}">
+              <span class="n">{{ cell.seat }}</span><span class="i">{{ s.student_id }}</span><span class="c" style="color:{{ k }}">{{ s.class_name }}{% if s.arm %} {{ s.arm }}{% endif %}</span></div>
+            {% else %}<div class="eh-seat empty"></div>{% endif %}
+          {% endfor %}{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      <details class="eh-roster">
+        <summary><i class="fas fa-chevron-right" aria-hidden="true"></i> Roster · {{ hall.count }} candidates</summary>
+        <table>
+          <thead><tr><th>Seat</th><th>Name</th><th>Student ID</th><th>Class</th><th>Gender</th></tr></thead>
+          <tbody>
+          {% for row in hall.seating.rows %}{% for cell in row %}{% if cell %}
+            <tr><td class="s">{{ cell.seat }}</td><td>{{ cell.student.name }}</td><td>{{ cell.student.student_id }}</td><td>{{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}</td><td>{{ cell.student.gender }}</td></tr>
+          {% endif %}{% endfor %}{% endfor %}
+          </tbody>
+        </table>
+      </details>
+    {% else %}
+      <p class="rs-muted">No candidates in this hall.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
 </div>
-{% endfor %}
 {% endblock %}
 
 {% block extra_js %}
 <script nonce="{{ csp_nonce }}">
 document.querySelectorAll('[data-print]').forEach(function (b) {
-  b.addEventListener('click', function () { window.print(); });
+  b.addEventListener('click', function () {
+    document.querySelectorAll('.eh-roster').forEach(function (d) { d.open = true; });
+    window.print();
+  });
+});
+document.querySelectorAll('form[data-confirm]').forEach(function (f) {
+  f.addEventListener('submit', function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); });
 });
 </script>
 {% endblock %}

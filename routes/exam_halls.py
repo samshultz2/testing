@@ -5,11 +5,14 @@ students from the same class + arm are scattered across as many halls as
 possible, halls fill in proportion to capacity (a big Main hall holds more),
 and each hall is gender-balanced where possible.
 """
+import json
+
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, Response, abort)
-from models import db, Student, StudentEnrollment, ClassArmAssignment
+from models import db, Student, StudentEnrollment, ClassArmAssignment, ExamHallPlan
 from utils.helpers import get_active_term
-from utils.branch_scope import scope_query, viewing_branch_id, can_access_branch
+from utils.branch_scope import (scope_query, viewing_branch_id, can_access_branch,
+                                 require_branch_access, branch_for_new)
 from utils.access_control import login_required, is_admin
 from utils.exam_hall_allocator import allocate_halls, seat_hall
 
@@ -111,7 +114,7 @@ def _gather_groups(form):
         if not a or not can_access_class(aid):
             continue
         enrs = (StudentEnrollment.query.filter_by(class_arm_assignment_id=aid, is_active=True)
-                .join(Student).order_by(Student.surname, Student.first_name).all())
+                .join(Student).filter(Student.is_active == True).order_by(Student.surname, Student.first_name).all())
         studs = []
         for e in enrs:
             s = e.student
@@ -119,10 +122,96 @@ def _gather_groups(form):
                 continue
             studs.append({'id': s.id, 'student_id': s.student_id, 'name': s.full_name,
                           'gender': s.gender, 'class_name': a.school_class.name if a.school_class else '',
+                          'class_level': (a.school_class.level or 0) if a.school_class else 0,
                           'arm': a.arm_label})
         if studs:
             groups.append({'key': a.display_name, 'students': studs})
     return groups
+
+
+PAYLOAD_KEYS = ('assignments', 'hall_name', 'hall_capacity', 'main_hall', 'balance_gender',
+                'diversify_classes', 'candidate_set', 'streams', 'seats_per_row', 'seed')
+
+
+def _payload(form, seed):
+    return {'assignments': form.getlist('assignments'),
+            'hall_name': form.getlist('hall_name'),
+            'hall_capacity': form.getlist('hall_capacity'),
+            'main_hall': form.get('main_hall', ''),
+            'balance_gender': 'on' if form.get('balance_gender') == 'on' else '',
+            'diversify_classes': 'on' if form.get('diversify_classes') == 'on' else '',
+            'candidate_set': form.get('candidate_set', 'all'),
+            'streams': form.getlist('streams'),
+            'seats_per_row': str(form.get('seats_per_row', type=int) or 5),
+            'seed': str(seed)}
+
+
+def _run(form, fresh=False):
+    """Allocate from the submitted form. Returns (result, payload); raises
+    ValueError with a message for the user. ``fresh`` draws a new seed."""
+    import random as _random
+    groups = _gather_groups(form)
+    halls = _parse_halls(form)
+    if not groups:
+        raise ValueError('Select at least one class/arm that has students.')
+    if not halls:
+        raise ValueError('Add at least one hall with a capacity.')
+    seed = None if fresh else form.get('seed', type=int)
+    if seed is None:
+        seed = _random.randrange(1_000_000_000)
+    cols = form.get('seats_per_row', type=int) or 5
+    result = allocate_halls(groups, halls, balance_gender=form.get('balance_gender') == 'on', seed=seed,
+                            diversify_classes=form.get('diversify_classes') == 'on')
+    for i, hall in enumerate(result['halls']):
+        hall['seating'] = seat_hall(hall['students'], cols=cols, seed=seed + i)
+    _add_class_breakdown(result, groups)
+    return result, _payload(form, seed)
+
+
+def _add_class_breakdown(result, groups):
+    """Per hall: how many of each class (SSS1, SSS2 …) sit there; plus the
+    class list in school order for the table columns."""
+    level = {}
+    for g in groups:
+        for s in g['students']:
+            level.setdefault(s.get('class_name') or '', s.get('class_level') or 0)
+    result['classes'] = sorted(level, key=lambda c: (level[c], c))
+    for hall in result['halls']:
+        bc = {}
+        for s in hall['students']:
+            c = s.get('class_name') or ''
+            bc[c] = bc.get(c, 0) + 1
+        hall['by_class'] = {c: bc[c] for c in result['classes'] if c in bc}
+
+
+def _snapshot(result):
+    """The JSON-safe arrangement to store on a saved plan."""
+    keep = ('id', 'student_id', 'name', 'gender', 'class_name', 'arm')
+    halls = []
+    for h in result['halls']:
+        seating = h.get('seating') or {}
+        rows = [[({'seat': c['seat'], 'student': {k: c['student'].get(k) for k in keep}} if c else None)
+                 for c in row] for row in seating.get('rows') or []]
+        halls.append({'name': h['name'], 'capacity': h['capacity'], 'is_main': h['is_main'],
+                      'count': h['count'], 'gender': h['gender'], 'by_group': h['by_group'],
+                      'by_class': h.get('by_class') or {},
+                      'students': [{k: s.get(k) for k in keep} for s in h['students']],
+                      'seating': {'rows': rows, 'cols': seating.get('cols'), 'nrows': seating.get('nrows'),
+                                  'conflicts': seating.get('conflicts', 0)}})
+    return {'halls': halls, 'groups': result['groups'], 'classes': result.get('classes') or [],
+            'total_students': result['total_students'], 'total_capacity': result['total_capacity'],
+            'balanced_by_gender': result.get('balanced_by_gender')}
+
+
+def _plans():
+    return (scope_query(ExamHallPlan.query, ExamHallPlan)
+            .order_by(ExamHallPlan.created_at.desc()).limit(60).all())
+
+
+def _plan_or_404(plan_id):
+    plan = db.get_or_404(ExamHallPlan, plan_id)
+    require_branch_access(plan.branch_id)
+    return plan
 
 
 @exam_halls_bp.route('/')
@@ -132,140 +221,129 @@ def index():
     return render_template('exam_halls/index.html',
                            assignments=_assignments_for_term(),
                            candidate_sets=CANDIDATE_SETS, streams=STREAMS,
-                           has_term=bool(get_active_term()))
+                           has_term=bool(get_active_term()), plans=_plans())
 
 
-@exam_halls_bp.route('/allocate', methods=['POST'])
+@exam_halls_bp.route('/allocate', methods=['GET', 'POST'])
 @login_required
 def allocate():
     _admin_only()
-    groups = _gather_groups(request.form)
-    halls = _parse_halls(request.form)
-    balance = request.form.get('balance_gender') == 'on'
-    diversify = request.form.get('diversify_classes') == 'on'
-    if not groups:
-        flash('Select at least one class/arm that has students.', 'error')
+    if request.method == 'GET':
         return redirect(url_for('exam_halls.index'))
-    if not halls:
-        flash('Add at least one hall with a capacity.', 'error')
-        return redirect(url_for('exam_halls.index'))
-    cols = request.form.get('seats_per_row', type=int) or 5
-    # A fresh seed each time (unless one is carried in) → a new arrangement per
-    # "Allocate"; the PDF re-uses this same seed so it matches what's shown.
-    import random as _random
-    seed = request.form.get('seed', type=int)
-    if seed is None:
-        seed = _random.randrange(1_000_000_000)
     try:
-        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed,
-                                diversify_classes=diversify)
+        # No seed carried in → a new arrangement on every "Allocate"/"Regenerate";
+        # the exports re-use the seed so they match what's shown.
+        result, payload = _run(request.form)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
-
-    # Number each hall's seats, keeping same class out of adjacent seats.
-    for i, hall in enumerate(result['halls']):
-        hall['seating'] = seat_hall(hall['students'], cols=cols, seed=seed + i)
-
     sname, branch, term = _masthead()
-    # Preserve the submitted inputs so the PDF button can re-run identically.
-    payload = {'assignments': request.form.getlist('assignments'),
-               'hall_name': request.form.getlist('hall_name'),
-               'hall_capacity': request.form.getlist('hall_capacity'),
-               'main_hall': request.form.get('main_hall', ''),
-               'balance_gender': 'on' if balance else '',
-               'diversify_classes': 'on' if diversify else '',
-               'candidate_set': request.form.get('candidate_set', 'all'),
-               'streams': request.form.getlist('streams'),
-               'seats_per_row': str(cols),
-               'seed': str(seed)}
-    return render_template('exam_halls/result.html', result=result,
-                           school_name=sname, branch=branch, term=term,
-                           payload=payload)
+    return render_template('exam_halls/result.html', result=result, plan=None,
+                           school_name=sname, branch=branch, term=term, payload=payload,
+                           default_name=_default_name(term))
+
+
+def _default_name(term):
+    from models import local_now
+    return 'Exam halls · %s%s' % (local_now().strftime('%d %b %Y'), (' · ' + term) if term else '')
+
+
+@exam_halls_bp.route('/save', methods=['POST'])
+@login_required
+def save():
+    """Save the arrangement on screen (same seed → identical seats)."""
+    _admin_only()
+    try:
+        result, payload = _run(request.form)
+    except ValueError as e:
+        flash(str(e), 'error')
+        return redirect(url_for('exam_halls.index'))
+    term = get_active_term()
+    name = (request.form.get('plan_name') or '').strip()[:150] or _default_name(term.full_name if term else '')
+    plan = ExamHallPlan(branch_id=branch_for_new(), term_id=term.id if term else None, name=name,
+                        params=json.dumps(payload), snapshot=json.dumps(_snapshot(result)),
+                        total_students=result['total_students'], hall_count=len(result['halls']),
+                        created_by=session.get('username') or 'Admin')
+    db.session.add(plan)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('exam_halls.save', f'{name}: {plan.total_students} candidates in {plan.hall_count} halls')
+    flash('Saved “%s”.' % name, 'success')
+    return redirect(url_for('exam_halls.view_plan', plan_id=plan.id))
+
+
+@exam_halls_bp.route('/plans/<int:plan_id>')
+@login_required
+def view_plan(plan_id):
+    _admin_only()
+    plan = _plan_or_404(plan_id)
+    sname, branch, _term = _masthead()
+    return render_template('exam_halls/result.html', result=plan.result, plan=plan,
+                           school_name=sname, branch=branch,
+                           term=plan.term.full_name if plan.term else '', payload=plan.payload,
+                           default_name=plan.name)
+
+
+@exam_halls_bp.route('/plans/<int:plan_id>/rename', methods=['POST'])
+@login_required
+def rename_plan(plan_id):
+    _admin_only()
+    plan = _plan_or_404(plan_id)
+    name = (request.form.get('plan_name') or '').strip()[:150]
+    if name:
+        plan.name = name
+        db.session.commit()
+        flash('Renamed.', 'success')
+    return redirect(url_for('exam_halls.view_plan', plan_id=plan.id))
+
+
+@exam_halls_bp.route('/plans/<int:plan_id>/delete', methods=['POST'])
+@login_required
+def delete_plan(plan_id):
+    _admin_only()
+    plan = _plan_or_404(plan_id)
+    name = plan.name
+    db.session.delete(plan)
+    db.session.commit()
+    from utils.audit import log_action
+    log_action('exam_halls.delete', name)
+    flash('Deleted “%s”.' % name, 'success')
+    return redirect(url_for('exam_halls.index'))
+
+
+def _file(result, fmt, name, term):
+    from utils import exam_hall_doc
+    import re
+    stem = re.sub(r'[^A-Za-z0-9]+', '_', name or 'exam_halls').strip('_')[:60] or 'exam_halls'
+    if fmt in ('excel', 'xlsx'):
+        data = exam_hall_doc.render_xlsx(result, subtitle=name)
+        return Response(data, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        headers={'Content-Disposition': f'attachment; filename="{stem}.xlsx"'})
+    result = dict(result, term=term)
+    data = exam_hall_doc.render_pdf(result, subtitle=name)
+    return Response(data, mimetype='application/pdf',
+                    headers={'Content-Disposition': f'attachment; filename="{stem}.pdf"'})
+
+
+@exam_halls_bp.route('/plans/<int:plan_id>/export')
+@login_required
+def export_plan(plan_id):
+    _admin_only()
+    plan = _plan_or_404(plan_id)
+    return _file(plan.result, (request.args.get('format') or 'pdf').lower(), plan.name,
+                 plan.term.full_name if plan.term else '')
 
 
 @exam_halls_bp.route('/pdf', methods=['POST'])
 @login_required
 def pdf():
+    """Export the (unsaved) arrangement on screen — ``format`` pdf | excel."""
     _admin_only()
-    groups = _gather_groups(request.form)
-    halls = _parse_halls(request.form)
-    balance = request.form.get('balance_gender') == 'on'
-    diversify = request.form.get('diversify_classes') == 'on'
-    cols = request.form.get('seats_per_row', type=int) or 5
-    seed = request.form.get('seed', type=int) or 0
     try:
-        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed,
-                                diversify_classes=diversify)
+        result, _payload_ = _run(request.form)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
-    for i, hall in enumerate(result['halls']):
-        hall['seating'] = seat_hall(hall['students'], cols=cols, seed=seed + i)
-    sname, branch, term = _masthead()
-    data = _build_pdf(result, sname, branch, term)
-    return Response(data, mimetype='application/pdf', headers={
-        'Content-Disposition': 'attachment; filename="exam_hall_allocation.pdf"'})
-
-
-def _build_pdf(result, school_name, branch, term):
-    """One A4 page per hall: masthead + hall/capacity + candidate list."""
-    from io import BytesIO
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib import colors
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                    Spacer, PageBreak)
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=14 * mm,
-                            leftMargin=14 * mm, rightMargin=14 * mm)
-    ss = getSampleStyleSheet()
-    h_school = ParagraphStyle('school', parent=ss['Title'], fontSize=16, spaceAfter=2,
-                              textColor=colors.HexColor('#0f172a'))
-    h_branch = ParagraphStyle('branch', parent=ss['Normal'], fontSize=11, alignment=1,
-                              textColor=colors.HexColor('#334155'), spaceAfter=1)
-    h_line = ParagraphStyle('line', parent=ss['Normal'], fontSize=11, alignment=1,
-                            textColor=colors.HexColor('#007bff'), spaceAfter=1)
-    h_hall = ParagraphStyle('hall', parent=ss['Normal'], fontSize=13, alignment=1,
-                            spaceBefore=6, spaceAfter=8, textColor=colors.HexColor('#0f172a'))
-    elems = []
-    halls = [h for h in result['halls'] if h['count'] > 0] or result['halls']
-    for hi, hall in enumerate(halls):
-        if hi > 0:
-            elems.append(PageBreak())
-        if school_name:
-            elems.append(Paragraph(school_name.upper(), h_school))
-        if branch:
-            elems.append(Paragraph(branch.upper(), h_branch))
-        elems.append(Paragraph('EXAM HALL ALLOCATION' + (f' — {term}' if term else ''), h_line))
-        g = hall['gender']
-        elems.append(Paragraph(
-            f"{hall['name'].upper()}  ·  {hall['count']}/{hall['capacity']} seats  ·  "
-            f"{g['Female']}F / {g['Male']}M", h_hall))
-        # Roster ordered by seat number (seats keep same class+arm apart).
-        seating = hall.get('seating') or {}
-        seats = [c for row in seating.get('rows', []) for c in row if c]
-        data = [['Seat', 'Student ID', 'Name', 'Class/Arm', 'Gender']]
-        rows_src = ([(c['seat'], c['student']) for c in seats] if seats
-                    else [(i, s) for i, s in enumerate(hall['students'], 1)])
-        for seat, s in rows_src:
-            arm = (s.get('class_name') or '') + (f" {s.get('arm')}" if s.get('arm') else '')
-            data.append([str(seat), s.get('student_id') or '', s.get('name') or '',
-                         arm.strip(), s.get('gender') or ''])
-        t = Table(data, colWidths=[13 * mm, 28 * mm, 72 * mm, 40 * mm, 22 * mm], repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#007bff')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-            ('ALIGN', (4, 0), (4, -1), 'CENTER'),
-            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')]),
-            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
-        elems.append(t)
-        elems.append(Spacer(1, 6))
-    doc.build(elems)
-    return buf.getvalue()
+    _s, _b, term = _masthead()
+    return _file(result, (request.form.get('format') or 'pdf').lower(),
+                 (request.form.get('plan_name') or '').strip() or 'Exam hall allocation', term)
