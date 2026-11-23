@@ -176,3 +176,20 @@ def test_svg_saved_and_screenshot_fallback(app, monkeypatch):
     assert out['status'] == 'attached' and 'screenshot' in out['message']
     with app.app_context():
         assert db.session.get(MockJAMBQuestion, qid).image_url == '/static/img/logo-mark.svg'
+
+
+def test_extensionless_and_picture_source_figures():
+    from utils import myschool as ms
+    p = ms.parse_detail(_card('<h1>Use the diagram above to answer this question</h1>',
+                              between='<div><img src="https://cdn.example.net/q/31331" width="600" height="400"></div>'))
+    assert p['image_url'] == 'https://cdn.example.net/q/31331'
+    p = ms.parse_detail(_card('<h1>Study the figure.</h1><picture><source srcset="/storage/classroom/f1.webp 1x">'
+                              '<img src="data:image/gif;base64,R0lGOD"></picture>'))
+    assert p['image_url'] == 'https://myschool.ng/storage/classroom/f1.webp'
+    # tiny icons and site logos are still ignored
+    p = ms.parse_detail(_card('<h1>Plain question?</h1><img src="https://x.net/a/b" width="16" height="16">'
+                              '<img src="https://x.net/myschool-logo.png">'))
+    assert p['image_url'] is None
+    from utils.myschool import _rejected
+    assert not _rejected('https://myschool.ng/uploads/flagellum.png') and not _rejected('/img/catalogue.jpg')
+    assert _rejected('/img/site-logo.png') and _rejected('https://x.net/icons/a.png')

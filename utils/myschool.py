@@ -958,25 +958,49 @@ _IMG_REJECT = ("placeholder", "emojione", "emoji", "/members/", "/comments/",
                "avatar", "logo", "/icons/", "sprite", "gravatar", "flag")
 
 
+_REJECT_WORDS = {"placeholder", "emojione", "emoji", "avatar", "avatars", "logo", "logos", "icon",
+                 "icons", "sprite", "sprites", "gravatar", "flag", "flags", "favicon", "badge", "spinner",
+                 "loader", "loading", "blank", "pixel", "spacer"}
+_REJECT_PATHS = ("/members/", "/comments/", "/icons/", "/avatars/", "gravatar.com", "googlesyndication",
+                 "doubleclick", "facebook.com", "google-analytics", "/flags/")
+
+
+def _rejected(src):
+    """A logo / icon / avatar / tracking pixel — judged on whole words of the file
+    name, so 'flagellum.png' or 'catalogue.jpg' are not caught by 'flag'/'logo'."""
+    s = (src or "").strip().lower()
+    if any(p in s for p in _REJECT_PATHS):
+        return True
+    name = s.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+    return any(tok in _REJECT_WORDS for tok in re.split(r"[^a-z0-9]+", name) if tok)
+
+
 def _real_image_src(src):
     """True for a genuine question figure, not an avatar / placeholder / emoji /
     comment attachment / logo."""
     s = (src or "").strip().lower()
     if not s or s.startswith("data:"):
         return False
-    # a question figure under myschool's classroom storage is genuine even when its
-    # file name happens to contain a "reject" word (flagellum.png, logo-type.png)
     if "/storage/classroom/" in s and not any(x in s for x in ("/members/", "/comments/", "avatar")):
         return True
-    if any(bad in s for bad in _IMG_REJECT):
+    if _rejected(s):
         return False
-    # a myschool question figure lives under /storage/… (but not the rejected
-    # sub-folders above); otherwise accept any real image URL.
     base = s.split("?", 1)[0].split(" ", 1)[0]
     if base.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp")):
         return True
     # myschool's image service paths often carry no extension (/_ipx/…, /storage/…)
     return "/storage/" in base or "/_ipx/" in base
+
+
+def _size_ok(el):
+    """False only when the tag itself says it's tiny (an icon / spacer)."""
+    def num(v):
+        try:
+            return float(re.sub(r"[^0-9.]", "", str(v or "")) or 0)
+        except ValueError:
+            return 0
+    w, h = num(el.get("width")), num(el.get("height"))
+    return not ((w and w < 40) or (h and h < 30))
 
 
 def _img_candidates(im):
@@ -989,10 +1013,11 @@ def _img_candidates(im):
         v = (im.get(attr) or "").strip()
         if v:
             out.append(v)
-    for key in ("srcset", "data-srcset"):
-        ss = (im.get(key) or "").strip()
-        if ss:
-            for part in ss.split(","):
+    pic = im.find_parent("picture")
+    sources = [im] + (pic.find_all("source") if pic is not None else [])
+    for el in sources:
+        for key in ("srcset", "data-srcset"):
+            for part in (el.get(key) or "").strip().split(","):
                 u = part.strip().split(" ")[0]
                 if u:
                     out.append(u)
@@ -1107,7 +1132,7 @@ def _find_figure(soup, h1, first_opt):
     if not scopes:
         scopes = [soup]
     seen, skipped = set(), []
-    data_uri = None
+    data_uri = plain = None
     for scope in scopes:
         for im in scope.find_all("img"):
             if id(im) in seen:
@@ -1117,7 +1142,8 @@ def _find_figure(soup, h1, first_opt):
                 skipped.append("in an option")
                 continue
             hosted = None
-            for cand in _img_candidates(im):
+            cands = _img_candidates(im)
+            for cand in cands:
                 if cand.startswith("data:"):
                     if data_uri is None and _real_data_uri(cand):
                         data_uri = cand
@@ -1128,10 +1154,21 @@ def _find_figure(soup, h1, first_opt):
                     break
                 else:
                     skipped.append("logo/icon")
+            if not hosted and plain is None and _size_ok(im):
+                # any other ordinary picture beside the question (e.g. an image
+                # host with extension-less links) — used if nothing better turns up
+                plain = next((c for c in cands if not c.startswith("data:") and not _rejected(c)
+                              and (c.startswith(("http://", "https://", "//", "/")))), None)
             if hosted:
                 return hosted, data_uri, None, ""
         if data_uri:
             return None, data_uri, None, ""
+        if plain:
+            return plain, None, None, ""
+        for el in scope.find_all(style=re.compile(r"background-image", re.I)):
+            m = re.search(r"url\((['\"]?)([^'\")]+)\1\)", el.get("style") or "")
+            if m and not _rejected(m.group(2)) and not _in_option_row(el):
+                return m.group(2), None, None, ""
         for svg in scope.find_all("svg"):
             if id(svg) in seen:
                 continue
