@@ -126,9 +126,26 @@ def find_question_page(q, session=None, budget_s=20):
     return None, 'not_found'
 
 
+def _browsers_path():
+    """Use <app>/.playwright for the browser when it's there, so whichever user
+    runs the app finds Chromium without changing the service settings."""
+    import os
+    if os.environ.get('PLAYWRIGHT_BROWSERS_PATH'):
+        return
+    try:
+        from flask import current_app
+        root = os.path.dirname(current_app.root_path) if os.path.basename(current_app.root_path) == 'app' else current_app.root_path
+    except Exception:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(root, '.playwright')
+    if os.path.isdir(path):
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = path
+
+
 def _browser_html(url):
     """The page as a browser sees it (after JavaScript), or None when Playwright
     and Chromium aren't installed on this server."""
+    _browsers_path()
     try:
         from playwright.sync_api import sync_playwright
     except Exception:

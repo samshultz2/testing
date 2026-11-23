@@ -53,3 +53,4 @@ loadtest/students.csv
 
 # React frontend build deps (the built bundle in static/js/react/ IS committed)
 frontend/node_modules/
+.playwright/
