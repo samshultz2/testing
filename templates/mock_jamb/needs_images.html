@@ -6,95 +6,163 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
-.qb-alert{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;border:1px solid color-mix(in srgb,var(--warning) 40%,var(--border-color));background:color-mix(in srgb,var(--warning) 8%,var(--bg-card));border-radius:16px;padding:.75rem 1rem;font-size:.86rem}
+/* ---------- shared ---------- */
+.qb-alert{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;border:1px solid color-mix(in srgb,var(--warning) 40%,var(--border-color));background:color-mix(in srgb,var(--warning) 8%,var(--bg-card));border-radius:16px;padding:.7rem 1rem;font-size:.86rem}
 .qb-alert>i{color:var(--warning);font-size:1.1rem}
 .qb-alert span{flex:1 1 240px}
-.ni-intro{font-size:.84rem;color:var(--text-secondary);line-height:1.55;margin:0}
+.ni-bar{display:flex;flex-direction:column;gap:.65rem}
 .ni-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%;padding:.1rem 0}
 .ni-chips::-webkit-scrollbar{display:none}
-.ni-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.34rem .8rem;font-size:.8rem;font-weight:600;color:var(--text-secondary);white-space:nowrap;text-decoration:none}
-.ni-chip:hover{border-color:var(--primary);color:var(--primary)}
+.ni-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.38rem .85rem;font-size:.8rem;font-weight:650;color:var(--text-secondary);white-space:nowrap;text-decoration:none}
+.ni-chip:hover{border-color:var(--primary);color:var(--primary);text-decoration:none}
 .ni-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
-.ni-chip em{font-style:normal;opacity:.7;margin-left:.3rem}
-.ni-filter{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-top:.75rem}
-.ni-filter select{flex:0 1 150px;min-width:0;border:1px solid var(--border-color);border-radius:12px;padding:.5rem .65rem;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.85rem}
-.ni-search{flex:1 1 220px;display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .7rem;background:var(--bg-card);color:var(--text-muted)}
-.ni-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.86rem;color:var(--text-primary);padding:.5rem 0;outline:none}
-.ni-bulk{position:sticky;top:calc(var(--header-height,56px) + 6px);z-index:5;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.6rem .8rem;margin-bottom:.8rem;border:1px solid var(--border-color);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 92%,transparent);backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(15,23,42,.06)}
-.ni-bulk label{display:flex;align-items:center;gap:.45rem;font-weight:650;font-size:.84rem;cursor:pointer}
-.ni-bulk .sp{flex:1;min-width:4px}
-.ni-bulk form{display:flex;flex-wrap:wrap;gap:.4rem;margin:0}
-.ni-box{width:18px;height:18px;accent-color:var(--primary,#0d6a4e);flex:none}
-.ni-list{display:flex;flex-direction:column;gap:.75rem}
-.ni-q{position:relative;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-card);padding:.9rem 1rem;transition:border-color .15s,box-shadow .15s}
-.ni-q.sel{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}
-.ni-top{display:flex;gap:.65rem;align-items:flex-start}
-.ni-top .ni-box{margin-top:.15rem}
-.ni-meta{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;flex:1;min-width:0}
-.ni-tag{font-size:.72rem;font-weight:650;border-radius:999px;padding:.15rem .55rem;background:var(--gray-100);color:var(--text-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.ni-chip em{font-style:normal;opacity:.7;margin-left:.3rem;font-variant-numeric:tabular-nums}
+.ni-filter{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.ni-filter select{flex:0 1 150px;min-width:0;border:1px solid var(--border-color);border-radius:12px;padding:.55rem .65rem;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.85rem}
+.ni-search{flex:1 1 240px;display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .75rem;background:var(--bg-card);color:var(--text-muted);min-width:0}
+.ni-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.88rem;color:var(--text-primary);padding:.55rem 0;outline:none}
+.ni-fbtn{display:none}
+.ni-sels{display:contents}
+.ni-how{font-size:.82rem;color:var(--text-secondary);line-height:1.55}
+.ni-how summary{cursor:pointer;font-weight:650;color:var(--text-muted);list-style:none;display:inline-flex;gap:.4rem;align-items:center}
+.ni-how summary::-webkit-details-marker{display:none}
+.ni-how p{margin:.45rem 0 0}
+.ni-box{width:18px;height:18px;accent-color:var(--primary,#0d6a4e);flex:none;cursor:pointer}
+.ni-tag{font-size:.7rem;font-weight:650;border-radius:999px;padding:.14rem .5rem;background:var(--gray-100);color:var(--text-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .ni-tag.why{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
 .ni-tag.subj{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
 .ni-num{font-size:.72rem;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.ni-passage{margin:.65rem 0 0;padding:.55rem .75rem;border-left:3px solid var(--border-color);font-size:.8rem;color:var(--text-secondary);background:var(--gray-50);border-radius:0 10px 10px 0}
-.ni-passage summary{cursor:pointer;font-weight:650}
-.ni-text{font-weight:600;font-size:.93rem;line-height:1.55;margin:.65rem 0 .55rem;overflow-wrap:anywhere}
-.ni-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:.35rem}
-.ni-opt{display:flex;gap:.5rem;align-items:flex-start;font-size:.84rem;color:var(--text-secondary);padding:.35rem .5rem;border-radius:10px;background:var(--gray-50);overflow-wrap:anywhere;min-width:0}
-.ni-opt b{flex:none;width:1.4rem;height:1.4rem;border-radius:7px;background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:.72rem}
-.ni-opt.key{background:color-mix(in srgb,var(--success) 10%,var(--bg-card));color:var(--text-primary)}
-.ni-opt.key b{background:var(--success);color:#fff}
-.ni-act{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;margin-top:.8rem;padding-top:.75rem;border-top:1px dashed var(--border-color)}
-.ni-act form{margin:0;display:flex;gap:.45rem;align-items:center;flex-wrap:wrap}
-.ni-up{flex:1 1 auto}
-.ni-file{position:relative;display:inline-flex;align-items:center;gap:.45rem;border:1.5px dashed var(--border-color);border-radius:12px;padding:.45rem .75rem;font-size:.82rem;font-weight:600;color:var(--text-secondary);cursor:pointer;max-width:100%;min-width:0}
-.ni-file:hover{border-color:var(--primary);color:var(--primary)}
-.ni-file input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-.ni-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:14rem}
-.ni-file.has{border-style:solid;border-color:var(--primary);color:var(--primary)}
-.ni-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border-color);display:none}
-.ni-thumb.on{display:block}
-.ni-fetch{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.7rem;padding:.55rem .75rem;border-radius:11px;font-size:.83rem;background:var(--gray-50);color:var(--text-secondary)}
-.ni-fetch[hidden]{display:none}
-.ni-fetch.ok{background:color-mix(in srgb,var(--success) 10%,var(--bg-card));color:var(--success)}
-.ni-fetch.warn{background:color-mix(in srgb,var(--warning) 10%,var(--bg-card));color:var(--warning)}
-.ni-fetch.bad{background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));color:var(--danger)}
-.ni-fetch img{max-height:110px;max-width:100%;border-radius:8px;border:1px solid var(--border-color);background:#fff}
-.ni-fetch a{font-weight:700}
-.ni-q.done{opacity:.85}
-.ni-q.done .ni-act{display:none}
+
+/* bulk / selection bar */
+.ni-bulk{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.55rem .75rem;border:1px solid var(--border-color);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 94%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 6px 18px rgba(15,23,42,.06);z-index:20}
+.ni-bulk label{display:flex;align-items:center;gap:.45rem;font-weight:650;font-size:.84rem;cursor:pointer;white-space:nowrap}
+.ni-bulk .sp{flex:1;min-width:4px}
+.ni-bulk form{display:flex;flex-wrap:wrap;gap:.4rem;margin:0}
+.ni-count{font-size:.82rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.ni-clear{display:none;border:0;background:none;color:var(--text-muted);cursor:pointer;font-size:1rem;padding:.2rem .4rem;border-radius:8px}
 .ni-prog{flex:1 1 100%;display:none;align-items:center;gap:.6rem;font-size:.82rem;color:var(--text-secondary)}
 .ni-prog.on{display:flex}
 .ni-prog .bar{flex:1;height:8px;border-radius:999px;background:var(--gray-100);overflow:hidden}
 .ni-prog .bar i{display:block;height:100%;width:0;background:var(--primary);transition:width .3s}
-.ni-src{color:#2563eb}
-#niLive[aria-busy="true"]{opacity:.55;pointer-events:none;transition:opacity .15s}
+
+/* question card (mobile feed) / row (desktop list) */
+.ni-list{display:flex;flex-direction:column;gap:.7rem}
+.ni-q{position:relative;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-card);padding:.85rem .95rem;transition:border-color .15s,box-shadow .15s,background .15s}
+.ni-q.sel{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}
+.ni-top{display:flex;gap:.6rem;align-items:flex-start}
+.ni-top .ni-box{margin-top:.1rem}
+.ni-meta{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;flex:1;min-width:0}
+.ni-dot{display:none;width:9px;height:9px;border-radius:50%;flex:none;margin-top:.35rem;background:var(--gray-100)}
+.ni-q[data-st] .ni-dot{display:block}
+.ni-q[data-st=busy] .ni-dot{background:var(--primary);animation:niPulse 1s infinite}
+.ni-q[data-st=ok] .ni-dot{background:var(--success)}
+.ni-q[data-st=warn] .ni-dot{background:var(--warning)}
+.ni-q[data-st=bad] .ni-dot{background:var(--danger)}
+@keyframes niPulse{50%{opacity:.35}}
+.ni-snip{display:none}
+.ni-bhead{display:none}
+.ni-passage{margin:.65rem 0 0;padding:.55rem .75rem;border-left:3px solid var(--border-color);font-size:.8rem;color:var(--text-secondary);background:var(--gray-50);border-radius:0 10px 10px 0}
+.ni-passage summary{cursor:pointer;font-weight:650}
+.ni-text{font-weight:600;font-size:.93rem;line-height:1.55;margin:.6rem 0 .55rem;overflow-wrap:anywhere}
+.ni-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.35rem}
+.ni-opt{display:flex;gap:.5rem;align-items:flex-start;font-size:.84rem;color:var(--text-secondary);padding:.4rem .5rem;border-radius:10px;background:var(--gray-50);overflow-wrap:anywhere;min-width:0}
+.ni-opt b{flex:none;width:1.4rem;height:1.4rem;border-radius:7px;background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:.72rem}
+.ni-opt.key{background:color-mix(in srgb,var(--success) 10%,var(--bg-card));color:var(--text-primary)}
+.ni-opt.key b{background:var(--success);color:#fff}
+.ni-fetch{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.7rem;padding:.55rem .75rem;border-radius:12px;font-size:.83rem;background:var(--gray-50);color:var(--text-secondary)}
+.ni-fetch[hidden]{display:none}
+.ni-fetch.ok{background:color-mix(in srgb,var(--success) 10%,var(--bg-card));color:var(--success)}
+.ni-fetch.warn{background:color-mix(in srgb,var(--warning) 10%,var(--bg-card));color:var(--warning)}
+.ni-fetch.bad{background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));color:var(--danger)}
+.ni-fetch img{max-height:160px;max-width:100%;border-radius:10px;border:1px solid var(--border-color);background:#fff;display:block;margin-top:.3rem}
+.ni-fetch a{font-weight:700}
+.ni-act{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem;margin-top:.8rem}
+.ni-act form{margin:0}
+.ni-act .rs-btn{width:100%;justify-content:center}
+.ni-act .ni-fetch-one{grid-column:1 / -1}
+.ni-pick{position:relative;overflow:hidden;cursor:pointer}
+.ni-pick input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ni-links{grid-column:1 / -1;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;font-size:.82rem;padding-top:.15rem}
+.ni-links a{font-weight:650;text-decoration:none;display:inline-flex;gap:.35rem;align-items:center}
+.ni-links .ni-src{color:#2563eb}
+.ni-body.done .ni-act{display:none}
 .ni-q.leaving{transition:opacity .25s,transform .25s;opacity:0;transform:translateX(12px)}
-.ni-toast{position:fixed;left:50%;bottom:calc(var(--bottom-nav-h,0px) + 22px);transform:translateX(-50%);z-index:60;max-width:min(92vw,520px);padding:.7rem 1rem;border-radius:14px;background:var(--text-primary,#0f172a);color:#fff;font-size:.86rem;box-shadow:0 10px 30px rgba(15,23,42,.25);display:flex;gap:.55rem;align-items:center}
+.ni-busy{opacity:.6;pointer-events:none}
+#niLive[aria-busy="true"]{opacity:.55;pointer-events:none;transition:opacity .15s}
+.ni-toast{position:fixed;left:50%;bottom:calc(var(--bottom-nav-h,0px) + 22px);transform:translateX(-50%);z-index:70;max-width:min(92vw,520px);padding:.7rem 1rem;border-radius:14px;background:var(--text-primary,#0f172a);color:#fff;font-size:.86rem;box-shadow:0 10px 30px rgba(15,23,42,.25);display:flex;gap:.55rem;align-items:center;cursor:pointer}
 .ni-toast[hidden]{display:none}
 .ni-toast.bad{background:var(--danger)}
 .ni-toast.warn{background:#b45309}
-.ni-busy{opacity:.6;pointer-events:none}
-@media (max-width:759px){.ni-toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
-.ni-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:1rem 0}
-@media (max-width:640px){
-  .ni-q{padding:.8rem .8rem}
-  .ni-act .ni-up{width:100%}
-  .ni-act .ni-up .ni-file{flex:1}
-  .ni-act .ni-up .rs-btn{flex:none}
-  .ni-act > .rs-btn, .ni-act > form:not(.ni-up){flex:1}
-  .ni-act > form:not(.ni-up) .rs-btn{width:100%;justify-content:center}
-  .ni-act > a.rs-btn{justify-content:center}
-  .ni-bulk{position:static}
-  .ni-bulk .sp{display:none}
-  .ni-tip{display:none}
-  .ni-bulk form{width:100%}
-  .ni-bulk form .rs-btn{flex:1;justify-content:center}
-  .ni-filter select{flex:1 1 40%}
+.ni-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.6rem 0}
+.ni-pane{display:none}
+
+/* ---------- desktop: list + detail workspace ---------- */
+@media (min-width:1100px){
+  .bx-tiles .rs-tile{padding:.6rem .85rem}
+  .bx-tiles .rs-tile .v{font-size:1.25rem}
+  .ni-bulk{position:sticky;top:calc(var(--header-height,60px) + 8px)}
+  .ni-work{display:grid;grid-template-columns:minmax(340px,40%) minmax(0,1fr);gap:1rem;align-items:start}
+  .ni-list{gap:0;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-card);overflow:auto;max-height:calc(100vh - var(--header-height,60px) - 150px);position:sticky;top:calc(var(--header-height,60px) + 78px)}
+  .ni-q{border:0;border-bottom:1px solid var(--border-light,var(--border-color));border-radius:0;padding:.65rem .8rem .65rem .95rem;cursor:pointer}
+  .ni-q:last-child{border-bottom:0}
+  .ni-q:hover{background:var(--gray-50)}
+  .ni-q.sel{box-shadow:none;background:color-mix(in srgb,var(--primary) 5%,var(--bg-card))}
+  .ni-q.active{background:color-mix(in srgb,var(--primary) 9%,var(--bg-card))}
+  .ni-q.active::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--primary)}
+  .ni-q .ni-tag:not(.subj):not(.why){display:none}
+  .ni-q .ni-tag.yr{display:inline-block}
+  .ni-snip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:.84rem;line-height:1.45;color:var(--text-primary);margin:.35rem 0 0 1.85rem}
+  .ni-q > .ni-body{display:none}
+  .ni-pane{display:block;position:sticky;top:calc(var(--header-height,60px) + 78px);max-height:calc(100vh - var(--header-height,60px) - 150px);overflow:auto;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-card);padding:1.1rem 1.25rem;transition:box-shadow .15s,border-color .15s}
+  .ni-pane.drag{border-color:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 16%,transparent)}
+  .ni-pane .ni-bhead{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+  .ni-pane .ni-text{font-size:1.02rem;margin-top:.8rem}
+  .ni-pane .ni-act{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ni-pane .ni-act .ni-fetch-one{grid-column:auto}
+  .ni-drop{display:flex;align-items:center;justify-content:center;gap:.6rem;margin-top:.9rem;padding:.9rem;border:1.5px dashed var(--border-color);border-radius:14px;color:var(--text-muted);font-size:.84rem;text-align:center}
+  .ni-pane.drag .ni-drop{border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 5%,var(--bg-card))}
+  .ni-keys{margin-top:.9rem;font-size:.74rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:.3rem .9rem}
+  .ni-keys kbd{font:inherit;font-weight:700;border:1px solid var(--border-color);border-bottom-width:2px;border-radius:6px;padding:0 .35rem;background:var(--gray-50);color:var(--text-secondary)}
+  .ni-pane-empty{color:var(--text-muted);font-size:.9rem;text-align:center;padding:3rem 1rem}
 }
+@media (max-width:1099px){ .ni-drop,.ni-keys{display:none} }
+
+/* ---------- phone: feed + floating selection bar ---------- */
+@media (max-width:759px){
+  .ni-fbtn{display:inline-flex}
+  .ni-sels{display:none}
+  .ni-filter.open .ni-sels{display:flex;flex:1 1 100%;gap:.5rem;flex-wrap:wrap}
+  .ni-filter.open .ni-sels select{flex:1 1 30%}
+  .ni-filter .ni-search{flex:1 1 0}
+  .bx-tiles{display:flex;gap:.5rem;overflow-x:auto;scrollbar-width:none;margin:0 -2px;padding:0 2px}
+  .bx-tiles::-webkit-scrollbar{display:none}
+  .bx-tiles .rs-tile{flex:0 0 40%;padding:.55rem .7rem}
+  .bx-tiles .rs-tile .v{font-size:1.15rem}
+  .bx-tiles .rs-tile .s{font-size:.72rem}
+  .ni-q{padding:.8rem .8rem;border-radius:16px}
+  .ni-text{font-size:.92rem}
+  .ni-text.clamp{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+  .ni-more{border:0;background:none;color:var(--primary);font-weight:700;font-size:.8rem;padding:0;margin:-.2rem 0 .5rem;cursor:pointer}
+  .ni-bulk.float{position:fixed;left:10px;right:10px;bottom:calc(72px + env(safe-area-inset-bottom,0px));border-radius:18px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:.6rem .7rem}
+  .ni-bulk.float .ni-allbox,.ni-bulk.float .ni-allnm,.ni-bulk.float .sp{display:none}
+  .ni-bulk.float .ni-clear{display:inline-flex}
+  .ni-bulk.float .ni-count{font-weight:750;color:var(--text-primary);font-size:.86rem}
+  .ni-bulk.float form{flex:1 1 100%;display:grid;grid-template-columns:2fr 1fr 1fr;gap:.4rem}
+  .ni-bulk.float form .rs-btn{justify-content:center;padding-left:.4rem;padding-right:.4rem}
+  .ni-bulk.float .ni-lbl{display:none}
+  .ni-bulk.float [data-bulk=dismiss_all]{display:none}
+  .ni-bulk:not(.float) form{display:none}
+  .ni-feed-pad{height:150px}
+  .ni-toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .ni-bulk.float ~ .ni-toast, body.ni-floating .ni-toast{bottom:calc(196px + env(safe-area-inset-bottom,0px))}
+}
+@media (min-width:760px){ .ni-more{display:none} .ni-feed-pad{display:none} .ni-lbl{display:inline} }
 </style>{% endblock %}
 {% block content %}
 {% set can_fix = can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
+{% set can_edit = can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
 {% set filtered = subject_id or year or exam_body or search %}
+{% set nfilters = (1 if year else 0) + (1 if exam_body else 0) + (1 if per_page != 20 else 0) %}
 {% set args = {'subject_id': subject_id or none, 'year': year or none, 'exam_body': exam_body or none, 'q': search or none, 'per_page': (per_page if per_page != 20 else none)} %}
 <div class="rs bx">
   {% call bx_head('fa-image', 'Questions needing images', (total ~ ' question' ~ ('' if total == 1 else 's') ~ ' waiting for a picture') if total else 'Every question that needs a picture has one') %}
@@ -105,43 +173,49 @@
   <div id="niLive" class="rs" aria-busy="false">
   <div class="rs-tiles bx-tiles" data-part="tiles">
     <div class="rs-tile {{ 'mid' if total else 'good' }}"><span class="l">Need a picture</span><span class="v">{{ total }}</span><span class="s">held out of exams</span></div>
-    <div class="rs-tile"><span class="l">Subjects affected</span><span class="v">{{ subject_counts|length }}</span><span class="s">{{ subject_counts[0][1] ~ ' has the most' if subject_counts else 'none' }}</span></div>
+    <div class="rs-tile"><span class="l">Subjects</span><span class="v">{{ subject_counts|length }}</span><span class="s">{{ subject_counts[0][1] ~ ' has the most' if subject_counts else 'none' }}</span></div>
     <div class="rs-tile"><span class="l">Showing</span><span class="v">{{ matching }}</span><span class="s">{{ 'with these filters' if filtered else 'all of them' }}</span></div>
-    <div class="rs-tile"><span class="l">Ruled not needed</span><span class="v">{{ dismissed }}</span><span class="s">false alarms you cleared</span></div>
+    <div class="rs-tile"><span class="l">Ruled not needed</span><span class="v">{{ dismissed }}</span><span class="s">false alarms cleared</span></div>
   </div>
 
-{% if external and can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
+  {% if external and can_fix %}
   <div class="qb-alert" data-part="external"><i class="fas fa-link-slash" aria-hidden="true"></i>
-    <span><strong>{{ external }}</strong> picture{{ '' if external == 1 else 's' }} {{ 'still links' if external == 1 else 'still link' }} to another website (usually myschool.ng), which blocks them — they show as broken images. Save copies on this server; any that can't be downloaded move to the needs-images list.</span>
+    <span><strong>{{ external }}</strong> picture{{ '' if external == 1 else 's' }} {{ 'still links' if external == 1 else 'still link' }} to another website (usually myschool.ng), which blocks them — they show as broken images. Save copies on this server; any that can't be downloaded move to this list.</span>
     <form method="post" action="{{ url_for('mock_jamb.bank_images_repair') }}" style="margin:0" data-ajax="reload">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button class="rs-btn primary"><i class="fas fa-wrench" aria-hidden="true"></i> Fix broken pictures</button></form></div>
   {% endif %}
-  <section class="rs-card">
-    <p class="ni-intro">Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — whether it was flagged on import or its wording points at one. They're <strong>held out of exams</strong> until you add the picture. If a question reads fine without one, mark it <em>No image needed</em>. <strong>Open on myschool.ng</strong> opens the original question so you can save its diagram (questions pasted without their link get a search instead).</p>
+
+  <section class="rs-card ni-bar">
     {% if subject_counts|length > 1 %}
-    <div class="ni-chips" role="navigation" aria-label="Subject" style="margin-top:.8rem" data-part="chips">
+    <div class="ni-chips" role="navigation" aria-label="Subject" data-part="chips">
       <a class="ni-chip {{ 'on' if not subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', year=year or none, exam_body=exam_body or none, q=search or none, per_page=(per_page if per_page != 20 else none)) }}">All subjects <em>{{ total }}</em></a>
       {% for sid, name, n in subject_counts %}<a class="ni-chip {{ 'on' if sid == subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', subject_id=sid, year=year or none, exam_body=exam_body or none, q=search or none, per_page=(per_page if per_page != 20 else none)) }}">{{ name }} <em>{{ n }}</em></a>{% endfor %}
     </div>{% endif %}
     <form method="get" class="ni-filter" role="search" id="niFilter">
       {% if subject_id %}<input type="hidden" name="subject_id" value="{{ subject_id }}">{% endif %}
-      <select name="year" aria-label="Year"><option value="">Any year</option>
-        {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}</select>
-      <select name="exam_body" aria-label="Exam body"><option value="">Any exam</option>
-        {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body }}>{{ e }}</option>{% endfor %}</select>
-      <select name="per_page" aria-label="Questions per page">
-        {% for n in (20, 40, 50, 100, 150) %}<option value="{{ n }}" {{ 'selected' if n == per_page }}>{{ n }} per page</option>{% endfor %}</select>
       <label class="ni-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" name="q" value="{{ search }}" placeholder="Search question text" aria-label="Search question text"></label>
-      {% if filtered %}<a class="rs-btn ghost" href="{{ url_for('mock_jamb.bank_needs_images') }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear</a>{% endif %}
+      <button type="button" class="rs-btn ni-fbtn" id="niFiltBtn" aria-expanded="false" aria-controls="niSels"><i class="fas fa-sliders" aria-hidden="true"></i>{% if nfilters %} <span class="ni-tag subj" style="padding:.05rem .4rem">{{ nfilters }}</span>{% endif %}<span class="sr-only">Filters</span></button>
+      <span class="ni-sels" id="niSels">
+        <select name="year" aria-label="Year"><option value="">Any year</option>
+          {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}</select>
+        <select name="exam_body" aria-label="Exam body"><option value="">Any exam</option>
+          {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body }}>{{ e }}</option>{% endfor %}</select>
+        <select name="per_page" aria-label="Questions per page">
+          {% for n in (20, 40, 50, 100, 150, 200, 250, 300) %}<option value="{{ n }}" {{ 'selected' if n == per_page }}>{{ n }} per page</option>{% endfor %}</select>
+      </span>
+      {% if filtered %}<a class="rs-btn ghost" href="{{ url_for('mock_jamb.bank_needs_images') }}" title="Clear filters"><i class="fas fa-xmark" aria-hidden="true"></i><span class="rs-hide-sm"> Clear</span></a>{% endif %}
     </form>
+    <details class="ni-how"><summary><i class="fas fa-circle-info" aria-hidden="true"></i> How this works</summary>
+      <p>Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — flagged on import or worded around one. They're <strong>held out of exams</strong> until the picture is added. <strong>Fetch from myschool</strong> finds the question on myschool.ng and attaches its diagram; <strong>Upload</strong> adds your own (on a computer you can also drop or paste a picture); <strong>No image needed</strong> clears a false alarm.</p>
+    </details>
   </section>
 
   {% if questions and can_fix %}
-  <div class="ni-bulk">
-    <label><input type="checkbox" class="ni-box" id="niSelectAll"> Select all <span id="niOnPage">{{ questions|length }}</span> on this page</label>
-    <span class="rs-muted ni-tip" style="font-size:.76rem">Tip: shift-click to tick a range</span>
-    <span id="niCount" class="rs-muted" style="font-size:.82rem">0 selected</span>
+  <div class="ni-bulk" id="niBulk">
+    <label class="ni-allbox"><input type="checkbox" class="ni-box" id="niSelectAll"> <span class="ni-allnm">Select all <span id="niOnPage">{{ questions|length }}</span></span></label>
+    <button type="button" class="ni-clear" id="niClearSel" aria-label="Clear selection"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+    <span id="niCount" class="ni-count">0 selected</span>
     <span class="sp"></span>
     <form method="post" id="niBulkForm" action="{{ url_for('mock_jamb.bank_needs_images_bulk') }}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -150,65 +224,82 @@
       <input type="hidden" name="subject_id" value="{{ subject_id or '' }}">
       <input type="hidden" name="year" value="{{ year or '' }}">
       <input type="hidden" name="exam_body" value="{{ exam_body or '' }}">
-      <button type="button" class="rs-btn primary" id="niFetchSel" data-sel><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
-      <button type="button" class="rs-btn" data-bulk="dismiss" data-sel><i class="fas fa-check-double" aria-hidden="true"></i> No image needed</button>
-      <button type="button" class="rs-btn ghost danger" data-bulk="delete" data-sel><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
-      {% if not search %}<button type="button" class="rs-btn ghost" data-bulk="dismiss_all"><i class="fas fa-list-check" aria-hidden="true"></i> All <span data-part="matching">{{ matching }}</span>: no image</button>{% endif %}
+      <button type="button" class="rs-btn primary" id="niFetchSel" data-sel title="Fetch the selected questions' diagrams from myschool.ng"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch<span class="ni-lbl">&nbsp;from myschool</span></button>
+      <button type="button" class="rs-btn" data-bulk="dismiss" data-sel title="Mark the selected questions as not needing an image"><i class="fas fa-check-double" aria-hidden="true"></i><span class="ni-lbl"> No image needed</span></button>
+      <button type="button" class="rs-btn ghost danger" data-bulk="delete" data-sel title="Delete the selected questions"><i class="fas fa-trash" aria-hidden="true"></i><span class="ni-lbl"> Delete</span></button>
+      {% if not search %}<button type="button" class="rs-btn ghost" data-bulk="dismiss_all" title="Mark every question matching these filters as not needing an image"><i class="fas fa-list-check" aria-hidden="true"></i><span class="ni-lbl"> All <span data-part="matching">{{ matching }}</span>: no image</span></button>{% endif %}
     </form>
     <div class="ni-prog" id="niProg"><span class="bar"><i></i></span><span id="niProgTxt"></span><button type="button" class="rs-btn ghost" id="niStop">Stop</button></div>
   </div>
   {% endif %}
 
-  <div class="ni-list">
+  <div class="ni-work">
+  <div class="ni-list" id="niList" role="list">
   {% for q in questions %}
-  <article class="ni-q" data-qid="{{ q.id }}" data-fetch="{{ url_for('mock_jamb.bank_fetch_figure', question_id=q.id) }}">
+  {% set n = (pagination.page - 1) * pagination.per_page + loop.index %}
+  {% set sl = src_link(q) %}
+  <article class="ni-q" data-qid="{{ q.id }}" data-fetch="{{ url_for('mock_jamb.bank_fetch_figure', question_id=q.id) }}" data-src="{{ sl[0] or '' }}" data-edit="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) if can_edit else '' }}" role="listitem" tabindex="-1">
     <div class="ni-top">
-      {% if can_fix %}<input type="checkbox" class="ni-box ni-check" value="{{ q.id }}" aria-label="Select question {{ (pagination.page - 1) * pagination.per_page + loop.index }}">{% endif %}
+      {% if can_fix %}<input type="checkbox" class="ni-box ni-check" value="{{ q.id }}" aria-label="Select question {{ n }}">{% endif %}
       <div class="ni-meta">
         <span class="ni-tag subj">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
-        {% if q.exam_year %}<span class="ni-tag">{{ q.exam_year }}</span>{% endif %}
-        {% if q.exam_body %}<span class="ni-tag">{{ q.exam_body }}</span>{% endif %}
+        {% if q.exam_year %}<span class="ni-tag yr">{{ q.exam_body or '' }} {{ q.exam_year }}</span>{% endif %}
         {% if q.topic %}<span class="ni-tag">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
         <span class="ni-tag why"><i class="fas fa-image" aria-hidden="true"></i> {{ reasons.get(q.id) }}</span>
       </div>
-      <span class="ni-num">#{{ (pagination.page - 1) * pagination.per_page + loop.index }}</span>
+      <span class="ni-dot" aria-hidden="true"></span>
+      <span class="ni-num">#{{ n }}</span>
     </div>
-    {% if q.passage and q.passage.body %}
-    <details class="ni-passage"><summary>{{ q.passage.title or 'Passage' }}</summary><div style="margin-top:.4rem">{{ q.passage.body | question_html }}</div></details>
-    {% endif %}
-    <div class="ni-text">{{ q.question_text | question_html }}</div>
-    <div class="ni-opts">
-      {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'key' if q.correct_option == opt }}"><b>{{ opt }}</b><span>{{ val }}</span></div>{% endif %}{% endfor %}
-    </div>
-    <div class="ni-fetch" hidden role="status" aria-live="polite"></div>
-    <div class="ni-act">
-      {% if can_fix %}
-      <button type="button" class="rs-btn ni-fetch-one" data-fetch="{{ url_for('mock_jamb.bank_fetch_figure', question_id=q.id) }}" title="Find this question on myschool.ng, download its diagram and attach it"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
-      <form class="ni-up" data-ajax="card" method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <img class="ni-thumb" alt="">
-        <label class="ni-file"><i class="fas fa-cloud-arrow-up" aria-hidden="true"></i><span>Choose picture</span><input type="file" name="image" accept="image/*" required></label>
-        <button class="rs-btn primary"><i class="fas fa-image" aria-hidden="true"></i> Add image</button>
-      </form>
-      <form method="post" data-ajax="card" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams.">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="dismiss" value="1">
-        <button class="rs-btn"><i class="fas fa-check" aria-hidden="true"></i> No image needed</button>
-      </form>
+    <div class="ni-snip">{{ q.question_text|striptags|truncate(180) }}</div>
+    <div class="ni-body" id="nib-{{ q.id }}">
+      <div class="ni-bhead">
+        <span class="ni-tag subj">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
+        {% if q.exam_year %}<span class="ni-tag">{{ q.exam_body or '' }} {{ q.exam_year }}</span>{% endif %}
+        {% if q.topic %}<span class="ni-tag">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+        <span class="ni-tag why"><i class="fas fa-image" aria-hidden="true"></i> {{ reasons.get(q.id) }}</span>
+        <span class="ni-num" style="margin-left:auto">#{{ n }}</span>
+      </div>
+      {% if q.passage and q.passage.body %}
+      <details class="ni-passage"><summary>{{ q.passage.title or 'Passage' }}</summary><div style="margin-top:.4rem">{{ q.passage.body | question_html }}</div></details>
       {% endif %}
-      {% set sl = src_link(q) %}{% if sl[0] %}
-      <a href="{{ sl[0] }}" class="rs-btn ghost ni-src" target="_blank" rel="noopener noreferrer" title="{{ 'Open the original question on myschool.ng to save its diagram' if sl[1] else 'Search myschool.ng for this question' }}"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> {{ 'Open on myschool.ng' if sl[1] else 'Find on myschool.ng' }}</a>
-      {% endif %}
-      {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
-      <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="rs-btn ghost"><i class="fas fa-pen" aria-hidden="true"></i> Edit</a>
-      {% endif %}
+      <div class="ni-text">{{ q.question_text | question_html }}</div>
+      <div class="ni-opts">
+        {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'key' if q.correct_option == opt }}"><b>{{ opt }}</b><span>{{ val }}</span></div>{% endif %}{% endfor %}
+      </div>
+      <div class="ni-fetch" hidden role="status" aria-live="polite"></div>
+      <div class="ni-act">
+        {% if can_fix %}
+        <button type="button" class="rs-btn primary ni-fetch-one" title="Find this question on myschool.ng, download its diagram and attach it"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
+        <form class="ni-up" data-ajax="card" method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <label class="rs-btn ni-pick"><i class="fas fa-camera" aria-hidden="true"></i> Upload<input type="file" name="image" accept="image/*" aria-label="Upload a picture for question {{ n }}"></label>
+        </form>
+        <form method="post" data-ajax="card" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams." class="ni-dismiss">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="dismiss" value="1">
+          <button class="rs-btn"><i class="fas fa-check" aria-hidden="true"></i> No image needed</button>
+        </form>
+        {% endif %}
+        <div class="ni-links">
+          {% if sl[0] %}<a href="{{ sl[0] }}" class="ni-src" target="_blank" rel="noopener noreferrer" title="{{ 'Open the original question on myschool.ng to save its diagram' if sl[1] else 'Search myschool.ng for this question' }}"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> {{ 'Open on myschool.ng' if sl[1] else 'Find on myschool.ng' }}</a>{% endif %}
+          {% if can_edit %}<a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}"><i class="fas fa-pen" aria-hidden="true"></i> Edit</a>{% endif %}
+        </div>
+      </div>
     </div>
   </article>
   {% else %}
-  <div class="rs-blank"><span><i class="fas fa-circle-check" aria-hidden="true"></i></span><h3>Nothing to review</h3>
+  <div class="rs-blank" style="border:0"><span><i class="fas fa-circle-check" aria-hidden="true"></i></span><h3>Nothing to review</h3>
     <p>No question is waiting for a picture{{ ' with these filters' if filtered else '' }}.</p>
     {% if filtered %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images') }}">Show all</a>{% endif %}</div>
   {% endfor %}
+  </div>
+  {% if questions %}
+  <aside class="ni-pane" id="niPane" aria-label="Selected question" aria-live="polite">
+    <div class="ni-pane-empty">Choose a question on the left.</div>
+    {% if can_fix %}<div class="ni-drop"><i class="fas fa-file-arrow-up" aria-hidden="true"></i> Drop a picture here, or paste one (Ctrl+V), to attach it to this question</div>{% endif %}
+    <div class="ni-keys" aria-hidden="true"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>Space</kbd> select</span>{% if can_fix %}<span><kbd>F</kbd> fetch</span><span><kbd>U</kbd> upload</span><span><kbd>N</kbd> no image needed</span>{% endif %}<span><kbd>O</kbd> myschool</span></div>
+  </aside>
+  {% endif %}
   </div>
 
   {% if pagination and pagination.pages > 1 %}
@@ -218,6 +309,7 @@
     {% if pagination.has_next %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
   </nav>
   {% endif %}
+  <div class="ni-feed-pad" aria-hidden="true"></div>
   </div>
 </div>
 <div class="ni-toast" id="niToast" role="status" aria-live="polite" hidden></div>
@@ -226,46 +318,174 @@
 {% block extra_js %}{% include "mock_jamb/_mathjax.html" %}
 <script nonce="{{ csp_nonce }}">
 (function(){
-    // Everything on this page happens in place — filters, paging, adding an
-    // image, "No image needed", delete, bulk actions — no full-page reloads.
+    // Needs images works like an app: everything happens in place (no reloads).
+    // Desktop: a list on the left, the chosen question on the right, with
+    // keyboard shortcuts, drag-and-drop and paste-to-upload. Phone: a card feed
+    // with a floating selection bar; picking a photo uploads it straight away.
     var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
     var BASE = location.pathname;
-    var live = function(){ return document.getElementById('niLive'); };
-    var running = false, stopped = false, loadSeq = 0, lastBox = null;
+    var DESK = window.matchMedia('(min-width: 1100px)'), PHONE = window.matchMedia('(max-width: 759px)');
+    var running = false, stopped = false, loadSeq = 0, lastBox = null, active = null, toastTimer = null, searchTimer = null;
 
-    // ---- small helpers ----
+    // ---------- helpers ----------
+    function live(){ return document.getElementById('niLive'); }
     function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
-    var toastTimer = null;
     function toast(msg, tone){
-        var t = document.getElementById('niToast'); if (!t) return;
+        var t = document.getElementById('niToast'); if (!t || !msg) return;
         t.className = 'ni-toast ' + (tone === 'error' ? 'bad' : tone === 'warning' ? 'warn' : '');
         t.innerHTML = '<i class="fas fa-' + (tone === 'error' ? 'circle-xmark' : tone === 'warning' ? 'triangle-exclamation' : 'circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
-        t.hidden = false; t.onclick = function(){ t.hidden = true; }; clearTimeout(toastTimer);
-        toastTimer = setTimeout(function(){ t.hidden = true; }, 4200);
+        t.hidden = false; t.onclick = function(){ t.hidden = true; };
+        clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 4200);
     }
     function ask(msg){ return window.themedConfirm ? window.themedConfirm(msg) : Promise.resolve(window.confirm(msg)); }
+    function cards(){ return Array.prototype.slice.call(document.querySelectorAll('#niList .ni-q')); }
     function boxes(){ return Array.prototype.slice.call(document.querySelectorAll('.ni-check')); }
     function selected(){ return boxes().filter(function(c){ return c.checked; }); }
+    function bodyOf(card){ return card && document.getElementById('nib-' + card.dataset.qid); }
+    function cardOf(el){
+        var c = el.closest && el.closest('.ni-q'); if (c) return c;
+        var b = el.closest && el.closest('.ni-body');
+        return b ? document.querySelector('.ni-q[data-qid="' + b.id.slice(4) + '"]') : null;
+    }
     function typeset(root){ if (window.MathJax && window.MathJax.typesetPromise) { try { window.MathJax.typesetPromise([root]); } catch (e) {} } }
-    function update(){
-        var n = selected().length, all = boxes().filter(function(c){ return !c.disabled; });
-        var cnt = document.getElementById('niCount'); if (cnt) cnt.textContent = n + ' selected';
-        document.querySelectorAll('[data-sel]').forEach(function(b){ b.disabled = !n || running; });
-        boxes().forEach(function(c){ var card = c.closest('.ni-q'); if (card) card.classList.toggle('sel', c.checked); });
-        var sa = document.getElementById('niSelectAll'); if (sa) sa.checked = all.length > 0 && n === all.length;
-        var onp = document.getElementById('niOnPage'); if (onp) onp.textContent = all.length;
-    }
-    function scrollChips(){
-        var on = document.querySelector('.ni-chip.on');
-        if (on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
-    }
     function post(url, body){
         return fetch(url, {method: 'POST', credentials: 'same-origin', body: body,
             headers: {'X-CSRFToken': CSRF, 'X-Requested-With': 'fetch'}})
             .then(function(r){ return r.json().catch(function(){ return {ok: false, tone: 'error', message: 'Unexpected reply (' + r.status + ').'}; }); });
     }
+    function update(){
+        var n = selected().length, all = boxes().filter(function(c){ return !c.disabled; });
+        var cnt = document.getElementById('niCount'); if (cnt) cnt.textContent = n ? n + ' selected' : (PHONE.matches ? '' : '0 selected');
+        document.querySelectorAll('[data-sel]').forEach(function(b){ b.disabled = !n || running; });
+        boxes().forEach(function(c){ var card = c.closest('.ni-q'); if (card) card.classList.toggle('sel', c.checked); });
+        var sa = document.getElementById('niSelectAll'); if (sa) sa.checked = all.length > 0 && n === all.length;
+        var onp = document.getElementById('niOnPage'); if (onp) onp.textContent = all.length;
+        var bulk = document.getElementById('niBulk');
+        if (bulk) bulk.classList.toggle('float', PHONE.matches && (n > 0 || running));
+        document.body.classList.toggle('ni-floating', !!(bulk && bulk.classList.contains('float')));
+    }
 
-    // ---- load another view of the list (filters, chips, paging) without a reload ----
+    // ---------- desktop workspace: the chosen question in the right pane ----------
+    function pane(){ return document.getElementById('niPane'); }
+    function dock(card){
+        // move a question's detail into the pane (desktop) or back into its card
+        var p = pane(), b = bodyOf(card); if (!b) return;
+        if (DESK.matches && p) {
+            var empty = p.querySelector('.ni-pane-empty'); if (empty) empty.hidden = true;
+            p.insertBefore(b, p.querySelector('.ni-drop') || p.querySelector('.ni-keys'));
+        } else {
+            card.appendChild(b);
+        }
+    }
+    function activate(card, opts){
+        opts = opts || {};
+        if (!card) return;
+        if (active && active !== card && document.body.contains(active)) {
+            active.classList.remove('active');
+            var ob = bodyOf(active); if (ob) active.appendChild(ob);
+        }
+        active = card;
+        card.classList.add('active');
+        if (DESK.matches) {
+            dock(card);
+            var p = pane(); if (p) p.scrollTop = 0;
+            if (opts.scroll !== false) card.scrollIntoView({block: 'nearest'});
+            if (opts.focus) card.focus({preventScroll: true});
+        }
+    }
+    function undockAll(){
+        cards().forEach(function(c){ var b = bodyOf(c); if (b && b.parentNode !== c) c.appendChild(b); c.classList.remove('active'); });
+        var e = pane() && pane().querySelector('.ni-pane-empty'); if (e) e.hidden = false;
+        active = null;
+    }
+    function step(dir){
+        var list = cards(); if (!list.length) return;
+        var i = active ? list.indexOf(active) : -1;
+        activate(list[Math.max(0, Math.min(list.length - 1, i + dir))], {focus: true});
+    }
+    function clampTexts(root){
+        if (!PHONE.matches) return;
+        (root || document).querySelectorAll('#niList .ni-text').forEach(function(t){
+            if (t.dataset.cl) return; t.dataset.cl = 1;
+            if (t.scrollHeight > 130) {
+                t.classList.add('clamp');
+                var b = document.createElement('button'); b.type = 'button'; b.className = 'ni-more'; b.textContent = 'Show more';
+                b.addEventListener('click', function(){ var c = t.classList.toggle('clamp'); b.textContent = c ? 'Show more' : 'Show less'; });
+                t.after(b);
+            }
+        });
+    }
+    function initWork(){
+        active = null;
+        if (DESK.matches) { var first = cards()[0]; if (first) activate(first, {scroll: false}); }
+        clampTexts();
+        var on = document.querySelector('.ni-chip.on');
+        if (on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+        update();
+    }
+    DESK.addEventListener && DESK.addEventListener('change', function(){
+        var keep = active; undockAll();
+        if (DESK.matches) activate(keep && document.body.contains(keep) ? keep : cards()[0], {scroll: false});
+    });
+    PHONE.addEventListener && PHONE.addEventListener('change', function(){ clampTexts(); update(); });
+
+    // clicking a row (not its checkbox/links) opens it in the pane
+    document.addEventListener('click', function(e){
+        if (!DESK.matches) return;
+        var card = e.target.closest && e.target.closest('#niList .ni-q');
+        if (!card || e.target.closest('input, a, button, label, form')) return;
+        activate(card, {focus: true});
+    });
+
+    // keyboard (desktop): ↑/↓ or j/k move, space select, f fetch, u upload, n no image, o myschool, e edit
+    document.addEventListener('keydown', function(e){
+        if (!DESK.matches || e.metaKey || e.ctrlKey || e.altKey) return;
+        var t = e.target, tag = (t.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+        if (document.querySelector('#confirmModal.active')) return;
+        var k = e.key.toLowerCase(), b = bodyOf(active);
+        if (k === 'arrowdown' || k === 'j') { e.preventDefault(); step(1); }
+        else if (k === 'arrowup' || k === 'k') { e.preventDefault(); step(-1); }
+        else if (!active) return;
+        else if (k === ' ') { e.preventDefault(); var cb = active.querySelector('.ni-check'); if (cb && !cb.disabled) { cb.checked = !cb.checked; update(); } }
+        else if (k === 'f') { var fb = b && b.querySelector('.ni-fetch-one'); if (fb && !fb.disabled) fb.click(); }
+        else if (k === 'u') { var fi = b && b.querySelector('.ni-up input[type=file]'); if (fi) fi.click(); }
+        else if (k === 'n') { var nf = b && b.querySelector('.ni-dismiss button'); if (nf) nf.click(); }
+        else if (k === 'o') { if (active.dataset.src) window.open(active.dataset.src, '_blank', 'noopener'); }
+        else if (k === 'e') { if (active.dataset.edit) location.href = active.dataset.edit; }
+    });
+
+    // drag-and-drop or paste a picture onto the chosen question (desktop)
+    function uploadTo(card, file){
+        var b = bodyOf(card), f = b && b.querySelector('.ni-up');
+        if (!f || !file) return;
+        if (!/^image\//.test(file.type)) { toast('That file is not a picture.', 'warning'); return; }
+        var dt = new DataTransfer(); dt.items.add(file);
+        f.querySelector('input[type=file]').files = dt.files;
+        submitForm(f);
+    }
+    document.addEventListener('dragover', function(e){
+        var p = e.target.closest && e.target.closest('#niPane'); if (!p) return;
+        e.preventDefault(); p.classList.add('drag');
+    });
+    document.addEventListener('dragleave', function(e){
+        var p = e.target.closest && e.target.closest('#niPane'); if (p && !p.contains(e.relatedTarget)) p.classList.remove('drag');
+    });
+    document.addEventListener('drop', function(e){
+        var p = e.target.closest && e.target.closest('#niPane'); if (!p) return;
+        e.preventDefault(); p.classList.remove('drag');
+        if (active && e.dataTransfer.files.length) uploadTo(active, e.dataTransfer.files[0]);
+    });
+    document.addEventListener('paste', function(e){
+        if (!DESK.matches || !active) return;
+        var tag = (e.target.tagName || '').toLowerCase(); if (tag === 'input' || tag === 'textarea') return;
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image/') === 0) { e.preventDefault(); uploadTo(active, items[i].getAsFile()); return; }
+        }
+    });
+
+    // ---------- load another view of the list without a reload ----------
     function load(url, opts){
         opts = opts || {};
         if (running) { toast('Wait for the fetch to finish, or press Stop.', 'warning'); return Promise.resolve(); }
@@ -274,29 +494,27 @@
         return fetch(url, {credentials: 'same-origin', headers: {'X-Requested-With': 'fetch-html'}})
             .then(function(r){ if (!r.ok) throw new Error(r.status); return r.text(); })
             .then(function(html){
-                if (seq !== loadSeq) return;                       // a newer load won
+                if (seq !== loadSeq) return;
                 var doc = new DOMParser().parseFromString(html, 'text/html');
                 var fresh = doc.getElementById('niLive');
                 if (!fresh) { location.href = url; return; }
+                var h = document.querySelector('.rs-head-t p'), h2 = doc.querySelector('.rs-head-t p');
+                if (h && h2) h.textContent = h2.textContent;
                 if (opts.partsOnly) {
-                    // refresh just the counts / chips / pager, keep cards and their results
                     ['tiles', 'chips', 'pager', 'external', 'matching'].forEach(function(k){
                         var a = box.querySelector('[data-part="' + k + '"]'), b = fresh.querySelector('[data-part="' + k + '"]');
                         if (a && b) a.replaceWith(b); else if (a && !b) a.remove();
                     });
-                    var h = document.querySelector('.rs-head-t p'), h2 = doc.querySelector('.rs-head-t p');
-                    if (h && h2) h.textContent = h2.textContent;
                 } else {
                     box.replaceWith(fresh); box = fresh;
-                    var h = document.querySelector('.rs-head-t p'), h2 = doc.querySelector('.rs-head-t p');
-                    if (h && h2) h.textContent = h2.textContent;
                     if (opts.push) history.pushState({ni: 1}, '', url);
                     else if (opts.replace) history.replaceState({ni: 1}, '', url);
-                    if (opts.scroll) { var top = (document.querySelector('.ni-bulk') || document.querySelector('.ni-list') || box).getBoundingClientRect().top + scrollY - 80; if (top < scrollY) scrollTo({top: top, behavior: 'smooth'}); }
+                    if (opts.scroll) { var top = (document.querySelector('.ni-bulk') || document.querySelector('.ni-work') || box).getBoundingClientRect().top + scrollY - 80; if (top < scrollY) scrollTo({top: top, behavior: 'smooth'}); }
                     typeset(box);
                     lastBox = null;
+                    initWork();
                 }
-                scrollChips(); update();
+                update();
             })
             .catch(function(){ if (!opts.quiet) location.href = url; })
             .then(function(){ if (box) box.setAttribute('aria-busy', 'false'); });
@@ -308,24 +526,31 @@
     }
     function removeCards(ids){
         var set = {}; (ids || []).forEach(function(i){ set[String(i)] = 1; });
-        document.querySelectorAll('.ni-q').forEach(function(c){
+        var list = cards(), next = null;
+        if (active && set[active.dataset.qid]) {
+            var i = list.indexOf(active);
+            next = list.slice(i + 1).concat(list.slice(0, i).reverse()).filter(function(c){ return !set[c.dataset.qid]; })[0] || null;
+        }
+        list.forEach(function(c){
             if (!set[c.dataset.qid]) return;
+            var b = bodyOf(c);
             c.classList.add('leaving');
-            setTimeout(function(){ c.remove(); afterRemove(); }, 260);
+            setTimeout(function(){ if (b) b.remove(); c.remove(); afterRemove(); }, 260);
         });
+        if (next) setTimeout(function(){ activate(next); }, 270);
+        else if (active && set[active.dataset.qid]) setTimeout(function(){ active = null; var e = pane() && pane().querySelector('.ni-pane-empty'); if (e) e.hidden = false; }, 270);
     }
     var afterTimer = null;
     function afterRemove(){
         clearTimeout(afterTimer);
         afterTimer = setTimeout(function(){
             update();
-            // the page ran dry: show the next page of questions
-            if (!document.querySelector('.ni-q')) load(location.pathname + location.search, {replace: true});
+            if (!document.querySelector('#niList .ni-q')) load(location.pathname + location.search, {replace: true});
             else load(location.pathname + location.search, {partsOnly: true, quiet: true});
         }, 120);
     }
 
-    // ---- clicks on chips, pager and "Clear"/"Show all" stay in place ----
+    // chips, pager, Clear / Show all stay in place
     document.addEventListener('click', function(e){
         var a = e.target.closest && e.target.closest('#niLive a[href]');
         if (!a || a.target || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
@@ -336,18 +561,16 @@
     });
     window.addEventListener('popstate', function(){ load(location.pathname + location.search, {}); });
 
-    // ---- filters: selects apply at once, search after a short pause ----
-    var searchTimer = null;
+    // filters
+    document.addEventListener('click', function(e){
+        var b = e.target.closest && e.target.closest('#niFiltBtn'); if (!b) return;
+        var f = document.getElementById('niFilter'), open = f.classList.toggle('open');
+        b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
     document.addEventListener('change', function(e){
         var t = e.target;
         if (t.closest && t.closest('#niFilter') && t.tagName === 'SELECT') { load(filterUrl(), {push: true}); return; }
-        if (t.matches && t.matches('.ni-up input[type=file]')) {
-            var f = t.closest('.ni-up'), file = t.files && t.files[0], lab = f.querySelector('.ni-file'), img = f.querySelector('.ni-thumb');
-            lab.classList.toggle('has', !!file);
-            lab.querySelector('span').textContent = file ? file.name : 'Choose picture';
-            if (file && window.URL) { img.src = URL.createObjectURL(file); img.classList.add('on'); } else img.classList.remove('on');
-            return;
-        }
+        if (t.matches && t.matches('.ni-up input[type=file]')) { if (t.files && t.files.length) submitForm(t.closest('.ni-up')); return; }
         if (t.id === 'niSelectAll') { boxes().forEach(function(c){ if (!c.disabled) c.checked = t.checked; }); update(); return; }
         if (t.classList && t.classList.contains('ni-check')) update();
     });
@@ -356,28 +579,35 @@
         clearTimeout(searchTimer);
         searchTimer = setTimeout(function(){ load(filterUrl(), {replace: true}); }, 400);
     });
+    document.addEventListener('click', function(e){
+        if (!(e.target.closest && e.target.closest('#niClearSel'))) return;
+        boxes().forEach(function(c){ c.checked = false; }); update();
+    });
 
-    // ---- forms: filter (GET) and the card / repair actions (POST) ----
-    document.addEventListener('submit', function(e){
-        var f = e.target;
-        if (f.id === 'niFilter') { e.preventDefault(); clearTimeout(searchTimer); load(filterUrl(), {push: true}); return; }
-        var mode = f.getAttribute('data-ajax'); if (!mode) return;
-        e.preventDefault();
-        if (f.classList.contains('ni-up')) {
-            var inp = f.querySelector('input[type=file]');
-            if (!inp.files || !inp.files.length) { toast('Choose a picture first.', 'warning'); inp.click(); return; }
-        }
-        var btns = f.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
-        var card = f.closest('.ni-q'); if (card) card.classList.add('ni-busy');
-        post(f.getAttribute('action'), new FormData(f)).then(function(r){
+    // ---------- per-question forms (upload, no image needed) ----------
+    function submitForm(f){
+        var mode = f.getAttribute('data-ajax');
+        var card = cardOf(f), b = bodyOf(card);
+        var btns = f.querySelectorAll('button, label.rs-btn'); btns.forEach(function(x){ x.classList.add('ni-busy'); });
+        if (card) card.dataset.st = 'busy';
+        var fd = new FormData(f);
+        return post(f.getAttribute('action'), fd).then(function(r){
             toast(r.message, r.tone || (r.ok ? 'success' : 'error'));
             if (r.ok && r.removed) removeCards(r.removed);
             else if (r.ok && (mode === 'reload' || r.reload)) load(location.pathname + location.search, {replace: true});
-        }).catch(function(){ toast('Network problem — try again.', 'error'); })
-          .then(function(){ btns.forEach(function(b){ b.disabled = false; }); if (card) card.classList.remove('ni-busy'); });
+            else if (card) card.dataset.st = 'bad';
+        }).catch(function(){ toast('Network problem — try again.', 'error'); if (card) card.dataset.st = 'bad'; })
+          .then(function(){ btns.forEach(function(x){ x.classList.remove('ni-busy'); }); var fi = f.querySelector('input[type=file]'); if (fi) fi.value = ''; });
+    }
+    document.addEventListener('submit', function(e){
+        var f = e.target;
+        if (f.id === 'niFilter') { e.preventDefault(); clearTimeout(searchTimer); load(filterUrl(), {push: true}); return; }
+        if (!f.getAttribute('data-ajax')) return;
+        e.preventDefault();
+        submitForm(f);
     });
 
-    // ---- bulk: No image needed / Delete / All matching ----
+    // ---------- bulk: No image needed / Delete / All matching ----------
     document.addEventListener('click', function(e){
         var b = e.target.closest && e.target.closest('#niBulkForm [data-bulk]'); if (!b) return;
         var action = b.getAttribute('data-bulk'), form = document.getElementById('niBulkForm');
@@ -395,13 +625,13 @@
                 toast(r.message, r.tone || (r.ok ? 'success' : 'error'));
                 if (!r.ok) return;
                 if (action === 'dismiss_all') load(location.pathname + location.search, {replace: true});
-                else removeCards(r.removed);
+                else { boxes().forEach(function(c){ c.checked = false; }); removeCards(r.removed); update(); }
             }).catch(function(){ toast('Network problem — try again.', 'error'); })
               .then(function(){ b.disabled = false; });
         });
     });
 
-    // ---- Shift-click a box to tick (or untick) the range since the last one ----
+    // shift-click a box to tick (or untick) the range since the last one
     document.addEventListener('click', function(e){
         var cb = e.target;
         if (!cb.classList || !cb.classList.contains('ni-check')) return;
@@ -414,8 +644,12 @@
         lastBox = cb;
     });
 
-    // ---- Fetch diagrams from myschool.ng, one question at a time ----
-    function show(card, cls, html){ var b = card.querySelector('.ni-fetch'); b.hidden = false; b.className = 'ni-fetch ' + (cls || ''); b.innerHTML = html; }
+    // ---------- fetch diagrams from myschool.ng, one question at a time ----------
+    function show(card, cls, html){
+        var b = bodyOf(card), box = b && b.querySelector('.ni-fetch'); if (!box) return;
+        box.hidden = false; box.className = 'ni-fetch ' + (cls || ''); box.innerHTML = html;
+        card.dataset.st = cls === '' ? 'busy' : cls;
+    }
     function fetchOne(card, tries){
         tries = tries || 0;
         show(card, '', '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> ' + (tries ? 'Still searching myschool.ng…' : 'Looking for this question on myschool.ng…'));
@@ -423,8 +657,8 @@
             if (r.status === 'searching' && tries < 12 && !stopped) return fetchOne(card, tries + 1);
             var link = r.url ? ' <a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Open on myschool.ng</a>' : '';
             if (r.status === 'attached') {
-                show(card, 'ok', '<i class="fas fa-circle-check" aria-hidden="true"></i> ' + esc(r.message) + link + '<br><img src="' + esc(r.image_url) + '" alt="Downloaded diagram">');
-                card.classList.add('done');
+                show(card, 'ok', '<i class="fas fa-circle-check" aria-hidden="true"></i> ' + esc(r.message) + link + '<img src="' + esc(r.image_url) + '" alt="Downloaded diagram">');
+                var b = bodyOf(card); if (b) b.classList.add('done');
                 var cb = card.querySelector('.ni-check'); if (cb) { cb.checked = false; cb.disabled = true; }
             } else if (r.status === 'no_image' || r.status === 'not_found' || r.status === 'searching') {
                 show(card, 'warn', '<i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ' + esc(r.message) + link);
@@ -434,40 +668,43 @@
             return r.status;
         }).catch(function(){ show(card, 'bad', '<i class="fas fa-circle-xmark" aria-hidden="true"></i> Network problem — try again.'); return 'error'; });
     }
-    function runQueue(cards){
-        if (running || !cards.length) return;
+    function runQueue(list){
+        if (running || !list.length) return;
         running = true; stopped = false; update();
         var prog = document.getElementById('niProg'), bar = prog.querySelector('.bar i'),
             txt = document.getElementById('niProgTxt'), stopBtn = document.getElementById('niStop');
         var done = 0, got = 0;
         prog.classList.add('on'); stopBtn.hidden = false;
-        (function step(){
-            bar.style.width = Math.round(done / cards.length * 100) + '%';
-            txt.textContent = done + ' of ' + cards.length + ' checked · ' + got + ' diagram' + (got === 1 ? '' : 's') + ' added';
-            if (stopped || done >= cards.length) {
+        (function next(){
+            bar.style.width = Math.round(done / list.length * 100) + '%';
+            txt.textContent = done + ' of ' + list.length + ' checked · ' + got + ' added';
+            if (stopped || done >= list.length) {
                 running = false; stopBtn.hidden = true;
                 txt.textContent += stopped ? ' · stopped' : ' · finished';
                 update();
                 if (got) load(location.pathname + location.search, {partsOnly: true, quiet: true});
                 return;
             }
-            fetchOne(cards[done]).then(function(st){ done++; if (st === 'attached') got++; step(); });
+            var card = list[done];
+            if (DESK.matches) activate(card);          // follow along in the pane
+            fetchOne(card).then(function(st){ done++; if (st === 'attached') got++; next(); });
         })();
     }
     document.addEventListener('click', function(e){
         var one = e.target.closest && e.target.closest('.ni-fetch-one');
         if (one) {
+            var card = cardOf(one); if (!card) return;
             one.disabled = true;
-            fetchOne(one.closest('.ni-q')).then(function(st){
+            fetchOne(card).then(function(st){
                 one.disabled = false;
                 if (st === 'attached') load(location.pathname + location.search, {partsOnly: true, quiet: true});
             });
             return;
         }
         if (e.target.closest && e.target.closest('#niFetchSel')) {
-            var cards = selected().map(function(c){ return c.closest('.ni-q'); });
-            if (!cards.length) { toast('Select the questions to fetch first.', 'warning'); return; }
-            runQueue(cards);
+            var list = selected().map(function(c){ return c.closest('.ni-q'); });
+            if (!list.length) { toast('Select the questions to fetch first.', 'warning'); return; }
+            runQueue(list);
             return;
         }
         if (e.target.closest && e.target.closest('#niStop')) stopped = true;
@@ -475,7 +712,7 @@
     window.addEventListener('beforeunload', function(e){ if (running) { e.preventDefault(); e.returnValue = ''; } });
 
     history.replaceState({ni: 1}, '', location.href);
-    scrollChips(); update();
+    initWork();
 })();
 </script>
 {% endblock %}

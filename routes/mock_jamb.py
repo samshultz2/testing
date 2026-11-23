@@ -2242,7 +2242,7 @@ def bank_needs_images():
     q = q.order_by(MockJAMBQuestion.subject_id, MockJAMBQuestion.exam_year,
                    MockJAMBQuestion.id)
     per_page = request.args.get('per_page', 20, type=int)
-    per_page = per_page if per_page in (20, 40, 50, 100, 150) else 20
+    per_page = per_page if per_page in (20, 40, 50, 100, 150, 200, 250, 300) else 20
     pagination = q.paginate(page=page, per_page=per_page, error_out=False)
     if not pagination.items and page > 1 and pagination.pages:   # past the end (e.g. after clearing a page)
         pagination = q.paginate(page=pagination.pages, per_page=per_page, error_out=False)
