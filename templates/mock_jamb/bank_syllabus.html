@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_jamb/_subject_picker.html" import subject_picker, subject_picker_assets with context %}
 {% from "mock_jamb/_shell.html" import mj_nav with context %}
 {% from "mock_jamb/_live.html" import live_kit with context %}
 {% block title %}Syllabus - Question Bank{% endblock %}
@@ -74,10 +75,10 @@
   {% endcall %}
   <div class="no-print">{{ mj_nav('syllabus') }}</div>
 
-  {% if subjects|length > 1 %}
-  <nav class="sy-chips" aria-label="Subject">
-    {% for s in subjects %}<a class="sy-chip {{ 'on' if subject and s.id == subject.id }}" href="{{ url_for('mock_jamb.bank_syllabus', subject_id=s.id) }}">{{ s.name }}</a>{% endfor %}
-  </nav>
+  {% if subjects|length > 1 or subjects_limited %}
+  {% set all_q = request.args.get('all') or none %}
+  {% set items = [] %}{% for s in subjects %}{% set _ = items.append((s.id, s.name, none, url_for('mock_jamb.bank_syllabus', subject_id=s.id, all=all_q))) %}{% endfor %}
+  {{ subject_picker(items, subject_id, url_for('mock_jamb.bank_syllabus', subject_id=subject_id, all=1) if subjects_limited else none, count_label='questions') }}
   {% endif %}
 
   {% if syllabus %}
@@ -234,7 +235,7 @@
   </div>
 
 </div>
-{{ live_kit('syLive') }}
+{{ live_kit('syLive') }}{{ subject_picker_assets() }}
 <script nonce="{{ csp_nonce }}">
 (function(){
   var INLINE = "{{ url_for('mock_jamb.bank_syllabus_retag') }}";

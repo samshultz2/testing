@@ -1,0 +1,166 @@
+{# Subject switcher: one button showing the current subject that opens a
+   searchable list (a dropdown on desktop, a bottom sheet on phones), plus chips
+   for recently used subjects. Replaces long scrolling chip rows.
+   items: list of (id, name, count or none, href). #}
+{% macro subject_picker(items, current_id, all_href=none, label='Subject', count_label='questions') -%}
+{% set cur = (items|selectattr(0, 'equalto', current_id)|list or [none])[0] %}
+<div class="sp" data-sp>
+  <div class="sp-row">
+    <button type="button" class="sp-btn" aria-haspopup="dialog" aria-expanded="false">
+      <span class="sp-k">{{ label }}</span>
+      <span class="sp-name">{{ cur[1] if cur else 'Choose a subject' }}</span>
+      {% if cur and cur[2] is not none %}<em class="sp-n">{{ cur[2] }}</em>{% endif %}
+      <i class="fas fa-chevron-down sp-chev" aria-hidden="true"></i>
+    </button>
+    <div class="sp-recent" aria-label="Recent subjects"></div>
+  </div>
+  <div class="sp-bg" hidden></div>
+  <div class="sp-pop" role="dialog" aria-label="Choose a subject" hidden>
+    <div class="sp-grip" aria-hidden="true"></div>
+    <div class="sp-head"><strong>Choose a subject</strong><button type="button" class="sp-x" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
+    <label class="sp-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" placeholder="Search {{ items|length }} subjects" aria-label="Search subjects" autocomplete="off"></label>
+    <div class="sp-list" role="listbox">
+      {% set with_q = items|selectattr(2)|list %}
+      {% set without = items|rejectattr(2)|list %}
+      {% for group, rows in [('With ' ~ count_label, with_q), ('None yet', without)] if rows %}
+      {% if with_q and without %}<div class="sp-gh">{{ group }}</div>{% endif %}
+      {% for sid, name, n, href in rows %}
+      <a class="sp-opt {{ 'on' if sid == current_id }}" role="option" aria-selected="{{ 'true' if sid == current_id else 'false' }}" href="{{ href }}" data-sid="{{ sid }}" data-name="{{ name }}">
+        <span>{{ name }}</span>{% if n is not none %}<em>{{ n }}</em>{% endif %}{% if sid == current_id %}<i class="fas fa-check" aria-hidden="true"></i>{% endif %}</a>
+      {% endfor %}
+      {% endfor %}
+      <div class="sp-none" hidden>No subject matches.</div>
+    </div>
+    {% if all_href %}<a class="sp-all" href="{{ all_href }}"><i class="fas fa-layer-group" aria-hidden="true"></i> Showing SSS3 subjects · show all subjects</a>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro subject_picker_assets() -%}
+<style>
+.sp{position:relative}
+.sp-row{display:flex;gap:.5rem;align-items:center;min-width:0}
+.sp-btn{display:inline-flex;align-items:center;gap:.55rem;flex:none;max-width:100%;border:1px solid var(--border-color);background:var(--bg-card);border-radius:14px;padding:.5rem .8rem;font:inherit;cursor:pointer;color:var(--text-primary);min-width:0}
+.sp-btn:hover,.sp-btn[aria-expanded="true"]{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 12%,transparent)}
+.sp-k{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.sp-name{font-weight:750;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sp-n{font-style:normal;font-size:.74rem;font-weight:750;border-radius:999px;padding:.1rem .5rem;background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary);font-variant-numeric:tabular-nums}
+.sp-chev{font-size:.72rem;color:var(--text-muted);transition:transform .15s}
+.sp-btn[aria-expanded="true"] .sp-chev{transform:rotate(180deg)}
+.sp-recent{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;min-width:0;flex:1}
+.sp-recent::-webkit-scrollbar{display:none}
+.sp-recent a{flex:none;border:1px solid var(--border-color);border-radius:999px;padding:.32rem .75rem;font-size:.78rem;font-weight:650;color:var(--text-secondary);text-decoration:none;white-space:nowrap;background:var(--bg-card)}
+.sp-recent a:hover{border-color:var(--primary);color:var(--primary);text-decoration:none}
+.sp-pop{position:absolute;z-index:80;top:calc(100% + 6px);left:0;width:min(380px,92vw);max-height:min(70vh,560px);display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;box-shadow:0 18px 44px rgba(15,23,42,.18);overflow:hidden}
+.sp-pop[hidden],.sp-bg[hidden]{display:none}
+.sp-grip{display:none}
+.sp-head{display:none;align-items:center;justify-content:space-between;padding:.2rem .9rem .4rem}
+.sp-x{border:0;background:var(--gray-100);width:2rem;height:2rem;border-radius:50%;cursor:pointer;color:var(--text-secondary)}
+.sp-search{display:flex;align-items:center;gap:.5rem;margin:.6rem .6rem .3rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .7rem;color:var(--text-muted)}
+.sp-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.9rem;padding:.55rem 0;outline:none;color:var(--text-primary)}
+.sp-list{overflow:auto;padding:.2rem .4rem .5rem;overscroll-behavior:contain}
+.sp-gh{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);padding:.55rem .55rem .25rem}
+.sp-opt{display:flex;align-items:center;gap:.6rem;padding:.55rem .6rem;border-radius:10px;text-decoration:none;color:var(--text-primary);font-size:.9rem}
+.sp-opt span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-opt em{font-style:normal;font-size:.76rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.sp-opt i{color:var(--primary);font-size:.8rem}
+.sp-opt:hover,.sp-opt.kb{background:var(--gray-50);text-decoration:none}
+.sp-opt.on{background:color-mix(in srgb,var(--primary) 9%,var(--bg-card));font-weight:700}
+.sp-opt[hidden],.sp-gh[hidden],.sp-none[hidden]{display:none}
+.sp-none{padding:1rem;color:var(--text-muted);font-size:.86rem;text-align:center}
+.sp-all{display:flex;gap:.45rem;align-items:center;justify-content:center;padding:.65rem;border-top:1px solid var(--border-light,var(--border-color));font-size:.8rem;font-weight:650;color:var(--text-muted);text-decoration:none}
+.sp-all:hover{color:var(--primary);text-decoration:none}
+@media (max-width:759px){
+  .sp-row{flex-wrap:wrap}
+  .sp-btn{flex:1 1 100%;justify-content:flex-start;padding:.65rem .85rem}
+  .sp-btn .sp-chev{margin-left:auto}
+  .sp-recent{flex:1 1 100%}
+  .sp-bg{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:1000}
+  .sp-pop{position:fixed;z-index:1001;top:auto;left:0;right:0;bottom:0;width:auto;max-height:78vh;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,0px);animation:spUp .2s ease-out}
+  .sp-grip{display:block;width:40px;height:5px;border-radius:3px;background:var(--gray-100);margin:.55rem auto .3rem}
+  .sp-head{display:flex}
+  .sp-opt{padding:.75rem .7rem;font-size:.95rem}
+  @keyframes spUp{from{transform:translateY(30%);opacity:.4}to{transform:none;opacity:1}}
+}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  if (window.__spReady) return; window.__spReady = 1;
+  var KEY = 'mj-recent-subjects', MAX = 4;
+  function recent(){ try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } }
+  function remember(id){
+    try { var r = recent().filter(function(x){ return x !== id; }); r.unshift(id); localStorage.setItem(KEY, JSON.stringify(r.slice(0, 8))); } catch (e) {}
+  }
+  function close(sp){
+    if (!sp) return;
+    sp.querySelector('.sp-pop').hidden = true; sp.querySelector('.sp-bg').hidden = true;
+    sp.querySelector('.sp-btn').setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
+  function open(sp){
+    var pop = sp.querySelector('.sp-pop'), inp = pop.querySelector('input');
+    pop.hidden = false; sp.querySelector('.sp-btn').setAttribute('aria-expanded', 'true');
+    if (window.matchMedia('(max-width: 759px)').matches) { sp.querySelector('.sp-bg').hidden = false; document.body.style.overflow = 'hidden'; }
+    inp.value = ''; filter(sp, '');
+    var on = pop.querySelector('.sp-opt.on'); if (on) on.scrollIntoView({block: 'center'});
+    if (!window.matchMedia('(hover: none)').matches) inp.focus();
+  }
+  function filter(sp, q){
+    q = (q || '').trim().toLowerCase();
+    var shown = 0, first = null;
+    sp.querySelectorAll('.sp-opt').forEach(function(o){
+      var ok = !q || o.dataset.name.toLowerCase().indexOf(q) >= 0;
+      o.hidden = !ok; o.classList.remove('kb'); if (ok) { shown++; if (!first) first = o; }
+    });
+    sp.querySelectorAll('.sp-gh').forEach(function(g){ g.hidden = !!q; });
+    sp.querySelector('.sp-none').hidden = !!shown;
+    if (q && first) first.classList.add('kb');
+  }
+  function paintRecent(sp){
+    var box = sp.querySelector('.sp-recent'); if (!box) return;
+    var cur = (sp.querySelector('.sp-opt.on') || {}).dataset;
+    var html = '', n = 0;
+    recent().forEach(function(id){
+      if (n >= MAX || (cur && String(cur.sid) === String(id))) return;
+      var o = sp.querySelector('.sp-opt[data-sid="' + id + '"]'); if (!o) return;
+      var a = document.createElement('a'); a.href = o.getAttribute('href'); a.textContent = o.dataset.name; a.dataset.sid = id;
+      html += a.outerHTML; n++;
+    });
+    box.innerHTML = html;
+  }
+  function init(){
+    document.querySelectorAll('[data-sp]').forEach(function(sp){
+      var on = sp.querySelector('.sp-opt.on'); if (on) remember(on.dataset.sid);
+      paintRecent(sp);
+    });
+  }
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest && e.target.closest('.sp-btn');
+    var sp = e.target.closest && e.target.closest('[data-sp]');
+    if (btn) { e.preventDefault(); var s2 = btn.closest('[data-sp]'); if (s2.querySelector('.sp-pop').hidden) open(s2); else close(s2); return; }
+    if (e.target.closest && (e.target.closest('.sp-x') || e.target.classList.contains('sp-bg'))) { close(sp); return; }
+    var opt = e.target.closest && e.target.closest('.sp-opt, .sp-recent a');
+    if (opt) { remember(opt.dataset.sid); close(sp); return; }       // the page's own link handling loads it
+    document.querySelectorAll('[data-sp]').forEach(function(s){ if (s !== sp) close(s); });
+  });
+  document.addEventListener('input', function(e){
+    if (e.target.closest && e.target.closest('.sp-search')) filter(e.target.closest('[data-sp]'), e.target.value);
+  });
+  document.addEventListener('keydown', function(e){
+    var sp = e.target.closest && e.target.closest('[data-sp]');
+    if (!sp || sp.querySelector('.sp-pop').hidden) return;
+    if (e.key === 'Escape') { close(sp); sp.querySelector('.sp-btn').focus(); return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return;
+    var opts = Array.prototype.filter.call(sp.querySelectorAll('.sp-opt'), function(o){ return !o.hidden; });
+    var i = opts.findIndex(function(o){ return o.classList.contains('kb'); });
+    if (e.key === 'Enter') { if (i >= 0) { e.preventDefault(); opts[i].click(); } return; }
+    e.preventDefault();
+    if (i >= 0) opts[i].classList.remove('kb');
+    i = e.key === 'ArrowDown' ? Math.min(opts.length - 1, i + 1) : Math.max(0, i - 1);
+    if (opts[i]) { opts[i].classList.add('kb'); opts[i].scrollIntoView({block: 'nearest'}); }
+  });
+  document.addEventListener('mj:swapped', init);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
+{%- endmacro %}

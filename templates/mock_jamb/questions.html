@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_jamb/_subject_picker.html" import subject_picker, subject_picker_assets with context %}
 {% from "mock_jamb/_shell.html" import mj_exam_nav with context %}
 {% from "mock_jamb/_figure.html" import qfig, qfig_js with context %}
 {% block title %}Questions — {{ exam.display_name }} - {{ app_name }}{% endblock %}
@@ -147,10 +148,10 @@
     <span>This mock draws each student's paper from the <strong>central question bank</strong>{% if subject %} ({{ bank_count }} {{ subject.name }} question{{ '' if bank_count == 1 else 's' }} there){% endif %}. Questions added here are used only by this mock — the bank is the better home.</span>
     <a href="{{ url_for('mock_jamb.bank', subject_id=subject_id or none) }}" class="rs-btn"><i class="fas fa-arrow-right" aria-hidden="true"></i> Open the bank</a></div>
 
-  {% if subjects|length > 1 %}
-  <nav class="qb-chips" aria-label="Subject">
-    {% for s in subjects %}<a class="qb-chip {{ 'on' if s.id == subject_id }}" href="{{ url_for('mock_jamb.questions', exam_id=exam.id, subject_id=s.id) }}">{{ s.name }} <em>{{ subject_counts.get(s.id, 0) }}</em></a>{% endfor %}
-  </nav>
+  {% if subjects|length > 1 or subjects_limited %}
+  {% set all_q = request.args.get('all') or none %}
+  {% set items = [] %}{% for s in subjects %}{% set _ = items.append((s.id, s.name, subject_counts.get(s.id, 0), url_for('mock_jamb.questions', exam_id=exam.id, subject_id=s.id, all=all_q))) %}{% endfor %}
+  {{ subject_picker(items, subject_id, url_for('mock_jamb.questions', exam_id=exam.id, subject_id=subject_id, all=1) if subjects_limited else none, count_label='questions in this mock') }}
   {% endif %}
 
 {% if not subject %}
@@ -312,4 +313,4 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{% endblock %}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{{ subject_picker_assets() }}{% endblock %}

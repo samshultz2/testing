@@ -1182,6 +1182,40 @@ def _mock_subjects():
     return Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
 
 
+def _sss3_subjects(current_id=None):
+    """Subjects SSS3 offers (set up for the SSS3 class under Class Subjects) —
+    the only ones a Mock JAMB candidate can sit. ``?all=1`` shows every subject;
+    the subject being viewed is always kept. Falls back to every subject when
+    SSS3 has none set up. Returns (subjects, limited)."""
+    from models import ClassSubject
+    from utils.helpers import get_sss3_class
+    everything = _mock_subjects()
+    if request.args.get('all') == '1':
+        return everything, False
+    sss3 = get_sss3_class()
+    ids = set()
+    if sss3 is not None:
+        ids = {sid for (sid,) in db.session.query(ClassSubject.subject_id)
+               .filter(ClassSubject.class_id == sss3.id, ClassSubject.is_active.isnot(False))
+               .distinct().all()}
+    if not ids:
+        return everything, False
+    subs = [x for x in everything if x.id in ids or x.id == current_id]
+    return subs, len(subs) < len(everything)
+
+
+def _default_subject_id(subjects):
+    """With no subject chosen, open the one with the most bank questions (not
+    simply the first alphabetically, which may be empty)."""
+    if not subjects:
+        return None
+    ids = [x.id for x in subjects]
+    row = (db.session.query(MockJAMBQuestion.subject_id, func.count(MockJAMBQuestion.id).label('n'))
+           .filter(MockJAMBQuestion.mock_exam_id.is_(None), MockJAMBQuestion.subject_id.in_(ids))
+           .group_by(MockJAMBQuestion.subject_id).order_by(func.count(MockJAMBQuestion.id).desc()).first())
+    return row[0] if row else subjects[0].id
+
+
 # =============================================================================
 # CENTRAL QUESTION BANK — subject-scoped, section-tagged questions & passages
 # (mock_exam_id NULL) that mocks draw from per the JAMB blueprint.
@@ -1250,8 +1284,9 @@ def bank():
     subject that every mock draws from by the JAMB blueprint."""
     from routes.cbt import _subject_topic_tree
     from utils.jamb_blueprint import sections_for
-    subjects = _mock_subjects()
-    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    req_sid = request.args.get('subject_id', type=int)
+    subjects, subjects_limited = _sss3_subjects(req_sid)
+    subject_id = req_sid or _default_subject_id(subjects)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     section = (request.args.get('section') or '').strip() or None
 
@@ -1334,7 +1369,7 @@ def bank():
                           .filter(MockJAMBQuestion.mock_exam_id.is_(None))
                           .group_by(MockJAMBQuestion.subject_id).all())
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
-                           src_link=mock_figures.source_link,
+                           src_link=mock_figures.source_link, subjects_limited=subjects_limited,
                            needs_image_count=needs_image_count, subject_counts=subject_counts,
                            external_images=external_images,
                            subject_id=subject_id, section=section, sections=sections,
@@ -1411,8 +1446,9 @@ def bank_syllabus():
     """Coded-syllabus manager: view a subject's imported syllabus (stable codes)
     and import/replace it from JSON or CSV."""
     import json as _json
-    subjects = _mock_subjects()
-    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    req_sid = request.args.get('subject_id', type=int)
+    subjects, subjects_limited = _sss3_subjects(req_sid)
+    subject_id = req_sid or _default_subject_id(subjects)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     syll, tree = _syllabus_tree(subject_id) if subject_id else (None, None)
     blueprint = []
@@ -1487,6 +1523,7 @@ def bank_syllabus():
     return render_template('mock_jamb/bank_syllabus.html',
                            subjects=subjects, subject=subject, subject_id=subject_id,
                            syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled, cover=cover,
+                           subjects_limited=subjects_limited,
                            years=years, tagged_count=tagged_count, total_questions_q=total_q,
                            key_set=key_set, batch_async=batch_async, batch_job=batch_job,
                            batch_job_in_progress=_batch_job_in_progress(batch_job),
@@ -1701,8 +1738,9 @@ def bank_analytics():
     topics, sub-topics, years and exam bodies, plus the cold/never-tested syllabus
     areas — so teachers can see what to focus students on."""
     from utils.mock_bank_analytics import subject_breakdown
-    subjects = _mock_subjects()
-    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    req_sid = request.args.get('subject_id', type=int)
+    subjects, subjects_limited = _sss3_subjects(req_sid)
+    subject_id = req_sid or _default_subject_id(subjects)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     data = subject_breakdown(subject) if subject else None
     # Past-question years present in this subject's bank, for the tag-scope picker.
@@ -1735,7 +1773,11 @@ def bank_analytics():
                          .order_by(BackgroundJob.id.desc()).first())
         except Exception:
             local_job = None
+    subject_counts = dict(db.session.query(MockJAMBQuestion.subject_id, func.count(MockJAMBQuestion.id))
+                          .filter(MockJAMBQuestion.mock_exam_id.is_(None))
+                          .group_by(MockJAMBQuestion.subject_id).all())
     return render_template('mock_jamb/bank_analytics.html', subjects=subjects,
+                           subject_counts=subject_counts, subjects_limited=subjects_limited,
                            subject=subject, subject_id=subject_id, data=data, years=years,
                            ai_ready=ai_ready, local_ready=local_ready, local_job=local_job,
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''),
@@ -2457,8 +2499,9 @@ def questions(exam_id):
     from routes.cbt import _subject_topic_tree
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)
-    subjects = _mock_subjects()
-    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    req_sid = request.args.get('subject_id', type=int)
+    subjects, subjects_limited = _sss3_subjects(req_sid)
+    subject_id = req_sid or _default_subject_id(subjects)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     page = max(1, request.args.get('page', 1, type=int))
     passages, standalone, qcount, pagination = [], [], 0, None
@@ -2480,6 +2523,7 @@ def questions(exam_id):
     bank_count = MockJAMBQuestion.query.filter(MockJAMBQuestion.mock_exam_id.is_(None),
                                                MockJAMBQuestion.subject_id == subject_id).count() if subject_id else 0
     return render_template('mock_jamb/questions.html', exam=exam, subjects=subjects,
+                           subjects_limited=subjects_limited,
                            subject_counts=subject_counts, bank_count=bank_count,
                            subject=subject, subject_id=subject_id, passages=passages,
                            standalone=standalone, qcount=qcount, pagination=pagination,

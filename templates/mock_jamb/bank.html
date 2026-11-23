@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "mock_jamb/_figure.html" import qfig, qfig_js with context %}
+{% from "mock_jamb/_subject_picker.html" import subject_picker, subject_picker_assets with context %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
 {% from "mock_jamb/_shell.html" import mj_nav with context %}
 {% block title %}Question Bank - {{ app_name }}{% endblock %}
@@ -125,10 +126,10 @@
   {% endcall %}
   <div class="no-print">{{ mj_nav('bank') }}</div>
 
-  {% if subjects|length > 1 %}
-  <nav class="qb-chips" aria-label="Subject">
-    {% for s in subjects %}<a class="qb-chip {{ 'on' if s.id == subject_id }}" href="{{ url_for('mock_jamb.bank', subject_id=s.id) }}">{{ s.name }} <em>{{ subject_counts.get(s.id, 0) }}</em></a>{% endfor %}
-  </nav>
+  {% if subjects|length > 1 or subjects_limited %}
+  {% set all_q = request.args.get('all') or none %}
+  {% set items = [] %}{% for s in subjects %}{% set _ = items.append((s.id, s.name, subject_counts.get(s.id, 0), url_for('mock_jamb.bank', subject_id=s.id, all=all_q))) %}{% endfor %}
+  {{ subject_picker(items, subject_id, url_for('mock_jamb.bank', subject_id=subject_id, all=1) if subjects_limited else none) }}
   {% endif %}
 
 {% if not subject %}
@@ -600,7 +601,7 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{{ subject_picker_assets() }}
 <script nonce="{{ csp_nonce }}">
 (function(){
     // The question bank works in place: subject chips, sections, filters, search,
@@ -649,6 +650,7 @@
         if (opts.scrollTo) { var el = fresh.querySelector(opts.scrollTo); if (el) { var t = el.getBoundingClientRect().top + scrollY - 80; if (t < scrollY) scrollTo({top: t, behavior: 'smooth'}); } }
         else scrollTo(0, y);
         after(fresh);
+        document.dispatchEvent(new CustomEvent('mj:swapped', {detail: {root: fresh}}));
         return true;
     }
     function load(url, opts){
