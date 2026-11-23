@@ -53,6 +53,7 @@
 .ni-file.has{border-style:solid;border-color:var(--primary);color:var(--primary)}
 .ni-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border-color);display:none}
 .ni-thumb.on{display:block}
+.ni-src{color:#2563eb}
 .ni-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:1rem 0}
 @media (max-width:640px){
   .ni-q{padding:.8rem .8rem}
@@ -94,7 +95,7 @@
       <button class="rs-btn primary"><i class="fas fa-wrench" aria-hidden="true"></i> Fix broken pictures</button></form></div>
   {% endif %}
   <section class="rs-card">
-    <p class="ni-intro">Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — whether it was flagged on import or its wording points at one. They're <strong>held out of exams</strong> until you add the picture. If a question reads fine without one, mark it <em>No image needed</em>.</p>
+    <p class="ni-intro">Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — whether it was flagged on import or its wording points at one. They're <strong>held out of exams</strong> until you add the picture. If a question reads fine without one, mark it <em>No image needed</em>. <strong>Open on myschool.ng</strong> opens the original question so you can save its diagram (questions pasted without their link get a search instead).</p>
     {% if subject_counts|length > 1 %}
     <div class="ni-chips" role="navigation" aria-label="Subject" style="margin-top:.8rem">
       <a class="ni-chip {{ 'on' if not subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', year=year or none, exam_body=exam_body or none, q=search or none) }}">All subjects <em>{{ total }}</em></a>
@@ -164,6 +165,9 @@
         <input type="hidden" name="dismiss" value="1">
         <button class="rs-btn"><i class="fas fa-check" aria-hidden="true"></i> No image needed</button>
       </form>
+      {% endif %}
+      {% set sl = src_link(q) %}{% if sl[0] %}
+      <a href="{{ sl[0] }}" class="rs-btn ghost ni-src" target="_blank" rel="noopener noreferrer" title="{{ 'Open the original question on myschool.ng to save its diagram' if sl[1] else 'Search myschool.ng for this question' }}"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> {{ 'Open on myschool.ng' if sl[1] else 'Find on myschool.ng' }}</a>
       {% endif %}
       {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
       <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="rs-btn ghost"><i class="fas fa-pen" aria-hidden="true"></i> Edit</a>

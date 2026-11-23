@@ -47,6 +47,8 @@
 .qb-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.55rem}
 .qb-tag{font-size:.7rem;font-weight:650;border-radius:999px;padding:.13rem .5rem;background:var(--gray-100);color:var(--text-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .qb-tag.sec{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
+.qb-tag.src{text-decoration:none;background:color-mix(in srgb,#2563eb 10%,var(--bg-card));color:#2563eb}
+.qb-tag.src:hover{background:color-mix(in srgb,#2563eb 18%,var(--bg-card))}
 .qb-tag.warn{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
 .qb-acts{display:flex;gap:.3rem;align-items:flex-start}
 .qb-acts form{margin:0}
@@ -240,6 +242,7 @@
       {% if q.source %}<span class="qb-tag">{{ q.source|upper }}</span>{% endif %}
       <span class="qb-tag">{{ q.marks|round(1)|string|replace('.0', '') }} mark{{ '' if q.marks == 1 else 's' }}</span>
       {% if q.needs_image %}<span class="qb-tag warn"><i class="fas fa-image" aria-hidden="true"></i> needs image</span>{% endif %}
+      {% if q.needs_image or (q.source or '') == 'myschool' %}{% set sl = src_link(q) %}{% if sl[0] %}<a class="qb-tag src" href="{{ sl[0] }}" target="_blank" rel="noopener noreferrer"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> {{ 'myschool.ng' if sl[1] else 'Find on myschool.ng' }}</a>{% endif %}{% endif %}
     </div>
   </div>
   {% if can_edit or can_del %}<div class="qb-acts">
@@ -333,8 +336,8 @@
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="subject_id" value="{{ subject_id }}">
         <p>Fields separated by a <strong>tab</strong> or <strong>|</strong>:<br>
-          <code style="overflow-wrap:anywhere">question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic] | [year] | [image URL]</code></p>
-        <p>The last <strong>image URL</strong> column is optional — paste a link to a figure and it shows on the question (some sites block hotlinking).</p>
+          <code style="overflow-wrap:anywhere">question | Option A | Option B | Option C | Option D | correct(A–D) | [section] | [topic] | [subtopic] | [year] | [image URL] | [myschool link]</code></p>
+        <p>The last two columns are optional. An <strong>image URL</strong> (or pasted image) is copied onto this server. A <strong>myschool link</strong> is kept so the original question page is one click away — handy for fetching a missing diagram. <code>waec_scraper.py</code> fills both.</p>
         <div class="form-row">
           <div class="form-group"><label class="form-label">Default section</label>
             <select name="default_section" class="form-control"><option value="">— None —</option>

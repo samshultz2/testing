@@ -230,3 +230,39 @@ def fix_all_degrees():
     if degrees:
         db.session.commit()
     return degrees
+
+
+# ---------------------------------------------------------------------------
+# Where a question came from on myschool.ng — so whoever adds a missing picture
+# can open the original page and save the diagram from there.
+
+_MS_URL = re.compile(r'myschool\.ng/classroom/([a-z0-9-]+)/(\d+)', re.I)
+_EXAM_TYPE = {'JAMB': 'jamb', 'WAEC': 'waec', 'NECO': 'neco', 'Post-UTME': 'post-utme'}
+
+
+def myschool_qid(url):
+    """The myschool question number in a question link, or None."""
+    m = _MS_URL.search(url or '')
+    return m.group(2) if m else None
+
+
+def source_link(q):
+    """(url, exact) — the question's own page on myschool.ng when we know its
+    number (downloaded in the app, or pasted with its link), otherwise a web
+    search for its wording on myschool.ng (exact=False)."""
+    from urllib.parse import quote, urlencode
+    from utils import myschool as ms
+    ref = (q.source_ref or '').strip()
+    if (q.source or '') == 'myschool' and ref.isdigit():
+        slug = ms.subject_slug(q.subject.name if q.subject is not None else '')
+        params = {}
+        if _EXAM_TYPE.get(q.exam_body or ''):
+            params['exam_type'] = _EXAM_TYPE[q.exam_body]
+        if (q.exam_year or '').isdigit():
+            params['exam_year'] = q.exam_year
+        return f"{ms.BASE}/{slug}/{ref}" + ('?' + urlencode(params) if params else ''), True
+    text = re.sub(r'<[^>]+>|\$[^$]*\$|\\\(.*?\\\)', ' ', q.question_text or '')
+    words = re.findall(r"[A-Za-z0-9'’]+", text)[:10]
+    if not words:
+        return None, False
+    return 'https://www.google.com/search?q=' + quote('site:myschool.ng "%s"' % ' '.join(words)), False

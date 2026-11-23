@@ -1334,6 +1334,7 @@ def bank():
                           .filter(MockJAMBQuestion.mock_exam_id.is_(None))
                           .group_by(MockJAMBQuestion.subject_id).all())
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
+                           src_link=mock_figures.source_link,
                            needs_image_count=needs_image_count, subject_counts=subject_counts,
                            external_images=external_images,
                            subject_id=subject_id, section=section, sections=sections,
@@ -1981,7 +1982,9 @@ def bank_edit_question(question_id):
         db.session.commit()
         flash('Question updated.', 'success')
         return redirect(_bank_url(q.subject_id, q.section))
+    from utils import mock_figures
     return render_template('mock_jamb/bank_edit_question.html', q=q, subject=subject,
+                           src_link=mock_figures.source_link,
                            sections=sections_for(subject.name),
                            topic_tree=_subject_topic_tree(q.subject_id),
                            back_url=_bank_url(q.subject_id, q.section))
@@ -2074,13 +2077,16 @@ def bank_import():
         elif raw_img.startswith('/'):
             image = raw_img[:300]
         a, b, c, d = (mock_figures.fix_degrees(x) for x in (a, b, c, d))
+        # optional 12th column: the question's link on myschool.ng — kept so the
+        # original page (and its diagram) is one click away.
+        src_qid = mock_figures.myschool_qid(parts[11]) if len(parts) > 11 else None
         base += 1
         db.session.add(MockJAMBQuestion(
             mock_exam_id=None, subject_id=subject_id, section=section, exam_body=exam_body,
             question_text=text, option_a=a, option_b=b, option_c=c, option_d=d,
             correct_option=correct, marks=1, topic=topic, subtopic=subtopic,
-            exam_year=year, image_url=image, source='paste', order=base,
-            needs_image=img_failed))
+            exam_year=year, image_url=image, order=base, needs_image=img_failed,
+            source='myschool' if src_qid else 'paste', source_ref=src_qid))
         added += 1
     db.session.commit()
     msg = f'Imported {added} question(s).'
@@ -2252,7 +2258,7 @@ def bank_needs_images():
         MockJAMBQuestion.image_not_needed.is_(True)).count()
     reasons = {x.id: mock_figures.reason(x) for x in pagination.items}
     external = mock_figures.external_count()
-    return render_template('mock_jamb/needs_images.html',
+    return render_template('mock_jamb/needs_images.html', src_link=mock_figures.source_link,
                            subjects=subjects, subject_id=subject_id, year=year,
                            exam_body=exam_body, search=search, years=years, subj_name=subj_name,
                            subject_counts=subject_counts, reasons=reasons, dismissed=dismissed,
@@ -2819,6 +2825,25 @@ def exam_blueprint(exam_id):
                               'total': sum(x['count'] for x in secs),
                               'default_total': sum(x['default'] for x in secs),
                               'sections': secs, 'customised': subj_key in current})
+    # Bank stock per blueprint subject and section, so short sections stand out.
+    from utils.jamb_blueprint import norm_subject
+    stock = {}
+    key_of = {sb.id: norm_subject(sb.name) for sb in Subject.query.all()}
+    sec_col = func.coalesce(MockJAMBQuestion.section, MockJAMBPassage.section)
+    for sid, sec, n in (db.session.query(MockJAMBQuestion.subject_id, sec_col, func.count(MockJAMBQuestion.id))
+                        .outerjoin(MockJAMBPassage, MockJAMBQuestion.passage_id == MockJAMBPassage.id)
+                        .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                                MockJAMBQuestion.needs_image.isnot(True))
+                        .group_by(MockJAMBQuestion.subject_id, sec_col).all()):
+        k = key_of.get(sid)
+        if k and sec:
+            stock.setdefault(k, {})[sec] = stock.get(k, {}).get(sec, 0) + n
+    for sv in subjects_view:
+        st = stock.get(sv['key'], {})
+        for x in sv['sections']:
+            x['stock'] = st.get(x['section'], 0)
+        sv['stock'] = sum(st.values())
+        sv['short'] = sum(1 for x in sv['sections'] if x['count'] and x['stock'] < x['count'])
     # Well-known JAMB recommended novels (suggestions; the field is free text).
     known_novels = ['The Life Changer — Khadija Abubakar Jalli',
                     'Sweet Sixteen — Bolaji Abdullahi',

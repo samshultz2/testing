@@ -54,6 +54,7 @@
     </div>
     {% if q.image_url %}<div class="form-group"><label class="form-label">Current figure</label><br>{{ qfig(q.image_url, 'Current figure', cls='', style='max-height:140px;border-radius:10px') }}</div>{% endif %}
     <div class="form-group"><label class="form-label">Replace figure (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
+    {% set sl = src_link(q) %}{% if sl[0] %}<p class="text-sm" style="margin:-.3rem 0 .9rem"><a href="{{ sl[0] }}" target="_blank" rel="noopener noreferrer"><i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> {{ 'Open this question on myschool.ng' if sl[1] else 'Find this question on myschool.ng' }}</a> — to save its diagram, then upload it above.</p>{% endif %}
     <button class="btn btn-primary"><i class="fas fa-save"></i> Save changes</button>
     <a href="{{ back_url }}" class="btn btn-secondary">Cancel</a>
 </form>

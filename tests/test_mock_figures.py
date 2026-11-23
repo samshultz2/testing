@@ -142,3 +142,34 @@ def test_import_copies_outside_pictures_and_repair(app, monkeypatch):
     with app.app_context():
         o = db.session.get(MockJAMBQuestion, oid)
         assert o.image_url == '/static/img/logo-mark.svg' and o.option_a == '90°'
+
+
+def test_myschool_source_links(app):
+    """Questions from myschool link back to their page; pasted ones keep the
+    link from the 12th column; anything else gets a myschool.ng search."""
+    from models import db, Subject, MockJAMBQuestion
+    from utils.mock_figures import source_link
+    with app.app_context():
+        s = Subject(name='Mathematics' if not Subject.query.filter_by(name='Mathematics').first()
+                    else 'Maths ' + uuid.uuid4().hex[:4], is_active=True)
+        db.session.add(s); db.session.flush()
+        harvested = _q(s.id, 'In the diagram, find x.', source='myschool', source_ref='4321',
+                       exam_body='JAMB', exam_year='2015')
+        pasted = _q(s.id, 'In the figure, AB is parallel to CD then x + y + z is', source='paste')
+        db.session.add_all([harvested, pasted]); db.session.commit()
+        url, exact = source_link(harvested)
+        assert exact and '/classroom/' in url and url.split('?')[0].endswith('/4321')
+        assert 'exam_type=jamb' in url and 'exam_year=2015' in url
+        url, exact = source_link(pasted)
+        assert not exact and url.startswith('https://www.google.com/search?q=') and 'myschool.ng' in url
+        sid = s.id
+    c = _admin(app)
+    row = ('Q with link? | a | b | c | d | A | | | | 2016 | | '
+           'https://myschool.ng/classroom/mathematics/98765?exam_type=jamb&exam_year=2016')
+    c.post('/mock-jamb/bank/import', data={'_csrf_token': _csrf(c), 'subject_id': sid, 'rows': row})
+    with app.app_context():
+        q = MockJAMBQuestion.query.filter_by(subject_id=sid, question_text='Q with link?').one()
+        assert q.source == 'myschool' and q.source_ref == '98765'
+        assert source_link(q)[0].split('?')[0].endswith('/98765')
+    html = c.get('/mock-jamb/bank/needs-images?subject_id=%d' % sid).get_data(as_text=True)
+    assert 'Open on myschool.ng' in html and 'Find on myschool.ng' in html

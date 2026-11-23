@@ -24,7 +24,7 @@ It writes two files:
 
 Each row is tab-separated in the importer's exact format, with year and an
 optional figure-URL column:
-    question  A  B  C  D  correct  section  topic  subtopic  year  [image URL]
+    question  A  B  C  D  correct  section  topic  subtopic  year  [image URL]  [myschool link]
 
 Then open the .txt, copy everything, and paste it into the subject's
 "Bulk import questions (paste)" box in the Mock JAMB question bank.
@@ -46,7 +46,7 @@ def _row(q):
     fields = [q["stem"], q["options"][0], q["options"][1], q["options"][2],
               q["options"][3], q["correct"], q.get("section") or "",
               q.get("topic") or "", q.get("subtopic") or "", str(q.get("year") or ""),
-              q.get("image_url") or ""]
+              q.get("image_url") or "", q.get("url") or ""]
     return "\t".join(ms.clean(str(c)) for c in fields)
 
 
@@ -105,6 +105,7 @@ def scrape(subject, exam, years, out, review_out, max_pages, delay, images=False
                     dup += 1
                     continue
                 seen.add(norm)
+                q["url"] = ms.question_url(ms.subject_slug(subject), exam, year, q["qid"])
                 if q.get("image_url"):
                     with_images += 1
                 # with a captured figure, a "figure-dependent" question is now

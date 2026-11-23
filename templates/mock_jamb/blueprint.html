@@ -1,97 +1,185 @@
 {% extends "base.html" %}
-{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
+{% from "results/_board_shell.html" import bx_head, bx_menu with context %}
+{% from "mock_jamb/_shell.html" import mj_exam_nav with context %}
 {% block title %}Paper Blueprint — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ urls.view }}">{{ exam.display_name }}</a> / <span>Blueprint</span>{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
 <style>
-.bp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
-.bp-card{border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
-.bp-head{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;background:var(--gray-50)}
-.bp-head .t{font-weight:700;flex:1}
-.bp-total{font-size:.75rem;font-weight:700;background:rgba(13,106,78,.12);color:#0d6a4e;padding:.1rem .5rem;border-radius:var(--radius-full)}
-.bp-cust{font-size:.68rem;font-weight:700;background:rgba(180,83,9,.14);color:#b45309;padding:.1rem .45rem;border-radius:var(--radius-full)}
-.bp-sec{display:flex;align-items:center;gap:.5rem;padding:.4rem .9rem;border-top:1px solid var(--border-light)}
-.bp-sec .l{flex:1;font-size:.86rem}
-.bp-sec input{width:64px;text-align:center}
-.bp-sec .def{font-size:.68rem;color:var(--text-muted);width:58px;text-align:right}
+.bp-set{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:1rem;align-items:start}
+.bp-note{font-size:.8rem;color:var(--text-muted);line-height:1.55;margin:.7rem 0 0}
+.bp-radio{display:flex;flex-direction:column;gap:.5rem}
+.bp-opt{display:flex;gap:.7rem;align-items:flex-start;border:1px solid var(--border-color);border-radius:13px;padding:.7rem .8rem;cursor:pointer;font-size:.84rem;color:var(--text-secondary);line-height:1.5}
+.bp-opt b{display:block;color:var(--text-primary);font-size:.88rem}
+.bp-opt input{margin-top:.25rem;accent-color:var(--primary);width:17px;height:17px;flex:none}
+.bp-opt:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--bg-card))}
+.bp-cls{display:flex;flex-wrap:wrap;gap:.35rem}
+.bp-cls label{display:inline-flex;align-items:center;gap:.35rem;border:1px solid var(--border-color);border-radius:999px;padding:.3rem .75rem;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--text-secondary)}
+.bp-cls input{accent-color:var(--primary)}
+.bp-cls label:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--bg-card));color:var(--primary)}
+.bp-text{width:100%;border:1px solid var(--border-color);border-radius:12px;padding:.6rem .75rem;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
+.bp-tools{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.bp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:1rem;align-items:start}
+.bp-card{border:1px solid var(--border-color);border-radius:var(--rs-r,16px);background:var(--bg-card);overflow:hidden}
+.bp-card[hidden]{display:none}
+.bp-card.short{border-color:color-mix(in srgb,var(--danger) 35%,var(--border-color))}
+.bp-head{display:flex;align-items:center;gap:.5rem;padding:.75rem .9rem;border-bottom:1px solid var(--border-light,var(--border-color))}
+.bp-head .t{font-weight:750;flex:1;min-width:0;font-size:.92rem}
+.bp-head .t small{display:block;font-weight:500;font-size:.74rem;color:var(--text-muted)}
+.bp-pill{font-size:.7rem;font-weight:800;border-radius:999px;padding:.15rem .55rem;white-space:nowrap;background:var(--gray-100);color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.bp-pill.tot{background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary)}
+.bp-pill.cust{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
+.bp-pill.bad{background:color-mix(in srgb,var(--danger) 10%,var(--bg-card));color:var(--danger)}
+.bp-reset{border:0;background:none;color:var(--text-muted);cursor:pointer;font-size:.78rem;padding:.2rem .3rem;border-radius:8px}
+.bp-reset:hover{color:var(--primary);background:var(--gray-50)}
+.bp-sec{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:.6rem;align-items:center;padding:.5rem .9rem;border-top:1px solid var(--border-light,var(--border-color))}
+.bp-sec:first-of-type{border-top:0}
+.bp-sec .l{font-size:.85rem;min-width:0}
+.bp-sec .l small{display:block;font-size:.72rem;color:var(--text-muted)}
+.bp-sec .l small.bad{color:var(--danger);font-weight:650}
+.bp-sec.changed .l{font-weight:700}
+.bp-step{display:inline-flex;align-items:center;border:1px solid var(--border-color);border-radius:11px;overflow:hidden;background:var(--bg-card)}
+.bp-step button{border:0;background:var(--gray-50);color:var(--text-secondary);width:2rem;height:2.2rem;cursor:pointer;font-size:.9rem}
+.bp-step button:hover{background:var(--gray-100);color:var(--primary)}
+.bp-step input{width:2.8rem;height:2.2rem;border:0;text-align:center;font:inherit;font-weight:750;font-size:.9rem;background:transparent;color:var(--text-primary);-moz-appearance:textfield}
+.bp-step input::-webkit-outer-spin-button,.bp-step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.bp-sec.changed .bp-step{border-color:var(--warning)}
+.bp-def{font-size:.7rem;color:var(--text-muted);width:3.4rem;text-align:right;font-variant-numeric:tabular-nums}
+.bp-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%}.bp-chips::-webkit-scrollbar{display:none}
+.bp-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.36rem .8rem;font:inherit;font-size:.8rem;font-weight:650;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.bp-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.bp-chip em{font-style:normal;opacity:.7;margin-left:.3rem}
+.bp-save{position:sticky;bottom:calc(var(--bottom-nav-h,0px) + 10px);z-index:5;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;padding:.7rem .9rem;border:1px solid var(--border-color);border-radius:16px;background:color-mix(in srgb,var(--bg-card) 94%,transparent);backdrop-filter:blur(8px);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+.bp-save .msg{flex:1 1 200px;font-size:.82rem;color:var(--text-muted)}
+@media (max-width:759px){.bp-save{bottom:calc(76px + env(safe-area-inset-bottom,0px))}.bp-save .rs-btn{flex:1;justify-content:center}}
 </style>
 {% endblock %}
 {% block content %}
+{% set n_custom = subjects|selectattr('customised')|list|length %}
+{% set n_short = subjects|selectattr('short')|list|length %}
 <div class="rs bx bx-legacy">
-<div class="page-header">
-    <div>
-        <h1>Paper Blueprint — {{ exam.display_name }}</h1>
-        <p class="text-muted text-sm">How many questions each subject draws from each JAMB section for this mock. Defaults follow the real UTME structure (English 60, others 40). Change any count to override; match the default to keep it.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ urls.bank }}" class="btn btn-secondary btn-sm"><i class="fas fa-database"></i> Question Bank</a>
-        <a href="{{ urls.view }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
-    </div>
-</div>
-<div class="no-print">{{ mj_exam_nav(exam, 'blueprint') }}</div>
+  {% call bx_head('fa-sliders', 'Paper blueprint', exam.display_name ~ ' · how many questions each subject draws from each JAMB section') %}
+    {{ bx_menu('More', [
+        (urls.questions, 'fa-pen-to-square', 'Questions'),
+        (urls.bank, 'fa-database', 'Central question bank'),
+        (url_for('mock_jamb.bank_needs_images'), 'fa-image', 'Questions needing images'),
+        (urls.view, 'fa-users', 'Results')]) }}
+  {% endcall %}
+  <div class="no-print">{{ mj_exam_nav(exam, 'blueprint') }}</div>
 
-<form method="post" action="{{ urls.self }}">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+<form method="post" action="{{ urls.self }}" id="bpForm" class="rs">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-    <div class="bp-card" style="margin-bottom:1rem;">
-        <div class="bp-head"><span class="t"><i class="fas fa-database"></i> Question source</span></div>
-        <div style="padding:.7rem .9rem;">
-            <label style="display:block;margin-bottom:.5rem;"><input type="radio" name="source_mode" value="bank" {{ 'checked' if source_mode != 'manual' else '' }}>
-                <strong>Draw from the central question bank</strong> — every student gets a completely different, JAMB-shaped paper for the subjects on their profile, drawn at random per attempt. (Recommended)</label>
-            <label style="display:block;"><input type="radio" name="source_mode" value="manual" {{ 'checked' if source_mode == 'manual' else '' }}>
-                <strong>Use this mock's own questions</strong> — everyone sits the exact questions you author into this mock under “Manage questions”.</label>
-            <p class="text-muted text-sm" style="margin:.5rem 0 0;">A mock that already has its own authored questions always serves those; “Draw from the bank” applies when the mock has none of its own.</p>
-        </div>
-    </div>
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Question source</span><span class="v" style="font-size:1.1rem">{{ 'Own questions' if source_mode == 'manual' else 'Question bank' }}</span><span class="s">{{ 'same paper for everyone' if source_mode == 'manual' else 'a fresh paper per student' }}</span></div>
+    <div class="rs-tile {{ 'mid' if n_custom }}"><span class="l">Customised subjects</span><span class="v">{{ n_custom }}<small>/ {{ subjects|length }}</small></span><span class="s">{{ 'differ from the UTME default' if n_custom else 'all on the UTME default' }}</span></div>
+    <div class="rs-tile {{ 'bad' if n_short else 'good' }}"><span class="l">Short in the bank</span><span class="v">{{ n_short }}</span><span class="s">{{ 'subjects missing questions for a section' if n_short else 'the bank covers every section' }}</span></div>
+    <div class="rs-tile"><span class="l">Who can sit</span><span class="v" style="font-size:1.1rem">{{ selected_levels|join(', ') if selected_levels else default_level }}</span><span class="s">{{ 'chosen classes' if selected_levels else 'default (JAMB cohort)' }}</span></div>
+  </div>
 
-    <div class="bp-card" style="margin-bottom:1rem;">
-        <div class="bp-head"><span class="t"><i class="fas fa-user-graduate"></i> Who can sit this mock</span></div>
-        <div style="padding:.7rem .9rem;">
-            <p class="text-muted text-sm" style="margin:0 0 .5rem;">By default only <strong>{{ default_level }}</strong> (the JAMB cohort) can sit online. Tick classes to override — leave all unticked for {{ default_level }}-only.</p>
-            <div style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
-                {% for c in all_classes %}
-                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" name="eligible_levels" value="{{ c.name }}" {{ 'checked' if c.name in selected_levels else '' }}> {{ c.name }}</label>
-                {% endfor %}
-            </div>
-            <p class="text-muted text-sm" style="margin:.6rem 0 0;"><i class="fas fa-circle-info"></i> <strong>Where students sit it:</strong> once you publish the online sitting, eligible students log in at the student CBT portal (<code>{{ url_for('cbt_portal.login', _external=True) }}</code>) with their Student ID &amp; portal password, then open <strong>Mock JAMB</strong> to see and take any open mock for their class.</p>
-        </div>
-    </div>
+  <div class="bp-set">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-database" aria-hidden="true"></i> Question source</h3></div>
+      <div class="bp-radio" role="radiogroup" aria-label="Question source">
+        <label class="bp-opt"><input type="radio" name="source_mode" value="bank" {{ 'checked' if source_mode != 'manual' }}>
+          <span><b>Draw from the question bank <span class="bp-pill tot" style="margin-left:.2rem">recommended</span></b>Every student gets a different, JAMB-shaped paper for the subjects on their profile, drawn per attempt.</span></label>
+        <label class="bp-opt"><input type="radio" name="source_mode" value="manual" {{ 'checked' if source_mode == 'manual' }}>
+          <span><b>Use this mock's own questions</b>Everyone sits the exact questions added to this mock under Questions.</span></label>
+      </div>
+      <p class="bp-note">A mock that already has its own questions always serves those; “Draw from the bank” applies when it has none.</p>
+    </section>
 
-    <div class="bp-card" style="margin-bottom:1rem;">
-        <div class="bp-head"><span class="t"><i class="fas fa-book"></i> Recommended Novel (English)</span></div>
-        <div style="padding:.7rem .9rem;">
-            <input type="text" name="novel_title" list="novelList" value="{{ novel_title }}" class="form-control"
-                   placeholder="e.g. The Life Changer — Khadija Abubakar Jalli">
-            <datalist id="novelList">{% for n in known_novels %}<option value="{{ n }}"></option>{% endfor %}</datalist>
-            <p class="text-muted text-sm" style="margin:.4rem 0 0;">The JAMB-approved novel for this mock. The English paper's Novel section will draw <strong>only</strong> from bank questions tagged with this exact title (a novel question's tag is its <em>topic</em>). Leave blank to allow any novel question. Set the same title on the questions in the Question Bank (filter the Novel section → “Assign novel”).</p>
-        </div>
-    </div>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-user-graduate" aria-hidden="true"></i> Who can sit this mock</h3></div>
+      <div class="bp-cls">
+        {% for c in all_classes %}<label><input type="checkbox" name="eligible_levels" value="{{ c.name }}" {{ 'checked' if c.name in selected_levels }}> {{ c.name }}</label>{% endfor %}
+      </div>
+      <p class="bp-note">Leave all unticked for {{ default_level }} only (the JAMB cohort). Once published, students sign in at <code style="overflow-wrap:anywhere">{{ url_for('cbt_portal.login', _external=True) }}</code> with their Student ID and portal password, then open <strong>Mock JAMB</strong>.</p>
+    </section>
 
-    <div class="bp-grid">
-        {% for s in subjects %}
-        <div class="bp-card">
-            <div class="bp-head">
-                <span class="t">{{ s.name }}</span>
-                {% if s.customised %}<span class="bp-cust">custom</span>{% endif %}
-                <span class="bp-total" title="Total questions drawn">{{ s.total }} Q</span>
-            </div>
-            {% for sec in s.sections %}
-            <div class="bp-sec">
-                <span class="l">{{ sec.label }}{% if sec.passage %} <i class="fas fa-align-left text-muted" title="passage section"></i>{% endif %}</span>
-                <input type="number" min="0" max="100" name="{{ s.key }}__{{ sec.section }}" value="{{ sec.count }}" class="form-control">
-                <span class="def">def {{ sec.default }}</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% endfor %}
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> Recommended novel (English)</h3></div>
+      <input type="text" name="novel_title" list="novelList" value="{{ novel_title }}" class="bp-text" aria-label="Recommended novel"
+             placeholder="e.g. The Life Changer — Khadija Abubakar Jalli">
+      <datalist id="novelList">{% for n in known_novels %}<option value="{{ n }}"></option>{% endfor %}</datalist>
+      <p class="bp-note">The English paper's Novel section draws <strong>only</strong> bank questions tagged with this exact title. Leave blank to allow any novel question. Tag questions in the bank (Novel section → Assign novel).</p>
+    </section>
+  </div>
+
+  <section class="rs-card">
+    <div class="bp-tools">
+      <div class="bp-chips" role="radiogroup" aria-label="Show">
+        <button type="button" class="bp-chip on" data-f="all">All subjects <em>{{ subjects|length }}</em></button>
+        {% if n_custom %}<button type="button" class="bp-chip" data-f="custom">Customised <em>{{ n_custom }}</em></button>{% endif %}
+        {% if n_short %}<button type="button" class="bp-chip" data-f="short">Short in bank <em>{{ n_short }}</em></button>{% endif %}
+      </div>
+      <span class="rs-muted" style="font-size:.8rem">Defaults follow the real UTME: English 60, others 40. A count equal to the default isn't stored.</span>
     </div>
-    <div style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap;">
-        <button class="btn btn-primary"><i class="fas fa-save"></i> Save blueprint</button>
-        <button class="btn btn-secondary" type="reset">Reset form</button>
-        <span class="text-muted text-sm" style="align-self:center;">Tip: set every count back to its default and save to fully restore the JAMB blueprint.</span>
+  </section>
+
+  <div class="bp-grid" id="bpGrid">
+    {% for s in subjects %}
+    <div class="bp-card {{ 'short' if s.short }}" data-custom="{{ 1 if s.customised else 0 }}" data-short="{{ 1 if s.short else 0 }}">
+      <div class="bp-head">
+        <span class="t">{{ s.name }}<small>{{ s.stock }} usable question{{ '' if s.stock == 1 else 's' }} in the bank{% if s.short %} · {{ s.short }} section{{ '' if s.short == 1 else 's' }} short{% endif %}</small></span>
+        <span class="bp-pill cust" data-cust {{ '' if s.customised else 'hidden' }}>custom</span>
+        <span class="bp-pill tot" title="Questions drawn"><span data-total>{{ s.total }}</span> Q</span>
+        <button type="button" class="bp-reset" data-reset title="Back to the UTME default"><i class="fas fa-rotate-left" aria-hidden="true"></i><span class="sr-only">Reset {{ s.name }}</span></button>
+      </div>
+      {% for sec in s.sections %}
+      <div class="bp-sec {{ 'changed' if sec.count != sec.default }}">
+        <span class="l">{{ sec.label }}{% if sec.passage %} <i class="fas fa-align-left" style="color:var(--text-muted)" aria-label="passage section"></i>{% endif %}
+          <small class="{{ 'bad' if sec.count and sec.stock < sec.count }}" data-stock="{{ sec.stock }}">{{ sec.stock }} in bank{% if sec.count and sec.stock < sec.count %} — short {{ sec.count - sec.stock }}{% endif %}</small></span>
+        <span class="bp-step"><button type="button" data-d="-1" aria-label="Fewer {{ sec.label }}">−</button><input type="number" inputmode="numeric" min="0" max="100" name="{{ s.key }}__{{ sec.section }}" value="{{ sec.count }}" data-def="{{ sec.default }}" aria-label="{{ s.name }} — {{ sec.label }}"><button type="button" data-d="1" aria-label="More {{ sec.label }}">+</button></span>
+        <span class="bp-def">default {{ sec.default }}</span>
+      </div>
+      {% endfor %}
     </div>
+    {% endfor %}
+  </div>
+
+  <div class="bp-save">
+    <span class="msg" id="bpMsg">Set a count back to its default and save to restore the UTME blueprint.</span>
+    <button class="rs-btn ghost" type="reset" id="bpUndo"><i class="fas fa-rotate-left" aria-hidden="true"></i> Undo changes</button>
+    <button class="rs-btn primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save blueprint</button>
+  </div>
 </form>
 </div>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var form = document.getElementById('bpForm'), msg = document.getElementById('bpMsg'), dirty = false;
+  function refresh(card){
+    var tot = 0, custom = false;
+    card.querySelectorAll('.bp-sec').forEach(function(row){
+      var inp = row.querySelector('input'), v = Math.max(0, parseInt(inp.value || '0', 10) || 0);
+      var def = parseInt(inp.dataset.def, 10), st = row.querySelector('[data-stock]'), stock = parseInt(st.dataset.stock, 10);
+      tot += v; if (v !== def) custom = true;
+      row.classList.toggle('changed', v !== def);
+      st.classList.toggle('bad', v > 0 && stock < v);
+      st.textContent = stock + ' in bank' + (v > 0 && stock < v ? ' — short ' + (v - stock) : '');
+    });
+    card.querySelector('[data-total]').textContent = tot;
+    card.querySelector('[data-cust]').hidden = !custom;
+  }
+  function changed(){ if (!dirty) { dirty = true; msg.textContent = 'Unsaved changes — save to apply them to this mock.'; msg.style.color = 'var(--warning)'; } }
+  form.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-d]');
+    if (b) { var inp = b.parentNode.querySelector('input'); inp.value = Math.max(0, Math.min(100, (parseInt(inp.value || '0', 10) || 0) + parseInt(b.dataset.d, 10))); refresh(b.closest('.bp-card')); changed(); return; }
+    var r = e.target.closest('[data-reset]');
+    if (r) { var card = r.closest('.bp-card'); card.querySelectorAll('.bp-sec input').forEach(function(i){ i.value = i.dataset.def; }); refresh(card); changed(); }
+  });
+  form.addEventListener('input', function(e){ var c = e.target.closest('.bp-card'); if (c) refresh(c); changed(); });
+  form.addEventListener('change', changed);
+  form.addEventListener('reset', function(){ setTimeout(function(){ document.querySelectorAll('.bp-card').forEach(refresh); dirty = false; msg.textContent = 'Changes undone.'; msg.style.color = ''; }, 0); });
+  form.addEventListener('submit', function(){ dirty = false; });
+  window.addEventListener('beforeunload', function(e){ if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  document.querySelectorAll('.bp-chip').forEach(function(ch){
+    ch.addEventListener('click', function(){
+      document.querySelectorAll('.bp-chip').forEach(function(x){ x.classList.toggle('on', x === ch); });
+      var f = ch.dataset.f;
+      document.querySelectorAll('#bpGrid .bp-card').forEach(function(c){ c.hidden = f === 'custom' ? c.dataset.custom !== '1' : f === 'short' ? c.dataset.short !== '1' : false; });
+    });
+  });
+})();
+</script>
 {% endblock %}
