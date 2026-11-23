@@ -207,3 +207,15 @@ def test_sync_repairs_existing_powers(app):
         mock_figures.sync(force=True)
         q = db.session.get(MockJAMBQuestion, q.id)
         assert [q.option_a, q.option_b, q.option_c, q.option_d] == ['y = kx²', 'x = y² - k', 'y = k - x²', 'x² = y² - k']
+
+
+def test_fix_powers_without_space():
+    from utils.mock_figures import fix_powers as f
+    assert f('y = kx2') == 'y = kx²'
+    assert f('2x2 + 3x - 1') == '2x² + 3x - 1'
+    assert f('(x + 1)2 = 9') == '(x + 1)² = 9'
+    assert f('v2 = u2 + 2as') == 'v² = u² + 2as'
+    assert f('Area = 12 cm2') == 'Area = 12 cm²'
+    # subscripts and chemical formulas are left alone
+    for t in ('(y2 - y1)/(x2 - x1)', 'x1 + x2 = 5', 'H2O + CO2 = ?', 'CaCl2 + H2SO4 =', 'x23 + 1 ='):
+        assert f(t) == t

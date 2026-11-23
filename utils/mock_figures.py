@@ -282,9 +282,30 @@ _POW_CHARS = str.maketrans('234', '²³⁴')
 _MATHY = re.compile(r'[=+−×÷<>≤≥()]|\s-\s')
 
 
+# "kx2", "x2 + 3x", "(x + 1)2", "12 cm2" → raised. Skipped when the text uses
+# subscripts (a letter followed by 0 or 1 — "x1", "y1" — means x2 is x₂ too), and
+# chemical formulas are safe because a lowercase letter right after another
+# letter ("Cl2") or a capital ("H2O", "CO2") is never touched.
+_POW_TIGHT = re.compile(r'((?<![A-Za-z])\d*[a-z]{1,2}|\))([2-4])(?![0-9.,/:%])')
+_SUBSCRIPTED = re.compile(r'(?<![A-Za-z])[a-z][01](?![0-9])')
+
+
+def _tight(text):
+    if _SUBSCRIPTED.search(text):
+        return text
+
+    def sub(m):
+        tok = m.group(1)
+        if tok.lstrip('0123456789').lower() in _POW_SKIP:
+            return m.group(0)
+        return tok + m.group(2).translate(_POW_CHARS)
+    return _POW_TIGHT.sub(sub, text)
+
+
 def fix_powers(text):
     if not text or not _MATHY.search(text):
         return text
+    text = _tight(text)
 
     def sub(m):
         tok = m.group(1)
@@ -299,7 +320,8 @@ def fix_all_powers(limit=20000):
     number of questions changed."""
     from models import db, MockJAMBQuestion as Q
     cols = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d')
-    pats = [f'% {d}' for d in '234'] + [f'% {d} %' for d in '234']
+    pats = ([f'% {d}' for d in '234'] + [f'% {d} %' for d in '234']
+            + [f'%{c}{d}%' for c in 'abcdefghijklmnopqrstuvwxyz)' for d in '234'])
     cond = or_(*[getattr(Q, c).like(p) for c in cols for p in pats])
     n = 0
     for q in Q.query.filter(cond).limit(limit).all():
