@@ -2376,6 +2376,26 @@ def bank_images_repair():
     return redirect(request.referrer or url_for('mock_jamb.bank_needs_images'))
 
 
+@mock_jamb_bp.route('/bank/question/<int:question_id>/fetch-figure', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_fetch_figure(question_id):
+    """Find this bank question on myschool.ng, download its diagram and attach
+    it. JSON for the needs-images page, which calls it once per selected
+    question; ``searching`` means call again to continue a long search."""
+    from utils.myschool_figures import fetch_figure
+    q = db.get_or_404(MockJAMBQuestion, question_id)
+    if q.mock_exam_id is not None:
+        return jsonify({'status': 'error', 'message': 'Not a bank question.'}), 400
+    try:
+        out = fetch_figure(q)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('fetch figure failed for %s', question_id)
+        out = {'status': 'error', 'message': 'Something went wrong fetching from myschool.ng.'}
+    return jsonify(out)
+
+
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])
 @login_required
 @csrf_protect

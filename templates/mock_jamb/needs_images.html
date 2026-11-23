@@ -53,6 +53,19 @@
 .ni-file.has{border-style:solid;border-color:var(--primary);color:var(--primary)}
 .ni-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid var(--border-color);display:none}
 .ni-thumb.on{display:block}
+.ni-fetch{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.7rem;padding:.55rem .75rem;border-radius:11px;font-size:.83rem;background:var(--gray-50);color:var(--text-secondary)}
+.ni-fetch[hidden]{display:none}
+.ni-fetch.ok{background:color-mix(in srgb,var(--success) 10%,var(--bg-card));color:var(--success)}
+.ni-fetch.warn{background:color-mix(in srgb,var(--warning) 10%,var(--bg-card));color:var(--warning)}
+.ni-fetch.bad{background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));color:var(--danger)}
+.ni-fetch img{max-height:110px;max-width:100%;border-radius:8px;border:1px solid var(--border-color);background:#fff}
+.ni-fetch a{font-weight:700}
+.ni-q.done{opacity:.85}
+.ni-q.done .ni-act{display:none}
+.ni-prog{flex:1 1 100%;display:none;align-items:center;gap:.6rem;font-size:.82rem;color:var(--text-secondary)}
+.ni-prog.on{display:flex}
+.ni-prog .bar{flex:1;height:8px;border-radius:999px;background:var(--gray-100);overflow:hidden}
+.ni-prog .bar i{display:block;height:100%;width:0;background:var(--primary);transition:width .3s}
 .ni-src{color:#2563eb}
 .ni-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:1rem 0}
 @media (max-width:640px){
@@ -124,16 +137,18 @@
       <input type="hidden" name="subject_id" value="{{ subject_id or '' }}">
       <input type="hidden" name="year" value="{{ year or '' }}">
       <input type="hidden" name="exam_body" value="{{ exam_body or '' }}">
+      <button type="button" class="rs-btn primary" id="niFetchSel" data-sel><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
       <button type="button" class="rs-btn" data-bulk="dismiss" data-sel><i class="fas fa-check-double" aria-hidden="true"></i> No image needed</button>
       <button type="button" class="rs-btn ghost danger" data-bulk="delete" data-sel><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
       {% if not search %}<button type="button" class="rs-btn ghost" data-bulk="dismiss_all"><i class="fas fa-list-check" aria-hidden="true"></i> All {{ matching }}: no image</button>{% endif %}
     </form>
+    <div class="ni-prog" id="niProg"><span class="bar"><i></i></span><span id="niProgTxt"></span><button type="button" class="rs-btn ghost" id="niStop">Stop</button></div>
   </div>
   {% endif %}
 
   <div class="ni-list">
   {% for q in questions %}
-  <article class="ni-q" data-qid="{{ q.id }}">
+  <article class="ni-q" data-qid="{{ q.id }}" data-fetch="{{ url_for('mock_jamb.bank_fetch_figure', question_id=q.id) }}">
     <div class="ni-top">
       {% if can_fix %}<input type="checkbox" class="ni-box ni-check" value="{{ q.id }}" aria-label="Select question {{ (pagination.page - 1) * pagination.per_page + loop.index }}">{% endif %}
       <div class="ni-meta">
@@ -152,8 +167,10 @@
     <div class="ni-opts">
       {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'key' if q.correct_option == opt }}"><b>{{ opt }}</b><span>{{ val }}</span></div>{% endif %}{% endfor %}
     </div>
+    <div class="ni-fetch" hidden role="status" aria-live="polite"></div>
     <div class="ni-act">
       {% if can_fix %}
+      <button type="button" class="rs-btn ni-fetch-one" data-fetch="{{ url_for('mock_jamb.bank_fetch_figure', question_id=q.id) }}" title="Find this question on myschool.ng, download its diagram and attach it"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
       <form class="ni-up" method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <img class="ni-thumb" alt="">
@@ -240,6 +257,66 @@
             form.submit();
         });
     });
+
+    // ---- Fetch diagrams from myschool.ng, one question at a time ----
+    var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
+    var prog = document.getElementById('niProg'), progBar = prog && prog.querySelector('.bar i'),
+        progTxt = document.getElementById('niProgTxt'), stopBtn = document.getElementById('niStop');
+    var stopped = false, running = false;
+    function show(card, cls, html){ var b = card.querySelector('.ni-fetch'); b.hidden = false; b.className = 'ni-fetch ' + (cls || ''); b.innerHTML = html; }
+    function esc(t){ var d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+    function post(url){
+        return fetch(url, {method: 'POST', credentials: 'same-origin',
+            headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch'},
+            body: '_csrf_token=' + encodeURIComponent(CSRF)}).then(function(r){ return r.json(); });
+    }
+    function fetchOne(card, tries){
+        tries = tries || 0;
+        show(card, '', '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> ' + (tries ? 'Still searching myschool.ng…' : 'Looking for this question on myschool.ng…'));
+        return post(card.dataset.fetch).then(function(r){
+            if (r.status === 'searching' && tries < 12 && !stopped) return fetchOne(card, tries + 1);
+            var link = r.url ? ' <a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Open on myschool.ng</a>' : '';
+            if (r.status === 'attached') {
+                show(card, 'ok', '<i class="fas fa-circle-check" aria-hidden="true"></i> ' + esc(r.message) + link + '<br><img src="' + esc(r.image_url) + '" alt="Downloaded diagram">');
+                card.classList.add('done');
+                var cb = card.querySelector('.ni-check'); if (cb) { cb.checked = false; cb.disabled = true; }
+            } else if (r.status === 'no_image' || r.status === 'not_found' || r.status === 'searching') {
+                show(card, 'warn', '<i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ' + esc(r.message) + link);
+            } else {
+                show(card, 'bad', '<i class="fas fa-circle-xmark" aria-hidden="true"></i> ' + esc(r.message || 'Something went wrong.') + link);
+            }
+            return r.status;
+        }).catch(function(){ show(card, 'bad', '<i class="fas fa-circle-xmark" aria-hidden="true"></i> Network problem — try again.'); return 'error'; });
+    }
+    function runQueue(cards){
+        if (running || !cards.length) return;
+        running = true; stopped = false;
+        var done = 0, got = 0;
+        prog.classList.add('on');
+        function step(){
+            progBar.style.width = Math.round(done / cards.length * 100) + '%';
+            progTxt.textContent = done + ' of ' + cards.length + ' checked · ' + got + ' diagram' + (got === 1 ? '' : 's') + ' added';
+            if (stopped || done >= cards.length) {
+                running = false; stopBtn.hidden = true;
+                progTxt.textContent += stopped ? ' · stopped' : ' · finished';
+                update();
+                return;
+            }
+            fetchOne(cards[done]).then(function(st){ done++; if (st === 'attached') got++; step(); });
+        }
+        stopBtn.hidden = false;
+        step();
+    }
+    document.querySelectorAll('.ni-fetch-one').forEach(function(b){
+        b.addEventListener('click', function(){ var c = b.closest('.ni-q'); b.disabled = true; fetchOne(c).then(function(){ b.disabled = false; }); });
+    });
+    var fsel = document.getElementById('niFetchSel');
+    if (fsel) fsel.addEventListener('click', function(){
+        var cards = selected().map(function(c){ return c.closest('.ni-q'); });
+        if (!cards.length) { window.alert('Select the questions to fetch first.'); return; }
+        runQueue(cards);
+    });
+    if (stopBtn) stopBtn.addEventListener('click', function(){ stopped = true; });
     update();
 })();
 </script>

@@ -1107,7 +1107,8 @@ _SUBSECTION_ENDPOINTS = {
         'mock_jamb_bank_images_view': {'mock_jamb.bank_needs_images'},
         'mock_jamb_bank_images_edit': {'mock_jamb.bank_set_question_image',
                                        'mock_jamb.bank_needs_images_bulk',
-                                       'mock_jamb.bank_images_repair'},
+                                       'mock_jamb.bank_images_repair',
+                                       'mock_jamb.bank_fetch_figure'},
         'mock_jamb_bank_analytics_view': {'mock_jamb.bank_analytics'},
         # JSS3 / Basic 6 exams live on their own per-level blueprints, so every
         # entry is fully-qualified (see _school_exam_subsections).
