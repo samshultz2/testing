@@ -2271,6 +2271,19 @@ def bank_needs_images():
                            bank_url=url_for('mock_jamb.bank'))
 
 
+def _wants_json():
+    """The needs-images page sends its actions with fetch() and updates in place."""
+    return request.headers.get('X-Requested-With') == 'fetch'
+
+
+def _done(message, tone='success', back=None, **extra):
+    """JSON for the in-page caller, else flash + redirect as before."""
+    if _wants_json():
+        return jsonify(dict(ok=tone != 'error', tone=tone, message=message, **extra)), (400 if tone == 'error' else 200)
+    flash(message, tone)
+    return redirect(back or request.referrer or url_for('mock_jamb.bank_needs_images'))
+
+
 @mock_jamb_bp.route('/bank/question/<int:question_id>/set-image', methods=['POST'])
 @login_required
 @csrf_protect
@@ -2279,24 +2292,20 @@ def bank_set_question_image(question_id):
     re-enters the pool), or dismiss the flag when no image is actually needed."""
     q = db.get_or_404(MockJAMBQuestion, question_id)
     if q.mock_exam_id is not None:
-        flash('Not a bank question.', 'error')
-        return redirect(url_for('mock_jamb.bank_needs_images'))
+        return _done('Not a bank question.', 'error', url_for('mock_jamb.bank_needs_images'))
     back = request.referrer or url_for('mock_jamb.bank_needs_images')
     if request.form.get('dismiss'):
         q.needs_image = False
         q.image_not_needed = True
         db.session.commit()
-        flash('Marked as not needing an image — it can now be used in exams.', 'success')
-        return redirect(back)
+        return _done('Marked as not needing an image — it can now be used in exams.', back=back, removed=[q.id])
     url = _save_mock_image(request.files.get('image'))
     if not url:
-        flash('Choose an image file to upload.', 'error')
-        return redirect(back)
+        return _done('Choose an image file to upload.', 'error', back)
     q.image_url = url
     q.needs_image = False
     db.session.commit()
-    flash('Image added — the question is now in the exam pool.', 'success')
-    return redirect(back)
+    return _done('Image added — the question is now in the exam pool.', back=back, removed=[q.id], image_url=url)
 
 
 @mock_jamb_bp.route('/bank/needs-images/bulk', methods=['POST'])
@@ -2332,8 +2341,7 @@ def bank_needs_images_bulk():
                .with_entities(MockJAMBQuestion.id).all()] if ids else []
 
     if not ids:
-        flash('Select at least one question first.', 'error')
-        return redirect(back)
+        return _done('Select at least one question first.', 'error', back)
 
     if action == 'delete':
         deleted = 0
@@ -2342,7 +2350,7 @@ def bank_needs_images_bulk():
             MockJAMBAnswer.query.filter(MockJAMBAnswer.question_id.in_(chunk)).delete(synchronize_session=False)
             deleted += MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(chunk)).delete(synchronize_session=False)
         db.session.commit()
-        flash(f'Deleted {deleted} question(s).', 'success')
+        return _done(f'Deleted {deleted} question(s).', back=back, removed=ids)
     else:
         n = 0
         for i in range(0, len(ids), 400):
@@ -2350,8 +2358,8 @@ def bank_needs_images_bulk():
                   .update({MockJAMBQuestion.needs_image: False,
                            MockJAMBQuestion.image_not_needed: True}, synchronize_session=False))
         db.session.commit()
-        flash(f'Marked {n} question(s) as not needing an image — they can now be used in exams.', 'success')
-    return redirect(back)
+        return _done(f'Marked {n} question(s) as not needing an image — they can now be used in exams.',
+                     back=back, removed=ids)
 
 
 @mock_jamb_bp.route('/bank/images/repair', methods=['POST'])
@@ -2375,8 +2383,7 @@ def bank_images_repair():
     msg = ('Done — ' + '; '.join(parts) + '.') if parts else 'Nothing to fix.'
     if r['left']:
         msg += f" {r['left']} still to go — click again to continue."
-    flash(msg, 'success' if not r['failed'] else 'warning')
-    return redirect(request.referrer or url_for('mock_jamb.bank_needs_images'))
+    return _done(msg, 'success' if not r['failed'] else 'warning', reload=True)
 
 
 @mock_jamb_bp.route('/bank/question/<int:question_id>/fetch-figure', methods=['POST'])

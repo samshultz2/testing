@@ -237,3 +237,29 @@ def test_needs_images_page_size(app):
     assert count(html) == 40 and 'per_page=40' in html                # kept in the pager links
     assert count(c.get(f'/mock-jamb/bank/needs-images?subject_id={sid}&per_page=100').get_data(as_text=True)) == 45
     assert count(c.get(f'/mock-jamb/bank/needs-images?subject_id={sid}&per_page=9999').get_data(as_text=True)) == 20
+
+
+def test_needs_images_actions_answer_json_for_the_page(app):
+    """The page sends its actions with fetch() and updates in place; without the
+    header the old redirect + flash still works."""
+    from models import db, Subject, MockJAMBQuestion
+    with app.app_context():
+        s = Subject(name='Ajax ' + uuid.uuid4().hex[:6], is_active=True)
+        db.session.add(s); db.session.flush()
+        qs = [_q(s.id, 'Use the diagram above, item %d.' % i, needs_image=True) for i in range(3)]
+        db.session.add_all(qs); db.session.commit()
+        ids = [q.id for q in qs]
+    c = _admin(app)
+    tok = _csrf(c)
+    h = {'X-Requested-With': 'fetch'}
+    r = c.post(f'/mock-jamb/bank/question/{ids[0]}/set-image', data={'_csrf_token': tok, 'dismiss': '1'}, headers=h)
+    assert r.status_code == 200 and r.get_json()['removed'] == [ids[0]]
+    r = c.post(f'/mock-jamb/bank/question/{ids[1]}/set-image', data={'_csrf_token': tok}, headers=h)
+    assert r.status_code == 400 and r.get_json()['ok'] is False            # no file chosen
+    r = c.post('/mock-jamb/bank/needs-images/bulk', headers=h,
+               data={'_csrf_token': tok, 'action': 'delete', 'question_ids': f'{ids[1]},{ids[2]}'})
+    assert sorted(r.get_json()['removed']) == sorted(ids[1:])
+    with app.app_context():
+        assert MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids[1:])).count() == 0
+    html = c.get('/mock-jamb/bank/needs-images').get_data(as_text=True)
+    assert 'id="niLive"' in html and 'data-autosubmit' not in html.split('id="niFilter"')[1].split('</form>')[0]

@@ -67,6 +67,13 @@
 .ni-prog .bar{flex:1;height:8px;border-radius:999px;background:var(--gray-100);overflow:hidden}
 .ni-prog .bar i{display:block;height:100%;width:0;background:var(--primary);transition:width .3s}
 .ni-src{color:#2563eb}
+#niLive[aria-busy="true"]{opacity:.55;pointer-events:none;transition:opacity .15s}
+.ni-q.leaving{transition:opacity .25s,transform .25s;opacity:0;transform:translateX(12px)}
+.ni-toast{position:fixed;left:50%;bottom:calc(var(--bottom-nav-h,0px) + 22px);transform:translateX(-50%);z-index:60;max-width:min(92vw,520px);padding:.7rem 1rem;border-radius:14px;background:var(--text-primary,#0f172a);color:#fff;font-size:.86rem;box-shadow:0 10px 30px rgba(15,23,42,.25);display:flex;gap:.55rem;align-items:center}
+.ni-toast.bad{background:var(--danger)}
+.ni-toast.warn{background:#b45309}
+.ni-busy{opacity:.6;pointer-events:none}
+@media (max-width:759px){.ni-toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 .ni-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:1rem 0}
 @media (max-width:640px){
   .ni-q{padding:.8rem .8rem}
@@ -94,7 +101,8 @@
   {% endcall %}
   <div class="no-print">{{ mj_nav('images') }}</div>
 
-  <div class="rs-tiles bx-tiles">
+  <div id="niLive" class="rs" aria-busy="false">
+  <div class="rs-tiles bx-tiles" data-part="tiles">
     <div class="rs-tile {{ 'mid' if total else 'good' }}"><span class="l">Need a picture</span><span class="v">{{ total }}</span><span class="s">held out of exams</span></div>
     <div class="rs-tile"><span class="l">Subjects affected</span><span class="v">{{ subject_counts|length }}</span><span class="s">{{ subject_counts[0][1] ~ ' has the most' if subject_counts else 'none' }}</span></div>
     <div class="rs-tile"><span class="l">Showing</span><span class="v">{{ matching }}</span><span class="s">{{ 'with these filters' if filtered else 'all of them' }}</span></div>
@@ -102,26 +110,26 @@
   </div>
 
 {% if external and can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
-  <div class="qb-alert"><i class="fas fa-link-slash" aria-hidden="true"></i>
+  <div class="qb-alert" data-part="external"><i class="fas fa-link-slash" aria-hidden="true"></i>
     <span><strong>{{ external }}</strong> picture{{ '' if external == 1 else 's' }} {{ 'still links' if external == 1 else 'still link' }} to another website (usually myschool.ng), which blocks them — they show as broken images. Save copies on this server; any that can't be downloaded move to the needs-images list.</span>
-    <form method="post" action="{{ url_for('mock_jamb.bank_images_repair') }}" style="margin:0">
+    <form method="post" action="{{ url_for('mock_jamb.bank_images_repair') }}" style="margin:0" data-ajax="reload">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button class="rs-btn primary"><i class="fas fa-wrench" aria-hidden="true"></i> Fix broken pictures</button></form></div>
   {% endif %}
   <section class="rs-card">
     <p class="ni-intro">Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — whether it was flagged on import or its wording points at one. They're <strong>held out of exams</strong> until you add the picture. If a question reads fine without one, mark it <em>No image needed</em>. <strong>Open on myschool.ng</strong> opens the original question so you can save its diagram (questions pasted without their link get a search instead).</p>
     {% if subject_counts|length > 1 %}
-    <div class="ni-chips" role="navigation" aria-label="Subject" style="margin-top:.8rem">
+    <div class="ni-chips" role="navigation" aria-label="Subject" style="margin-top:.8rem" data-part="chips">
       <a class="ni-chip {{ 'on' if not subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', year=year or none, exam_body=exam_body or none, q=search or none, per_page=(per_page if per_page != 20 else none)) }}">All subjects <em>{{ total }}</em></a>
       {% for sid, name, n in subject_counts %}<a class="ni-chip {{ 'on' if sid == subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', subject_id=sid, year=year or none, exam_body=exam_body or none, q=search or none, per_page=(per_page if per_page != 20 else none)) }}">{{ name }} <em>{{ n }}</em></a>{% endfor %}
     </div>{% endif %}
-    <form method="get" class="ni-filter" role="search">
+    <form method="get" class="ni-filter" role="search" id="niFilter">
       {% if subject_id %}<input type="hidden" name="subject_id" value="{{ subject_id }}">{% endif %}
-      <select name="year" data-autosubmit aria-label="Year"><option value="">Any year</option>
+      <select name="year" aria-label="Year"><option value="">Any year</option>
         {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}</select>
-      <select name="exam_body" data-autosubmit aria-label="Exam body"><option value="">Any exam</option>
+      <select name="exam_body" aria-label="Exam body"><option value="">Any exam</option>
         {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body }}>{{ e }}</option>{% endfor %}</select>
-      <select name="per_page" data-autosubmit aria-label="Questions per page">
+      <select name="per_page" aria-label="Questions per page">
         {% for n in (20, 40, 50, 100, 150) %}<option value="{{ n }}" {{ 'selected' if n == per_page }}>{{ n }} per page</option>{% endfor %}</select>
       <label class="ni-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" name="q" value="{{ search }}" placeholder="Search question text" aria-label="Search question text"></label>
       {% if filtered %}<a class="rs-btn ghost" href="{{ url_for('mock_jamb.bank_needs_images') }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear</a>{% endif %}
@@ -130,7 +138,7 @@
 
   {% if questions and can_fix %}
   <div class="ni-bulk">
-    <label><input type="checkbox" class="ni-box" id="niSelectAll"> Select all {{ questions|length }} on this page</label>
+    <label><input type="checkbox" class="ni-box" id="niSelectAll"> Select all <span id="niOnPage">{{ questions|length }}</span> on this page</label>
     <span class="rs-muted ni-tip" style="font-size:.76rem">Tip: shift-click to tick a range</span>
     <span id="niCount" class="rs-muted" style="font-size:.82rem">0 selected</span>
     <span class="sp"></span>
@@ -144,7 +152,7 @@
       <button type="button" class="rs-btn primary" id="niFetchSel" data-sel><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
       <button type="button" class="rs-btn" data-bulk="dismiss" data-sel><i class="fas fa-check-double" aria-hidden="true"></i> No image needed</button>
       <button type="button" class="rs-btn ghost danger" data-bulk="delete" data-sel><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>
-      {% if not search %}<button type="button" class="rs-btn ghost" data-bulk="dismiss_all"><i class="fas fa-list-check" aria-hidden="true"></i> All {{ matching }}: no image</button>{% endif %}
+      {% if not search %}<button type="button" class="rs-btn ghost" data-bulk="dismiss_all"><i class="fas fa-list-check" aria-hidden="true"></i> All <span data-part="matching">{{ matching }}</span>: no image</button>{% endif %}
     </form>
     <div class="ni-prog" id="niProg"><span class="bar"><i></i></span><span id="niProgTxt"></span><button type="button" class="rs-btn ghost" id="niStop">Stop</button></div>
   </div>
@@ -175,13 +183,13 @@
     <div class="ni-act">
       {% if can_fix %}
       <button type="button" class="rs-btn ni-fetch-one" data-fetch="{{ url_for('mock_jamb.bank_fetch_figure', question_id=q.id) }}" title="Find this question on myschool.ng, download its diagram and attach it"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i> Fetch from myschool</button>
-      <form class="ni-up" method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data">
+      <form class="ni-up" data-ajax="card" method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <img class="ni-thumb" alt="">
         <label class="ni-file"><i class="fas fa-cloud-arrow-up" aria-hidden="true"></i><span>Choose picture</span><input type="file" name="image" accept="image/*" required></label>
         <button class="rs-btn primary"><i class="fas fa-image" aria-hidden="true"></i> Add image</button>
       </form>
-      <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams.">
+      <form method="post" data-ajax="card" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams.">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="dismiss" value="1">
         <button class="rs-btn"><i class="fas fa-check" aria-hidden="true"></i> No image needed</button>
@@ -203,81 +211,214 @@
   </div>
 
   {% if pagination and pagination.pages > 1 %}
-  <nav class="ni-pager" aria-label="Pages">
+  <nav class="ni-pager" aria-label="Pages" data-part="pager">
     {% if pagination.has_prev %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Prev</a>{% endif %}
     <span class="rs-muted" style="font-size:.84rem">Page {{ pagination.page }} of {{ pagination.pages }}</span>
     {% if pagination.has_next %}<a class="rs-btn" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
   </nav>
   {% endif %}
+  </div>
 </div>
+<div class="ni-toast" id="niToast" role="status" aria-live="polite" hidden></div>
 {% endblock %}
 
 {% block extra_js %}{% include "mock_jamb/_mathjax.html" %}
 <script nonce="{{ csp_nonce }}">
 (function(){
-    var on = document.querySelector('.ni-chip.on');
-    if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
-    // Picture picker: show the chosen file's name and a thumbnail.
-    document.querySelectorAll('.ni-up').forEach(function(f){
-        var inp = f.querySelector('input[type=file]'), lab = f.querySelector('.ni-file'), img = f.querySelector('.ni-thumb');
-        inp.addEventListener('change', function(){
-            var file = inp.files && inp.files[0];
-            lab.classList.toggle('has', !!file);
-            lab.querySelector('span').textContent = file ? file.name : 'Choose picture';
-            if(file && window.URL){ img.src = URL.createObjectURL(file); img.classList.add('on'); }
-            else { img.classList.remove('on'); }
-        });
-    });
-    var form = document.getElementById('niBulkForm'); if(!form) return;
-    var selectAll = document.getElementById('niSelectAll');
-    var countEl = document.getElementById('niCount');
+    // Everything on this page happens in place — filters, paging, adding an
+    // image, "No image needed", delete, bulk actions — no full-page reloads.
+    var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
+    var BASE = location.pathname;
+    var live = function(){ return document.getElementById('niLive'); };
+    var running = false, stopped = false, loadSeq = 0, lastBox = null;
+
+    // ---- small helpers ----
+    function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+    var toastTimer = null;
+    function toast(msg, tone){
+        var t = document.getElementById('niToast'); if (!t) return;
+        t.className = 'ni-toast ' + (tone === 'error' ? 'bad' : tone === 'warning' ? 'warn' : '');
+        t.innerHTML = '<i class="fas fa-' + (tone === 'error' ? 'circle-xmark' : tone === 'warning' ? 'triangle-exclamation' : 'circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
+        t.hidden = false; clearTimeout(toastTimer);
+        toastTimer = setTimeout(function(){ t.hidden = true; }, 4200);
+    }
+    function ask(msg){ return window.themedConfirm ? window.themedConfirm(msg) : Promise.resolve(window.confirm(msg)); }
     function boxes(){ return Array.prototype.slice.call(document.querySelectorAll('.ni-check')); }
     function selected(){ return boxes().filter(function(c){ return c.checked; }); }
+    function typeset(root){ if (window.MathJax && window.MathJax.typesetPromise) { try { window.MathJax.typesetPromise([root]); } catch (e) {} } }
     function update(){
-        var n = selected().length;
-        countEl.textContent = n + ' selected';
-        boxes().forEach(function(c){ var card = c.closest('.ni-q'); if(card) card.classList.toggle('sel', c.checked); });
-        form.querySelectorAll('[data-sel]').forEach(function(b){ b.disabled = !n; });
-        if(selectAll){ var all = boxes(); selectAll.checked = all.length > 0 && n === all.length; }
+        var n = selected().length, all = boxes().filter(function(c){ return !c.disabled; });
+        var cnt = document.getElementById('niCount'); if (cnt) cnt.textContent = n + ' selected';
+        document.querySelectorAll('[data-sel]').forEach(function(b){ b.disabled = !n || running; });
+        boxes().forEach(function(c){ var card = c.closest('.ni-q'); if (card) card.classList.toggle('sel', c.checked); });
+        var sa = document.getElementById('niSelectAll'); if (sa) sa.checked = all.length > 0 && n === all.length;
+        var onp = document.getElementById('niOnPage'); if (onp) onp.textContent = all.length;
     }
+    function scrollChips(){
+        var on = document.querySelector('.ni-chip.on');
+        if (on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+    }
+    function post(url, body){
+        return fetch(url, {method: 'POST', credentials: 'same-origin', body: body,
+            headers: {'X-CSRFToken': CSRF, 'X-Requested-With': 'fetch'}})
+            .then(function(r){ return r.json().catch(function(){ return {ok: false, tone: 'error', message: 'Unexpected reply (' + r.status + ').'}; }); });
+    }
+
+    // ---- load another view of the list (filters, chips, paging) without a reload ----
+    function load(url, opts){
+        opts = opts || {};
+        if (running) { toast('Wait for the fetch to finish, or press Stop.', 'warning'); return Promise.resolve(); }
+        var seq = ++loadSeq, box = live();
+        if (!opts.quiet) box.setAttribute('aria-busy', 'true');
+        return fetch(url, {credentials: 'same-origin', headers: {'X-Requested-With': 'fetch-html'}})
+            .then(function(r){ if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(function(html){
+                if (seq !== loadSeq) return;                       // a newer load won
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var fresh = doc.getElementById('niLive');
+                if (!fresh) { location.href = url; return; }
+                if (opts.partsOnly) {
+                    // refresh just the counts / chips / pager, keep cards and their results
+                    ['tiles', 'chips', 'pager', 'external', 'matching'].forEach(function(k){
+                        var a = box.querySelector('[data-part="' + k + '"]'), b = fresh.querySelector('[data-part="' + k + '"]');
+                        if (a && b) a.replaceWith(b); else if (a && !b) a.remove();
+                    });
+                    var h = document.querySelector('.rs-head-t p'), h2 = doc.querySelector('.rs-head-t p');
+                    if (h && h2) h.textContent = h2.textContent;
+                } else {
+                    box.replaceWith(fresh); box = fresh;
+                    var h = document.querySelector('.rs-head-t p'), h2 = doc.querySelector('.rs-head-t p');
+                    if (h && h2) h.textContent = h2.textContent;
+                    if (opts.push) history.pushState({ni: 1}, '', url);
+                    else if (opts.replace) history.replaceState({ni: 1}, '', url);
+                    if (opts.scroll) { var top = (document.querySelector('.ni-bulk') || document.querySelector('.ni-list') || box).getBoundingClientRect().top + scrollY - 80; if (top < scrollY) scrollTo({top: top, behavior: 'smooth'}); }
+                    typeset(box);
+                    lastBox = null;
+                }
+                scrollChips(); update();
+            })
+            .catch(function(){ if (!opts.quiet) location.href = url; })
+            .then(function(){ if (box) box.setAttribute('aria-busy', 'false'); });
+    }
+    function filterUrl(){
+        var f = document.getElementById('niFilter'), q = new URLSearchParams();
+        new FormData(f).forEach(function(v, k){ if (v !== '' && !(k === 'per_page' && v === '20')) q.set(k, v); });
+        var s = q.toString(); return BASE + (s ? '?' + s : '');
+    }
+    function removeCards(ids){
+        var set = {}; (ids || []).forEach(function(i){ set[String(i)] = 1; });
+        document.querySelectorAll('.ni-q').forEach(function(c){
+            if (!set[c.dataset.qid]) return;
+            c.classList.add('leaving');
+            setTimeout(function(){ c.remove(); afterRemove(); }, 260);
+        });
+    }
+    var afterTimer = null;
+    function afterRemove(){
+        clearTimeout(afterTimer);
+        afterTimer = setTimeout(function(){
+            update();
+            // the page ran dry: show the next page of questions
+            if (!document.querySelector('.ni-q')) load(location.pathname + location.search, {replace: true});
+            else load(location.pathname + location.search, {partsOnly: true, quiet: true});
+        }, 120);
+    }
+
+    // ---- clicks on chips, pager and "Clear"/"Show all" stay in place ----
+    document.addEventListener('click', function(e){
+        var a = e.target.closest && e.target.closest('#niLive a[href]');
+        if (!a || a.target || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+        var u = new URL(a.href, location.href);
+        if (u.origin !== location.origin || u.pathname !== BASE) return;
+        e.preventDefault();
+        load(u.pathname + u.search, {push: true, scroll: !!a.closest('[data-part="pager"]')});
+    });
+    window.addEventListener('popstate', function(){ load(location.pathname + location.search, {}); });
+
+    // ---- filters: selects apply at once, search after a short pause ----
+    var searchTimer = null;
     document.addEventListener('change', function(e){
-        if(e.target && e.target.classList && e.target.classList.contains('ni-check')) update();
+        var t = e.target;
+        if (t.closest && t.closest('#niFilter') && t.tagName === 'SELECT') { load(filterUrl(), {push: true}); return; }
+        if (t.matches && t.matches('.ni-up input[type=file]')) {
+            var f = t.closest('.ni-up'), file = t.files && t.files[0], lab = f.querySelector('.ni-file'), img = f.querySelector('.ni-thumb');
+            lab.classList.toggle('has', !!file);
+            lab.querySelector('span').textContent = file ? file.name : 'Choose picture';
+            if (file && window.URL) { img.src = URL.createObjectURL(file); img.classList.add('on'); } else img.classList.remove('on');
+            return;
+        }
+        if (t.id === 'niSelectAll') { boxes().forEach(function(c){ if (!c.disabled) c.checked = t.checked; }); update(); return; }
+        if (t.classList && t.classList.contains('ni-check')) update();
     });
-    if(selectAll) selectAll.addEventListener('change', function(){
-        boxes().forEach(function(c){ if (!c.disabled) c.checked = selectAll.checked; }); update();
+    document.addEventListener('input', function(e){
+        if (!(e.target.closest && e.target.closest('#niFilter') && e.target.name === 'q')) return;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function(){ load(filterUrl(), {replace: true}); }, 400);
     });
-    form.querySelectorAll('[data-bulk]').forEach(function(btn){
-        btn.addEventListener('click', function(){
-            var action = btn.getAttribute('data-bulk');
-            if(action === 'dismiss_all'){
-                if(!window.confirm('Mark ALL {{ matching }} question(s) matching the current filters as not needing an image?')) return;
-            } else {
-                var ids = selected().map(function(c){ return c.value; });
-                if(!ids.length){ window.alert('Select at least one question first.'); return; }
-                if(action === 'delete' && !window.confirm('Delete ' + ids.length + ' selected question(s)? This cannot be undone.')) return;
-                document.getElementById('niIds').value = ids.join(',');
-            }
-            document.getElementById('niAction').value = action;
-            form.submit();
+
+    // ---- forms: filter (GET) and the card / repair actions (POST) ----
+    document.addEventListener('submit', function(e){
+        var f = e.target;
+        if (f.id === 'niFilter') { e.preventDefault(); clearTimeout(searchTimer); load(filterUrl(), {push: true}); return; }
+        var mode = f.getAttribute('data-ajax'); if (!mode) return;
+        e.preventDefault();
+        if (f.classList.contains('ni-up')) {
+            var inp = f.querySelector('input[type=file]');
+            if (!inp.files || !inp.files.length) { toast('Choose a picture first.', 'warning'); inp.click(); return; }
+        }
+        var btns = f.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
+        var card = f.closest('.ni-q'); if (card) card.classList.add('ni-busy');
+        post(f.getAttribute('action'), new FormData(f)).then(function(r){
+            toast(r.message, r.tone || (r.ok ? 'success' : 'error'));
+            if (r.ok && r.removed) removeCards(r.removed);
+            else if (r.ok && (mode === 'reload' || r.reload)) load(location.pathname + location.search, {replace: true});
+        }).catch(function(){ toast('Network problem — try again.', 'error'); })
+          .then(function(){ btns.forEach(function(b){ b.disabled = false; }); if (card) card.classList.remove('ni-busy'); });
+    });
+
+    // ---- bulk: No image needed / Delete / All matching ----
+    document.addEventListener('click', function(e){
+        var b = e.target.closest && e.target.closest('#niBulkForm [data-bulk]'); if (!b) return;
+        var action = b.getAttribute('data-bulk'), form = document.getElementById('niBulkForm');
+        var ids = selected().map(function(c){ return c.value; });
+        var n = (document.querySelector('[data-part="matching"]') || {}).textContent || '';
+        var msg = action === 'dismiss_all' ? 'Mark all ' + n + ' question(s) matching these filters as not needing an image?'
+                : action === 'delete' ? 'Delete ' + ids.length + ' selected question(s)? This cannot be undone.'
+                : 'Mark ' + ids.length + ' selected question(s) as not needing an image?';
+        if (action !== 'dismiss_all' && !ids.length) { toast('Select at least one question first.', 'warning'); return; }
+        ask(msg).then(function(ok){
+            if (!ok) return;
+            var fd = new FormData(form); fd.set('action', action); fd.set('question_ids', ids.join(','));
+            b.disabled = true;
+            post(form.getAttribute('action'), fd).then(function(r){
+                toast(r.message, r.tone || (r.ok ? 'success' : 'error'));
+                if (!r.ok) return;
+                if (action === 'dismiss_all') load(location.pathname + location.search, {replace: true});
+                else removeCards(r.removed);
+            }).catch(function(){ toast('Network problem — try again.', 'error'); })
+              .then(function(){ b.disabled = false; });
         });
     });
 
+    // ---- Shift-click a box to tick (or untick) the range since the last one ----
+    document.addEventListener('click', function(e){
+        var cb = e.target;
+        if (!cb.classList || !cb.classList.contains('ni-check')) return;
+        var all = boxes();
+        if (e.shiftKey && lastBox && lastBox !== cb && all.indexOf(lastBox) >= 0) {
+            var a = all.indexOf(lastBox), z = all.indexOf(cb);
+            all.slice(Math.min(a, z), Math.max(a, z) + 1).forEach(function(x){ if (!x.disabled) x.checked = cb.checked; });
+            update();
+        }
+        lastBox = cb;
+    });
+
     // ---- Fetch diagrams from myschool.ng, one question at a time ----
-    var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
-    var prog = document.getElementById('niProg'), progBar = prog && prog.querySelector('.bar i'),
-        progTxt = document.getElementById('niProgTxt'), stopBtn = document.getElementById('niStop');
-    var stopped = false, running = false;
     function show(card, cls, html){ var b = card.querySelector('.ni-fetch'); b.hidden = false; b.className = 'ni-fetch ' + (cls || ''); b.innerHTML = html; }
-    function esc(t){ var d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
-    function post(url){
-        return fetch(url, {method: 'POST', credentials: 'same-origin',
-            headers: {'X-CSRFToken': CSRF, 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch'},
-            body: '_csrf_token=' + encodeURIComponent(CSRF)}).then(function(r){ return r.json(); });
-    }
     function fetchOne(card, tries){
         tries = tries || 0;
         show(card, '', '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> ' + (tries ? 'Still searching myschool.ng…' : 'Looking for this question on myschool.ng…'));
-        return post(card.dataset.fetch).then(function(r){
+        return post(card.dataset.fetch, new URLSearchParams({_csrf_token: CSRF})).then(function(r){
             if (r.status === 'searching' && tries < 12 && !stopped) return fetchOne(card, tries + 1);
             var link = r.url ? ' <a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">Open on myschool.ng</a>' : '';
             if (r.status === 'attached') {
@@ -294,48 +435,46 @@
     }
     function runQueue(cards){
         if (running || !cards.length) return;
-        running = true; stopped = false;
+        running = true; stopped = false; update();
+        var prog = document.getElementById('niProg'), bar = prog.querySelector('.bar i'),
+            txt = document.getElementById('niProgTxt'), stopBtn = document.getElementById('niStop');
         var done = 0, got = 0;
-        prog.classList.add('on');
-        function step(){
-            progBar.style.width = Math.round(done / cards.length * 100) + '%';
-            progTxt.textContent = done + ' of ' + cards.length + ' checked · ' + got + ' diagram' + (got === 1 ? '' : 's') + ' added';
+        prog.classList.add('on'); stopBtn.hidden = false;
+        (function step(){
+            bar.style.width = Math.round(done / cards.length * 100) + '%';
+            txt.textContent = done + ' of ' + cards.length + ' checked · ' + got + ' diagram' + (got === 1 ? '' : 's') + ' added';
             if (stopped || done >= cards.length) {
                 running = false; stopBtn.hidden = true;
-                progTxt.textContent += stopped ? ' · stopped' : ' · finished';
+                txt.textContent += stopped ? ' · stopped' : ' · finished';
                 update();
+                if (got) load(location.pathname + location.search, {partsOnly: true, quiet: true});
                 return;
             }
             fetchOne(cards[done]).then(function(st){ done++; if (st === 'attached') got++; step(); });
-        }
-        stopBtn.hidden = false;
-        step();
+        })();
     }
-    document.querySelectorAll('.ni-fetch-one').forEach(function(b){
-        b.addEventListener('click', function(){ var c = b.closest('.ni-q'); b.disabled = true; fetchOne(c).then(function(){ b.disabled = false; }); });
-    });
-    var fsel = document.getElementById('niFetchSel');
-    if (fsel) fsel.addEventListener('click', function(){
-        var cards = selected().map(function(c){ return c.closest('.ni-q'); });
-        if (!cards.length) { window.alert('Select the questions to fetch first.'); return; }
-        runQueue(cards);
-    });
-    if (stopBtn) stopBtn.addEventListener('click', function(){ stopped = true; });
-    window.addEventListener('beforeunload', function(e){ if (running) { e.preventDefault(); e.returnValue = ''; } });
-    // Shift-click a box to tick (or untick) everything between it and the last one clicked.
-    var lastBox = null;
     document.addEventListener('click', function(e){
-        var cb = e.target;
-        if (!cb.classList || !cb.classList.contains('ni-check')) return;
-        var all = boxes();
-        if (e.shiftKey && lastBox && lastBox !== cb) {
-            var a = all.indexOf(lastBox), b = all.indexOf(cb);
-            all.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function(x){ if (!x.disabled) x.checked = cb.checked; });
-            update();
+        var one = e.target.closest && e.target.closest('.ni-fetch-one');
+        if (one) {
+            one.disabled = true;
+            fetchOne(one.closest('.ni-q')).then(function(st){
+                one.disabled = false;
+                if (st === 'attached') load(location.pathname + location.search, {partsOnly: true, quiet: true});
+            });
+            return;
         }
-        lastBox = cb;
+        if (e.target.closest && e.target.closest('#niFetchSel')) {
+            var cards = selected().map(function(c){ return c.closest('.ni-q'); });
+            if (!cards.length) { toast('Select the questions to fetch first.', 'warning'); return; }
+            runQueue(cards);
+            return;
+        }
+        if (e.target.closest && e.target.closest('#niStop')) stopped = true;
     });
-    update();
+    window.addEventListener('beforeunload', function(e){ if (running) { e.preventDefault(); e.returnValue = ''; } });
+
+    history.replaceState({ni: 1}, '', location.href);
+    scrollChips(); update();
 })();
 </script>
 {% endblock %}
