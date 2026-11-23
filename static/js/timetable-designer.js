@@ -1026,7 +1026,19 @@ function tlModel(){
     var today=tlTodayISO(), next='';
     order.forEach(function(k){ var d=dmap[k]; if(!next && !d.off && d.date && toISO(d.date)>=today) next=k; });
     var groupsAll=[]; rows.forEach(function(r){ var g=(r.group||'').trim(); if(g && !isAll(r.group) && groupsAll.indexOf(g)<0) groupsAll.push(g); });
-    return {periods:periods, colour:colour, teach:teach, anyGroup:anyGroup, dmap:dmap, order:order, next:next, groupsAll:groupsAll};
+    // Day numbers, ticks and "next class" belong to the whole timetable, not
+    // to the page being exported: a page of a multi-page export only holds
+    // some of the dates, so take them from the full set.
+    var all=order.filter(function(k){ return !dmap[k].off; }), nextDay=next?dmap[next]:null;
+    if(_fullRows){
+        var keep=[rows,_pageKeys,_fullRows], g;
+        rows=_fullRows; _pageKeys=null; _fullRows=null;
+        try { g=tlModel(); } finally { rows=keep[0]; _pageKeys=keep[1]; _fullRows=keep[2]; }
+        all=g.all; next=g.next; nextDay=g.nextDay;
+    }
+    var nextPos=next?all.indexOf(next):-1;
+    return {periods:periods, colour:colour, teach:teach, anyGroup:anyGroup, dmap:dmap, order:order, next:next, nextDay:nextDay,
+            all:all, nextPos:nextPos, pos:function(k){ return all.indexOf(k); }, groupsAll:groupsAll};
 }
 function tlPrinted(){ var now=new Date(); var m=TL_MON[now.getMonth()];
     return now.getDate()+' '+m.charAt(0)+m.slice(1).toLowerCase()+' '+now.getFullYear(); }
@@ -1270,10 +1282,10 @@ function renderGazetteSheet(){
     };
     var real=order.filter(function(k){ return !dmap[k].off; });
     // Multi-page export: only the first page leads with a feature date.
-    var leadKey = _laterPage ? null : (md.next || real[0]);
+    var leadKey = _laterPage ? null : ((md.next && dmap[md.next]) ? md.next : real[0]);
     var weekOf=function(d){ var m=(d.label||'').match(/^Week\s+(\d+)/i); return m?('Week '+m[1]):(d.date?d.day:''); };
     var lead=leadKey ? dmap[leadKey] : null;
-    var leadHtml=!lead ? '' : '<section class="gz-lead"><div class="gz-kick">'+(md.next?'Next class':'First class')+(weekOf(lead)?' · '+esc(weekOf(lead)):'')+'</div>'
+    var leadHtml=!lead ? '' : '<section class="gz-lead"><div class="gz-kick">'+(leadKey===md.next?'Next class':'First class')+(weekOf(lead)?' · '+esc(weekOf(lead)):'')+'</div>'
         + '<h2>'+esc(lead.date?(dayFromDate(lead.date)+', '+gzDate(lead)):gzDate(lead))+'</h2>'
         + table(lead, true);
     var dirKeys=Object.keys(teach).filter(function(sj){ return teach[sj].length; });
@@ -1306,7 +1318,7 @@ function renderGazetteSheet(){
     var unit = isSaturdayLayout() ? 'Saturday' : 'day';
     var strip='<div class="gz-dl"><span>'+real.length+' '+unit+(real.length===1?'':'s')+(range?' · '+esc(range):'')
         + (offAll.length?' · no class '+esc(offAll.join(', ')):'')+'</span>'
-        + (md.next?'<b>Next class: '+esc(gzDate(dmap[md.next]))+'</b>':'<span></span>')
+        + (md.nextDay?'<b>Next class: '+esc(gzDate(md.nextDay))+'</b>':'<span></span>')
         + '<span>Printed '+tlPrinted()+'</span></div>';
     var marks=[];
     if(/″/.test(arts+leadHtml)) marks.push('″ = continues from the period above');
@@ -1329,12 +1341,12 @@ function renderSwissSheet(){
     }
     var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
     var real=order.filter(function(k){ return !dmap[k].off; });
-    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var nextIdx=md.nextPos;
     var pad=function(n){ return ('0'+n).slice(-2); };
-    var prog=real.map(function(k,i){ return '<i class="'+(nextIdx<0?'':(i<nextIdx?'d':(i===nextIdx?'n':'')))+'"><span>'+pad(i+1)+'</span></i>'; }).join('');
+    var prog=md.all.map(function(k,i){ return '<i class="'+(nextIdx<0?'':(i<nextIdx?'d':(i===nextIdx?'n':'')))+'"><span>'+pad(i+1)+'</span></i>'; }).join('');
     var done=nextIdx<0?0:nextIdx;
-    var sum = nextIdx<0 ? real.length+' '+(isSaturdayLayout()?'Saturdays':'days')
-            : '<b>'+done+'</b> done · <b class="sw-a">'+(isSaturdayLayout()?'week ':'day ')+pad(nextIdx+1)+'</b> next · <b>'+(real.length-nextIdx-1)+'</b> to go';
+    var sum = nextIdx<0 ? md.all.length+' '+(isSaturdayLayout()?'Saturdays':'days')
+            : '<b>'+done+'</b> done · <b class="sw-a">'+(isSaturdayLayout()?'week ':'day ')+pad(nextIdx+1)+'</b> next · <b>'+(md.all.length-nextIdx-1)+'</b> to go';
     var table=function(d){
         if(!(d.groups||[]).length && d.banners.length){
             return '<div class="sw-ev">'+d.banners.map(function(b){ return '<b>'+esc(b.subject||'')+'</b>'+((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':''); }).join('')+'</div>';
@@ -1377,8 +1389,7 @@ function renderSwissSheet(){
         var d=dmap[k], p=parseDateAny(d.date);
         var dd=p?gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2'):'';
         if(d.off){ offPending.push(dd||gzDate(d)); offAll.push(dd||gzDate(d)); return; }
-        idx++;
-        var i=real.indexOf(k);
+        var i=md.pos(k); idx=i+1;
         var cls='sw-wk'+(k===md.next?' nx':'')+(nextIdx>=0 && i<nextIdx?' past':'');
         var note=offPending.length?'<div class="sw-gap">No class '+(isSaturdayLayout()?'Sat ':'')+esc(offPending.join(', '))+'</div>':'';
         offPending=[];
@@ -1420,7 +1431,7 @@ function renderNotebookSheet(){
     }
     var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
     var real=order.filter(function(k){ return !dmap[k].off; });
-    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var nextIdx=md.nextPos;
     var block=function(d){
         if(!(d.groups||[]).length && d.banners.length){
             return '<div class="nb-ev">'+d.banners.map(function(b){ return '<b>'+esc(b.subject||'')+'</b>'+((b.teacher||'').trim()?'<small>'+esc(b.teacher)+'</small>':''); }).join('')+'</div>';
@@ -1460,8 +1471,8 @@ function renderNotebookSheet(){
     order.forEach(function(k){
         var d=dmap[k];
         if(d.off){ offPending.push(gzDate(d)); offAll.push(gzDate(d)); return; }
-        var i=real.indexOf(k), col=NB_TABS[i % NB_TABS.length];
-        idx++;
+        var i=md.pos(k), col=NB_TABS[i % NB_TABS.length];
+        idx=i+1;
         var wk=(d.label||'').match(/^Week\s+(\d+)/i);
         var pill=wk?('Week '+wk[1]):(isSaturdayLayout()?('Week '+idx):('Day '+idx));
         var title=d.date?(dayFromDate(d.date)+', '+gzDate(d)):gzDate(d);
@@ -1469,7 +1480,7 @@ function renderNotebookSheet(){
         var note=offPending.length?'<div class="nb-note">No class on '+esc(offPending.join(', '))+'</div>':'';
         offPending=[];
         html+='<section class="nb-wk'+(past?' past':'')+(nx?' nx':'')+'" style="--tab:'+col+'">'
-            + (nx?'<div class="nb-postit">Next class!<br><b>'+esc(d.date?gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2'):title)+'</b></div>':'')
+            + (nx?'<div class="nb-postit">Next class! · <b>'+esc(d.date?gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2'):title)+'</b></div>':'')
             + '<h3><span class="nb-pill">'+esc(pill)+'</span>'+esc(title)+(past?'<span class="nb-tick">✓</span>':'')+'</h3>'+note+block(d)+'</section>';
     });
     if(offPending.length && html){
@@ -1477,8 +1488,8 @@ function renderNotebookSheet(){
         html=html.slice(0,at)+'<div class="nb-note">No class on '+esc(offPending.join(', '))+' (after this)</div>'+html.slice(at);
     }
     var n=real.length||1;
-    var tabs=real.map(function(k,i){
-        return '<i class="'+(k===md.next?'on':'')+'" style="--tab:'+NB_TABS[i % NB_TABS.length]+';top:calc(14% + '+i+' * (80% / '+n+'));height:calc(80% / '+n+' - .35em)">'+(i+1)+'</i>'; }).join('');
+    var tabs=real.map(function(k,j){ var i=md.pos(k);
+        return '<i class="'+(k===md.next?'on':'')+'" style="--tab:'+NB_TABS[i % NB_TABS.length]+';top:calc(14% + '+j+' * (80% / '+n+'));height:calc(80% / '+n+' - .35em)">'+(i+1)+'</i>'; }).join('');
     var marks=[];
     if(/nb-cont/.test(html)) marks.push('〃 continues from the period above');
     if(/<u>/.test(html)) marks.push('double = two periods');
@@ -1506,7 +1517,7 @@ function renderBoardSheet(){
     }
     var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
     var real=order.filter(function(k){ return !dmap[k].off; });
-    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var nextIdx=md.nextPos;
     var gsAll = md.anyGroup ? md.groupsAll : [''];
     var tight = gsAll.length>2;
     var label=function(t){
@@ -1518,7 +1529,7 @@ function renderBoardSheet(){
     order.forEach(function(k){
         var d=dmap[k], p=parseDateAny(d.date);
         if(d.off){ offAll.push(gzDate(d).replace(/(\d+) (\w{3})\w*/,'$1 $2')); return; }
-        var i0=real.indexOf(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
+        var i0=md.pos(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
         var head = p ? (d.day.slice(0,3)+' '+('0'+p.d).slice(-2)+' '+TL_MON[p.m-1]) : (d.label||d.day||'');
         var gs = md.anyGroup ? gsAll.filter(function(g){ return d.gset && (g in d.gset); }) : [''];
         var body='';
@@ -1555,7 +1566,7 @@ function renderBoardSheet(){
         }
         html+='<section class="bd-pn'+st+'"><header><b>'+esc(head.toUpperCase())+'</b>'+(st===' nx'?'<i>NEXT</i>':(st===' past'?'<i class="d">DONE</i>':''))+'</header>'+body+'</section>';
     });
-    var nx=md.next?dmap[md.next]:null, np=nx?parseDateAny(nx.date):null;
+    var nx=md.nextDay, np=nx?parseDateAny(nx.date):null;
     var nextTxt = nx ? (np ? (nx.day.slice(0,3)+' '+np.d+' '+TL_MON[np.m-1]) : gzDate(nx)) : '';
     var marks=['Read a row across: all '+(isSaturdayLayout()?'streams':'classes')+' have lessons at the same time'];
     if(/<em>×2/.test(html)) marks.push('×2 double'); if(/bd-c/.test(html)) marks.push('↓ continues');
@@ -1590,7 +1601,7 @@ function renderQuietSheet(){
     }
     var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
     var real=order.filter(function(k){ return !dmap[k].off; });
-    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var nextIdx=md.nextPos;
     var gsAll = md.anyGroup ? md.groupsAll : [''];
     var tight = gsAll.length>2;
     var who = isSaturdayLayout()?'streams':'classes';
@@ -1614,7 +1625,7 @@ function renderQuietSheet(){
             blocks.push({w:.3, h:'<div class="qt-bl off" style="'+tmpl+'"><div class="qt-dt"><b>'+num+'</b><span>'+sub+'</span></div><div class="qt-nc">No class</div></div>'});
             return;
         }
-        var i0=real.indexOf(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
+        var i0=md.pos(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
         var gs = md.anyGroup ? gsAll : [''];
         var g='', rowsT=[], r=0;
         var rowOf={};
@@ -1660,7 +1671,7 @@ function renderQuietSheet(){
     for(var c=0;c<nc;c++) cols.push('');
     blocks.forEach(function(b){ var ci=Math.min(nc-1, Math.floor((acc+b.w/2)/tot*nc)); cols[ci]+=b.h; acc+=b.w; });
     var hdr='<div class="qt-ch" style="'+tmpl+'"><span>Date</span><span>Time</span>'+gsAll.map(function(gr){ return '<span>'+esc(gr||'Lesson')+'</span>'; }).join('')+'</div>';
-    var nx=md.next?dmap[md.next]:null, np=nx?parseDateAny(nx.date):null;
+    var nx=md.nextDay, np=nx?parseDateAny(nx.date):null;
     var nextTxt = nx ? (np ? (nx.day.slice(0,3)+' '+np.d+' '+TL_MON[np.m-1].charAt(0)+TL_MON[np.m-1].slice(1).toLowerCase()) : gzDate(nx)) : '';
     el('pBody').innerHTML='<div class="tl qt">'
         + (nextTxt?'<div class="qt-next"><span>Next class</span><b>'+esc(nextTxt)+'</b></div>':'')
@@ -1686,7 +1697,7 @@ function renderInlineSheet(){
     }
     var sig=function(arr){ return arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§'); };
     var real=order.filter(function(k){ return !dmap[k].off; });
-    var nextIdx=md.next?real.indexOf(md.next):-1;
+    var nextIdx=md.nextPos;
     var gsAll = md.anyGroup ? md.groupsAll : [''];
     var tight = gsAll.length>2;
     var who = isSaturdayLayout()?'streams':'classes';
@@ -1705,7 +1716,7 @@ function renderInlineSheet(){
     order.forEach(function(k){
         var d=dmap[k];
         if(d.off){ cards.push({w:.35, h:'<div class="il-dy off"><h3><b>'+heading(d)+'</b></h3><p class="il-nc">No class</p></div>'}); return; }
-        var i0=real.indexOf(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
+        var i0=md.pos(k), st = k===md.next ? ' nx' : (nextIdx>=0 && i0<nextIdx ? ' past' : '');
         var gs = md.anyGroup ? gsAll : [''];
         var lines='';
         var hasCells=(d.groups||[]).length && periods.some(function(pd){ return gs.some(function(g){ return (d.cells[g+'§'+pd.k]||[]).length; }); });
@@ -1739,7 +1750,7 @@ function renderInlineSheet(){
     var tot=cards.reduce(function(a,b){ return a+b.w; },0), cols=[], acc=0;
     for(var c=0;c<nc;c++) cols.push('');
     cards.forEach(function(b){ var ci=Math.min(nc-1, Math.floor((acc+b.w/2)/tot*nc)); cols[ci]+=b.h; acc+=b.w; });
-    var nx=md.next?dmap[md.next]:null, np=nx?parseDateAny(nx.date):null;
+    var nx=md.nextDay, np=nx?parseDateAny(nx.date):null;
     var nextTxt = nx ? (np ? ((nx.day||dayFromDate(nx.date)).slice(0,3)+' '+np.d+' '+IL_MONTHS[np.m-1].slice(0,3)) : gzDate(nx)) : '';
     var leg = md.anyGroup ? gsAll.map(function(g,li){ return pill(li, esc(g)); }).join('') : '';
     el('pBody').innerHTML='<div class="tl il'+(tight?' tight':'')+'">'
@@ -1754,13 +1765,13 @@ function renderSheet(){
     applySaturdayDates();
     // A multi-page export renders one page's dates at a time.
     var allRows = null;
-    if(_pageKeys){ allRows = rows; rows = rows.filter(function(r){ return _pageKeys[rowKey(r)]; }); }
+    if(_pageKeys){ allRows = _fullRows = rows; rows = rows.filter(function(r){ return _pageKeys[rowKey(r)]; }); }
     try{
         if(isBlankGrid()) renderBlankGridSheet();
         else if(tlUsesTimeline()) (isTickets() ? renderTicketsSheet() : isGazette() ? renderGazetteSheet() : isSwiss() ? renderSwissSheet() : isNotebook() ? renderNotebookSheet() : isBoard() ? renderBoardSheet() : isQuiet() ? renderQuietSheet() : isInline() ? renderInlineSheet() : renderTimelineSheet());
         else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
         else renderListSheet();
-    } finally { if(allRows) rows = allRows; }
+    } finally { if(allRows) rows = allRows; _fullRows = null; }
 }
 // The key a session is grouped under (same rule as tlModel: date, else day).
 function rowKey(r){ var date=r.date||''; return date || (r.day||'').trim() || '—'; }
@@ -1881,6 +1892,7 @@ function exportName(){
 // landscape 1480px); on a phone Medium is ~11.5px portrait / ~10px landscape.
 var EXPORT_TEXT = {portrait:{s:24, m:28, l:33}, landscape:{s:27, m:31, l:37}};
 var EXPORT_MIN_RATIO = 0.72;   // no text (teachers, labels, footers) below this share of it
+var _fullRows = null;           // every row, while one page of an export renders
 var _pageKeys = null;           // dates on the page being rendered (null = all)
 var _pageLabel = '';
 var _laterPage = false;          // rendering page 2+ of a multi-page export
