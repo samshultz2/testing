@@ -964,12 +964,19 @@ def _real_image_src(src):
     s = (src or "").strip().lower()
     if not s or s.startswith("data:"):
         return False
+    # a question figure under myschool's classroom storage is genuine even when its
+    # file name happens to contain a "reject" word (flagellum.png, logo-type.png)
+    if "/storage/classroom/" in s and not any(x in s for x in ("/members/", "/comments/", "avatar")):
+        return True
     if any(bad in s for bad in _IMG_REJECT):
         return False
     # a myschool question figure lives under /storage/… (but not the rejected
     # sub-folders above); otherwise accept any real image URL.
     base = s.split("?", 1)[0].split(" ", 1)[0]
-    return base.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"))
+    if base.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp")):
+        return True
+    # myschool's image service paths often carry no extension (/_ipx/…, /storage/…)
+    return "/storage/" in base or "/_ipx/" in base
 
 
 def _img_candidates(im):
@@ -1006,7 +1013,7 @@ def _real_data_uri(src):
     if not s.lower().startswith("data:image/"):
         return False
     payload = s.split(",", 1)[1] if "," in s else ""
-    return len(payload) > 3000                # ~2KB+ decoded → a genuine figure
+    return len(payload) > 1200                # ~1KB+ decoded → a real (small) figure
 
 
 def _serialize_table(table):
@@ -1044,6 +1051,98 @@ def _flatten_scripts(soup):
         for el in soup.find_all(tag):
             el.replace_with(_script_text(el.get_text("", strip=True), table, marker))
     return soup
+
+
+def _in_option_row(el):
+    """True when ``el`` sits inside an option row (A/B/C/D)."""
+    node = el
+    for _ in range(4):
+        node = node.parent if node is not None else None
+        if node is None or not hasattr(node, "select_one"):
+            return False
+        if node.find("h1") is not None:          # reached the question card itself
+            return False
+        sp = node.select_one("span.uppercase")
+        if sp is not None and sp.get_text(strip=True).lower() in ("a", "b", "c", "d"):
+            return True
+    return False
+
+
+def _svg_is_figure(svg):
+    """An inline <svg> that is a diagram, not a UI icon."""
+    cls = " ".join(svg.get("class") or []).lower()
+    if any(k in cls for k in ("icon", "svg-inline", "fa-", "logo", "spinner")):
+        return False
+    if svg.find_parent(["button", "a", "nav", "header", "footer"]) is not None:
+        return False
+    def num(v):
+        try:
+            return float(re.sub(r"[^0-9.]", "", v or "") or 0)
+        except ValueError:
+            return 0
+    w, h = num(svg.get("width")), num(svg.get("height"))
+    vb = (svg.get("viewbox") or svg.get("viewBox") or "").split()
+    if len(vb) == 4:
+        w, h = w or num(vb[2]), h or num(vb[3])
+    shapes = len(svg.find_all(["path", "line", "circle", "rect", "polygon", "polyline", "ellipse", "text"]))
+    return (w >= 60 and h >= 40) or shapes >= 6
+
+
+def _find_figure(soup, h1, first_opt):
+    """(image_url, data_uri, svg_markup, debug) — the question's figure, looked for
+    in widening rings around the stem; ``debug`` says what was seen and skipped."""
+    scopes = []
+    if h1 is not None:
+        node = h1.parent
+        for _ in range(6):
+            if node is None:
+                break
+            scopes.append(node)
+            if first_opt is not None and first_opt in node.descendants:
+                break                                   # reached the question card
+            node = node.parent
+    for d in soup.select("div.prevent-copy"):           # instruction / passage block
+        if not d.select_one("span.uppercase"):
+            scopes.append(d)
+    if not scopes:
+        scopes = [soup]
+    seen, skipped = set(), []
+    data_uri = None
+    for scope in scopes:
+        for im in scope.find_all("img"):
+            if id(im) in seen:
+                continue
+            seen.add(id(im))
+            if _in_option_row(im):
+                skipped.append("in an option")
+                continue
+            hosted = None
+            for cand in _img_candidates(im):
+                if cand.startswith("data:"):
+                    if data_uri is None and _real_data_uri(cand):
+                        data_uri = cand
+                    elif not _real_data_uri(cand):
+                        skipped.append("tiny placeholder")
+                elif _real_image_src(cand):
+                    hosted = cand
+                    break
+                else:
+                    skipped.append("logo/icon")
+            if hosted:
+                return hosted, data_uri, None, ""
+        if data_uri:
+            return None, data_uri, None, ""
+        for svg in scope.find_all("svg"):
+            if id(svg) in seen:
+                continue
+            seen.add(id(svg))
+            if not _in_option_row(svg) and _svg_is_figure(svg):
+                return None, None, str(svg), ""
+    if skipped:
+        from collections import Counter
+        parts = [f"{n} {why}" for why, n in Counter(skipped).items()]
+        return None, None, None, "skipped pictures: " + ", ".join(parts)
+    return None, None, None, "no picture on the page"
 
 
 def parse_detail(html):
@@ -1106,22 +1205,15 @@ def parse_detail(html):
     if not stem:
         return None
 
-    # a genuine figure image in the stem, if any. myschool server-renders these as
-    # a NuxtImg (``<img data-nuxt-img srcset/src>``) pointing at /storage/classroom/…,
-    # or embeds the diagram inline as a base64 data URI. Prefer a real hosted URL;
-    # fall back to a substantial inline image (re-hosted at save time).
-    image_url, data_uri = None, None
-    if container is not None:
-        for im in container.find_all("img"):
-            for cand in _img_candidates(im):
-                if cand.startswith("data:"):
-                    if data_uri is None and _real_data_uri(cand):
-                        data_uri = cand
-                elif _real_image_src(cand):
-                    image_url = cand
-                    break
-            if image_url:
-                break
+    # the question's figure. myschool server-renders these as a NuxtImg pointing at
+    # /storage/classroom/…, embeds them inline as base64, or draws them as an inline
+    # <svg>. The figure is usually beside the stem but sometimes in a sibling block
+    # between the stem and the options, or in the instruction block — so look in
+    # widening rings around the stem, never inside an option row (picture options
+    # are not the question's figure).
+    image_url, data_uri, svg, debug = _find_figure(soup, h1, first_opt)
+    if image_url and image_url.startswith("//"):
+        image_url = "https:" + image_url
     if image_url and image_url.startswith("/"):        # absolutise site-relative
         image_url = "https://myschool.ng" + image_url
     if not image_url:                                  # inline base64 figure
@@ -1184,7 +1276,8 @@ def parse_detail(html):
 
     return {
         "stem": stem, "options": ordered, "correct": correct,
-        "image_url": image_url, "has_table": has_table,
+        "image_url": image_url, "image_svg": svg if not image_url else None,
+        "image_debug": debug, "has_table": has_table,
         "figure_dependent": figure_dependent,
         "needs_review": figure_dependent, "flags": flags,
         "instruction": instruction, "passage_text": passage_text,

@@ -46,7 +46,7 @@ def _fake_site(monkeypatch, slug, with_img=True, listing_text=True):
         return None
     monkeypatch.setattr(ms, 'fetch', fetch)
     monkeypatch.setattr(mock_figures, 'save_copy', lambda url: '/static/img/logo-mark.svg' if 'fig-abcd' in url else None)
-    monkeypatch.setattr(myschool_figures, '_browser_html', lambda url: None)
+    monkeypatch.setattr(myschool_figures, '_browser', lambda url, want_png=False: (None, None))
     return calls
 
 
@@ -111,3 +111,68 @@ def test_no_year_is_not_found(app, monkeypatch):
     assert out['status'] == 'not_found' and 'year' in out['message']
     html = c.get('/mock-jamb/bank/needs-images').get_data(as_text=True)
     assert 'Fetch from myschool' in html
+
+
+def _card(stem_block, between='', options_extra=''):
+    return f"""
+    <div class="card">
+      <div class="qhead">{stem_block}</div>
+      {between}
+      <div class="opts">
+        <div class="prevent-copy"><span class="uppercase">a</span><p>1</p>{options_extra}</div>
+        <div class="prevent-copy"><span class="uppercase">b</span><p>2</p></div>
+        <div class="prevent-copy"><span class="uppercase">c</span><p>3</p></div>
+        <div class="prevent-copy"><span class="uppercase">d</span><p>4</p></div>
+      </div>
+      <div class="ans">Correct Option <span class="uppercase">a</span></div>
+    </div>"""
+
+
+def test_figure_found_in_a_sibling_block_not_in_options():
+    from utils import myschool as ms
+    # the diagram sits in its own block between the stem and the options
+    p = ms.parse_detail(_card('<h1>In the figure, find x.</h1>',
+                              between='<div class="fig"><img src="/storage/classroom/q55.png"></div>'))
+    assert p['image_url'] == 'https://myschool.ng/storage/classroom/q55.png'
+    # a picture inside an option row is a picture option, not the question's figure
+    p = ms.parse_detail(_card('<h1>Which shape is a square?</h1>',
+                              options_extra='<img src="/storage/classroom/opt-a.png">'))
+    assert p['image_url'] is None and 'option' in p['image_debug']
+    # a figure whose file name contains a "reject" word is still a figure
+    p = ms.parse_detail(_card('<h1>The structure labelled X is</h1><img src="https://myschool.ng/storage/classroom/flagellum.png">'))
+    assert p['image_url'].endswith('flagellum.png')
+    # extension-less image-service path
+    p = ms.parse_detail(_card('<h1>Use the graph shown.</h1><img src="/_ipx/w_600/storage/classroom/g1">'))
+    assert p['image_url'] == 'https://myschool.ng/_ipx/w_600/storage/classroom/g1'
+
+
+def test_inline_svg_diagram_is_kept():
+    from utils import myschool as ms
+    svg = ('<svg width="300" height="200" viewBox="0 0 300 200"><line x1="0" y1="0" x2="300" y2="200"/>'
+           '<script>alert(1)</script><circle cx="50" cy="50" r="20" onclick="x()"/></svg>')
+    p = ms.parse_detail(_card('<h1>In the diagram, find the angle.</h1>' + svg))
+    assert p['image_url'] is None and p['image_svg'] and '<line' in p['image_svg']
+    icon = '<svg class="icon" width="16" height="16"><path d="M0 0"/></svg>'
+    assert ms.parse_detail(_card('<h1>Plain question?</h1>' + icon))['image_svg'] is None
+
+
+def test_svg_saved_and_screenshot_fallback(app, monkeypatch):
+    from models import db, MockJAMBQuestion
+    from utils import myschool as ms
+    from utils import mock_figures, myschool_figures
+    with app.app_context():
+        url = mock_figures.save_svg('<svg width="10" height="10"><script>bad()</script><rect onload="x()" width="5" height="5"/></svg>')
+        import os
+        from flask import current_app
+        body = open(os.path.join(current_app.root_path, url.lstrip('/'))).read()
+        assert url.endswith('.svg') and '<script' not in body and 'onload' not in body and 'xmlns=' in body
+    # no picture in the page HTML, but the browser can screenshot the drawn figure
+    qid, slug = _question(app, source='myschool', source_ref='777')
+    _fake_site(monkeypatch, slug, with_img=False)
+    monkeypatch.setattr(myschool_figures, '_browser', lambda url, want_png=False: ('<html></html>', b'PNGDATA'))
+    monkeypatch.setattr(mock_figures, 'save_png_bytes', lambda b: '/static/img/logo-mark.svg' if b == b'PNGDATA' else None)
+    c = _admin(app)
+    out = c.post(f'/mock-jamb/bank/question/{qid}/fetch-figure', data={'_csrf_token': _csrf(c)}).get_json()
+    assert out['status'] == 'attached' and 'screenshot' in out['message']
+    with app.app_context():
+        assert db.session.get(MockJAMBQuestion, qid).image_url == '/static/img/logo-mark.svg'

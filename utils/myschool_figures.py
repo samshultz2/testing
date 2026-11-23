@@ -142,26 +142,57 @@ def _browsers_path():
         os.environ['PLAYWRIGHT_BROWSERS_PATH'] = path
 
 
-def _browser_html(url):
-    """The page as a browser sees it (after JavaScript), or None when Playwright
-    and Chromium aren't installed on this server."""
+_FIG_JS = """
+() => {
+  const h1 = document.querySelector('h1');
+  const letters = [...document.querySelectorAll('span.uppercase')].filter(s => /^[a-d]$/i.test(s.textContent.trim()));
+  let card = h1 ? h1.parentElement : document.body;
+  for (let i = 0; i < 6 && card && letters.length && !card.contains(letters[0]); i++) card = card.parentElement;
+  card = card || document.body;
+  const inOption = (el) => letters.some(sp => { let n = sp.parentElement; for (let i = 0; i < 3 && n; i++, n = n.parentElement) { if (h1 && n.contains(h1)) return false; if (n.contains(el)) return true; } return false; });
+  const els = [...card.querySelectorAll('img, svg, canvas')].filter(el => {
+    const r = el.getBoundingClientRect();
+    return r.width >= 80 && r.height >= 50 && !inOption(el) && !el.closest('button, a, nav, header, footer');
+  });
+  if (!els.length) return 0;
+  els.forEach((el, i) => el.setAttribute('data-fig-pick', String(i)));
+  return els.length;
+}
+"""
+
+
+def _browser(url, want_png=False):
+    """(html, png) — the page as a browser sees it after JavaScript and, when
+    ``want_png``, a screenshot of the figure element. (None, None) when
+    Playwright and Chromium aren't installed on this server."""
     _browsers_path()
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
-        return None
+        return None, None
     try:
         with sync_playwright() as p:
             br = p.chromium.launch(args=['--no-sandbox'])
             try:
-                page = br.new_page()
+                page = br.new_page(viewport={'width': 1100, 'height': 1600}, device_scale_factor=2)
                 page.goto(url, wait_until='networkidle', timeout=40000)
                 page.wait_for_timeout(900)
-                return page.content()
+                html = page.content()
+                png = None
+                if want_png and page.evaluate(_FIG_JS):
+                    try:
+                        png = page.locator('[data-fig-pick="0"]').screenshot(timeout=10000)
+                    except Exception:
+                        png = None
+                return html, png
             finally:
                 br.close()
     except Exception:
-        return None
+        return None, None
+
+
+def _browser_html(url):
+    return _browser(url)[0]
 
 
 def browser_available():
@@ -195,29 +226,39 @@ def fetch_figure(q, session=None, budget_s=20):
     html = html or ms.fetch(url, session)
     parsed = ms.parse_detail(html) if html else None
     img = parsed.get('image_url') if parsed else None
-    used_browser = False
-    if not img:
-        rendered = _browser_html(url)
+    svg = parsed.get('image_svg') if parsed else None
+    why = (parsed or {}).get('image_debug') or ('the page could not be read' if not parsed else '')
+    used_browser, png = False, None
+    if not img and not svg:
+        rendered, png = _browser(url, want_png=True)
         if rendered:
             used_browser = True
             p2 = ms.parse_detail(rendered)
-            img = p2.get('image_url') if p2 else None
+            if p2:
+                img, svg = p2.get('image_url'), p2.get('image_svg')
+                why = p2.get('image_debug') or why
     # remember where it came from, so the question links to its page from now on
     if qid and (q.source or '') != 'myschool':
         q.source, q.source_ref = 'myschool', qid
-    if not img:
+    saved, how = None, ''
+    if img:
+        saved = mock_figures.save_copy(img)
+    elif svg:
+        saved, how = mock_figures.save_svg(svg), ' (drawn diagram)'
+    if not saved and png:
+        saved, how = mock_figures.save_png_bytes(png), ' (screenshot of the diagram)'
+    if not saved:
         db.session.commit()
+        if img or svg:
+            return {'status': 'error', 'url': url, 'message': 'Found the diagram but could not download it.'}
         hint = ('' if used_browser or browser_available() else
                 ' myschool draws many diagrams with JavaScript; open the page and save it by hand.')
         return {'status': 'no_image', 'url': url,
-                'message': 'Found the question, but its page has no downloadable diagram.' + hint}
-    saved = mock_figures.save_copy(img)
-    if not saved:
-        db.session.commit()
-        return {'status': 'error', 'url': url, 'message': 'Found the diagram but could not download it.'}
+                'message': 'Found the question, but no diagram on its page'
+                           + (f' ({why})' if why else '') + '.' + hint}
     q.image_url = saved
     q.needs_image = False
     q.image_not_needed = False
     db.session.commit()
     return {'status': 'attached', 'url': url, 'image_url': saved,
-            'message': 'Diagram added' + (' (rendered in a browser)' if used_browser else '') + '.'}
+            'message': 'Diagram added' + (how or (' (rendered in a browser)' if used_browser else '')) + '.'}

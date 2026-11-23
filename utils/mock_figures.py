@@ -336,3 +336,32 @@ def fix_all_powers(limit=20000):
     if n:
         db.session.commit()
     return n
+
+
+def save_svg(markup):
+    """Save an inline <svg> diagram as a file on this server (scripts and event
+    handlers stripped). Returns its URL, or None."""
+    import os
+    import secrets
+    from flask import current_app
+    if not markup or '<svg' not in markup[:400].lower():
+        return None
+    svg = re.sub(r'(?is)<script.*?</script>|<foreignObject.*?</foreignObject>', '', markup)
+    svg = re.sub(r'(?i)\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)', '', svg)
+    svg = re.sub(r'(?i)(href\s*=\s*["\'])\s*javascript:[^"\']*', r'\1#', svg)
+    if 'xmlns=' not in svg[:400]:
+        svg = svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"', 1)
+    if len(svg) > 2_000_000:
+        return None
+    folder = os.path.join(current_app.root_path, 'static', 'uploads', 'mock_jamb')
+    os.makedirs(folder, exist_ok=True)
+    name = secrets.token_hex(8) + '.svg'
+    with open(os.path.join(folder, name), 'w', encoding='utf-8') as fh:
+        fh.write(svg)
+    return (current_app.static_url_path or '/static').rstrip('/') + '/uploads/mock_jamb/' + name
+
+
+def save_png_bytes(content):
+    """Save PNG/JPEG bytes (e.g. a screenshot of a diagram) on this server."""
+    import base64
+    return save_copy('data:image/png;base64,' + base64.b64encode(content).decode()) if content else None
