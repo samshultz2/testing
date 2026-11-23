@@ -17,13 +17,16 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     {% if q.passage %}<p class="text-muted text-sm"><i class="fas fa-align-left"></i> Attached to passage: <strong>{{ q.passage.title or q.passage.kind_label }}</strong> (section inherited)</p>{% endif %}
     <div class="form-group"><label class="form-label">Question <span class="required">*</span></label>
-        <textarea name="question_text" class="form-control" rows="3" required>{{ q.question_text }}</textarea></div>
+        {% with tid='qtext_bedit', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+        <textarea name="question_text" id="qtext_bedit" class="form-control" rows="4" required>{{ q.question_text }}</textarea>
+        <small class="mx-help">Type words normally; tap a button to build a formula where your cursor is (question or the option you clicked last). Inside a formula, <kbd>Tab</kbd> moves to the next blank. <kbd>Ctrl</kbd>+<kbd>M</kbd> starts a blank formula; type <code>/</code> for a fraction, <code>^</code> for a power, <code>_</code> for a subscript.</small></div>
     <div class="opt-grid">
-        <input type="text" name="option_a" class="form-control" placeholder="Option A" value="{{ q.option_a or '' }}">
-        <input type="text" name="option_b" class="form-control" placeholder="Option B" value="{{ q.option_b or '' }}">
-        <input type="text" name="option_c" class="form-control" placeholder="Option C" value="{{ q.option_c or '' }}">
-        <input type="text" name="option_d" class="form-control" placeholder="Option D" value="{{ q.option_d or '' }}">
+        <input type="text" name="option_a" class="form-control" placeholder="Option A" aria-label="Option A" data-math-target="Option A" data-letter="A" value="{{ q.option_a or '' }}">
+        <input type="text" name="option_b" class="form-control" placeholder="Option B" aria-label="Option B" data-math-target="Option B" data-letter="B" value="{{ q.option_b or '' }}">
+        <input type="text" name="option_c" class="form-control" placeholder="Option C" aria-label="Option C" data-math-target="Option C" data-letter="C" value="{{ q.option_c or '' }}">
+        <input type="text" name="option_d" class="form-control" placeholder="Option D" aria-label="Option D" data-math-target="Option D" data-letter="D" value="{{ q.option_d or '' }}">
     </div>
+    <div class="form-group" style="margin-top:.7rem">{% with tid='qtext_bedit' %}{% include 'cbt/_math_preview.html' %}{% endwith %}</div>
     <div class="form-row" style="margin-top:.5rem;">
         <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label>
             <select name="correct_option" class="form-control" required>
@@ -80,4 +83,4 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{{ qfig_js() }}{% endblock %}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{% endblock %}

@@ -1368,7 +1368,9 @@ def bank():
     subject_counts = dict(db.session.query(MockJAMBQuestion.subject_id, func.count(MockJAMBQuestion.id))
                           .filter(MockJAMBQuestion.mock_exam_id.is_(None))
                           .group_by(MockJAMBQuestion.subject_id).all())
+    from utils.cbt_symbols import editor_config as _mx_config
     return render_template('mock_jamb/bank.html', subjects=subjects, subject=subject,
+                           math_editor=_mx_config(subject.name if subject else ''),
                            src_link=mock_figures.source_link, subjects_limited=subjects_limited,
                            needs_image_count=needs_image_count, subject_counts=subject_counts,
                            external_images=external_images,
@@ -2025,7 +2027,9 @@ def bank_edit_question(question_id):
         flash('Question updated.', 'success')
         return redirect(_bank_url(q.subject_id, q.section))
     from utils import mock_figures
+    from utils.cbt_symbols import editor_config as _mx_config
     return render_template('mock_jamb/bank_edit_question.html', q=q, subject=subject,
+                           math_editor=_mx_config(subject.name if subject else ''),
                            src_link=mock_figures.source_link,
                            sections=sections_for(subject.name),
                            topic_tree=_subject_topic_tree(q.subject_id),
@@ -2522,7 +2526,9 @@ def questions(exam_id):
                           .group_by(MockJAMBQuestion.subject_id).all())
     bank_count = MockJAMBQuestion.query.filter(MockJAMBQuestion.mock_exam_id.is_(None),
                                                MockJAMBQuestion.subject_id == subject_id).count() if subject_id else 0
+    from utils.cbt_symbols import editor_config as _mx_config
     return render_template('mock_jamb/questions.html', exam=exam, subjects=subjects,
+                           math_editor=_mx_config(subject.name if subject else ''),
                            subjects_limited=subjects_limited,
                            subject_counts=subject_counts, bank_count=bank_count,
                            subject=subject, subject_id=subject_id, passages=passages,
@@ -2662,7 +2668,9 @@ def edit_mock_question(question_id):
         db.session.commit()
         flash('Question updated.', 'success')
         return redirect(_q_url(q.mock_exam_id, q.subject_id))
+    from utils.cbt_symbols import editor_config as _mx_config
     return render_template('mock_jamb/edit_question.html', q=q, exam=q.exam,
+                           math_editor=_mx_config(q.subject.name if q.subject else ''),
                            topic_tree=_subject_topic_tree(q.subject_id),
                            back_url=_q_url(q.mock_exam_id, q.subject_id))
 

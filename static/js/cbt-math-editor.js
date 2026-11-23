@@ -665,7 +665,10 @@
       field.form.addEventListener('submit', function (ev) {
         var bad = null;
         field.form.querySelectorAll('[data-mr-required]').forEach(function (f) {
-          if (f.mrEditor) sync(f.mrEditor);
+          // only the visible editor is the source of truth: in LaTeX view the
+          // field itself holds the edits, and syncing the hidden editor would
+          // overwrite them with stale text
+          if (f.mrEditor && isVisual(f)) sync(f.mrEditor);
           if (isVisual(f) && !f.value.trim() && !bad) bad = f;
         });
         if (bad) {

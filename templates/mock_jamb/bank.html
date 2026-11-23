@@ -199,13 +199,17 @@
     <input type="hidden" name="subject_id" value="{{ subject_id }}">
     {% if passage_id %}<input type="hidden" name="passage_id" value="{{ passage_id }}">{% endif %}
     <div class="form-group"><label class="form-label">Question <span class="required">*</span></label>
-        <textarea name="question_text" class="form-control" rows="2" required></textarea></div>
+        {% if not in_passage %}<div class="mx-wrap">{% with tid='qtext_bank_new', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}</div>
+        <textarea name="question_text" id="qtext_bank_new" class="form-control" rows="3" required></textarea>
+        <small class="mx-help">Type words normally; tap a button to build a formula where your cursor is (question or the option you clicked last). <kbd>Ctrl</kbd>+<kbd>M</kbd> starts a blank formula; type <code>/</code> for a fraction, <code>^</code> for a power, <code>_</code> for a subscript.</small>
+        {% else %}<textarea name="question_text" class="form-control" rows="2" required></textarea>{% endif %}</div>
     <div class="opt-grid">
-        <input type="text" name="option_a" class="form-control" placeholder="Option A" aria-label="Option A">
-        <input type="text" name="option_b" class="form-control" placeholder="Option B" aria-label="Option B">
-        <input type="text" name="option_c" class="form-control" placeholder="Option C" aria-label="Option C">
-        <input type="text" name="option_d" class="form-control" placeholder="Option D" aria-label="Option D">
+        <input type="text" name="option_a" class="form-control" placeholder="Option A" aria-label="Option A" data-math-target="Option A" data-letter="A">
+        <input type="text" name="option_b" class="form-control" placeholder="Option B" aria-label="Option B" data-math-target="Option B" data-letter="B">
+        <input type="text" name="option_c" class="form-control" placeholder="Option C" aria-label="Option C" data-math-target="Option C" data-letter="C">
+        <input type="text" name="option_d" class="form-control" placeholder="Option D" aria-label="Option D" data-math-target="Option D" data-letter="D">
     </div>
+    {% if not in_passage %}<div class="form-group mx-wrap" style="margin-top:.7rem">{% with tid='qtext_bank_new' %}{% include 'cbt/_math_preview.html' %}{% endwith %}</div>{% endif %}
     <div class="form-row" style="margin-top:.5rem;">
         <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label>
             <select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
@@ -650,8 +654,22 @@
         if (opts.scrollTo) { var el = fresh.querySelector(opts.scrollTo); if (el) { var t = el.getBoundingClientRect().top + scrollY - 80; if (t < scrollY) scrollTo({top: t, behavior: 'smooth'}); } }
         else scrollTo(0, y);
         after(fresh);
+        rerunScripts(fresh);
         document.dispatchEvent(new CustomEvent('mj:swapped', {detail: {root: fresh}}));
         return true;
+    }
+    // The maths & science toolbar and its preview start themselves with inline
+    // scripts, which don't run when HTML is swapped in — run them again.
+    function rerunScripts(root){
+        var nonce = (document.querySelector('meta[name=csp-nonce]') || {}).content || '';
+        root.querySelectorAll('.mx-wrap script').forEach(function(old){
+            var type = (old.getAttribute('type') || '').toLowerCase();
+            if (type && type !== 'text/javascript' && type !== 'module') return;   // JSON data stays as is
+            var s = document.createElement('script');
+            if (old.src) s.src = old.src; else s.textContent = '(function(){' + old.textContent + '\n})();';
+            if (nonce) s.setAttribute('nonce', nonce);
+            old.replaceWith(s);
+        });
     }
     function load(url, opts){
         opts = opts || {};
