@@ -173,3 +173,37 @@ def test_myschool_source_links(app):
         assert source_link(q)[0].split('?')[0].endswith('/98765')
     html = c.get('/mock-jamb/bank/needs-images?subject_id=%d' % sid).get_data(as_text=True)
     assert 'Open on myschool.ng' in html and 'Find on myschool.ng' in html
+
+
+def test_fix_powers_raises_lost_exponents_only_in_maths():
+    from utils.mock_figures import fix_powers as f
+    assert f('y = kx 2') == 'y = kx²'
+    assert f('x 2 = y 2 - k') == 'x² = y² - k'
+    assert f('(x + 1) 2 = 9') == '(x + 1)² = 9'
+    assert f('2x 2 + 3x - 1') == '2x² + 3x - 1'
+    assert f('Area = 12 cm 2') == 'Area = 12 cm²'
+    for t in ('Paper 2', 'x = 2', 'y = 3x + 2', 'If a = 3, b is 2 more', '10 2 = 100', None, ''):
+        assert f(t) == t
+
+
+def test_parser_keeps_superscripts_and_subscripts():
+    from utils import myschool as ms
+    from tests.test_myschool import _fixture
+    html = _fixture('Simplify x<sup>2</sup> + H<sub>2</sub>O').replace('<p>Lagos</p>', '<p>y = kx<sup>2</sup></p>')
+    p = ms.parse_detail(html)
+    assert p['stem'] == 'Simplify x² + H₂O' and p['options'][0] == 'y = kx²'
+
+
+def test_sync_repairs_existing_powers(app):
+    from models import db, Subject, MockJAMBQuestion
+    from utils import mock_figures
+    with app.app_context():
+        s = Subject(name='Pow ' + uuid.uuid4().hex[:6], is_active=True)
+        db.session.add(s); db.session.flush()
+        q = MockJAMBQuestion(mock_exam_id=None, subject_id=s.id, correct_option='B', marks=1,
+                             question_text='If K is a constant, which equation best describes the parabola?',
+                             option_a='y = kx 2', option_b='x = y 2 - k', option_c='y = k - x 2', option_d='x 2 = y 2 - k')
+        db.session.add(q); db.session.commit()
+        mock_figures.sync(force=True)
+        q = db.session.get(MockJAMBQuestion, q.id)
+        assert [q.option_a, q.option_b, q.option_c, q.option_d] == ['y = kx²', 'x = y² - k', 'y = k - x²', 'x² = y² - k']

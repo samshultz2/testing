@@ -2076,7 +2076,8 @@ def bank_import():
                 img_failed = True
         elif raw_img.startswith('/'):
             image = raw_img[:300]
-        a, b, c, d = (mock_figures.fix_degrees(x) for x in (a, b, c, d))
+        a, b, c, d = (mock_figures.fix_powers(mock_figures.fix_degrees(x)) for x in (a, b, c, d))
+        text = mock_figures.fix_powers(text)
         # optional 12th column: the question's link on myschool.ng — kept so the
         # original page (and its diagram) is one click away.
         src_qid = mock_figures.myschool_qid(parts[11]) if len(parts) > 11 else None

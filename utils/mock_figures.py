@@ -96,6 +96,7 @@ def sync(force=False, every=60):
         db.session.commit()
     try:
         fix_all_degrees()
+        fix_all_powers()
     except Exception:
         db.session.rollback()
     return len(on)
@@ -208,7 +209,7 @@ def repair(limit=40, budget_s=40):
                     q.image_not_needed = False
             failed += 1
         db.session.commit()
-    degrees = fix_all_degrees()
+    degrees = fix_all_degrees() + fix_all_powers()
     return {'saved': saved, 'failed': failed, 'left': external_count(), 'degrees': degrees}
 
 
@@ -266,3 +267,50 @@ def source_link(q):
     if not words:
         return None, False
     return 'https://www.google.com/search?q=' + quote('site:myschool.ng "%s"' % ' '.join(words)), False
+
+
+# "y = kx 2" → "y = kx²": an exponent that lost its superscript when copied. Only
+# a lone digit 2–4 right after a variable-like token (one or two lower-case
+# letters that aren't an English word, or a closing bracket) inside something
+# that reads like maths (has = + − × ÷ or brackets) is raised, so ordinary text
+# such as "Paper 2", "in 2 days" or "x = 2" is left alone.
+_POW_SKIP = {'is', 'in', 'at', 'of', 'to', 'by', 'be', 'as', 'an', 'or', 'if', 'on', 'it', 'we',
+             'no', 'so', 'up', 'do', 'go', 'me', 'my', 'he', 'am', 'us', 'pm',
+             'kg', 'ms', 'and', 'the'}
+_POW_RE = re.compile(r'((?<![A-Za-z])\d*[a-z]{1,2}|\))\s([2-4])(?![0-9.,/:%])(?=\s*(?:[=+\-−×÷*/)<>≤≥,;]|$))')
+_POW_CHARS = str.maketrans('234', '²³⁴')
+_MATHY = re.compile(r'[=+−×÷<>≤≥()]|\s-\s')
+
+
+def fix_powers(text):
+    if not text or not _MATHY.search(text):
+        return text
+
+    def sub(m):
+        tok = m.group(1)
+        if tok.lstrip('0123456789').lower() in _POW_SKIP:
+            return m.group(0)
+        return tok + m.group(2).translate(_POW_CHARS)
+    return _POW_RE.sub(sub, text)
+
+
+def fix_all_powers(limit=20000):
+    """Raise lost exponents in Mock JAMB questions and options. Returns the
+    number of questions changed."""
+    from models import db, MockJAMBQuestion as Q
+    cols = ('question_text', 'option_a', 'option_b', 'option_c', 'option_d')
+    pats = [f'% {d}' for d in '234'] + [f'% {d} %' for d in '234']
+    cond = or_(*[getattr(Q, c).like(p) for c in cols for p in pats])
+    n = 0
+    for q in Q.query.filter(cond).limit(limit).all():
+        changed = False
+        for c in cols:
+            v = getattr(q, c)
+            nv = fix_powers(v)
+            if nv != v:
+                setattr(q, c, nv)
+                changed = True
+        n += 1 if changed else 0
+    if n:
+        db.session.commit()
+    return n

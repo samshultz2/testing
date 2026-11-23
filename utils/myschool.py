@@ -1021,6 +1021,31 @@ def _serialize_table(table):
     return " ; ".join(rows)
 
 
+_SUP = str.maketrans("0123456789+-−=()nixyk", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁻⁼⁽⁾ⁿⁱˣʸᵏ")
+_SUB = str.maketrans("0123456789+-−=()", "₀₁₂₃₄₅₆₇₈₉₊₋₋₌₍₎")
+
+
+def _script_text(text, table, marker):
+    """Superscript/subscript text in Unicode when every character has a form
+    (x² , H₂O, 10⁻³), else ``^(…)`` / ``_(…)`` so nothing reads as a plain digit."""
+    t = re.sub(r"\s+", "", text or "")
+    if not t:
+        return ""
+    if all(ch in "0123456789+-−=()nixyk" for ch in t) and (marker == "^" or all(ch in "0123456789+-−=()" for ch in t)):
+        return t.translate(table)
+    return f"{marker}({t})" if len(t) > 1 else marker + t
+
+
+def _flatten_scripts(soup):
+    """myschool writes powers and chemical formulas with <sup>/<sub>; reading the
+    text with spaces turned "x<sup>2</sup>" into "x 2". Swap them for Unicode
+    (x², H₂O) before the text is read."""
+    for tag, table, marker in (("sup", _SUP, "^"), ("sub", _SUB, "_")):
+        for el in soup.find_all(tag):
+            el.replace_with(_script_text(el.get_text("", strip=True), table, marker))
+    return soup
+
+
 def parse_detail(html):
     """Parse a question detail page into a dict:
 
@@ -1029,6 +1054,8 @@ def parse_detail(html):
     """
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
+    _flatten_scripts(soup)
+    soup = BeautifulSoup(str(soup), "html.parser")   # merge the new text into its neighbours
 
     options = {}
     for sp in soup.select("span.uppercase"):
