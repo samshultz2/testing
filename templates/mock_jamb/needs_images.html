@@ -78,6 +78,7 @@
   .ni-act > a.rs-btn{justify-content:center}
   .ni-bulk{position:static}
   .ni-bulk .sp{display:none}
+  .ni-tip{display:none}
   .ni-bulk form{width:100%}
   .ni-bulk form .rs-btn{flex:1;justify-content:center}
   .ni-filter select{flex:1 1 40%}
@@ -86,7 +87,7 @@
 {% block content %}
 {% set can_fix = can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
 {% set filtered = subject_id or year or exam_body or search %}
-{% set args = {'subject_id': subject_id or none, 'year': year or none, 'exam_body': exam_body or none, 'q': search or none} %}
+{% set args = {'subject_id': subject_id or none, 'year': year or none, 'exam_body': exam_body or none, 'q': search or none, 'per_page': (per_page if per_page != 20 else none)} %}
 <div class="rs bx">
   {% call bx_head('fa-image', 'Questions needing images', (total ~ ' question' ~ ('' if total == 1 else 's') ~ ' waiting for a picture') if total else 'Every question that needs a picture has one') %}
     <a href="{{ bank_url }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">Back to bank</span></a>
@@ -111,8 +112,8 @@
     <p class="ni-intro">Every bank question that refers to a picture it doesn't have — a diagram, figure, graph, map or circuit — whether it was flagged on import or its wording points at one. They're <strong>held out of exams</strong> until you add the picture. If a question reads fine without one, mark it <em>No image needed</em>. <strong>Open on myschool.ng</strong> opens the original question so you can save its diagram (questions pasted without their link get a search instead).</p>
     {% if subject_counts|length > 1 %}
     <div class="ni-chips" role="navigation" aria-label="Subject" style="margin-top:.8rem">
-      <a class="ni-chip {{ 'on' if not subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', year=year or none, exam_body=exam_body or none, q=search or none) }}">All subjects <em>{{ total }}</em></a>
-      {% for sid, name, n in subject_counts %}<a class="ni-chip {{ 'on' if sid == subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', subject_id=sid, year=year or none, exam_body=exam_body or none, q=search or none) }}">{{ name }} <em>{{ n }}</em></a>{% endfor %}
+      <a class="ni-chip {{ 'on' if not subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', year=year or none, exam_body=exam_body or none, q=search or none, per_page=(per_page if per_page != 20 else none)) }}">All subjects <em>{{ total }}</em></a>
+      {% for sid, name, n in subject_counts %}<a class="ni-chip {{ 'on' if sid == subject_id }}" href="{{ url_for('mock_jamb.bank_needs_images', subject_id=sid, year=year or none, exam_body=exam_body or none, q=search or none, per_page=(per_page if per_page != 20 else none)) }}">{{ name }} <em>{{ n }}</em></a>{% endfor %}
     </div>{% endif %}
     <form method="get" class="ni-filter" role="search">
       {% if subject_id %}<input type="hidden" name="subject_id" value="{{ subject_id }}">{% endif %}
@@ -120,6 +121,8 @@
         {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}</select>
       <select name="exam_body" data-autosubmit aria-label="Exam body"><option value="">Any exam</option>
         {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body }}>{{ e }}</option>{% endfor %}</select>
+      <select name="per_page" data-autosubmit aria-label="Questions per page">
+        {% for n in (20, 40, 50, 100, 150) %}<option value="{{ n }}" {{ 'selected' if n == per_page }}>{{ n }} per page</option>{% endfor %}</select>
       <label class="ni-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" name="q" value="{{ search }}" placeholder="Search question text" aria-label="Search question text"></label>
       {% if filtered %}<a class="rs-btn ghost" href="{{ url_for('mock_jamb.bank_needs_images') }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear</a>{% endif %}
     </form>
@@ -127,7 +130,8 @@
 
   {% if questions and can_fix %}
   <div class="ni-bulk">
-    <label><input type="checkbox" class="ni-box" id="niSelectAll"> Select page</label>
+    <label><input type="checkbox" class="ni-box" id="niSelectAll"> Select all {{ questions|length }} on this page</label>
+    <span class="rs-muted ni-tip" style="font-size:.76rem">Tip: shift-click to tick a range</span>
     <span id="niCount" class="rs-muted" style="font-size:.82rem">0 selected</span>
     <span class="sp"></span>
     <form method="post" id="niBulkForm" action="{{ url_for('mock_jamb.bank_needs_images_bulk') }}">
@@ -240,7 +244,7 @@
         if(e.target && e.target.classList && e.target.classList.contains('ni-check')) update();
     });
     if(selectAll) selectAll.addEventListener('change', function(){
-        boxes().forEach(function(c){ c.checked = selectAll.checked; }); update();
+        boxes().forEach(function(c){ if (!c.disabled) c.checked = selectAll.checked; }); update();
     });
     form.querySelectorAll('[data-bulk]').forEach(function(btn){
         btn.addEventListener('click', function(){
@@ -317,6 +321,20 @@
         runQueue(cards);
     });
     if (stopBtn) stopBtn.addEventListener('click', function(){ stopped = true; });
+    window.addEventListener('beforeunload', function(e){ if (running) { e.preventDefault(); e.returnValue = ''; } });
+    // Shift-click a box to tick (or untick) everything between it and the last one clicked.
+    var lastBox = null;
+    document.addEventListener('click', function(e){
+        var cb = e.target;
+        if (!cb.classList || !cb.classList.contains('ni-check')) return;
+        var all = boxes();
+        if (e.shiftKey && lastBox && lastBox !== cb) {
+            var a = all.indexOf(lastBox), b = all.indexOf(cb);
+            all.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function(x){ if (!x.disabled) x.checked = cb.checked; });
+            update();
+        }
+        lastBox = cb;
+    });
     update();
 })();
 </script>

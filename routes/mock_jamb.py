@@ -2241,7 +2241,9 @@ def bank_needs_images():
         q = q.filter(MockJAMBQuestion.question_text.ilike('%' + search[:80] + '%'))
     q = q.order_by(MockJAMBQuestion.subject_id, MockJAMBQuestion.exam_year,
                    MockJAMBQuestion.id)
-    pagination = q.paginate(page=page, per_page=20, error_out=False)
+    per_page = request.args.get('per_page', 20, type=int)
+    per_page = per_page if per_page in (20, 40, 50, 100, 150) else 20
+    pagination = q.paginate(page=page, per_page=per_page, error_out=False)
 
     years = [y for (y,) in db.session.query(MockJAMBQuestion.exam_year)
              .filter(MockJAMBQuestion.mock_exam_id.is_(None),
@@ -2263,7 +2265,7 @@ def bank_needs_images():
                            subjects=subjects, subject_id=subject_id, year=year,
                            exam_body=exam_body, search=search, years=years, subj_name=subj_name,
                            subject_counts=subject_counts, reasons=reasons, dismissed=dismissed,
-                           matching=pagination.total, external=external,
+                           matching=pagination.total, external=external, per_page=per_page,
                            pagination=pagination, questions=pagination.items,
                            total=total, index_url=url_for('mock_jamb.index'),
                            bank_url=url_for('mock_jamb.bank'))

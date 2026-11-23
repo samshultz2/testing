@@ -219,3 +219,21 @@ def test_fix_powers_without_space():
     # subscripts and chemical formulas are left alone
     for t in ('(y2 - y1)/(x2 - x1)', 'x1 + x2 = 5', 'H2O + CO2 = ?', 'CaCl2 + H2SO4 =', 'x23 + 1 ='):
         assert f(t) == t
+
+
+def test_needs_images_page_size(app):
+    from models import db, Subject, MockJAMBQuestion
+    with app.app_context():
+        s = Subject(name='PerPage ' + uuid.uuid4().hex[:6], is_active=True)
+        db.session.add(s); db.session.flush()
+        for i in range(45):
+            db.session.add(_q(s.id, 'Use the diagram above to answer item %d.' % i))
+        db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    count = lambda html: len(re.findall(r'class="ni-q"', html))
+    assert count(c.get(f'/mock-jamb/bank/needs-images?subject_id={sid}').get_data(as_text=True)) == 20
+    html = c.get(f'/mock-jamb/bank/needs-images?subject_id={sid}&per_page=40').get_data(as_text=True)
+    assert count(html) == 40 and 'per_page=40' in html                # kept in the pager links
+    assert count(c.get(f'/mock-jamb/bank/needs-images?subject_id={sid}&per_page=100').get_data(as_text=True)) == 45
+    assert count(c.get(f'/mock-jamb/bank/needs-images?subject_id={sid}&per_page=9999').get_data(as_text=True)) == 20
