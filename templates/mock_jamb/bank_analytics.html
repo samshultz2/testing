@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
 {% from "mock_jamb/_shell.html" import mj_nav with context %}
+{% from "mock_jamb/_live.html" import live_kit with context %}
 {% block title %}Bank Analytics - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question Bank</a> / <span>Topic analytics</span>{% endblock %}
 {% block extra_css %}
@@ -83,6 +84,7 @@
 {% block content %}
 {% set can_tag = can_write_sub('external_exams', 'mock_jamb_bank_retag') %}
 <div class="rs bx bx-legacy">
+<div id="baLive" class="rs" aria-busy="false">
   {% call bx_head('fa-chart-pie', 'Topic analytics', (subject.name ~ ' · ' ~ data.total ~ ' banked questions · where they cluster and what is thin') if subject and data and data.total else 'Where your banked past questions cluster, and the syllabus areas that are thin, cold or never tested.') %}
     {% set links = [] %}
     {% if can_tag and data and data.total %}{% set _ = links.extend([(None, None, 'Tag questions'), ('#baAuto', 'fa-wand-magic-sparkles', 'Auto-tag (classifier)'), ('#baAI', 'fa-robot', 'Tag with AI'), ('#baLocal', 'fa-microchip', 'Tag locally')]) %}{% endif %}
@@ -229,8 +231,7 @@
       <div class="tb">
         <p class="ba-txt" style="margin-top:0">Sends {{ subject.name }}'s bank questions to Claude, using the key set in <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a>, and assigns each the best-matching JAMB syllabus topic. Re-tags the whole subject (or one year), overwriting existing topics — only real syllabus topics, never invented ones.</p>
         {% if ai_ready %}
-        <form method="post" action="{{ url_for('mock_jamb.bank_ai_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;"
-              onsubmit="var b=this.querySelector('button');b.disabled=true;b.innerHTML='<i class=&quot;fas fa-spinner fa-spin&quot;></i> Tagging… this can take a moment';">
+        <form method="post" action="{{ url_for('mock_jamb.bank_ai_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             {% if years %}
@@ -290,43 +291,49 @@
   </div>
   {% endif %}
 
+
+{% endif %}
+</div>
+{{ live_kit('baLive') }}
 <script nonce="{{ csp_nonce }}">
 (function(){
-  var on = document.querySelector('nav.ba-chips .ba-chip.on');
-  if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+  // Menu links open (and scroll to) a tagging panel.
   document.addEventListener('click', function(e){
-    var a = e.target.closest && e.target.closest('a[href^="#ba"]'); if(!a) return;
-    var el = document.getElementById(a.getAttribute('href').slice(1)); if(!el) return;
+    var a = e.target.closest && e.target.closest('a[href^="#ba"]'); if (!a) return;
+    var el = document.getElementById(a.getAttribute('href').slice(1)); if (!el) return;
     e.preventDefault();
-    var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if(m) m.open = false;
-    el.open = true; el.scrollIntoView({behavior:'smooth', block:'start'});
+    var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if (m) m.open = false;
+    el.open = true; el.scrollIntoView({behavior: 'smooth', block: 'start'});
   });
-  var box = document.getElementById('baTopics'); if(!box) return;
-  var rows = Array.prototype.slice.call(box.querySelectorAll('.ba-topic'));
-  var q = document.getElementById('baSearch'), none = document.getElementById('baNone'), more = document.getElementById('baMore');
-  var mode = 'all', LIMIT = 12, expanded = false;
+  // Topic list: All / Cold chips, search, "Show all topics".
+  var mode = 'all', expanded = false, LIMIT = 12;
   function apply(){
-    var term = (q.value || '').trim().toLowerCase(), n = 0, match = 0;
-    rows.forEach(function(r){
+    var box = document.getElementById('baTopics'); if (!box) return;
+    var q = document.getElementById('baSearch'), none = document.getElementById('baNone'), more = document.getElementById('baMore');
+    var term = ((q && q.value) || '').trim().toLowerCase(), match = 0;
+    box.querySelectorAll('.ba-topic').forEach(function(r){
       var ok = (mode === 'all' || r.dataset.cold === '1') && (!term || r.dataset.s.indexOf(term) >= 0);
-      if(ok) match++;
-      var show = ok && (expanded || term || match <= LIMIT);
-      r.hidden = !show; if(show) n++;
+      if (ok) match++;
+      r.hidden = !(ok && (expanded || term || match <= LIMIT));
     });
-    none.hidden = !!match;
-    more.hidden = expanded || !!term || match <= LIMIT;
+    if (none) none.hidden = !!match;
+    if (more) more.hidden = expanded || !!term || match <= LIMIT;
   }
-  q.addEventListener('input', apply);
-  more.querySelector('button').addEventListener('click', function(){ expanded = true; apply(); });
-  document.querySelectorAll('#baShow .ba-chip').forEach(function(b){
-    b.addEventListener('click', function(){
-      document.querySelectorAll('#baShow .ba-chip').forEach(function(x){ x.classList.toggle('on', x === b); });
-      mode = b.dataset.f; apply();
-    });
+  document.addEventListener('input', function(e){ if (e.target.id === 'baSearch') apply(); });
+  document.addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('#baMore button')) { expanded = true; apply(); return; }
+    var b = e.target.closest && e.target.closest('#baShow .ba-chip'); if (!b) return;
+    document.querySelectorAll('#baShow .ba-chip').forEach(function(x){ x.classList.toggle('on', x === b); });
+    mode = b.dataset.f; apply();
   });
-  apply();
+  function init(){
+    mode = 'all'; expanded = false; apply();
+    var on = document.querySelector('nav.ba-chips .ba-chip.on');
+    if (on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+  }
+  document.addEventListener('mj:swapped', init);
+  init();
 })();
 </script>
-{% endif %}
 </div>
 {% endblock %}

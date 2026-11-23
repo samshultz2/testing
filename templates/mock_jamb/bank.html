@@ -614,7 +614,7 @@
         var t = document.getElementById('qbToast'); if (!t || !msg) return;
         t.className = 'ni-toast ' + (tone === 'error' ? 'bad' : tone === 'warning' ? 'warn' : '');
         t.innerHTML = '<i class="fas fa-' + (tone === 'error' ? 'circle-xmark' : tone === 'warning' ? 'triangle-exclamation' : 'circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
-        t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 4500);
+        t.hidden = false; t.onclick = function(){ t.hidden = true; }; clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 4500);
     }
     function openPanel(id){
         var el = id && document.getElementById(id);
@@ -723,7 +723,9 @@
         var btns = f.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
         var card = f.closest('.qb-q, .qb-passage'); if (card) card.style.opacity = '.5';
         var isAdd = f.classList.contains('addq');
-        fetch(f.getAttribute('action'), {method: 'POST', body: new FormData(f), credentials: 'same-origin',
+        var fd = new FormData(f), sub = e.submitter;
+        if (sub && sub.name && !fd.has(sub.name)) fd.append(sub.name, sub.value);
+        fetch(f.getAttribute('action'), {method: 'POST', body: fd, credentials: 'same-origin',
                                          headers: {'X-CSRFToken': CSRF, 'X-Requested-With': 'fetch-html'}})
             .then(function(r){ return r.text().then(function(h){ return [h, r.url, r.ok]; }); })
             .then(function(x){

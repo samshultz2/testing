@@ -70,6 +70,7 @@
 #niLive[aria-busy="true"]{opacity:.55;pointer-events:none;transition:opacity .15s}
 .ni-q.leaving{transition:opacity .25s,transform .25s;opacity:0;transform:translateX(12px)}
 .ni-toast{position:fixed;left:50%;bottom:calc(var(--bottom-nav-h,0px) + 22px);transform:translateX(-50%);z-index:60;max-width:min(92vw,520px);padding:.7rem 1rem;border-radius:14px;background:var(--text-primary,#0f172a);color:#fff;font-size:.86rem;box-shadow:0 10px 30px rgba(15,23,42,.25);display:flex;gap:.55rem;align-items:center}
+.ni-toast[hidden]{display:none}
 .ni-toast.bad{background:var(--danger)}
 .ni-toast.warn{background:#b45309}
 .ni-busy{opacity:.6;pointer-events:none}
@@ -239,7 +240,7 @@
         var t = document.getElementById('niToast'); if (!t) return;
         t.className = 'ni-toast ' + (tone === 'error' ? 'bad' : tone === 'warning' ? 'warn' : '');
         t.innerHTML = '<i class="fas fa-' + (tone === 'error' ? 'circle-xmark' : tone === 'warning' ? 'triangle-exclamation' : 'circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
-        t.hidden = false; clearTimeout(toastTimer);
+        t.hidden = false; t.onclick = function(){ t.hidden = true; }; clearTimeout(toastTimer);
         toastTimer = setTimeout(function(){ t.hidden = true; }, 4200);
     }
     function ask(msg){ return window.themedConfirm ? window.themedConfirm(msg) : Promise.resolve(window.confirm(msg)); }

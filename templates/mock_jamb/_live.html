@@ -1,0 +1,106 @@
+{# In-place updates for a server-rendered page: links back to the same page,
+   GET filter forms and POST forms inside #<container_id> are fetched in the
+   background and the container is swapped, with flash messages shown as a toast.
+   Pages re-bind their own widgets on the "mj:swapped" event. #}
+{% macro live_kit(container_id) -%}
+<style>
+#{{ container_id }}[aria-busy="true"]{opacity:.55;pointer-events:none;transition:opacity .15s}
+.mj-toast{position:fixed;left:50%;bottom:calc(var(--bottom-nav-h,0px) + 22px);transform:translateX(-50%);z-index:60;max-width:min(92vw,520px);padding:.7rem 1rem;border-radius:14px;background:var(--text-primary,#0f172a);color:#fff;font-size:.86rem;box-shadow:0 10px 30px rgba(15,23,42,.25);display:flex;gap:.55rem;align-items:center;cursor:pointer}
+.mj-toast[hidden]{display:none}
+.mj-toast.bad{background:var(--danger)}.mj-toast.warn{background:#b45309}
+@media (max-width:759px){.mj-toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
+</style>
+<div class="mj-toast" id="mjToast" role="status" aria-live="polite" hidden></div>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var ID = {{ container_id|tojson }}, BASE = location.pathname, seq = 0, timer = null;
+  var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
+  function box(){ return document.getElementById(ID); }
+  function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+  function toast(msg, tone){
+    var t = document.getElementById('mjToast'); if (!t || !msg) return;
+    t.className = 'mj-toast ' + (tone === 'error' ? 'bad' : tone === 'warning' ? 'warn' : '');
+    t.innerHTML = '<i class="fas fa-' + (tone === 'error' ? 'circle-xmark' : tone === 'warning' ? 'triangle-exclamation' : 'circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
+    t.hidden = false; t.onclick = function(){ t.hidden = true; };
+    clearTimeout(timer); timer = setTimeout(function(){ t.hidden = true; }, 4500);
+  }
+  window.mjToast = toast;
+  function swap(html, url, opts){
+    var doc = new DOMParser().parseFromString(html, 'text/html'), fresh = doc.getElementById(ID);
+    if (!fresh) { location.href = url; return; }
+    var y = scrollY;
+    box().replaceWith(fresh);
+    doc.querySelectorAll('.flash-message').forEach(function(f){
+      var tone = /flash-(error|danger)/.test(f.className) ? 'error' : /flash-warning/.test(f.className) ? 'warning' : 'success';
+      toast((f.querySelector('span') || f).textContent.trim(), tone);
+    });
+    var u = new URL(url, location.href);
+    if (opts.push) history.pushState({mj: 1}, '', u.pathname + u.search);
+    else if (opts.replace !== false) history.replaceState({mj: 1}, '', u.pathname + u.search);
+    if (doc.title) document.title = doc.title;
+    scrollTo(0, opts.top ? 0 : y);
+    if (window.MathJax && window.MathJax.typesetPromise) { try { window.MathJax.typesetPromise([fresh]); } catch (e) {} }
+    document.dispatchEvent(new CustomEvent('mj:swapped', {detail: {root: fresh}}));
+  }
+  function load(url, opts){
+    opts = opts || {};
+    var n = ++seq, b = box(); b.setAttribute('aria-busy', 'true');
+    return fetch(url, {credentials: 'same-origin', headers: {'X-Requested-With': 'fetch-html'}})
+      .then(function(r){ if (!r.ok) throw 0; return r.text().then(function(h){ return [h, r.url]; }); })
+      .then(function(x){ if (n === seq) swap(x[0], x[1] || url, opts); })
+      .catch(function(){ location.href = url; })
+      .then(function(){ var b2 = box(); if (b2) b2.setAttribute('aria-busy', 'false'); });
+  }
+  window.mjLoad = load;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a || !a.closest('#' + ID) || a.target || a.hasAttribute('download') || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    var href = a.getAttribute('href'); if (!href || href.charAt(0) === '#') return;
+    var u = new URL(a.href, location.href);
+    if (u.origin !== location.origin || u.pathname !== BASE) return;
+    e.preventDefault();
+    load(u.pathname + u.search, {push: true});
+  });
+  window.addEventListener('popstate', function(){ load(location.pathname + location.search, {replace: false}); });
+  document.addEventListener('submit', function(e){
+    var f = e.target;
+    if (!f.closest || !f.closest('#' + ID) || e.defaultPrevented) return;
+    var method = (f.getAttribute('method') || 'get').toLowerCase();
+    var action = f.getAttribute('action') || BASE;
+    if (method === 'get') {
+      var u = new URL(action, location.href); if (u.pathname !== BASE) return;
+      e.preventDefault();
+      var q = new URLSearchParams(); new FormData(f).forEach(function(v, k){ if (v !== '') q.set(k, v); });
+      load(BASE + '?' + q.toString(), {push: true});
+      return;
+    }
+    e.preventDefault();
+    var btns = f.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
+    var busy = f.querySelector('button:not([type=button])');
+    if (busy) { busy.dataset.label = busy.innerHTML; busy.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i> Working…'; }
+    var fd = new FormData(f);
+    var sub = e.submitter;                                   // the clicked button's name/value counts
+    if (sub && sub.name && !fd.has(sub.name)) fd.append(sub.name, sub.value);
+    fetch(action, {method: 'POST', body: fd, credentials: 'same-origin',
+                   headers: {'X-CSRFToken': CSRF, 'X-Requested-With': 'fetch-html'}})
+      .then(function(r){ return r.text().then(function(h){ return [h, r.url]; }); })
+      .then(function(x){
+        var u = new URL(x[1], location.href);
+        if (u.pathname !== BASE) { location.href = x[1]; return; }
+        swap(x[0], x[1], {});
+      })
+      .catch(function(){
+        toast('Network problem — nothing was changed. Try again.', 'error');
+        btns.forEach(function(b){ b.disabled = false; });
+        if (busy && busy.dataset.label) busy.innerHTML = busy.dataset.label;
+      });
+  });
+  // a <select data-live> inside the container applies its form at once
+  document.addEventListener('change', function(e){
+    var t = e.target;
+    if (t.matches && t.matches('select[data-live]') && t.form && t.closest('#' + ID)) t.form.requestSubmit ? t.form.requestSubmit() : t.form.dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));
+  });
+  history.replaceState({mj: 1}, '', location.href);
+})();
+</script>
+{%- endmacro %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
 {% from "mock_jamb/_shell.html" import mj_nav with context %}
+{% from "mock_jamb/_live.html" import live_kit with context %}
 {% block title %}Syllabus - Question Bank{% endblock %}
 {% block breadcrumb %}<a href="{{ bank_url }}">Question Bank</a> / <span>Syllabus</span>{% endblock %}
 {% block extra_css %}
@@ -65,6 +66,7 @@
 {% set can_edit = can_write_sub('external_exams', 'mock_jamb_bank_syllabus_edit') %}
 {% set can_del = can_write_sub('external_exams', 'mock_jamb_bank_syllabus_delete') %}
 <div class="rs bx bx-legacy">
+<div id="syLive" class="rs" aria-busy="false">
   {% call bx_head('fa-list-ol', 'JAMB Syllabus', ((subject.name ~ ' · ' ~ syllabus.prefix ~ ((' v' ~ syllabus.version) if syllabus.version else '') ~ ' · ' ~ cover['items'] ~ ' items') if syllabus else ('Import each subject’s coded syllabus — every item keeps a stable code, so re-imports reconcile by code, not by name.'))) %}
     {% set links = [] %}
     {% if can_edit %}{% set _ = links.append(('#syImport', 'fa-file-import', 'Import a syllabus')) %}{% if syllabus %}{% set _ = links.append(('#syRetag', 'fa-wand-magic-sparkles', 'AI retag questions')) %}{% endif %}{% endif %}
@@ -180,7 +182,7 @@
     <p class="sy-note">Classifies {{ subject.name }}'s bank questions against this coded syllabus using your Anthropic key (Settings &rarr; AI Vision OCR). The model can only pick from these codes — it never invents an item, and marks a question <code>OUTSIDE_SYLLABUS</code> when none fits.</p>
     {% if not key_set %}<p class="sy-note" style="color:var(--warning)"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>{% endif %}
     {% if batch_job %}
-    <div class="sy-batch" id="batchJobPill"><strong>Batch:</strong> <span id="batchJobMessage">{{ batch_job.message or batch_job.status }}</span>
+    <div class="sy-batch" id="batchJobPill" data-inprogress="{{ 1 if batch_job_in_progress else 0 }}" data-status="{{ url_for('mock_jamb.bank_syllabus_batch_status', subject_id=subject_id or '') }}"><strong>Batch:</strong> <span id="batchJobMessage">{{ batch_job.message or batch_job.status }}</span>
       <span id="batchJobTotal" class="rs-muted">{% if batch_job.total %}({{ batch_job.total }} question(s) submitted){% endif %}</span></div>
     {% endif %}
     <form method="POST" id="retagForm" action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
@@ -231,91 +233,87 @@
   {% endif %}
   </div>
 
-<script nonce="{{ csp_nonce }}">
-// The Method select routes to the inline or batch endpoint; the checkbox maps to
-// the inline route's "mode" (untagged/all) as well as the batch "force" flag.
-(function () {
-    var form = document.getElementById('retagForm');
-    var method = document.getElementById('retagMethod');
-    var force = document.getElementById('retagForce');
-    if (!form || !method) return;
-    var INLINE = "{{ url_for('mock_jamb.bank_syllabus_retag') }}";
-    var BATCH = "{{ url_for('mock_jamb.bank_syllabus_batch_retag') }}";
-    form.addEventListener('submit', function () {
-        form.action = (method.value === 'batch') ? BATCH : INLINE;
-        // inline endpoint reads name="mode"; mirror the force checkbox into a hidden field
-        var m = form.querySelector('input[name="mode"]');
-        if (!m) { m = document.createElement('input'); m.type = 'hidden'; m.name = 'mode'; form.appendChild(m); }
-        m.value = (force && force.checked) ? 'all' : 'untagged';
-    });
-})();
-
-// Auto-refresh the batch status pill while a batch retag is in progress. The
-// batch itself runs entirely server-side (submitted to Claude, polled and
-// applied by the edusyncra-jobs worker) -- this poll only re-reads that state,
-// so a closed tab or a dropped connection here never stops the retag; a failed
-// fetch is silently retried on the next tick instead of stopping the loop.
-(function () {
-    var pill = document.getElementById('batchJobPill');
-    if (!pill) return;
-    var inProgress = {{ 'true' if batch_job_in_progress else 'false' }};
-    if (!inProgress) return;
-    var msgEl = document.getElementById('batchJobMessage');
-    var totalEl = document.getElementById('batchJobTotal');
-    var statusUrl = "{{ url_for('mock_jamb.bank_syllabus_batch_status', subject_id=subject_id or '') }}";
-    var timer = setInterval(function () {
-        fetch(statusUrl, {headers: {'X-Requested-With': 'fetch'}})
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data.found) return;
-                if (msgEl) msgEl.textContent = data.message;
-                if (totalEl) totalEl.textContent = data.total ? '(' + data.total + ' question(s) submitted)' : '';
-                if (!data.in_progress) {
-                    clearInterval(timer);
-                    location.reload();  // pick up the updated tagged/total counts elsewhere on the page
-                }
-            })
-            .catch(function () { /* network blip -- try again next tick */ });
-    }, 6000);
-})();
-</script>
+</div>
+{{ live_kit('syLive') }}
 <script nonce="{{ csp_nonce }}">
 (function(){
-  var on = document.querySelector('nav.sy-chips .sy-chip.on');
-  if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+  var INLINE = "{{ url_for('mock_jamb.bank_syllabus_retag') }}";
+  var BATCH = "{{ url_for('mock_jamb.bank_syllabus_batch_retag') }}";
+  // AI retag: the Method picks the inline or batch endpoint; the checkbox maps to
+  // the inline route's "mode" and the batch route's "force". (Capture phase, so
+  // it runs before the form is sent in the background.)
+  document.addEventListener('submit', function(e){
+    var form = e.target; if (form.id !== 'retagForm') return;
+    var method = document.getElementById('retagMethod'), force = document.getElementById('retagForce');
+    form.setAttribute('action', (method && method.value === 'batch') ? BATCH : INLINE);
+    var m = form.querySelector('input[name="mode"]');
+    if (!m) { m = document.createElement('input'); m.type = 'hidden'; m.name = 'mode'; form.appendChild(m); }
+    m.value = (force && force.checked) ? 'all' : 'untagged';
+  }, true);
+
+  // Menu links open (and scroll to) a panel.
   document.addEventListener('click', function(e){
-    var a = e.target.closest && e.target.closest('a[href^="#sy"]'); if(!a) return;
-    var el = document.getElementById(a.getAttribute('href').slice(1)); if(!el) return;
+    var a = e.target.closest && e.target.closest('a[href^="#sy"]'); if (!a) return;
+    var el = document.getElementById(a.getAttribute('href').slice(1)); if (!el) return;
     e.preventDefault();
-    var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if(m) m.open = false;
-    el.open = true; el.scrollIntoView({behavior:'smooth', block:'start'});
+    var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if (m) m.open = false;
+    el.open = true; el.scrollIntoView({behavior: 'smooth', block: 'start'});
   });
-  var tree = document.getElementById('syTree'); if(!tree) return;
-  var q = document.getElementById('sySearch'), none = document.getElementById('syNone'), mode = 'all';
+
+  // Syllabus tree: "All items / Gaps only" chips and search.
+  var mode = 'all';
   function apply(){
-    var term = (q.value || '').trim().toLowerCase(), shown = 0;
+    var tree = document.getElementById('syTree'); if (!tree) return;
+    var q = document.getElementById('sySearch'), none = document.getElementById('syNone');
+    var term = ((q && q.value) || '').trim().toLowerCase(), shown = 0;
     tree.querySelectorAll('.sy-sec').forEach(function(sec){
       var secShown = 0;
       sec.querySelectorAll('.sy-topic').forEach(function(t){
         var n = 0;
         t.querySelectorAll('.sy-item').forEach(function(it){
           var ok = (mode === 'all' || it.classList.contains('gap')) && (!term || it.dataset.s.indexOf(term) >= 0);
-          it.hidden = !ok; if(ok) n++;
+          it.hidden = !ok; if (ok) n++;
         });
         t.hidden = !n; secShown += n;
       });
       sec.hidden = !secShown; shown += secShown;
-      if((term || mode !== 'all') && secShown) sec.open = true;
+      if ((term || mode !== 'all') && secShown) sec.open = true;
     });
-    none.hidden = !!shown;
+    if (none) none.hidden = !!shown;
   }
-  q.addEventListener('input', apply);
-  document.querySelectorAll('#syShow .sy-chip').forEach(function(b){
-    b.addEventListener('click', function(){
-      document.querySelectorAll('#syShow .sy-chip').forEach(function(x){ x.classList.toggle('on', x === b); });
-      mode = b.dataset.f; apply();
-    });
+  document.addEventListener('input', function(e){ if (e.target.id === 'sySearch') apply(); });
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('#syShow .sy-chip'); if (!b) return;
+    document.querySelectorAll('#syShow .sy-chip').forEach(function(x){ x.classList.toggle('on', x === b); });
+    mode = b.dataset.f; apply();
   });
+
+  // Batch retag status: poll while a batch runs (it runs server-side, so a
+  // closed tab never stops it) and refresh the page in place when it ends.
+  var poll = null;
+  function watchBatch(){
+    clearInterval(poll);
+    var pill = document.getElementById('batchJobPill');
+    if (!pill || pill.dataset.inprogress !== '1') return;
+    poll = setInterval(function(){
+      fetch(pill.dataset.status, {headers: {'X-Requested-With': 'fetch'}}).then(function(r){ return r.json(); }).then(function(d){
+        if (!d.found) return;
+        var msg = document.getElementById('batchJobMessage'), tot = document.getElementById('batchJobTotal');
+        if (msg) msg.textContent = d.message;
+        if (tot) tot.textContent = d.total ? '(' + d.total + ' question(s) submitted)' : '';
+        if (!d.in_progress) { clearInterval(poll); window.mjLoad(location.pathname + location.search, {}); }
+      }).catch(function(){});
+    }, 6000);
+  }
+
+  function init(){
+    mode = 'all'; apply();
+    var on = document.querySelector('nav.sy-chips .sy-chip.on');
+    if (on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+    watchBatch();
+  }
+  document.addEventListener('mj:swapped', init);
+  init();
 })();
 </script>
 </div>

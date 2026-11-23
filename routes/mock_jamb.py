@@ -2244,6 +2244,8 @@ def bank_needs_images():
     per_page = request.args.get('per_page', 20, type=int)
     per_page = per_page if per_page in (20, 40, 50, 100, 150) else 20
     pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+    if not pagination.items and page > 1 and pagination.pages:   # past the end (e.g. after clearing a page)
+        pagination = q.paginate(page=pagination.pages, per_page=per_page, error_out=False)
 
     years = [y for (y,) in db.session.query(MockJAMBQuestion.exam_year)
              .filter(MockJAMBQuestion.mock_exam_id.is_(None),
