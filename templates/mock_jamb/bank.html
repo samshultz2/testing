@@ -22,7 +22,7 @@
 .qb-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.86rem;color:var(--text-primary);padding:.5rem 0;outline:none}
 .qb-cov{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:.5rem}
 .qb-sec{display:flex;flex-direction:column;gap:.35rem;border:1px solid var(--border-color);border-radius:13px;padding:.6rem .75rem;text-decoration:none;color:inherit;min-width:0;background:var(--bg-card)}
-.qb-sec:hover{border-color:var(--primary)}
+.qb-sec:hover{border-color:var(--primary);text-decoration:none}
 .qb-sec.on{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}
 .qb-sec .t{display:flex;justify-content:space-between;gap:.4rem;font-size:.8rem;font-weight:700;line-height:1.25}
 .qb-sec .t span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -83,6 +83,11 @@
 .qb-prog i{display:block;height:100%;width:0;background:var(--primary);transition:width .3s}
 .qb-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.9rem;border-top:1px solid var(--border-light,var(--border-color))}
 .qb-empty{padding:1.4rem 1rem;color:var(--text-muted);font-size:.88rem;text-align:center;border-top:1px solid var(--border-light,var(--border-color))}
+#qbLive[aria-busy="true"]{opacity:.55;pointer-events:none;transition:opacity .15s}
+.ni-toast{position:fixed;left:50%;bottom:calc(var(--bottom-nav-h,0px) + 22px);transform:translateX(-50%);z-index:60;max-width:min(92vw,520px);padding:.7rem 1rem;border-radius:14px;background:var(--text-primary,#0f172a);color:#fff;font-size:.86rem;box-shadow:0 10px 30px rgba(15,23,42,.25);display:flex;gap:.55rem;align-items:center}
+.ni-toast[hidden]{display:none}
+.ni-toast.bad{background:var(--danger)}.ni-toast.warn{background:#b45309}
+@media (max-width:759px){.ni-toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 @media (max-width:640px){
   .qb-q{grid-template-columns:1.9rem minmax(0,1fr);padding:.8rem .85rem}
   .qb-n{width:1.9rem;height:1.9rem}
@@ -102,6 +107,7 @@
 {% set can_scrape = can_write_sub('external_exams', 'mock_jamb_bank_scrape') %}
 {% set short_rows = coverage.rows|selectattr('short')|list if coverage else [] %}
 <div class="rs bx bx-legacy">
+<div id="qbLive" class="rs" aria-busy="false">
   {% call bx_head('fa-database', 'Question Bank', (subject.name ~ ' · ' ~ (coverage.total if coverage else 0) ~ ' banked · every mock draws a fresh JAMB-shaped paper per student from here') if subject else 'One bank per subject. Every mock draws from it.') %}
     {% if subject and can_edit %}<a href="#qbAdd" class="rs-btn primary" data-open="qbAdd"><i class="fas fa-plus" aria-hidden="true"></i><span class="rs-hide-sm">Add question</span></a>{% endif %}
     {% set tools = [] %}
@@ -171,14 +177,14 @@
     <input type="hidden" name="subject_id" value="{{ subject_id }}">
     {% if section %}<input type="hidden" name="section" value="{{ section }}">{% endif %}
     {% if filter_options %}
-    <select name="exam_body" data-autosubmit aria-label="Exam type"><option value="">Any exam</option>
+    <select name="exam_body" aria-label="Exam type"><option value="">Any exam</option>
       {% for b in filter_options.exam_bodies %}<option value="{{ b }}" {{ 'selected' if f_body == b }}>{{ b }}</option>{% endfor %}</select>
-    <select name="year" data-autosubmit aria-label="Year"><option value="">Any year</option>
+    <select name="year" aria-label="Year"><option value="">Any year</option>
       {% for y in filter_options.years %}<option value="{{ y }}" {{ 'selected' if f_year == y }}>{{ y }}</option>{% endfor %}</select>
-    <select name="topic" id="fTopic" data-autosubmit aria-label="Topic"><option value="">All topics</option>
+    <select name="topic" id="fTopic" aria-label="Topic"><option value="">All topics</option>
       {% for t in filter_options.topics %}<option value="{{ t }}" {{ 'selected' if f_topic == t }}>{{ t }}</option>{% endfor %}</select>
-    <select name="subtopic" id="fSubtopic" data-autosubmit aria-label="Sub-topic"><option value="">All sub-topics</option>
-      {% for st in filter_options.all_subtopics %}<option value="{{ st }}" {{ 'selected' if f_subtopic == st }}>{{ st }}</option>{% endfor %}</select>
+    <select name="subtopic" id="fSubtopic" aria-label="Sub-topic"><option value="">All sub-topics</option>
+      {% for st in ((filter_options.subtopics_by_topic or {}).get(f_topic) or filter_options.all_subtopics if f_topic else filter_options.all_subtopics) %}<option value="{{ st }}" {{ 'selected' if f_subtopic == st }}>{{ st }}</option>{% endfor %}</select>
     {% endif %}
     <label class="qb-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><input type="search" name="q" value="{{ q_search or '' }}" placeholder="Search question text" aria-label="Search question text"></label>
     {% if f_topic or f_subtopic or f_year or f_body or q_search %}
@@ -382,41 +388,6 @@
   {% endif %}
   {% endif %}
 
-  {% if can_scrape %}
-  <details class="qb-tool" id="qbDownload">
-    <summary><span class="ic"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i></span><span class="tt"><b>Download from myschool.ng</b><small>Pick subjects and years; it saves straight to the bank</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
-    <div class="tb">
-      <p>Downloads past questions for the ticked subjects across the chosen years, skipping duplicates. Each question is tagged with its section, topic and year. It runs in steps in your browser, so you can stop and resume at any time. Keep this tab open while it runs. Questions that <em>rely</em> on a diagram we can't fetch are saved but <strong>held out of exams</strong> until you add the picture.</p>
-      <p><i class="fas fa-circle-info" aria-hidden="true"></i> myschool draws most diagrams with JavaScript, so this download rarely captures them. For diagram-heavy subjects, run the local <code>waec_scraper.py --images</code> and paste its output.</p>
-      <div class="form-row" style="align-items:flex-end;">
-        <div class="form-group"><label class="form-label" for="scExam">Exam</label>
-          <select id="scExam" class="form-control"><option value="jamb">JAMB</option><option value="waec">WAEC</option><option value="neco">NECO</option><option value="post-utme">Post-UTME</option></select></div>
-        <div class="form-group"><label class="form-label" for="scYearFrom">Start year</label>
-          <input type="number" id="scYearFrom" class="form-control" value="2010" min="1990" max="2035"></div>
-        <div class="form-group"><label class="form-label" for="scYearTo">End year</label>
-          <input type="number" id="scYearTo" class="form-control" value="2023" min="1990" max="2035"></div>
-      </div>
-      <div class="form-group">
-        <div class="form-label" style="display:flex;gap:.6rem;align-items:center">Subjects <a href="#" id="scAll" style="text-transform:none;letter-spacing:0">all</a><a href="#" id="scNone" style="text-transform:none;letter-spacing:0">none</a></div>
-        <div id="scSubjects" class="qb-subj">
-          {% for s in subjects %}
-          <label class="sc-lbl" data-jamb="{{ '1' if s.id in jamb_ok_ids else '0' }}"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}<span class="sc-na rs-muted" style="display:none;font-size:.72rem;">(not on JAMB)</span></label>
-          {% endfor %}
-        </div>
-      </div>
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;">
-        <button type="button" id="scStart" class="rs-btn primary"><i class="fas fa-play" aria-hidden="true"></i> Start download</button>
-        <button type="button" id="scResume" class="rs-btn primary" style="display:none;"><i class="fas fa-play" aria-hidden="true"></i> Resume</button>
-        <button type="button" id="scStop" class="rs-btn ghost danger" style="display:none;"><i class="fas fa-pause" aria-hidden="true"></i> Stop</button>
-      </div>
-      <div id="scProgressWrap" style="display:none;">
-        <div class="qb-prog"><i id="scBar"></i></div>
-        <div style="margin-top:.45rem;font-size:.84rem"><strong id="scStatus">—</strong> · <span id="scCounts">0 added</span> <span id="scCurrent" class="rs-muted"></span></div>
-        <div id="scError" style="color:var(--warning);margin-top:.3rem;font-size:.84rem"></div>
-      </div>
-    </div>
-  </details>
-  {% endif %}
 
   {% if can_del %}
   <details class="qb-tool danger" id="qbDelete">
@@ -452,39 +423,8 @@
   {% endif %}
   </div>
 
-<script nonce="{{ csp_nonce }}">
-(function(){
-    // Menu links and "Add question" open (and scroll to) the matching panel.
-    function openFromHash(id){
-        var el = id && document.getElementById(id);
-        if(el && el.tagName === 'DETAILS'){ el.open = true; el.scrollIntoView({behavior:'smooth', block:'start'}); }
-    }
-    document.addEventListener('click', function(e){
-        var a = e.target.closest && e.target.closest('a[href^="#qb"]');
-        if(!a) return;
-        e.preventDefault();
-        var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details'));
-        if(m) m.open = false;
-        openFromHash(a.getAttribute('href').slice(1));
-    });
-    if(location.hash.indexOf('#qb') === 0) openFromHash(location.hash.slice(1));
-    var on = document.querySelector('.qb-chip.on');
-    if(on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
-})();
-</script>
-<script nonce="{{ csp_nonce }}">
-(function(){
-    var sel = document.getElementById('delScope');
-    if(sel){
-        var box = sel.closest('form');
-        function upd(){
-            box.querySelector('.del-src').style.display = sel.value === 'source' ? '' : 'none';
-            box.querySelector('.del-year').style.display = sel.value === 'year' ? '' : 'none';
-        }
-        sel.addEventListener('change', upd); upd();
-    }
-})();
-</script>
+
+
 
 <script nonce="{{ csp_nonce }}">
 (function(){
@@ -612,45 +552,195 @@
 
 {% if filter_options %}
 <script type="application/json" id="bank-subs-by-topic">{{ filter_options.subtopics_by_topic|tojson }}</script>
-<script nonce="{{ csp_nonce }}">
-(function(){
-    // Filter bar: narrow the sub-topic list to the chosen topic (blank topic = all).
-    var byTopic = JSON.parse(document.getElementById('bank-subs-by-topic').textContent);
-    var all = {{ filter_options.all_subtopics|tojson }};
-    var topic = document.getElementById('fTopic'), sub = document.getElementById('fSubtopic');
-    if(!topic || !sub) return;
-    var current = sub.value;
-    topic.addEventListener('change', function(){
-        var list = topic.value ? (byTopic[topic.value] || []) : all;
-        var keep = list.indexOf(current) >= 0 ? current : '';
-        sub.innerHTML = '<option value="">All sub-topics</option>' + list.map(function(s){
-            return '<option value="'+s.replace(/"/g,'&quot;')+'"'+(s===keep?' selected':'')+'>'+s+'</option>'; }).join('');
-        // topic changed by the user → drop a stale sub-topic so it doesn't over-filter
-    });
-})();
-</script>
+
 {% endif %}
 
 <script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
-<script nonce="{{ csp_nonce }}">
-(function(){
-    var tree = JSON.parse(document.getElementById('mjq-topics').textContent);
-    var byTitle = {}; tree.forEach(function(t){ byTitle[t.title] = t.subtopics || []; });
-    document.querySelectorAll('.mjq-topic').forEach(function(topic){
-        var form = topic.closest('form');
-        var sub = form ? form.querySelector('.mjq-subtopic') : null;
-        if(!sub) return;
-        topic.addEventListener('change', function(){
-            var subs = byTitle[topic.value] || [];
-            sub.innerHTML = '<option value="">— None —</option>' + subs.map(function(s){
-                return '<option value="'+s.title.replace(/"/g,'&quot;')+'">'+s.title+'</option>'; }).join('');
-            sub.disabled = subs.length === 0;
-        });
-    });
-})();
-</script>
+
 {% endif %}
+</div>
+{% if subject and can_scrape %}
+<div class="qb-tools">
+  <details class="qb-tool" id="qbDownload">
+    <summary><span class="ic"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i></span><span class="tt"><b>Download from myschool.ng</b><small>Pick subjects and years; it saves straight to the bank</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+    <div class="tb">
+      <p>Downloads past questions for the ticked subjects across the chosen years, skipping duplicates. Each question is tagged with its section, topic and year. It runs in steps in your browser, so you can stop and resume at any time. Keep this tab open while it runs. Questions that <em>rely</em> on a diagram we can't fetch are saved but <strong>held out of exams</strong> until you add the picture.</p>
+      <p><i class="fas fa-circle-info" aria-hidden="true"></i> myschool draws most diagrams with JavaScript, so this download rarely captures them. For diagram-heavy subjects, run the local <code>waec_scraper.py --images</code> and paste its output.</p>
+      <div class="form-row" style="align-items:flex-end;">
+        <div class="form-group"><label class="form-label" for="scExam">Exam</label>
+          <select id="scExam" class="form-control"><option value="jamb">JAMB</option><option value="waec">WAEC</option><option value="neco">NECO</option><option value="post-utme">Post-UTME</option></select></div>
+        <div class="form-group"><label class="form-label" for="scYearFrom">Start year</label>
+          <input type="number" id="scYearFrom" class="form-control" value="2010" min="1990" max="2035"></div>
+        <div class="form-group"><label class="form-label" for="scYearTo">End year</label>
+          <input type="number" id="scYearTo" class="form-control" value="2023" min="1990" max="2035"></div>
+      </div>
+      <div class="form-group">
+        <div class="form-label" style="display:flex;gap:.6rem;align-items:center">Subjects <a href="#" id="scAll" style="text-transform:none;letter-spacing:0">all</a><a href="#" id="scNone" style="text-transform:none;letter-spacing:0">none</a></div>
+        <div id="scSubjects" class="qb-subj">
+          {% for s in subjects %}
+          <label class="sc-lbl" data-jamb="{{ '1' if s.id in jamb_ok_ids else '0' }}"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}<span class="sc-na rs-muted" style="display:none;font-size:.72rem;">(not on JAMB)</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;">
+        <button type="button" id="scStart" class="rs-btn primary"><i class="fas fa-play" aria-hidden="true"></i> Start download</button>
+        <button type="button" id="scResume" class="rs-btn primary" style="display:none;"><i class="fas fa-play" aria-hidden="true"></i> Resume</button>
+        <button type="button" id="scStop" class="rs-btn ghost danger" style="display:none;"><i class="fas fa-pause" aria-hidden="true"></i> Stop</button>
+      </div>
+      <div id="scProgressWrap" style="display:none;">
+        <div class="qb-prog"><i id="scBar"></i></div>
+        <div style="margin-top:.45rem;font-size:.84rem"><strong id="scStatus">—</strong> · <span id="scCounts">0 added</span> <span id="scCurrent" class="rs-muted"></span></div>
+        <div id="scError" style="color:var(--warning);margin-top:.3rem;font-size:.84rem"></div>
+      </div>
+    </div>
+  </details>
+</div>
+{% endif %}
+<div class="ni-toast" id="qbToast" role="status" aria-live="polite" hidden></div>
 </div>
 {% endblock %}
 
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{% endblock %}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // The question bank works in place: subject chips, sections, filters, search,
+    // paging and every form (add, delete, import, passages, novel, bulk delete,
+    // fix pictures) update the page without a full reload.
+    var BASE = location.pathname, seq = 0, searchTimer = null, toastTimer = null;
+    var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).content || '';
+    function live(){ return document.getElementById('qbLive'); }
+    function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+    function toast(msg, tone){
+        var t = document.getElementById('qbToast'); if (!t || !msg) return;
+        t.className = 'ni-toast ' + (tone === 'error' ? 'bad' : tone === 'warning' ? 'warn' : '');
+        t.innerHTML = '<i class="fas fa-' + (tone === 'error' ? 'circle-xmark' : tone === 'warning' ? 'triangle-exclamation' : 'circle-check') + '" aria-hidden="true"></i><span>' + esc(msg) + '</span>';
+        t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 4500);
+    }
+    function openPanel(id){
+        var el = id && document.getElementById(id);
+        if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+    }
+    function scrollChips(){
+        var on = document.querySelector('.qb-chip.on');
+        if (on && on.parentNode.scrollWidth > on.parentNode.clientWidth) on.parentNode.scrollLeft = on.offsetLeft - 16;
+    }
+    function after(box){
+        if (window.MathJax && window.MathJax.typesetPromise) { try { window.MathJax.typesetPromise([box]); } catch (e) {} }
+        scrollChips();
+    }
+    // Swap #qbLive for the same block from a fetched page; show its messages.
+    function swapFrom(html, url, opts){
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var fresh = doc.getElementById('qbLive');
+        if (!fresh) { location.href = url; return false; }
+        var box = live();
+        var openIds = Array.prototype.map.call(box.querySelectorAll('details[id][open]'), function(d){ return d.id; });
+        var y = scrollY;
+        box.replaceWith(fresh);
+        if (opts.keepOpen) openIds.forEach(function(id){ var d = document.getElementById(id); if (d) d.open = true; });
+        doc.querySelectorAll('.flash-message').forEach(function(f){
+            var tone = /flash-(error|danger)/.test(f.className) ? 'error' : /flash-warning/.test(f.className) ? 'warning' : 'success';
+            toast((f.querySelector('span') || f).textContent.trim(), tone);
+        });
+        var u = new URL(url, location.href);
+        if (opts.push) history.pushState({qb: 1}, '', u.pathname + u.search);
+        else if (opts.replace !== false) history.replaceState({qb: 1}, '', u.pathname + u.search);
+        document.title = doc.title || document.title;
+        if (opts.scrollTo) { var el = fresh.querySelector(opts.scrollTo); if (el) { var t = el.getBoundingClientRect().top + scrollY - 80; if (t < scrollY) scrollTo({top: t, behavior: 'smooth'}); } }
+        else scrollTo(0, y);
+        after(fresh);
+        return true;
+    }
+    function load(url, opts){
+        opts = opts || {};
+        var n = ++seq, box = live(); box.setAttribute('aria-busy', 'true');
+        return fetch(url, {credentials: 'same-origin', headers: {'X-Requested-With': 'fetch-html'}})
+            .then(function(r){ if (!r.ok) throw 0; return r.text().then(function(h){ return [h, r.url]; }); })
+            .then(function(x){ if (n === seq) swapFrom(x[0], x[1] || url, opts); })
+            .catch(function(){ location.href = url; })
+            .then(function(){ var b = live(); if (b) b.setAttribute('aria-busy', 'false'); });
+    }
+    function filterUrl(changed){
+        var f = document.getElementById('bankFilters'), q = new URLSearchParams();
+        new FormData(f).forEach(function(v, k){
+            if (v === '') return;
+            if (changed === 'topic' && k === 'subtopic') return;   // a new topic drops a stale sub-topic
+            q.set(k, v);
+        });
+        return BASE + '?' + q.toString();
+    }
+
+    // links: chips, section tiles, pager, Clear, "Need images" tile stays a normal link
+    document.addEventListener('click', function(e){
+        var a = e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        if (a.getAttribute('href').indexOf('#qb') === 0) {         // menu / "Add question" → open a panel
+            e.preventDefault();
+            var pop = a.closest('.bx-menu-pop'), m = pop && (pop._home || pop.closest('details')); if (m) m.open = false;
+            openPanel(a.getAttribute('href').slice(1));
+            return;
+        }
+        if (!a.closest('#qbLive') || a.target || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+        var u = new URL(a.href, location.href);
+        if (u.origin !== location.origin || u.pathname !== BASE) return;
+        e.preventDefault();
+        load(u.pathname + u.search, {push: true, scrollTo: a.closest('.qb-pager') ? '.qb-list' : null});
+    });
+    window.addEventListener('popstate', function(){ load(location.pathname + location.search, {replace: false}); });
+
+    // filters apply at once; search after a short pause
+    document.addEventListener('change', function(e){
+        var t = e.target;
+        if (t.closest && t.closest('#bankFilters') && t.tagName === 'SELECT') { load(filterUrl(t.name), {push: true}); return; }
+        if (t.id === 'delScope') {
+            var box = t.closest('form');
+            box.querySelector('.del-src').style.display = t.value === 'source' ? '' : 'none';
+            box.querySelector('.del-year').style.display = t.value === 'year' ? '' : 'none';
+            return;
+        }
+        if (t.classList && t.classList.contains('mjq-topic')) {          // add-question form: topic → its sub-topics
+            var tree = JSON.parse((document.getElementById('mjq-topics') || {}).textContent || '[]'), subs = [];
+            tree.forEach(function(x){ if (x.title === t.value) subs = x.subtopics || []; });
+            var sub = t.closest('form').querySelector('.mjq-subtopic');
+            if (sub) {
+                sub.innerHTML = '<option value="">— None —</option>' + subs.map(function(x){ return '<option value="' + esc(x.title) + '">' + esc(x.title) + '</option>'; }).join('');
+                sub.disabled = !subs.length;
+            }
+        }
+    });
+    document.addEventListener('input', function(e){
+        if (!(e.target.closest && e.target.closest('#bankFilters') && e.target.name === 'q')) return;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(function(){ load(filterUrl(), {replace: true}); }, 450);
+    });
+
+    // forms: the filter (GET) and every POST inside the bank run in the background
+    document.addEventListener('submit', function(e){
+        var f = e.target;
+        if (f.id === 'bankFilters') { e.preventDefault(); clearTimeout(searchTimer); load(filterUrl(), {push: true}); return; }
+        if (!f.closest || !f.closest('#qbLive') || (f.getAttribute('method') || '').toLowerCase() !== 'post') return;
+        e.preventDefault();
+        var btns = f.querySelectorAll('button'); btns.forEach(function(b){ b.disabled = true; });
+        var card = f.closest('.qb-q, .qb-passage'); if (card) card.style.opacity = '.5';
+        var isAdd = f.classList.contains('addq');
+        fetch(f.getAttribute('action'), {method: 'POST', body: new FormData(f), credentials: 'same-origin',
+                                         headers: {'X-CSRFToken': CSRF, 'X-Requested-With': 'fetch-html'}})
+            .then(function(r){ return r.text().then(function(h){ return [h, r.url, r.ok]; }); })
+            .then(function(x){
+                var u = new URL(x[1], location.href);
+                if (u.pathname !== BASE) { location.href = x[1]; return; }   // e.g. an error on another page
+                swapFrom(x[0], x[1], {keepOpen: isAdd});
+                if (isAdd) {                                             // ready for the next question
+                    var again = live().querySelector('details#qbAdd textarea[name=question_text]');
+                    if (again && document.querySelector('details#qbAdd[open]')) again.focus({preventScroll: true});
+                }
+            })
+            .catch(function(){ toast('Network problem — nothing was changed. Try again.', 'error'); btns.forEach(function(b){ b.disabled = false; }); if (card) card.style.opacity = ''; });
+    });
+
+    if (location.hash.indexOf('#qb') === 0) openPanel(location.hash.slice(1));
+    history.replaceState({qb: 1}, '', location.href);
+    scrollChips();
+})();
+</script>
+{% endblock %}
