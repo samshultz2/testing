@@ -106,7 +106,7 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12,
             if _title_ok(q.topic) and not title:
                 note('kept (already titled)', q, q.topic)
                 continue
-            new = (title or '').strip() or ms.novel_for_year(q.exam_year) or None
+            new = (title or '').strip() or ms.book_from_characters(q.question_text) or ms.novel_for_year(q.exam_year) or None
             if new and not ms.same_novel(new, q.topic or ''):
                 note('kept, titled', q, new)
                 if apply:
@@ -214,8 +214,12 @@ def _find_elsewhere(subject, base, apply, session, cache, note, log, from_year):
     for b, ns in names.items():
         if ns:
             log('  names learned for %s: %s' % (b, ', '.join(sorted(ns)[:25])))
+    from utils.myschool import book_from_characters
     for q in unchecked:
         book = _book_for_year(q.exam_year)
+        known = book_from_characters(q.question_text)
+        if known and book and same_novel(known, book) and not _clearly_other(q.question_text):
+            found.append((q, known, 'known character')); continue
         if not book:
             continue
         ns = next((v for b, v in names.items() if same_novel(b, book)), set())

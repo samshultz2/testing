@@ -100,3 +100,32 @@ def test_finds_novel_questions_filed_elsewhere(app):
         assert g(other_year).section != 'novel'            # 2012 is not a Lekki year
         MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids)).delete(synchronize_session=False)
         db.session.commit()
+
+
+def test_known_characters_identify_the_book():
+    from utils import myschool as ms
+    lekki = ms.book_from_characters
+    assert 'Lekki' in lekki('What did Mr Bepo tell the staff at assembly?')
+    assert 'Lekki' in lekki('Mrs Ibidun Gloss, the MD, insisted that')
+    assert 'Lekki' in lekki('Who is Mr Audu?')                        # everyday name + title
+    assert 'Lekki' in lekki('The headmaster of Stardom Schools is')
+    assert lekki('Sola and Ade went to school') is None               # everyday name alone
+    assert lekki('Gloss over the details, he said') is None
+    assert 'Life Changer' in lekki("Ummi's husband wanted to study law")
+    sec, top, _ = ms.classify('English Language', 'What did Mr Bepo tell the staff?', year=2025)
+    assert sec == 'novel' and 'Lekki' in top
+    assert ms.classify('English Language', 'Choose the option nearest in meaning: Mr Audu is generous')[0] != 'novel'
+    assert ms.classify('Mathematics', 'Bepo bought 3 pens')[0] != 'novel'
+
+
+def test_repair_finds_2025_question_by_known_character(app):
+    from utils.novel_repair import repair
+    with app.app_context():
+        subj = _english()
+        t = uuid.uuid4().hex[:5]
+        q = _q(subj.id, f'Why was Mr Bepo unable to speak at the assembly? {t}', 'comprehension', 'What the questions test')
+        db.session.add(q); db.session.commit()
+        repair(subj, apply=True, use_myschool=False, log=lambda *a: None)
+        q = db.session.get(MockJAMBQuestion, q.id)
+        assert q.section == 'novel' and 'Lekki' in q.topic
+        db.session.delete(q); db.session.commit()

@@ -129,6 +129,40 @@ def novel_catalogue():
     return out
 
 
+# Character / place names per recommended text, to recognise a novel question
+# that only names a character ("What did Mr Bepo tell the staff?"). ``strong``
+# names are distinctive and count on their own; ``weak`` ones are everyday names
+# that also turn up in grammar sentences, so they count only with a title
+# (Mr/Mrs/Chief…) or together with another of the book's names. Spellings vary
+# between study guides, so common variants are listed.
+NOVEL_CHARACTERS = {
+    "The Lekki Headmaster": {
+        "strong": ["Bepo", "Adebepo", "Adebeop", "Ibidun", "Stardom", "Egi Meko", "Meko", "Fafore",
+                   "Ayesoro", "Didi Ogba", "Ogba", "Solape", "Ikenna Egbu", "Egbu", "Jeremi Amos", "Jeremi",
+                   "Grace Ape", "Ope Wande", "Oloja"],
+        "weak": ["Gloss", "Audu", "Sola", "Seri", "Adewale", "Ignatius", "Ogo", "Amos", "Bayo"],
+    },
+    "The Life Changer": {
+        "strong": ["Ummi", "Bint", "Talle", "Teemah", "Labeeb", "Zainab", "Salma"],
+        "weak": ["Omar", "Zara", "Kabir", "Hakeem", "Rabiu"],
+    },
+}
+_TITLE_WORD = r"(?:Mr|Mrs|Miss|Ms|Dr|Prof|Chief|Alhaji|Mallam|Malam|Aunty|Uncle|Madam)\.?\s+"
+
+
+def book_from_characters(text):
+    """The recommended text whose characters a question names, or None."""
+    t = text or ''
+    for book, ns in NOVEL_CHARACTERS.items():
+        strong = [n for n in ns['strong'] if re.search(r"\b%s\b" % re.escape(n), t)]
+        weak = [n for n in ns['weak'] if re.search(r"\b%s\b" % re.escape(n), t)]
+        titled = [n for n in ns['weak'] if re.search(_TITLE_WORD + re.escape(n) + r"\b", t)]
+        if strong or titled or len(weak) >= 2:
+            full = next((c['value'] for c in novel_catalogue() if c['title'] == book), book)
+            return full
+    return None
+
+
 GENERIC_NOVEL_TAGS = {'', 'novel', 'recommended novel', 'recommendednovel', 'the novel',
                       'recommended text', 'prescribed text', 'reading text'}
 
@@ -156,7 +190,7 @@ _NOVEL_CUE = re.compile(r"\b(novel|novelist|narrator|narrates|narrative|protagon
 def looks_like_novel_question(text):
     """Does a question's wording refer to a book (novel, narrator, character…)?"""
     t = text or ''
-    if _NOVEL_CUE.search(t):
+    if _NOVEL_CUE.search(t) or book_from_characters(t):
         return True
     return any(novel_key(c['title']) and novel_key(c['title']) in novel_key(t)
                for c in novel_catalogue())
@@ -910,6 +944,11 @@ def classify(subject, text, year=None, novel_title=None):
     mock's ``novel_title``. The novel is taken from ``novel_title`` when supplied
     (the name scraped off the listing page, authoritative), else from the
     hardcoded ``year`` map."""
+    if norm_subject(subject) == "english language":
+        book = book_from_characters(text)
+        if book and not re.search(r"nearest in meaning|opposite in meaning|in italics|vowel sound|best completes", text or "", re.I):
+            # names one of a recommended text's characters: a Novel question on that book
+            return ("novel", (novel_title or "").strip() or book, "Characters & characterisation")
     index = _build_index(subject)
     if not index:
         return (None, None, None)
@@ -934,7 +973,7 @@ def classify(subject, text, year=None, novel_title=None):
         # tag the actual novel (only on a genuine novel match): prefer the name
         # scraped off the listing page, fall back to the year map.
         if section == "novel" and topic == "Recommended Novel":
-            nv = (novel_title or "").strip() or novel_for_year(year)
+            nv = (novel_title or "").strip() or book_from_characters(text) or novel_for_year(year)
             if nv:
                 topic = nv
         return (section, topic, sub)
@@ -954,6 +993,11 @@ def classify_confident(subject, text, year=None, novel_title=None):
     hash-based section fallback. Returns ``(section, topic, subtopic)`` or
     ``(None, None, None)`` when nothing matched. Used by the bank auto-tagger so a
     question is never given a made-up topic/section it doesn't actually belong to."""
+    if norm_subject(subject) == "english language":
+        book = book_from_characters(text)
+        if book and not re.search(r"nearest in meaning|opposite in meaning|in italics|vowel sound|best completes", text or "", re.I):
+            # names one of a recommended text's characters: a Novel question on that book
+            return ("novel", (novel_title or "").strip() or book, "Characters & characterisation")
     index = _build_index(subject)
     if not index:
         return (None, None, None)
@@ -977,7 +1021,7 @@ def classify_confident(subject, text, year=None, novel_title=None):
         return (None, None, None)
     section, topic, sub = best
     if section == "novel" and topic == "Recommended Novel":
-        nv = (novel_title or "").strip() or novel_for_year(year)
+        nv = (novel_title or "").strip() or book_from_characters(text) or novel_for_year(year)
         if nv:
             topic = nv
     return (section, topic, sub)
