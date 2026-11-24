@@ -72,3 +72,31 @@ def test_retag_leaves_novel_titles_alone(app):
         db.session.add(q); db.session.commit()
         assert q.id not in _target_ids(subj, 'all')
         db.session.delete(q); db.session.commit()
+
+
+def test_finds_novel_questions_filed_elsewhere(app):
+    """By the book named in the question, or by character names learned from the
+    confirmed novel questions (made-up names here)."""
+    from utils.novel_repair import repair
+    with app.app_context():
+        subj = _english()
+        t = uuid.uuid4().hex[:5]
+        lekki = 'The Lekki Headmaster — Kabir Alabi Garba'
+        conf = [_q(subj.id, f'Why did Zorbadu leave the staff room? {t}', 'novel', lekki),
+                _q(subj.id, f'Zorbadu and Quillana argued about the {t} fees', 'novel', lekki),
+                _q(subj.id, f"Who is Quillana's guardian? {t}", 'novel', lekki)]
+        titled = _q(subj.id, f'The following question is based on The Lekki Headmaster. Who {t}?', 'comprehension', 'What the questions test')
+        by_name = _q(subj.id, f'What did Zorbadu promise the pupils? {t}', 'lexis_structure', 'Lexis and Structure', year='2026')
+        plain = _q(subj.id, f'Choose the option nearest in meaning to the word in italics {t}', 'lexis_structure', 'Lexis and Structure')
+        other_year = _q(subj.id, f'What did Zorbadu say? {t}', None, None, year='2012')
+        rows = conf + [titled, by_name, plain, other_year]
+        db.session.add_all(rows); db.session.commit()
+        ids = [r.id for r in rows]
+        repair(subj, apply=True, use_myschool=False, log=lambda *a: None)
+        g = lambda r: db.session.get(MockJAMBQuestion, r.id)
+        assert g(titled).section == 'novel' and 'Lekki' in g(titled).topic
+        assert g(by_name).section == 'novel' and 'Lekki' in g(by_name).topic
+        assert g(plain).section == 'lexis_structure'
+        assert g(other_year).section != 'novel'            # 2012 is not a Lekki year
+        MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids)).delete(synchronize_session=False)
+        db.session.commit()

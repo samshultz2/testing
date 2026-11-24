@@ -73,7 +73,7 @@ def _myschool_verdict(q, subject, session, cache):
     return (True, title)
 
 
-def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12):
+def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12, find_elsewhere=True, from_year=2010):
     from models import db, MockJAMBQuestion
     from utils import myschool as ms
     session = ms._session() if use_myschool else None
@@ -139,4 +139,94 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12)
                 q.section = 'novel'
     if apply:
         db.session.commit()
+    if find_elsewhere:
+        _find_elsewhere(subject, base, apply, session, cache, note, log, from_year)
     return stats, samples
+
+
+# ---------------------------------------------------------------- elsewhere
+_NAME = re.compile(r"\b(?:(?:Mr|Mrs|Miss|Mallam|Malam|Alhaji|Chief|Dr|Prof|Aunty|Uncle)\.?\s+)?[A-Z][a-z]{2,}\b")
+_NOT_NAMES = set('''The What Who Which When Where Why How According Choose Complete Fill From Select Identify
+In On At Of For And But Or Not None All Both Each Every This That These Those His Her Their Its Our Your
+January February March April May June July August September October November December Monday Tuesday
+Wednesday Thursday Friday Saturday Sunday English Nigeria Nigerian Lagos Abuja God Allah Christmas
+Book Novel Chapter Author Writer Narrator Story Text Question Following Option Options Answer Based
+Life Changer Lekki Headmaster Last Days Forcados High School Sweet Sixteen Dependence'''.split())
+
+
+def _names(text):
+    out = set()
+    for m in _NAME.finditer(text or ''):
+        w = m.group(0)
+        if w.split()[-1] in _NOT_NAMES:
+            continue
+        out.add(w.split()[-1])
+    return out
+
+
+def _title_in_text(text):
+    from utils.myschool import novel_catalogue, novel_key
+    k = novel_key(text)
+    for c in novel_catalogue():
+        ck = novel_key(c['title'])
+        if ck and len(ck) >= 6 and ck in k:
+            return c['value']
+    return None
+
+
+def _book_for_year(year):
+    from utils.myschool import novel_for_year
+    return novel_for_year(year)
+
+
+def _find_elsewhere(subject, base, apply, session, cache, note, log, from_year):
+    """Novel questions filed in other sections: found by the book's title in
+    the question, by their myschool.ng page, or (pasted questions that can't be
+    checked) by character names learned from the confirmed novel questions."""
+    from models import db, MockJAMBQuestion
+    from utils.myschool import same_novel
+    pool = [q for q in base.filter((MockJAMBQuestion.section.is_(None)) | (MockJAMBQuestion.section != 'novel'))
+            .order_by(MockJAMBQuestion.id).all()
+            if str(q.exam_year or '')[:4].isdigit() and int(str(q.exam_year)[:4]) >= from_year
+            or _title_in_text(q.question_text)]
+    log('Looking for novel questions filed elsewhere among %d English questions from %d on…' % (len(pool), from_year))
+    found, unchecked = [], []
+    for i, q in enumerate(pool, 1):
+        title = _title_in_text(q.question_text)
+        if title:
+            found.append((q, title, 'book named in the question')); continue
+        v = _myschool_verdict(q, subject, session, cache) if session is not None else None
+        if v is None:
+            unchecked.append(q)
+        elif v[0]:
+            found.append((q, (v[1] or '').strip() or _book_for_year(q.exam_year), 'myschool page'))
+        if i % 50 == 0:
+            log('  …%d/%d' % (i, len(pool)))
+    # learn each book's character names from every confirmed novel question
+    confirmed = [(q.question_text, q.topic) for q in base.filter(MockJAMBQuestion.section == 'novel').all()]
+    confirmed += [(q.question_text, t) for q, t, _w in found if t]
+    seen = {}
+    for text, book in confirmed:
+        for n in _names(text):
+            seen.setdefault((book or '').strip(), {}).setdefault(n, 0)
+            seen[(book or '').strip()][n] += 1
+    names = {b: {n for n, c in d.items() if c >= 2} for b, d in seen.items() if b}
+    for b, ns in names.items():
+        if ns:
+            log('  names learned for %s: %s' % (b, ', '.join(sorted(ns)[:25])))
+    for q in unchecked:
+        book = _book_for_year(q.exam_year)
+        if not book:
+            continue
+        ns = next((v for b, v in names.items() if same_novel(b, book)), set())
+        hit = _names(q.question_text) & ns
+        if hit and not _clearly_other(q.question_text):
+            found.append((q, book, 'character ' + ', '.join(sorted(hit))))
+    for q, title, why in found:
+        note('found in another section -> Novel', q, '%s (%s)' % (title or 'untitled', why))
+        if apply:
+            q.section = 'novel'
+            if title:
+                q.topic = title[:100]; q.subtopic = None
+    if apply:
+        db.session.commit()
