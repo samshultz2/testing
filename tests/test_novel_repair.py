@@ -10,6 +10,15 @@ def _q(subj_id, text, section, topic, year='2025'):
                             correct_option='A', marks=1)
 
 
+def _english():
+    # its own subject ("English" = English Language to the classifier) so these
+    # rows never leak into other tests' English Language bank
+    subj = Subject.query.filter_by(name='English').first()
+    if subj is None:
+        subj = Subject(name='English', is_active=False); db.session.add(subj); db.session.flush()
+    return subj
+
+
 def test_classifier_never_guesses_novel():
     from utils import myschool as ms
     for text in ['Choose the option nearest in meaning to the word in italics: The style of the dress was odd',
@@ -30,34 +39,36 @@ def test_fallback_sections_exclude_novel(app):
 def test_repair_novel_section(app):
     from utils.novel_repair import repair
     with app.app_context():
-        subj = Subject.query.filter_by(name='English Language').first()
-        if subj is None:
-            subj = Subject(name='English Language', is_active=True); db.session.add(subj); db.session.flush()
+        subj = _english()
         tag = uuid.uuid4().hex[:6]
         real = _q(subj.id, f'In the novel, who is the headmaster\'s deputy? {tag}', 'novel', 'What the questions test')
         lexis = _q(subj.id, f'Choose the option opposite in meaning to the word in italics: The man is generous {tag}',
                    'novel', 'Lexis and Structure')
         stray = _q(subj.id, f'Who narrates the story? {tag}', None, 'The Lekki Headmaster')
-        db.session.add_all([real, lexis, stray]); db.session.commit()
-        ids = real.id, lexis.id, stray.id
+        bare = _q(subj.id, f'Mr Mezie is best described as {tag}', 'novel', 'Recommended Novel', year='2026')
+        db.session.add_all([real, lexis, stray, bare]); db.session.commit()
+        ids = real.id, lexis.id, stray.id, bare.id
 
         stats, _s = repair(subj, apply=False, use_myschool=False, log=lambda *a: None)
         assert db.session.get(MockJAMBQuestion, ids[0]).topic == 'What the questions test'      # dry run
         assert stats['moved out of Novel'] >= 1 and stats['kept, titled'] >= 1
 
         repair(subj, apply=True, use_myschool=False, log=lambda *a: None)
-        r, l, st = (db.session.get(MockJAMBQuestion, i) for i in ids)
+        r, l, st, b = (db.session.get(MockJAMBQuestion, i) for i in ids)
+        assert b.section == 'novel' and 'Lekki Headmaster' in b.topic          # names a character only; 2026
         assert r.section == 'novel' and 'Lekki Headmaster' in r.topic          # 2025 novel
         assert l.section != 'novel'
         assert st.section == 'novel'
+        MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids)).delete(synchronize_session=False)
+        db.session.commit()
 
 
 def test_retag_leaves_novel_titles_alone(app):
     from utils.mock_bank_retag import _target_ids
     with app.app_context():
-        subj = Subject.query.filter_by(name='English Language').first() or Subject(name='English Language', is_active=True)
-        db.session.add(subj); db.session.flush()
+        subj = _english()
         q = _q(subj.id, 'In the novel, what does the narrator fear? ' + uuid.uuid4().hex[:5], 'novel',
                'The Lekki Headmaster — Kabir Alabi Garba')
         db.session.add(q); db.session.commit()
         assert q.id not in _target_ids(subj, 'all')
+        db.session.delete(q); db.session.commit()

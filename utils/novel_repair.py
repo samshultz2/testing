@@ -26,6 +26,22 @@ def _title_ok(topic):
     return any(same_novel(c['value'], t) for c in novel_catalogue())
 
 
+import re
+
+# Wording that unmistakably marks a Use-of-English item from another section
+# (vocabulary, oral, sentence completion, comprehension) — never a novel one.
+_OTHER_SECTION = re.compile(
+    r"nearest in meaning|closest in meaning|opposite in meaning|same meaning|in italics|underlined|"
+    r"vowel sound|consonant sound|same sound|rhymes? with|stress(?:ed)? (?:on|syllable)|primary stress|"
+    r"emphatic(?:ally)? stress|syllable|phonetic|correctly spelt|wrongly spelt|best completes|"
+    r"completes? the (?:sentence|gap)|fill(?:s)? the gap|the gap|the blank|according to the passage|"
+    r"in the passage|the writer of the passage|interpretation of the sentence|question tag", re.I)
+
+
+def _clearly_other(text):
+    return bool(_OTHER_SECTION.search(text or ''))
+
+
 def _myschool_verdict(q, subject, session, cache):
     """(is_novel, title) from the question's myschool page, or None if it
     can't be checked (not a myschool question, or the page didn't load)."""
@@ -78,7 +94,11 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12)
     for i, q in enumerate(rows, 1):
         verdict = _myschool_verdict(q, subject, session, cache) if use_myschool else None
         if verdict is None:
-            is_novel, title, how = ms.looks_like_novel_question(q.question_text), None, 'wording'
+            # can't check the page: keep it as a novel question (and title it by
+            # year) unless its wording clearly belongs to another section — real
+            # novel questions often just name a character ("Who is Mr Mezie?")
+            is_novel = ms.looks_like_novel_question(q.question_text) or not _clearly_other(q.question_text)
+            title, how = None, 'wording'
         else:
             (is_novel, title), how = verdict, 'myschool'
         stats['checked_' + how] += 1
