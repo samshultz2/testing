@@ -157,7 +157,8 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
     q = db.session.query(MockJAMBQuestion.id).filter(
         MockJAMBQuestion.subject_id == subject.id,
         MockJAMBQuestion.mock_exam_id.is_(None),
-        MockJAMBQuestion.passage_id.is_(None))
+        MockJAMBQuestion.passage_id.is_(None),
+        (MockJAMBQuestion.section.is_(None)) | (MockJAMBQuestion.section != 'novel'))   # keep Novel titles
     if year:
         q = q.filter(MockJAMBQuestion.exam_year == str(year))
     if exam_body:

@@ -2552,6 +2552,9 @@ def bank_assign_novel():
     rows = q.all()
     if scope == 'untagged':                # blank, or only a placeholder like "Recommended Novel"
         rows = [r for r in rows if not (r.topic or '').strip() or is_generic_novel_tag(r.topic)]
+    if make_novel:                         # only questions whose wording is about a book
+        from utils.myschool import looks_like_novel_question
+        rows = [r for r in rows if looks_like_novel_question(r.question_text)]
     n = 0
     for row in rows:
         row.topic = novel or None

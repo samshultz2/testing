@@ -32,7 +32,8 @@ def target_ids(subject, year=None, exam_body=None, force=False):
     q = db.session.query(MockJAMBQuestion.id).filter(
         MockJAMBQuestion.subject_id == subject.id,
         MockJAMBQuestion.mock_exam_id.is_(None),
-        MockJAMBQuestion.passage_id.is_(None))
+        MockJAMBQuestion.passage_id.is_(None),
+        (MockJAMBQuestion.section.is_(None)) | (MockJAMBQuestion.section != 'novel'))   # keep Novel titles
     if year:
         q = q.filter(MockJAMBQuestion.exam_year == str(year))
     if exam_body:

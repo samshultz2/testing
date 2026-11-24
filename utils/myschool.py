@@ -146,6 +146,22 @@ def novel_key(text):
     return ''.join(t)
 
 
+# A question only belongs to the Novel section when its wording is about a book:
+# words like "style", "setting" or "themes" alone also turn up in lexis and
+# comprehension questions, so they never decide it on their own.
+_NOVEL_CUE = re.compile(r"\b(novel|novelist|narrator|narrates|narrative|protagonist|antagonist|the author|"
+                        r"the writer|in the text|in the book|chapter|character|characters)\b", re.I)
+
+
+def looks_like_novel_question(text):
+    """Does a question's wording refer to a book (novel, narrator, character…)?"""
+    t = text or ''
+    if _NOVEL_CUE.search(t):
+        return True
+    return any(novel_key(c['title']) and novel_key(c['title']) in novel_key(t)
+               for c in novel_catalogue())
+
+
 def is_generic_novel_tag(text):
     """A Novel-section tag that names no actual book (e.g. "Recommended Novel")."""
     return re.sub(r"[^a-z ]+", "", (text or '').lower()).strip() in GENERIC_NOVEL_TAGS
@@ -900,7 +916,10 @@ def classify(subject, text, year=None, novel_title=None):
     low = (text or "").lower()
     toks = set(_tokens(text))
     best, best_score = None, 0
+    novel_ok = looks_like_novel_question(text)
     for section, topic, sub, kws in index:
+        if section == "novel" and not novel_ok:
+            continue                      # never file a question as Novel on stray words
         score = 0
         for kw in kws:
             if " " in kw:
@@ -921,6 +940,8 @@ def classify(subject, text, year=None, novel_title=None):
         return (section, topic, sub)
     sections = []
     for section, _t, _s, _k in index:
+        if section == "novel":
+            continue                      # Novel is never a guess
         if section and section not in sections:
             sections.append(section)
     if not sections:
@@ -939,7 +960,10 @@ def classify_confident(subject, text, year=None, novel_title=None):
     low = (text or "").lower()
     toks = set(_tokens(text))
     best, best_score = None, 0
+    novel_ok = looks_like_novel_question(text)
     for section, topic, sub, kws in index:
+        if section == "novel" and not novel_ok:
+            continue                      # never file a question as Novel on stray words
         score = 0
         for kw in kws:
             if " " in kw:

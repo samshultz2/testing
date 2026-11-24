@@ -30,6 +30,9 @@ def _target_ids(subject, mode, year=None):
         MockJAMBQuestion.subject_id == subject.id,
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.passage_id.is_(None))       # never re-tag passage-bound questions
+    # never re-tag Novel questions: their topic is the book's title, which the
+    # syllabus classifier would overwrite (e.g. with "What the questions test")
+    q = q.filter((MockJAMBQuestion.section.is_(None)) | (MockJAMBQuestion.section != 'novel'))
     if year:
         q = q.filter(MockJAMBQuestion.exam_year == str(year))
     if mode != 'all':
@@ -52,7 +55,8 @@ def _drawable_sections(subject):
     """Valid, non-passage blueprint sections a stand-alone question can be filed
     under (so a fallback never dumps a question into a comprehension/cloze slot)."""
     from utils.jamb_blueprint import sections_for
-    return [s['section'] for s in sections_for(subject.name) if not s['passage']] \
+    secs = [s['section'] for s in sections_for(subject.name) if not s['passage'] and s['section'] != 'novel']
+    return secs or [s['section'] for s in sections_for(subject.name) if s['section'] != 'novel'] \
         or [s['section'] for s in sections_for(subject.name)]
 
 
