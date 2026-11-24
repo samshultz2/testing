@@ -81,3 +81,27 @@ def test_view_exam_json_payload(app):
     assert data['page'] == 'view_exam'
     assert data['results'] and data['results'][0]['rank'] == 1
     assert data['statistics']['statistics']['max'] == 280
+
+
+def test_new_mock_gets_current_novel_existing_kept(app):
+    with app.app_context():
+        s = AcademicSession(name='2025/2026 NV', is_active=False); db.session.add(s); db.session.flush()
+        old = MockJAMBExam(name='Old mock', exam_number=7, session_id=s.id, exam_date=date.today(),
+                           novel_title='The Life Changer')
+        db.session.add(old); db.session.commit(); sid, oid = s.id, old.id
+    client = _admin(app)
+    r = client.post('/mock-jamb/exam/create', headers={'X-Requested-With': 'fetch'},
+                    data={'session_id': sid, 'exam_number': 8, 'exam_date': date.today().isoformat(),
+                          '_csrf_token': _ptoken(client)})
+    assert r.get_json()['ok']
+    with app.app_context():
+        new = MockJAMBExam.query.filter_by(session_id=sid, exam_number=8).first()
+        assert new.novel_title == 'The Lekki Headmaster — Kabir Alabi Garba'      # UTME 2026
+        assert db.session.get(MockJAMBExam, oid).novel_title == 'The Life Changer'   # untouched
+    # re-saving the old mock's blueprint without changing the novel keeps it exactly
+    page = client.get(f'/mock-jamb/exam/{oid}/blueprint').get_data(as_text=True)
+    assert 'Saved for this mock' in page and 'value="The Life Changer" checked' in page
+    client.post(f'/mock-jamb/exam/{oid}/blueprint',
+                data={'_csrf_token': _ptoken(client), 'novel_title': 'The Life Changer'})
+    with app.app_context():
+        assert db.session.get(MockJAMBExam, oid).novel_title == 'The Life Changer'

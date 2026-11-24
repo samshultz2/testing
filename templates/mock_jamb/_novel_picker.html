@@ -12,6 +12,7 @@
         <b>{{ c.title }}</b>
         {% if c.author %}<span class="np-au">{{ c.author }}</span>{% endif %}
         <span class="np-meta">
+          {% if c.saved %}<span class="np-yr">Saved for this mock</span>{% endif %}
           {% if c.years %}<span class="np-yr">JAMB {{ c.years }}</span>{% endif %}
           <span class="np-ct{{ ' none' if not c.count }}">{{ c.count or 'No' }} question{{ '' if c.count == 1 else 's' }} in bank</span>
         </span>

@@ -101,7 +101,7 @@ def on_jamb(subject_name):
 JAMB_ENGLISH_NOVELS = [
     ((2016, 2020), "The Last Days at Forcados High School — A.H. Mohammed"),
     ((2021, 2024), "The Life Changer — Khadija Abubakar Jalli"),
-    ((2025, 2025), "The Lekki Headmaster — Kabir Alabi Garba"),
+    ((2025, 2026), "The Lekki Headmaster — Kabir Alabi Garba"),
 ]
 
 # Every recommended text offered as a one-tap choice when a novel is picked
@@ -127,6 +127,21 @@ def novel_catalogue():
         if title.lower() not in seen:
             out.append({"value": full, "title": title, "author": author, "years": ""})
     return out
+
+
+def current_novel(utme_year):
+    """The novel to preselect for a NEW mock preparing for ``utme_year``: that
+    year's text, or the latest known one for a year past the table (texts run
+    for several years). Existing mocks keep whatever they have saved."""
+    t = novel_for_year(utme_year)
+    if t:
+        return t
+    try:
+        y = int(str(utme_year)[:4])
+    except (TypeError, ValueError):
+        return None
+    latest = max(JAMB_ENGLISH_NOVELS, key=lambda x: x[0][1])
+    return latest[1] if y > latest[0][1] else None
 
 
 def novel_for_year(year):

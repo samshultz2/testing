@@ -217,6 +217,13 @@ def create_exam():
                 description=description,
                 branch_id=new_branch_id
             )
+            # A new mock starts with the recommended novel for the UTME it prepares
+            # for (session 2025/2026 -> UTME 2026); change it on the Blueprint.
+            import re
+            from utils.myschool import current_novel
+            yrs = re.findall(r'(?:19|20)\d{2}', (session_obj.name if session_obj else '') or '')
+            utme = int(yrs[-1]) if yrs else (exam_date.year + (1 if exam_date.month >= 9 else 0))
+            exam.novel_title = current_novel(utme)
             
             db.session.add(exam)
             db.session.commit()
@@ -2488,8 +2495,13 @@ def _novel_choices(current=''):
             title, _, author = t.partition(' — ')
             cards.append({'value': t, 'title': title, 'author': author, 'years': '', 'count': n})
     cur = (current or '').strip()
-    match = next((c for c in cards if cur and (c['value'].lower() == cur.lower() or same(c['title'], cur))), None)
-    return cards, (match['value'] if match else ''), ('' if match else cur)
+    if cur and not any(c['value'] == cur for c in cards):
+        # keep a mock's saved title exactly as it is (e.g. "The Lekki Headmaster"
+        # without the author) so re-saving the blueprint never rewrites it
+        title, _, author = cur.partition(' — ')
+        cards.insert(0, {'value': cur, 'title': title, 'author': author, 'years': '', 'saved': True,
+                         'count': sum(n for t, n in tags if same(t, cur) or same(t, title))})
+    return cards, cur, ''
 
 
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])

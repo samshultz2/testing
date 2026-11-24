@@ -720,3 +720,12 @@ def test_new_maths_and_commerce_boosts():
         == 'Foreign trade: import, export & documents'
     assert ms.classify_confident('Commerce',
                                  'Utmost good faith is a principle of insurance')[2] == 'Insurance'
+
+
+def test_current_novel_for_new_mocks():
+    from utils import myschool as ms
+    assert 'Lekki Headmaster' in ms.novel_for_year(2026)
+    assert 'Lekki Headmaster' in ms.current_novel(2026)
+    assert 'Lekki Headmaster' in ms.current_novel(2030)          # past the table -> latest known
+    assert 'Life Changer' in ms.current_novel(2023)
+    assert ms.current_novel(2005) is None
