@@ -198,11 +198,13 @@ def _default_novel(novel_questions):
     """When a mock doesn't name a novel, pick ONE recommended text so a paper never
     mixes novels: the title (question ``topic``) with the most recent ``exam_year``,
     tie-broken by how many questions carry it."""
-    agg = {}
+    from utils.myschool import novel_key, is_generic_novel_tag
+    agg, names = {}, {}
     for q in novel_questions:
-        title = (q.topic or '').strip()
-        if not title:
+        raw = (q.topic or '').strip()
+        if not raw or is_generic_novel_tag(raw):
             continue
+        title = names.setdefault(novel_key(raw), raw)    # one entry per book, however spelt
         y = str(q.exam_year or '').strip()[:4]
         yr = int(y) if y.isdigit() else 0
         a = agg.setdefault(title, {'max_year': 0, 'count': 0})
@@ -387,8 +389,8 @@ def _fit_english(exam, subject_id, attempt, items, served, subject=None):
     def ok_novel(q):
         if (q.section or '') != 'novel':
             return True
-        t = (q.topic or '').strip().lower()
-        return bool(t) and bool(novel) and (novel in t or t in novel)
+        from utils.myschool import same_novel
+        return bool(novel) and same_novel(novel, q.topic or '')
 
     loose = [q for q in qrows if not q.passage_id and q.id not in served and ok_novel(q)]
     tagged = [q for q in loose if (q.section or '').strip()]
@@ -492,8 +494,8 @@ def _draw_subject_items(exam, subject_id, attempt, subject=None):
                 # tolerant match: the mock's title and the question's novel tag
                 # line up if either contains the other (so "The Life Changer"
                 # matches "The Life Changer — Khadija Abubakar Jalli").
-                t = (q.topic or '').strip().lower()
-                return bool(t) and (novel in t or t in novel)
+                from utils.myschool import same_novel
+                return same_novel(novel, q.topic or '')
             questions_by_section['novel'] = [
                 q for q in questions_by_section['novel'] if _novel_match(q)]
         items, served = draw_paper(bp, passages_by_section, questions_by_section, rng,

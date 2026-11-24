@@ -1390,6 +1390,7 @@ def bank():
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),
                            novel_cards=(_novel_choices()[0] if section == 'novel' else []),
+                           novel_untagged=(_novel_untagged() if section == 'novel' else (0, None)),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            coded_syllabus_url=url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''),
                            analytics_url=url_for('mock_jamb.bank_analytics', subject_id=subject_id or ''),
@@ -2471,36 +2472,55 @@ def _novel_from_form():
     return v
 
 
+def _novel_untagged():
+    """(count, subject_id) of bank Novel questions that name no book — empty or a
+    placeholder like "Recommended Novel". A mock can't use them until tagged."""
+    from utils.myschool import is_generic_novel_tag
+    rows = (db.session.query(MockJAMBQuestion.topic, MockJAMBQuestion.subject_id, db.func.count(MockJAMBQuestion.id))
+            .filter(MockJAMBQuestion.mock_exam_id.is_(None), MockJAMBQuestion.section == 'novel')
+            .group_by(MockJAMBQuestion.topic, MockJAMBQuestion.subject_id).all())
+    n, sid = 0, None
+    for t, subj, c in rows:
+        if not (t or '').strip() or is_generic_novel_tag(t):
+            n += c; sid = sid or subj
+    return n, sid
+
+
 def _novel_choices(current=''):
     """Cards for the novel picker: the JAMB catalogue plus any other title the
     bank already uses, each with how many bank Novel questions carry it."""
-    from utils.myschool import novel_catalogue
+    from utils.myschool import novel_catalogue, same_novel, is_generic_novel_tag
     rows = (db.session.query(MockJAMBQuestion.topic, db.func.count(MockJAMBQuestion.id))
             .filter(MockJAMBQuestion.mock_exam_id.is_(None), MockJAMBQuestion.section == 'novel')
             .group_by(MockJAMBQuestion.topic).all())
-    tags = [((t or '').strip(), n) for t, n in rows if (t or '').strip()]
+    tags = [((t or '').strip(), n) for t, n in rows if (t or '').strip() and not is_generic_novel_tag(t)]
     cards = novel_catalogue()
-
-    def same(a, b):
-        a, b = a.lower(), b.lower()
-        return a in b or b in a
+    same = same_novel
     used = set()
     for c in cards:
         c['count'] = 0
         for t, n in tags:
             if same(c['title'], t):
                 c['count'] += n; used.add(t)
-    for t, n in tags:                      # titles only the bank knows about
-        if t not in used:
-            title, _, author = t.partition(' — ')
-            cards.append({'value': t, 'title': title, 'author': author, 'years': '', 'count': n})
+    extra = {}                             # titles only the bank knows about, one card per book
+    for t, n in tags:
+        if t in used:
+            continue
+        k = next((x for x in extra if same(x, t)), None)
+        if k:
+            extra[k] += n
+        else:
+            extra[t] = n
+    for t, n in extra.items():
+        title, _, author = t.partition(' — ')
+        cards.append({'value': t, 'title': title, 'author': author, 'years': '', 'count': n})
     cur = (current or '').strip()
     if cur and not any(c['value'] == cur for c in cards):
         # keep a mock's saved title exactly as it is (e.g. "The Lekki Headmaster"
         # without the author) so re-saving the blueprint never rewrites it
         title, _, author = cur.partition(' — ')
         cards.insert(0, {'value': cur, 'title': title, 'author': author, 'years': '', 'saved': True,
-                         'count': sum(n for t, n in tags if same(t, cur) or same(t, title))})
+                         'count': sum(n for t, n in tags if same(t, cur))})
     return cards, cur, ''
 
 
@@ -2528,10 +2548,12 @@ def bank_assign_novel():
     else:
         q = MockJAMBQuestion.query.filter_by(
             subject_id=subject_id, mock_exam_id=None, section='novel')
-        if scope == 'untagged':
-            q = q.filter(empty_topic)
+    from utils.myschool import is_generic_novel_tag
+    rows = q.all()
+    if scope == 'untagged':                # blank, or only a placeholder like "Recommended Novel"
+        rows = [r for r in rows if not (r.topic or '').strip() or is_generic_novel_tag(r.topic)]
     n = 0
-    for row in q.all():
+    for row in rows:
         row.topic = novel or None
         if make_novel:
             row.section = 'novel'
@@ -2986,7 +3008,7 @@ def exam_blueprint(exam_id):
     selected_levels = [x.strip() for x in (exam.eligible_levels or '').split(',') if x.strip()]
     sss3 = get_sss3_class()
     return render_template('mock_jamb/blueprint.html', exam=exam, subjects=subjects_view,
-                           novel_title=exam.novel_title or '', novel_cards=novel_cards, novel_pick=novel_pick, novel_other=novel_other,
+                           novel_title=exam.novel_title or '', novel_cards=novel_cards, novel_pick=novel_pick, novel_other=novel_other, novel_untagged=_novel_untagged(),
                            source_mode=exam.source_mode or 'bank',
                            all_classes=all_classes, selected_levels=selected_levels,
                            default_level=(sss3.name if sss3 else 'SSS3'),

@@ -427,3 +427,33 @@ def test_novel_picker_on_blueprint_and_bank(app):
         assert db.session.get(MockJAMBQuestion, qid).topic == 'The Lekki Headmaster — Kabir Alabi Garba'
     bank = c.get(f'/mock-jamb/bank?subject_id={subj_id}&section=novel&all=1').get_data(as_text=True)
     assert 'Which novel?' in bank and '1 question in bank' in bank
+
+
+def test_novel_count_and_draw_tolerate_spelling(app):
+    """Bank questions tagged "The Lekki Head Master" (myschool's spelling) count
+    toward The Lekki Headmaster card, and placeholder tags are flagged."""
+    eid, sid, subj_id = _bank_maths(app, n_per_section=2)
+    with app.app_context():
+        for i, tag in enumerate(['The Lekki Head Master', 'the lekki headmaster.', 'Recommended Novel', '']):
+            db.session.add(MockJAMBQuestion(mock_exam_id=None, subject_id=subj_id, section='novel',
+                                            question_text=f'Lekki spelling Q{i}', topic=tag or None,
+                                            option_a='a', option_b='b', option_c='c', option_d='d',
+                                            correct_option='A', marks=1))
+        db.session.commit()
+    c = _admin(app); tok = _bank_csrf(c)
+    with app.test_request_context():
+        from routes.mock_jamb import _novel_choices, _novel_untagged
+        cards, _p, _o = _novel_choices()
+        lekki = next(x for x in cards if x['title'] == 'The Lekki Headmaster')
+        assert lekki['count'] >= 2
+        assert not any(x['title'].lower().startswith('the lekki head master') for x in cards)   # no duplicate card
+        assert _novel_untagged()[0] >= 2
+    page = c.get(f'/mock-jamb/exam/{eid}/blueprint').get_data(as_text=True)
+    assert 'have no novel title' in page
+    c.post('/mock-jamb/bank/assign-novel', data={'_csrf_token': tok, 'subject_id': subj_id, 'scope': 'untagged',
+                                                 'novel_title': 'The Lekki Headmaster — Kabir Alabi Garba'})
+    with app.app_context():
+        left = MockJAMBQuestion.query.filter(MockJAMBQuestion.question_text.like('Lekki spelling Q%')).all()
+        assert {q.topic for q in left if q.question_text in ('Lekki spelling Q2', 'Lekki spelling Q3')} == \
+            {'The Lekki Headmaster — Kabir Alabi Garba'}
+        assert {q.topic for q in left if q.question_text == 'Lekki spelling Q0'} == {'The Lekki Head Master'}   # real tags kept

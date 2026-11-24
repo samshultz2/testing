@@ -129,6 +129,37 @@ def novel_catalogue():
     return out
 
 
+GENERIC_NOVEL_TAGS = {'', 'novel', 'recommended novel', 'recommendednovel', 'the novel',
+                      'recommended text', 'prescribed text', 'reading text'}
+
+
+def novel_key(text):
+    """A spelling-proof key for a novel title: the title only (an author after
+    " — " / " - " / " by " is dropped), letters and digits only, no leading
+    "The". So "The Lekki Headmaster — Kabir Alabi Garba", "the lekki head
+    master." and "“Lekki Headmaster”" all give "lekkiheadmaster"."""
+    t = (text or '').replace('\u00a0', ' ').strip()
+    t = re.split(r"\s+(?:—|–|-|by)\s+", t, maxsplit=1)[0]
+    t = re.sub(r"[^a-z0-9 ]+", " ", t.lower()).split()
+    if t and t[0] == 'the':
+        t = t[1:]
+    return ''.join(t)
+
+
+def is_generic_novel_tag(text):
+    """A Novel-section tag that names no actual book (e.g. "Recommended Novel")."""
+    return re.sub(r"[^a-z ]+", "", (text or '').lower()).strip() in GENERIC_NOVEL_TAGS
+
+
+def same_novel(a, b):
+    """Do two novel titles / tags name the same book? Tolerant of spacing,
+    punctuation, case, a missing "The" and an author added or left off."""
+    ka, kb = novel_key(a), novel_key(b)
+    if not ka or not kb or is_generic_novel_tag(a) or is_generic_novel_tag(b):
+        return False
+    return ka == kb or (len(min(ka, kb, key=len)) >= 6 and (ka in kb or kb in ka))
+
+
 def current_novel(utme_year):
     """The novel to preselect for a NEW mock preparing for ``utme_year``: that
     year's text, or the latest known one for a year past the table (texts run

@@ -2,8 +2,15 @@
    how many bank questions it has), "Something else…" with a text box, and an
    optional "no specific novel" choice. Posts ``novel_title`` (or ``__other__``
    + ``novel_title_other``). #}
-{% macro novel_picker(cards, picked='', other='', allow_none=False, required=False, uid='np') -%}
+{% macro novel_picker(cards, picked='', other='', allow_none=False, required=False, uid='np', untagged=(0, None), in_bank=False) -%}
 <div class="np" data-np>
+  {% if untagged[0] %}
+  <p class="np-warn"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+    <span><b>{{ untagged[0] }} Novel question{{ '' if untagged[0] == 1 else 's' }} in the bank {{ 'has' if untagged[0] == 1 else 'have' }} no novel title</b>
+    (blank or just “Recommended Novel”), so no mock can use {{ 'it' if untagged[0] == 1 else 'them' }} yet.
+    {% if in_bank %}Pick the novel below, set “Apply to” to <em>Untagged novel questions</em>, then Assign.
+    {% elif untagged[1] %}<a href="{{ url_for('mock_jamb.bank', subject_id=untagged[1], section='novel') }}">Tag them in the Question bank →</a>{% endif %}</span></p>
+  {% endif %}
   <div class="np-grid" role="radiogroup" aria-label="Novel">
     {% for c in cards %}
     <label class="np-card">
@@ -58,6 +65,9 @@
 .np-text{display:none;margin-top:.45rem;width:100%;box-sizing:border-box;padding:.5rem .6rem;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
 .np-other:has(input[type=radio]:checked) .np-text{display:block}
 .np-none b{font-weight:600}
+.np-warn{display:flex;gap:.55rem;align-items:flex-start;margin:0 0 .7rem;padding:.65rem .8rem;border-radius:12px;background:color-mix(in srgb,var(--warning,#b45309) 10%,var(--bg-card));color:var(--text-primary);font-size:.82rem;line-height:1.45}
+.np-warn>i{color:var(--warning,#b45309);margin-top:.15rem}
+.np-warn a{font-weight:700;color:var(--primary)}
 @media (max-width:640px){.np-grid{grid-template-columns:1fr}.np-card{padding:.8rem .9rem}}
 </style>
 <script nonce="{{ csp_nonce }}">

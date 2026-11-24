@@ -729,3 +729,14 @@ def test_current_novel_for_new_mocks():
     assert 'Lekki Headmaster' in ms.current_novel(2030)          # past the table -> latest known
     assert 'Life Changer' in ms.current_novel(2023)
     assert ms.current_novel(2005) is None
+
+
+def test_same_novel_is_spelling_proof():
+    from utils import myschool as ms
+    full = 'The Lekki Headmaster — Kabir Alabi Garba'
+    for tag in ['The Lekki Headmaster', 'the lekki headmaster', 'The Lekki Head Master', 'Lekki Headmaster',
+                '“The Lekki Headmaster”', 'The Lekki Headmaster.', 'The Lekki Headmaster',
+                'The Lekki Headmaster by Kabir Alabi Garba', 'The Lekki Headmaster - Kabir Alabi Garba']:
+        assert ms.same_novel(full, tag), tag
+    assert not ms.same_novel(full, 'The Life Changer — Khadija Abubakar Jalli')
+    assert not ms.same_novel(full, 'Recommended Novel') and ms.is_generic_novel_tag('Recommended Novel')
