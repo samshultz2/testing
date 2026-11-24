@@ -187,6 +187,7 @@
     return '<div class="tb-bar">'
       + '<div class="tb-prog"><b>' + f.n + '</b> of ' + f.t + ' lessons filled<span class="rs-meter ' + (pct >= 100 ? 'good' : 'n') + '"><i style="width:' + pct + '%"></i></span></div>'
       + '<div class="tb-bar-a">'
+      + (M.periods.length ? '<button type="button" class="rs-btn ghost sm tb-start" data-tb="start" title="Change when the day starts — every period moves with it"><i class="fas fa-clock" aria-hidden="true"></i> ' + (phone.matches ? '' : 'Starts ') + esc(fmtT(M.periods[0].time)) + '</button>' : '')
       + '<button type="button" class="rs-icon-btn" data-tb="undo" title="Undo (Ctrl+Z)" aria-label="Undo"' + (undoStack.length ? '' : ' disabled') + '><i class="fas fa-rotate-left" aria-hidden="true"></i></button>'
       + (phone.matches ? '' : '<button type="button" class="rs-icon-btn" data-tb="wide" title="' + ($('tdWrap').classList.contains('td-wide') ? 'Show the preview' : 'Wider grid (hide the preview)') + '" aria-label="Toggle wide grid"><i class="fas ' + ($('tdWrap').classList.contains('td-wide') ? 'fa-compress' : 'fa-expand') + '" aria-hidden="true"></i></button>')
       + '<button type="button" class="rs-icon-btn" data-tb="restart" title="Start a new grid" aria-label="Start a new grid"><i class="fas fa-table-cells" aria-hidden="true"></i></button>'
@@ -645,6 +646,36 @@
   }
   function toMin(t) { var a = (t || '0:0').split(':'); return (+a[0]) * 60 + (+a[1] || 0); }
 
+  // Day start: move every period (and break) by the same amount, so a saved
+  // timetable can start earlier or later without retyping each time.
+  function openStart() {
+    var first = M.periods[0]; if (!first) return;
+    var sh = openSheet('When does the day start?',
+      '<label class="td-f"><span>First period starts</span><input type="time" class="tbs-t" value="' + esc(first.time) + '"></label>'
+      + '<p class="tbs-note">Every period and break moves with it; their lengths stay the same.</p>'
+      + '<ol class="tbs-prev"></ol>',
+      '<button type="button" class="rs-btn ghost tbs-x">Cancel</button><button type="button" class="rs-btn primary tbs-ok">Move the timetable</button>');
+    var t = sh.querySelector('.tbs-t'), prev = sh.querySelector('.tbs-prev');
+    function delta() { var n = normTime(t.value); return n ? toMin(n) - toMin(first.time) : 0; }
+    function paint() {
+      var dm = delta();
+      prev.innerHTML = M.periods.map(function (p, i) {
+        var nt = addMinutes(p.time, dm), r = null;
+        M.days.some(function (d) { r = cellRow(d, p); return r && r.subject; });
+        var brk = r && breakish(r.subject);
+        return '<li' + (brk ? ' class="brk"' : '') + '><span>' + esc(fmtT(nt)) + (p.dur ? '–' + esc(fmtT(addMinutes(nt, p.dur))) : '') + '</span><b>' + (brk ? esc(r.subject) : 'Period ' + (i + 1)) + '</b></li>';
+      }).join('');
+    }
+    t.addEventListener('input', paint); paint();
+    sh.querySelector('.tbs-x').addEventListener('click', closeSheet);
+    sh.querySelector('.tbs-ok').addEventListener('click', function () {
+      var dm = delta(); closeSheet();
+      if (!dm) return;
+      change(function () { rows.forEach(function (r) { if (r.time) r.time = addMinutes(r.time, dm); }); });
+      toast('The day now starts at ' + fmtT(normTime(t.value)) + ' — every period moved ' + (dm > 0 ? 'later' : 'earlier') + ' by ' + Math.abs(dm) + ' min');
+    });
+  }
+
   // Day sheet: rename / date / stream / copy / clear / delete
   function openDay(di) {
     var d = M.days[di]; if (!d) return;
@@ -752,6 +783,7 @@
     else if (a === 'addperiod') { change(function () { addPeriod(); }); }
     else if (a === 'addday') addDay();
     else if (a === 'period') openPeriod(+b.dataset.p);
+    else if (a === 'start') openStart();
     else if (a === 'day') openDay(+b.dataset.d);
     else if (a === 'copy') openCopy(+b.dataset.d);
     else if (a === 'pday') { phoneDay = +b.dataset.d; render(); var on = B.querySelector('.tb-dchip.on'); on && on.scrollIntoView({ inline: 'center', block: 'nearest' }); }
