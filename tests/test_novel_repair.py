@@ -112,6 +112,12 @@ def test_known_characters_identify_the_book():
     assert lekki('Sola and Ade went to school') is None               # everyday name alone
     assert lekki('Gloss over the details, he said') is None
     assert 'Life Changer' in lekki("Ummi's husband wanted to study law")
+    assert 'Lekki' in lekki('What subject did Mr Justus Anabel teach?')
+    assert 'Lekki' in lekki("Why did Mr Guta complain about Mr Fafore?")
+    assert 'Lekki' in lekki('Mrs Grace Apeh is the')
+    assert 'Lekki' in lekki('Who are Nike and Kike?')                  # two of the book's names together
+    assert 'Lekki' in lekki('Mr Ibe was the games master')               # everyday name + title
+    assert lekki('Ade as well as Jide comes to school') is None          # myschool grammar sentence
     sec, top, _ = ms.classify('English Language', 'What did Mr Bepo tell the staff?', year=2025)
     assert sec == 'novel' and 'Lekki' in top
     assert ms.classify('English Language', 'Choose the option nearest in meaning: Mr Audu is generous')[0] != 'novel'

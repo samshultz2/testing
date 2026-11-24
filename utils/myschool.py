@@ -136,11 +136,15 @@ def novel_catalogue():
 # (Mr/Mrs/Chief…) or together with another of the book's names. Spellings vary
 # between study guides, so common variants are listed.
 NOVEL_CHARACTERS = {
+    # from the school's own character list (Bepo's family, Stardom staff, parents,
+    # students, landlord, other schools)
     "The Lekki Headmaster": {
-        "strong": ["Bepo", "Adebepo", "Adebeop", "Ibidun", "Stardom", "Egi Meko", "Meko", "Fafore",
-                   "Ayesoro", "Didi Ogba", "Ogba", "Solape", "Ikenna Egbu", "Egbu", "Jeremi Amos", "Jeremi",
-                   "Grace Ape", "Ope Wande", "Oloja"],
-        "weak": ["Gloss", "Audu", "Sola", "Seri", "Adewale", "Ignatius", "Ogo", "Amos", "Bayo"],
+        "strong": ["Bepo", "Adebepo", "Adebeop", "Ibidun", "Stardom", "David Aje", "Apeh", "Jeremi",
+                   "Fafore", "Ayesoro", "Owala", "Ope Wande", "Wande", "Justus", "Anabel", "Oyelana",
+                   "Ladele", "Guta", "Banky", "Tosh", "Didi Ogba", "Ogba", "Bibi", "Ogunwale",
+                   "Egi Meko", "Meko", "Beesway", "Fruitful Future", "Nku", "Oloja"],
+        "weak": ["Seri", "Nike", "Kike", "Jide", "Kemi", "Tai", "Sola", "Audu", "Ibe", "Ignatius",
+                 "Favour", "Ogo", "Grace", "Amos", "Adewale", "Gloss", "Mary", "Aje", "Egi"],
     },
     "The Life Changer": {
         "strong": ["Ummi", "Bint", "Talle", "Teemah", "Labeeb", "Zainab", "Salma"],
