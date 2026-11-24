@@ -499,8 +499,17 @@ function renderGridModeSheet(){
         return;
     }
     var spanAll = (anyGroup?1:0) + periods.length;
+    // A period that is Break / Lunch on every day is drawn as one shaded break column.
+    var brkOf={};
+    periods.forEach(function(p){ var name='', ok=true;
+        order.forEach(function(k){ var d=dmap[k];
+            Object.keys(d.cells).forEach(function(ck){ if(ck.split('§').pop()!==p.k) return;
+                d.cells[ck].forEach(function(r){ var sj=(r.subject||'').trim();
+                    if(sj && subjIsBreak(sj)) { name=name||sj; } else if(sj) ok=false; }); }); });
+        if(ok && name) brkOf[p.k]=name.charAt(0).toUpperCase()+name.slice(1); });
+    var brkTd=function(p, extra){ return '<td class="cell brk"'+(extra||'')+'><span class="c-brk">'+esc(brkOf[p.k])+'</span></td>'; };
     var thead='<tr><th>Day</th>'+(anyGroup?'<th>Class / Stream</th>':'')
-            + periods.map(function(p){ return '<th>'+esc(p.label)+'</th>'; }).join('')+'</tr>';
+            + periods.map(function(p){ return '<th'+(brkOf[p.k]?' class="brk"':'')+'>'+esc(p.label)+'</th>'; }).join('')+'</tr>';
 
     // Each day becomes its own <tbody class="day"> so a thick rule can separate
     // one day's block from the next (see the CSS above) — on screen and export.
@@ -539,6 +548,7 @@ function renderGridModeSheet(){
             if(first){ dh+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
             if(anyGroup) dh+='<td class="grp-cell">'+esc(g||'—')+'</td>';
             periods.forEach(function(p, pidx){
+                if(brkOf[p.k]){ if(gi===0) dh+=brkTd(p, groups.length>1?' rowspan="'+groups.length+'"':''); return; }
                 if(uval[pidx]!==null){
                     // only the top-left cell of each merge rectangle is emitted;
                     // the cells it covers (other columns/rows) are skipped
@@ -1055,6 +1065,8 @@ function abbrOn(){ var v=el('layout') ? el('layout').value : ''; return v==='sat
 function sheetSubj(t){ return abbrOn() ? subjAbbr(t) : (t||''); }
 window.subjAbbr = subjAbbr; window.subjAbbrKnown = subjAbbrKnown; window.subjNorm = subjNorm; window.subjIsBreak = subjIsBreak;
 
+function tMin(t){ var m=String(t||'').match(/(\d+):(\d+)/); return m ? (+m[1])*60+(+m[2]) : 0; }
+function brkName(p){ return esc((p && p.brkName) || 'Break'); }
 function tlSubj(t){ return esc(sheetSubj(t)||'—').replace(/\//g,'/<wbr>'); }
 
 function tlModel(){
@@ -1092,6 +1104,23 @@ function tlModel(){
     order.sort(function(a,b){ return String(dmap[a].sort).localeCompare(String(dmap[b].sort)); });
     var today=tlTodayISO(), next='';
     order.forEach(function(k){ var d=dmap[k]; if(!next && !d.off && d.date && toISO(d.date)>=today) next=k; });
+    // A period that is "Break" / "Lunch" on every day (entered as its own period,
+    // as Tap to fill does) is a break, not a lesson: drop it so every theme draws
+    // it as its own aligned break between the periods either side, named after
+    // what was entered. Only between two lessons, so the gap is there to draw.
+    for(var bi=periods.length-2; bi>=1; bi--){
+        var bp=periods[bi], name='', ok=true;
+        order.forEach(function(k){ var d=dmap[k];
+            Object.keys(d.cells).forEach(function(ck){ if(ck.split('§').pop()!==bp.k) return;
+                d.cells[ck].forEach(function(r){ var sj=(r.subject||'').trim();
+                    if(!sj || (window.subjIsBreak && subjIsBreak(sj))) { if(!name && sj) name=sj; } else ok=false; }); }); });
+        if(!ok || !name) continue;
+        order.forEach(function(k){ var d=dmap[k]; Object.keys(d.cells).forEach(function(ck){ if(ck.split('§').pop()===bp.k) delete d.cells[ck]; }); });
+        periods.splice(bi,1);
+        var nx=periods[bi];
+        nx.brkName = /^break$/i.test(name) ? 'Break' : name.charAt(0).toUpperCase()+name.slice(1);
+        if(!periods[bi-1].end) periods[bi-1].end = bp.start;          // keep the gap even if the lesson has no length
+    }
     var groupsAll=[]; rows.forEach(function(r){ var g=(r.group||'').trim(); if(g && !isAll(r.group) && groupsAll.indexOf(g)<0) groupsAll.push(g); });
     // Day numbers, ticks and "next class" belong to the whole timetable, not
     // to the page being exported: a page of a multi-page export only holds
@@ -1120,9 +1149,12 @@ function renderTimelineSheet(){
     var tracks=[], pcol={}, col=(anyGroup?2:1), heads='';
     periods.forEach(function(pd, i){
         if(i>0 && periods[i-1].end && periods[i-1].end < pd.start){
-            tracks.push('1.1em');
-            heads+='<div class="tl-br" style="grid-column:'+col+'"><span>Break</span></div>';
-            pd.brk=col; col++;
+            // A named break (Break, Lunch) or a gap of 15+ minutes is a real break:
+            // a shaded column with its name; a short changeover stays a dotted line.
+            var big = !!pd.brkName || (tMin(pd.start)-tMin(periods[i-1].end) >= 15);
+            tracks.push(big ? '2.9em' : '1.1em');
+            heads+='<div class="tl-br'+(big?' big':'')+'" style="grid-column:'+col+'"><span>'+brkName(pd)+(big?'<small>'+esc(fmtT(periods[i-1].end))+'</small>':'')+'</span></div>';
+            pd.brk=col; pd.brkBig=big; col++;
         }
         tracks.push('minmax(0,1fr)'); pcol[pd.k]=col;
         // Exports drop am/pm: at readable sizes "11:30am" runs into the next column.
@@ -1132,7 +1164,7 @@ function renderTimelineSheet(){
     });
     var tmpl=(anyGroup?'var(--tl-gw,3.4em) ':'')+tracks.join(' ');
     var lastCol=col;
-    var breaks=periods.filter(function(pd){ return pd.brk; }).map(function(pd){ return pd.brk; });
+    var breaks=periods.filter(function(pd){ return pd.brk; }).map(function(pd){ return {c:pd.brk, big:pd.brkBig}; });
     var next=md.next;
     var card=function(r, span, n){
         var sj=(r.subject||'').trim(), c=colour[sj]||'#a8a29e';
@@ -1158,7 +1190,7 @@ function renderTimelineSheet(){
         (anyGroup ? d.groups : ['']).forEach(function(g){
             var l='', gi=0;
             if(anyGroup) l+='<span class="tl-g" style="grid-column:1">'+esc(g||'—')+'</span>';
-            breaks.forEach(function(b){ l+='<span class="tl-bk" style="grid-column:'+b+'"></span>'; });
+            breaks.forEach(function(b){ l+='<span class="tl-bk'+(b.big?' big':'')+'" style="grid-column:'+b.c+'"></span>'; });
             for(var i=0;i<periods.length;){
                 var arr=d.cells[g+'§'+periods[i].k]||[], sig=arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§');
                 var j=i+1;
@@ -1246,13 +1278,13 @@ function renderTicketsSheet(){
                 while(sg && j<to && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
                 if(i>from && periods[i].brk===undefined && periods[i-1].end && periods[i-1].end<periods[i].start){
                     var mins=(function(a,b){ var x=a.split(':'),y=b.split(':'); return (+y[0]*60+ +y[1])-(+x[0]*60+ +x[1]); })(periods[i-1].end, periods[i].start);
-                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>Break · '+mins+' min</span></li>';
+                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>'+brkName(periods[i])+' · '+mins+' min</span></li>';
                 }
                 if(arr.length) arr.forEach(function(r){ items+=line(fmtT(periods[i].start), r, j-i); });
                 else items+='<li class="tk-free"><time>'+esc(fmtT(periods[i].start))+'</time><span>Free</span></li>';
                 // a break that falls inside a merged run is still shown after it
                 for(var q=i+1;q<j;q++){ if(periods[q-1].end && periods[q-1].end<periods[q].start){
-                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[q-1].end))+'</time><span>Break</span></li>'; } }
+                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[q-1].end))+'</time><span>'+brkName(periods[q])+'</span></li>'; } }
                 i=j;
             }
             lanes+='<div class="tk-lane">'+(md.anyGroup && withHead?'<h4>'+esc(g||'—')+'</h4>':'')+'<ol>'+items+'</ol></div>';
@@ -1264,12 +1296,12 @@ function renderTicketsSheet(){
             if(sg[0]==='run'){
                 var ri=tlRunInfo(d,gsT,periods,sg[1],sg[2]), r=ri.r, c=colour[(r.subject||'').trim()]||'#8d99ae';
                 if(sg[1]>0 && periods[sg[1]-1].end && periods[sg[1]-1].end<periods[sg[1]].start)
-                    lanes+='<div class="tk-sbrk">Break '+esc(fmtT(periods[sg[1]-1].end))+'</div>';
+                    lanes+='<div class="tk-sbrk">'+brkName(periods[sg[1]])+' '+esc(fmtT(periods[sg[1]-1].end))+'</div>';
                 lanes+='<div class="tk-band" style="--c:'+c+'"><time>'+esc(ri.from)+(ri.to?'–'+esc(ri.to):'')+'</time><i></i><b>'+tlSubj(r.subject)+'<em>×'+ri.n+'</em></b>'
                     + '<small>'+esc([ri.who,(r.teacher||'').trim()].filter(Boolean).join(' · '))+'</small></div>';
             } else {
                 if(k>0 && periods[sg[0]-1] && periods[sg[0]-1].end && periods[sg[0]-1].end<periods[sg[0]].start)
-                    lanes+='<div class="tk-sbrk">Break '+esc(fmtT(periods[sg[0]-1].end))+'</div>';
+                    lanes+='<div class="tk-sbrk">'+brkName(periods[sg[0]])+' '+esc(fmtT(periods[sg[0]-1].end))+'</div>';
                 lanes+='<div class="tk-lanes'+(k?' cont':'')+'">'+lanesFor(sg[0],sg[1],k===0)+'</div>';
             }
         });
@@ -1328,7 +1360,7 @@ function renderGazetteSheet(){
                 return;
             }
             if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
-                body+='<tr class="gz-br"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'">— Break —</td></tr>';
+                body+='<tr class="gz-br"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'">— '+brkName(pd)+' —</td></tr>';
             var cells='';
             gs.forEach(function(g){
                 var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
@@ -1436,7 +1468,7 @@ function renderSwissSheet(){
                 return;
             }
             if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
-                body+='<tr class="sw-brk"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'"><span>break</span></td></tr>';
+                body+='<tr class="sw-brk"><td>'+esc(fmtT(periods[i-1].end))+'</td><td colspan="'+gs.length+'"><span>'+brkName(pd).toLowerCase()+'</span></td></tr>';
             var cells='';
             gs.forEach(function(g){
                 var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
@@ -1519,7 +1551,7 @@ function renderNotebookSheet(){
                 return;
             }
             if(i>0 && periods[i-1].end && periods[i-1].end<pd.start)
-                out+='<div class="nb-r nb-brk" style="'+tmpl+'"><span>'+esc(fmtT(periods[i-1].end))+'</span><em style="grid-column:2 / -1">break</em></div>';
+                out+='<div class="nb-r nb-brk" style="'+tmpl+'"><span>'+esc(fmtT(periods[i-1].end))+'</span><em style="grid-column:2 / -1">'+brkName(pd).toLowerCase()+'</em></div>';
             var cells='';
             gs.forEach(function(g){
                 var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
@@ -1608,7 +1640,7 @@ function renderBoardSheet(){
             var runs=tlRuns(d,gs,periods);
             for(var i=0;i<periods.length;){
                 if(i>0 && periods[i-1].end && periods[i-1].end<periods[i].start)
-                    body+='<div class="bd-br">Break</div>';
+                    body+='<div class="bd-br">'+brkName(periods[i])+'</div>';
                 if(runs[i]){
                     var ri=tlRunInfo(d,gs,periods,i,runs[i]);
                     body+='<div class="bd-rw bd-span" style="'+tmpl+';flex:'+ri.n+'"><b>'+esc(fmtT(periods[i].start))+'</b><span class="bd-all"><b>'+label(ri.r.subject)+'</b>'
@@ -1706,7 +1738,7 @@ function renderQuietSheet(){
         } else {
             var runs=tlRuns(d,gs,periods);
             periods.forEach(function(pd,i){
-                if(gap(i)) g+='<span class="qt-bk" style="grid-row:'+(rowOf[i]-1)+'">Break · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(pd.start))+'</span>';
+                if(gap(i)) g+='<span class="qt-bk" style="grid-row:'+(rowOf[i]-1)+'">'+brkName(pd)+' · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(pd.start))+'</span>';
                 g+='<span class="qt-tm" style="grid-row:'+rowOf[i]+'">'+esc(fmtT(pd.start))+'</span>';
             });
             for(var i=0;i<periods.length;){
@@ -1791,7 +1823,7 @@ function renderInlineSheet(){
         if(hasCells){
             var runs=tlRuns(d,gs,periods);
             for(var i=0;i<periods.length;){
-                if(gap(i)) lines+='<p class="il-bk">Break · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(periods[i].start))+'</p>';
+                if(gap(i)) lines+='<p class="il-bk">'+brkName(periods[i])+' · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(periods[i].start))+'</p>';
                 if(runs[i]){
                     var ri=tlRunInfo(d,gs,periods,i,runs[i]);
                     lines+='<p class="il-ln sk"><time>'+esc(fmtT(periods[i].start))+'</time><span><b>'+esc(sheetSubj(ri.r.subject))+'</b> <em>· '
