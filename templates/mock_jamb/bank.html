@@ -3,6 +3,7 @@
 {% from "mock_jamb/_subject_picker.html" import subject_picker, subject_picker_assets with context %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
 {% from "mock_jamb/_shell.html" import mj_nav with context %}
+{% from "mock_jamb/_novel_picker.html" import novel_picker, novel_picker_assets with context %}
 {% block title %}Question Bank - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <span>Question Bank</span>{% endblock %}
 {% block extra_css %}
@@ -297,14 +298,8 @@
     <form method="post" action="{{ url_for('mock_jamb.bank_assign_novel') }}" style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="subject_id" value="{{ subject_id }}">
-      <div class="form-group mb-0" style="flex:1 1 240px;min-width:0"><label class="form-label">Novel title</label>
-        <input type="text" name="novel_title" list="novelList" class="form-control" placeholder="e.g. The Life Changer — Khadija Abubakar Jalli" required>
-        <datalist id="novelList">
-          <option value="The Life Changer — Khadija Abubakar Jalli"></option>
-          <option value="Sweet Sixteen — Bolaji Abdullahi"></option>
-          <option value="In Dependence — Sarah Ladipo Manyika"></option>
-          <option value="The Last Days at Forcados High School — A.H. Mohammed"></option>
-        </datalist></div>
+      <div class="form-group mb-0" style="flex:1 1 100%;min-width:0"><div class="form-label">Which novel?</div>
+        {{ novel_picker(novel_cards, required=True, uid='bk') }}</div>
       <div class="form-group mb-0" style="flex:1 1 200px;min-width:0"><label class="form-label">Apply to</label>
         <select name="scope" class="form-control">
           <option value="untagged">Untagged novel questions</option>
@@ -483,7 +478,7 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{{ subject_picker_assets() }}
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{{ subject_picker_assets() }}{{ novel_picker_assets() }}
 {% if subject and can_write_sub("external_exams", "mock_jamb_bank_scrape") %}
 <script nonce="{{ csp_nonce }}">
 (function(){

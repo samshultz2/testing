@@ -1,0 +1,83 @@
+{# One-tap novel picker: a card per JAMB recommended text (title, author, years,
+   how many bank questions it has), "Something else…" with a text box, and an
+   optional "no specific novel" choice. Posts ``novel_title`` (or ``__other__``
+   + ``novel_title_other``). #}
+{% macro novel_picker(cards, picked='', other='', allow_none=False, required=False, uid='np') -%}
+<div class="np" data-np>
+  <div class="np-grid" role="radiogroup" aria-label="Novel">
+    {% for c in cards %}
+    <label class="np-card">
+      <input type="radio" name="novel_title" value="{{ c.value }}" {{ 'checked' if c.value == picked }} {{ 'required' if required and loop.first }}>
+      <span class="np-body">
+        <b>{{ c.title }}</b>
+        {% if c.author %}<span class="np-au">{{ c.author }}</span>{% endif %}
+        <span class="np-meta">
+          {% if c.years %}<span class="np-yr">JAMB {{ c.years }}</span>{% endif %}
+          <span class="np-ct{{ ' none' if not c.count }}">{{ c.count or 'No' }} question{{ '' if c.count == 1 else 's' }} in bank</span>
+        </span>
+      </span>
+      <i class="fas fa-circle-check np-tick" aria-hidden="true"></i>
+    </label>
+    {% endfor %}
+    <label class="np-card np-other">
+      <input type="radio" name="novel_title" value="__other__" {{ 'checked' if other }}>
+      <span class="np-body"><b><i class="fas fa-pen" aria-hidden="true"></i> Something else…</b>
+        <span class="np-au">A newly announced text</span>
+        <input type="text" name="novel_title_other" class="np-text" value="{{ other }}" placeholder="Title — Author" aria-label="Other novel title"></span>
+      <i class="fas fa-circle-check np-tick" aria-hidden="true"></i>
+    </label>
+    {% if allow_none %}
+    <label class="np-card np-none">
+      <input type="radio" name="novel_title" value="" {{ 'checked' if not picked and not other }}>
+      <span class="np-body"><b>No specific novel</b><span class="np-au">Use the most recent one in the bank</span></span>
+      <i class="fas fa-circle-check np-tick" aria-hidden="true"></i>
+    </label>
+    {% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro novel_picker_assets() -%}
+<style>
+.np-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.55rem}
+.np-card{position:relative;display:flex;gap:.6rem;align-items:flex-start;padding:.75rem .85rem;border:1.5px solid var(--border-color);border-radius:14px;background:var(--bg-card);cursor:pointer;transition:border-color .12s,background .12s;min-width:0}
+.np-card:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--border-color))}
+.np-card>input[type=radio]{position:absolute;opacity:0;pointer-events:none}
+.np-card:has(input[type=radio]:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
+.np-card:has(input[type=radio]:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.np-body{display:flex;flex-direction:column;gap:.15rem;min-width:0;flex:1}
+.np-body b{font-size:.92rem;color:var(--text-primary);line-height:1.25}
+.np-au{font-size:.8rem;color:var(--text-muted)}
+.np-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.3rem}
+.np-yr,.np-ct{font-size:.7rem;font-weight:700;padding:.12rem .45rem;border-radius:99px;background:var(--gray-100,#f1f5f9);color:var(--text-secondary,var(--text-muted))}
+.np-yr{background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary)}
+.np-ct.none{color:var(--warning,#b45309)}
+.np-tick{color:var(--primary);font-size:1.05rem;opacity:0;flex:0 0 auto;margin-top:.1rem}
+.np-card:has(input[type=radio]:checked) .np-tick{opacity:1}
+.np-text{display:none;margin-top:.45rem;width:100%;box-sizing:border-box;padding:.5rem .6rem;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.88rem}
+.np-other:has(input[type=radio]:checked) .np-text{display:block}
+.np-none b{font-weight:600}
+@media (max-width:640px){.np-grid{grid-template-columns:1fr}.np-card{padding:.8rem .9rem}}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  // typing in "Something else…" picks that card; picking it focuses the box
+  document.addEventListener('focusin', function(e){
+    if (e.target.classList && e.target.classList.contains('np-text')) {
+      var r = e.target.closest('.np-card').querySelector('input[type=radio]'); if (r) r.checked = true;
+    }
+  });
+  document.addEventListener('change', function(e){
+    var r = e.target;
+    if (r.name === 'novel_title' && r.value === '__other__' && r.checked) {
+      var t = r.closest('.np-card').querySelector('.np-text'); if (t) setTimeout(function(){ t.focus(); }, 0);
+    }
+  });
+  // "Something else…" needs a title
+  document.addEventListener('submit', function(e){
+    var f = e.target, r = f.querySelector && f.querySelector('input[name=novel_title][value="__other__"]:checked');
+    if (r) { var t = f.querySelector('.np-text'); if (t && !t.value.trim()) { e.preventDefault(); e.stopImmediatePropagation(); t.focus(); t.setCustomValidity('Type the novel title'); t.reportValidity(); setTimeout(function(){ t.setCustomValidity(''); }, 1500); } }
+  }, true);
+})();
+</script>
+{%- endmacro %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu with context %}
 {% from "mock_jamb/_shell.html" import mj_exam_nav with context %}
+{% from "mock_jamb/_novel_picker.html" import novel_picker, novel_picker_assets with context %}
 {% block title %}Paper Blueprint — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ urls.view }}">{{ exam.display_name }}</a> / <span>Blueprint</span>{% endblock %}
 {% block extra_css %}
@@ -99,10 +100,8 @@
 
     <section class="rs-card">
       <div class="rs-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> Recommended novel (English)</h3></div>
-      <input type="text" name="novel_title" list="novelList" value="{{ novel_title }}" class="bp-text" aria-label="Recommended novel"
-             placeholder="e.g. The Life Changer — Khadija Abubakar Jalli">
-      <datalist id="novelList">{% for n in known_novels %}<option value="{{ n }}"></option>{% endfor %}</datalist>
-      <p class="bp-note">The English paper's Novel section draws <strong>only</strong> bank questions tagged with this exact title. Leave blank to allow any novel question. Tag questions in the bank (Novel section → Assign novel).</p>
+      {{ novel_picker(novel_cards, novel_pick, novel_other, allow_none=True, uid='bp') }}
+      <p class="bp-note">The English paper's 10 Novel questions come <strong>only</strong> from bank questions tagged with the novel you pick, so students get the right text. “No specific novel” uses the most recent one in the bank. Tag questions in the bank (Novel section → Assign novel).</p>
     </section>
   </div>
 
@@ -183,3 +182,5 @@
 })();
 </script>
 {% endblock %}
+
+{% block extra_js %}{{ novel_picker_assets() }}{% endblock %}

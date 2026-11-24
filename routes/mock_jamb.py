@@ -1382,6 +1382,7 @@ def bank():
                            f_topic=f_topic, f_subtopic=f_subtopic, f_year=f_year, f_body=f_body,
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),
+                           novel_cards=(_novel_choices()[0] if section == 'novel' else []),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
                            coded_syllabus_url=url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''),
                            analytics_url=url_for('mock_jamb.bank_analytics', subject_id=subject_id or ''),
@@ -2454,6 +2455,43 @@ def bank_fetch_figure(question_id):
     return jsonify(out)
 
 
+def _novel_from_form():
+    """The novel picked on a form: one of the cards, or the typed "something
+    else" title when that card is chosen."""
+    v = (request.form.get('novel_title') or '').strip()
+    if v == '__other__':
+        v = (request.form.get('novel_title_other') or '').strip()
+    return v
+
+
+def _novel_choices(current=''):
+    """Cards for the novel picker: the JAMB catalogue plus any other title the
+    bank already uses, each with how many bank Novel questions carry it."""
+    from utils.myschool import novel_catalogue
+    rows = (db.session.query(MockJAMBQuestion.topic, db.func.count(MockJAMBQuestion.id))
+            .filter(MockJAMBQuestion.mock_exam_id.is_(None), MockJAMBQuestion.section == 'novel')
+            .group_by(MockJAMBQuestion.topic).all())
+    tags = [((t or '').strip(), n) for t, n in rows if (t or '').strip()]
+    cards = novel_catalogue()
+
+    def same(a, b):
+        a, b = a.lower(), b.lower()
+        return a in b or b in a
+    used = set()
+    for c in cards:
+        c['count'] = 0
+        for t, n in tags:
+            if same(c['title'], t):
+                c['count'] += n; used.add(t)
+    for t, n in tags:                      # titles only the bank knows about
+        if t not in used:
+            title, _, author = t.partition(' — ')
+            cards.append({'value': t, 'title': title, 'author': author, 'years': '', 'count': n})
+    cur = (current or '').strip()
+    match = next((c for c in cards if cur and (c['value'].lower() == cur.lower() or same(c['title'], cur))), None)
+    return cards, (match['value'] if match else ''), ('' if match else cur)
+
+
 @mock_jamb_bp.route('/bank/assign-novel', methods=['POST'])
 @login_required
 @csrf_protect
@@ -2465,7 +2503,7 @@ def bank_assign_novel():
     if not subject:
         flash('Choose a subject first.', 'error')
         return redirect(_bank_url(subject_id))
-    novel = (request.form.get('novel_title') or '').strip()
+    novel = _novel_from_form()
     scope = request.form.get('scope')
     empty_topic = db.or_(MockJAMBQuestion.topic.is_(None), MockJAMBQuestion.topic == '')
     make_novel = (scope == 'untagged_any')
@@ -2884,7 +2922,7 @@ def exam_blueprint(exam_id):
                 if n != s['count']:               # only store real deviations
                     override.setdefault(subj_key, {})[s['section']] = n
         exam.blueprint = json.dumps(override) if override else None
-        exam.novel_title = (request.form.get('novel_title') or '').strip() or None
+        exam.novel_title = _novel_from_form() or None
         sm = (request.form.get('source_mode') or 'bank').strip()
         exam.source_mode = sm if sm in ('bank', 'manual') else 'bank'
         levels = request.form.getlist('eligible_levels')
@@ -2929,17 +2967,14 @@ def exam_blueprint(exam_id):
         sv['stock'] = sum(st.values())
         sv['short'] = sum(1 for x in sv['sections'] if x['count'] and x['stock'] < x['count'])
     # Well-known JAMB recommended novels (suggestions; the field is free text).
-    known_novels = ['The Life Changer — Khadija Abubakar Jalli',
-                    'Sweet Sixteen — Bolaji Abdullahi',
-                    'In Dependence — Sarah Ladipo Manyika',
-                    'The Last Days at Forcados High School — A.H. Mohammed']
+    novel_cards, novel_pick, novel_other = _novel_choices(exam.novel_title or '')
     from models import SchoolClass
     from utils.helpers import get_sss3_class
     all_classes = SchoolClass.query.order_by(SchoolClass.level, SchoolClass.name).all()
     selected_levels = [x.strip() for x in (exam.eligible_levels or '').split(',') if x.strip()]
     sss3 = get_sss3_class()
     return render_template('mock_jamb/blueprint.html', exam=exam, subjects=subjects_view,
-                           novel_title=exam.novel_title or '', known_novels=known_novels,
+                           novel_title=exam.novel_title or '', novel_cards=novel_cards, novel_pick=novel_pick, novel_other=novel_other,
                            source_mode=exam.source_mode or 'bank',
                            all_classes=all_classes, selected_levels=selected_levels,
                            default_level=(sss3.name if sss3 else 'SSS3'),

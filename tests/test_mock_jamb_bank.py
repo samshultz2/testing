@@ -393,3 +393,37 @@ def test_paper_is_cached_and_stable_across_reloads(app):
         db.session.commit()
         _items2, served2 = subject_items(ex, subj_id, att)
         assert served2 == served1                          # same paper, rebuilt from cache
+
+
+def test_novel_picker_on_blueprint_and_bank(app):
+    """The novel is picked from cards (incl. The Lekki Headmaster), or typed via
+    "Something else…"; both the blueprint and the bank tagging save it."""
+    eid, sid, subj_id = _bank_maths(app, n_per_section=2)
+    c = _admin(app); tok = _bank_csrf(c)
+    page = c.get(f'/mock-jamb/exam/{eid}/blueprint').get_data(as_text=True)
+    assert 'The Lekki Headmaster' in page and 'Kabir Alabi Garba' in page
+    assert 'value="__other__"' in page and 'No specific novel' in page
+    c.post(f'/mock-jamb/exam/{eid}/blueprint',
+           data={'_csrf_token': tok, 'novel_title': 'The Lekki Headmaster — Kabir Alabi Garba'})
+    with app.app_context():
+        assert db.session.get(MockJAMBExam, eid).novel_title == 'The Lekki Headmaster — Kabir Alabi Garba'
+    page = c.get(f'/mock-jamb/exam/{eid}/blueprint').get_data(as_text=True)
+    assert 'value="The Lekki Headmaster — Kabir Alabi Garba" checked' in page          # shows as picked
+    c.post(f'/mock-jamb/exam/{eid}/blueprint',
+           data={'_csrf_token': tok, 'novel_title': '__other__', 'novel_title_other': 'A New Text — Some Author'})
+    with app.app_context():
+        assert db.session.get(MockJAMBExam, eid).novel_title == 'A New Text — Some Author'
+    c.post(f'/mock-jamb/exam/{eid}/blueprint', data={'_csrf_token': tok, 'novel_title': ''})
+    with app.app_context():
+        assert db.session.get(MockJAMBExam, eid).novel_title is None
+
+    with app.app_context():
+        q = MockJAMBQuestion(mock_exam_id=None, subject_id=subj_id, section='novel', question_text='Who said it?',
+                             option_a='a', option_b='b', option_c='c', option_d='d', correct_option='A', marks=1)
+        db.session.add(q); db.session.commit(); qid = q.id
+    c.post('/mock-jamb/bank/assign-novel', data={'_csrf_token': tok, 'subject_id': subj_id, 'scope': 'untagged',
+                                                 'novel_title': 'The Lekki Headmaster — Kabir Alabi Garba'})
+    with app.app_context():
+        assert db.session.get(MockJAMBQuestion, qid).topic == 'The Lekki Headmaster — Kabir Alabi Garba'
+    bank = c.get(f'/mock-jamb/bank?subject_id={subj_id}&section=novel&all=1').get_data(as_text=True)
+    assert 'Which novel?' in bank and '1 question in bank' in bank

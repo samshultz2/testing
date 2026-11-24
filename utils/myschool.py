@@ -101,8 +101,32 @@ def on_jamb(subject_name):
 JAMB_ENGLISH_NOVELS = [
     ((2016, 2020), "The Last Days at Forcados High School — A.H. Mohammed"),
     ((2021, 2024), "The Life Changer — Khadija Abubakar Jalli"),
-    ((2025, 2025), "The Lekki Headmaster"),
+    ((2025, 2025), "The Lekki Headmaster — Kabir Alabi Garba"),
 ]
+
+# Every recommended text offered as a one-tap choice when a novel is picked
+# (mock blueprint, bank tagging): the year table above plus other JAMB texts.
+# The stored value is "Title — Author"; matching elsewhere is tolerant, so an
+# older tag of just the title still lines up.
+OTHER_JAMB_NOVELS = [
+    "Sweet Sixteen — Bolaji Abdullahi",
+    "In Dependence — Sarah Ladipo Manyika",
+]
+
+
+def novel_catalogue():
+    """[{value, title, author, years}] newest first."""
+    out, seen = [], set()
+    for (lo, hi), full in sorted(JAMB_ENGLISH_NOVELS, key=lambda x: -x[0][0]):
+        title, _, author = full.partition(" — ")
+        out.append({"value": full, "title": title, "author": author,
+                    "years": str(lo) if lo == hi else f"{lo}–{hi}"})
+        seen.add(title.lower())
+    for full in OTHER_JAMB_NOVELS:
+        title, _, author = full.partition(" — ")
+        if title.lower() not in seen:
+            out.append({"value": full, "title": title, "author": author, "years": ""})
+    return out
 
 
 def novel_for_year(year):
