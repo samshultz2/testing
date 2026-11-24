@@ -950,6 +950,7 @@
 .td-toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:100002;
   background:#0f172a;color:#fff;font-weight:600;font-size:.88rem;padding:.6rem 1rem;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.3);transition:.2s;max-width:calc(100vw - 32px);text-align:center}
 .td-toast.on{opacity:1;transform:translate(-50%,0)}
+.td-toast.on button{pointer-events:auto}
 
 /* ===== Entry modes ===== */
 .td-modes{margin-bottom:.8rem;display:flex;width:100%}
@@ -958,6 +959,144 @@
 #rowEditor [data-td-pane]{display:none}
 #rowEditor[data-mode="build"] [data-td-pane="build"],#rowEditor[data-mode="paste"] [data-td-pane="paste"],#rowEditor[data-mode="list"] [data-td-pane="list"]{display:block}
 #rowEditor [data-td-pane="paste"] .bulk-box{margin-bottom:.6rem}
+/* ===== Paste (pz) ===== */
+.pz-tabs{display:flex;gap:.25rem;padding:.25rem;margin-bottom:.75rem;background:var(--gray-100,#f1f5f9);border-radius:12px;overflow-x:auto;scrollbar-width:none}
+.pz-tabs::-webkit-scrollbar{display:none}
+.pz-tabs button{flex:1 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border:0;background:transparent;color:var(--text-muted);font:600 .82rem/1 inherit;padding:.6rem .8rem;border-radius:9px;cursor:pointer;white-space:nowrap}
+.pz-tabs button.on{background:var(--bg-card,#fff);color:var(--text-primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.pz-tabs button[hidden]{display:none}
+.pz [data-pz-pane]{display:none!important}
+.pz[data-pz="grid"] [data-pz-pane="grid"],.pz[data-pz="fill"] [data-pz-pane="fill"],.pz[data-pz="bulk"] [data-pz-pane="bulk"]{display:block!important}
+.pz-card{border:1px solid var(--border-color);border-radius:16px;background:var(--bg-card,#fff);overflow:hidden}
+.pz-h{padding:1rem 1.1rem .2rem}
+.pz-h h4{margin:0;font-size:1rem;font-weight:700;color:var(--text-primary)}
+.pz-h p{margin:.25rem 0 0;font-size:.84rem;color:var(--text-muted);line-height:1.45}
+.pz-body{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:1rem;padding:.8rem 1.1rem 0}
+.pz-in{padding:0;min-width:0}
+[data-pz-pane="bulk"] .pz-in{padding:.8rem 1.1rem 0}
+.pz-in textarea{display:block;width:100%;box-sizing:border-box;min-height:12rem;resize:vertical;padding:.8rem .9rem;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-body,var(--gray-50,#f8fafc));color:var(--text-primary);font:500 .88rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;tab-size:4}
+.pz-in textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 18%,transparent);background:var(--bg-card,#fff)}
+.pz-meta{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-top:.4rem;font-size:.78rem;color:var(--text-muted)}
+.pz-meta b{color:var(--text-primary)}
+.pz-clear{border:0;background:none;color:var(--primary);font:600 .78rem inherit;cursor:pointer;padding:.2rem .3rem}
+.pz-clear[hidden]{display:none}
+.pz-help{border:1px solid var(--border-color);border-radius:12px;padding:.75rem .85rem;background:var(--gray-50,#f8fafc);font-size:.8rem;color:var(--text-secondary,var(--text-muted));align-self:start}
+.pz-help summary{font-weight:700;color:var(--text-primary);cursor:pointer;list-style:none;font-size:.82rem}
+.pz-help summary::-webkit-details-marker{display:none}
+.pz-help ul{margin:.55rem 0 0;padding-left:1.05rem;line-height:1.5}
+.pz-help li{margin:.12rem 0}
+.pz-help code,.pz-card p code{font-size:.92em;background:var(--bg-card,#fff);border:1px solid var(--border-color);border-radius:5px;padding:0 .25em}
+.pz-ex{width:100%;border-collapse:collapse;margin-top:.55rem;font-size:.74rem;background:var(--bg-card,#fff);border-radius:8px;overflow:hidden}
+.pz-ex th,.pz-ex td{border:1px solid var(--border-color);padding:.28rem .4rem;text-align:left;white-space:nowrap}
+.pz-ex th{background:var(--gray-100,#f1f5f9);font-weight:700;color:var(--text-primary)}
+.pz-ex .pz-blank{color:var(--text-muted);font-style:italic}
+.pz-ai{margin:.9rem 1.1rem 0;border:1px solid var(--border-color);border-radius:12px;background:var(--bg-card,#fff)}
+.pz-ai summary{display:flex;align-items:center;gap:.7rem;padding:.7rem .85rem;cursor:pointer;list-style:none}
+.pz-ai summary::-webkit-details-marker{display:none}
+.pz-ai summary>.fa-camera{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--primary);flex:0 0 auto}
+.pz-ai summary span{flex:1;min-width:0;display:flex;flex-direction:column}
+.pz-ai summary b{font-size:.86rem;color:var(--text-primary)}
+.pz-ai summary small{font-size:.76rem;color:var(--text-muted)}
+.pz-ai .pz-chev{color:var(--text-muted);transition:transform .15s}
+.pz-ai[open] .pz-chev{transform:rotate(180deg)}
+.pz-ai>:not(summary){margin-left:.85rem;margin-right:.85rem}
+.pz-ai>.rs-btn{margin-bottom:.85rem}
+.pz-steps{margin:.1rem 0 .6rem;padding-left:1.2rem;font-size:.82rem;color:var(--text-secondary,var(--text-muted));line-height:1.55}
+.pz-prompt{white-space:pre-wrap;max-height:11rem;overflow:auto;margin:0 0 .6rem;padding:.7rem .8rem;border-radius:10px;background:var(--gray-50,#f8fafc);border:1px solid var(--border-color);font:.76rem/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text-secondary,var(--text-primary))}
+.pz-form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:.75rem;padding:.8rem 1.1rem 0}
+.pz-foot{display:flex;justify-content:flex-end;gap:.5rem;padding:.9rem 1.1rem;margin-top:.9rem;border-top:1px solid var(--border-color);background:var(--gray-50,#f8fafc)}
+.pz-foot .rs-btn{min-width:11rem;justify-content:center}
+/* ===== List (sl) ===== */
+.tdl-hint{margin:0 0 .6rem}
+.tdl-bar{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.7rem}
+.tdl-sum{font-size:.82rem;color:var(--text-muted)}
+.tdl-sum b{color:var(--text-primary)}
+.tdl-bar-a{display:flex;gap:.35rem;align-items:center}
+.tdl-empty{display:flex;flex-direction:column;align-items:center;gap:.4rem;text-align:center;padding:2.2rem 1rem;border:1.5px dashed var(--border-color);border-radius:16px;color:var(--text-muted);font-size:.86rem}
+.tdl-empty>i{font-size:1.4rem;color:var(--primary);opacity:.8}
+.tdl-empty b{color:var(--text-primary);font-size:1rem}
+.tdl-empty .rs-btn{margin-top:.5rem}
+.tdl-g{border:1px solid var(--border-color);border-radius:14px;background:var(--bg-card,#fff);margin-bottom:.8rem;overflow:hidden}
+.tdl-gh{display:flex;flex-direction:column;gap:.55rem;padding:.65rem .8rem .7rem;background:var(--gray-50,#f8fafc);border-bottom:1px solid var(--border-color)}
+.tdl-gtop{display:flex;align-items:center;gap:.35rem}
+.tdl-gtitle{flex:1;min-width:0;font-size:.98rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tdl-gtitle em{font-style:normal;font-weight:600;color:var(--text-muted)}
+.tdl-row.brk .tdl-c-teacher input::placeholder,.tdl-row.brk .tdl-c-venue input::placeholder{color:transparent}
+.tdl-gfs{display:flex;flex-wrap:wrap;gap:.6rem;min-width:0}
+.tdl-gf{display:flex;flex-direction:row;align-items:center;gap:.45rem;font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);position:relative}
+.tdl-gf input{box-sizing:border-box;height:2.15rem;padding:0 .6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card,#fff);color:var(--text-primary);font:600 .9rem inherit;text-transform:none;letter-spacing:0}
+.tdl-gf-week input{width:4.5rem}.tdl-gf-group input{width:12rem}
+.tdl-gf em{position:absolute;left:calc(100% + .5rem);bottom:.55rem;font-style:normal;font-size:.86rem;font-weight:700;color:var(--text-primary);text-transform:none;letter-spacing:0;white-space:nowrap}
+.tdl-gc{font-size:.76rem;color:var(--text-muted);white-space:nowrap;margin-right:.25rem}
+.tdl-row{display:grid;grid-template-columns:var(--gtc);gap:.4rem;align-items:center;padding:.22rem .8rem;border-bottom:1px solid color-mix(in srgb,var(--border-color) 60%,transparent)}
+.tdl-row.tdl-hd{padding-top:.45rem;padding-bottom:.25rem;font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border-color)}
+.tdl-row:not(.tdl-hd):hover{background:color-mix(in srgb,var(--primary) 4%,transparent)}
+.tdl-row>span{min-width:0;position:relative;display:flex;align-items:center;gap:.35rem}
+.tdl-row input{box-sizing:border-box;width:100%;min-width:0;height:2.1rem;padding:0 .5rem;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--text-primary);font:500 .9rem inherit}
+.tdl-row:hover input{border-color:var(--border-color)}
+.tdl-row input:focus{outline:none;border-color:var(--primary);background:var(--bg-card,#fff);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 15%,transparent)}
+.tdl-row .tdl-c-subject input{font-weight:650}
+.tdl-row .tdl-c-dur input{width:3.6rem;flex:0 0 auto;text-align:right}
+.tdl-row .tdl-c-dur i{font-style:normal;font-size:.74rem;color:var(--text-muted);white-space:nowrap}
+.tdl-row.brk .tdl-c-subject input{font-style:italic;font-weight:500;color:var(--text-muted)}
+.tdl-act{justify-content:flex-end;opacity:.35;transition:opacity .12s}
+.tdl-row:hover .tdl-act,.tdl-row:focus-within .tdl-act{opacity:1}
+.tdl-act .rs-icon-btn{width:1.95rem;height:1.95rem;font-size:.8rem}
+.tdl{container-type:inline-size}
+.tdl-row.sess-card{border:0;border-bottom:1px solid color-mix(in srgb,var(--border-color) 60%,transparent);border-radius:0;margin:0;background:transparent}
+.tdl-row input[type=time]::-webkit-calendar-picker-indicator{display:none}
+.tdl-row input[type=number]{-moz-appearance:textfield}
+.tdl-row input[type=number]::-webkit-inner-spin-button,.tdl-row input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+@container (max-width:640px){
+  .tdl-row{gap:.2rem;padding-left:.5rem;padding-right:.4rem}
+  .tdl-row input{padding:0 .35rem;font-size:.86rem}
+  .tdl-row .tdl-c-dur input{width:2.6rem}
+  .tdl-gf-group input{width:9.5rem}
+}
+.tdl-add{display:flex;align-items:center;gap:.45rem;width:100%;border:0;background:none;padding:.65rem .95rem;color:var(--primary);font:600 .86rem inherit;cursor:pointer;text-align:left}
+.tdl-add:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
+.tdl-add kbd{margin-left:auto;font:600 .68rem inherit;color:var(--text-muted);border:1px solid var(--border-color);border-radius:5px;padding:.05rem .35rem}
+.tdl-form{display:grid;gap:.75rem}
+.tdl-form .td-f em{font-style:normal;font-weight:500;color:var(--text-muted);text-transform:none;letter-spacing:0}
+.tdl-note{margin:0;font-size:.8rem;color:var(--text-muted)}
+#tdToast button{margin-left:.75rem;border:0;background:none;color:inherit;font:700 .86rem inherit;text-decoration:underline;cursor:pointer;padding:0}
+@media (max-width:1100px){.pz-body{grid-template-columns:1fr}}
+@media (max-width:759px){
+  .pz-card{border-radius:14px}
+  .pz-tabs button{flex:1 1 0;padding:.6rem .35rem;font-size:.8rem}
+  .pz-tabs button i{display:none}
+  .pz-h{padding:.9rem .9rem .1rem}
+  .pz-body{padding:.7rem .9rem 0;gap:.7rem}
+  [data-pz-pane="bulk"] .pz-in{padding:.7rem .9rem 0}
+  .pz-in textarea{min-height:9.5rem;font-size:.84rem}
+  .pz-help:not([open]){padding:.6rem .8rem}
+  .pz-ex{display:block;overflow-x:auto}
+  .pz-ai{margin:.75rem .9rem 0}
+  .pz-form{grid-template-columns:1fr;padding:.7rem .9rem 0}
+  .pz-foot{position:sticky;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:5;padding:.7rem .9rem;background:color-mix(in srgb,var(--bg-card,#fff) 94%,transparent);backdrop-filter:blur(8px)}
+  .pz-foot .rs-btn{flex:1;min-height:2.9rem;font-size:.95rem}
+  .tdl-g{border-radius:14px}
+  .tdl-gh{flex-direction:row;align-items:center;gap:.2rem;padding:.15rem .35rem .15rem 0;background:transparent;border-bottom:0}
+  .tdl-hint{font-size:.8rem}
+  .tdl-gt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:.05rem;border:0;background:none;text-align:left;padding:.65rem .9rem .35rem;cursor:pointer;color:var(--text-primary)}
+  .tdl-gt b{font-size:1rem}
+  .tdl-gt small{font-size:.76rem;color:var(--text-muted)}
+  .tdl-list{border-top:1px solid var(--border-color)}
+  .tdl-item{display:flex;align-items:center;gap:.8rem;width:100%;min-height:3.6rem;padding:.55rem .9rem;border:0;border-bottom:1px solid color-mix(in srgb,var(--border-color) 70%,transparent);background:none;text-align:left;cursor:pointer;color:var(--text-primary)}
+  .tdl-item:active{background:var(--gray-100,#f1f5f9)}
+  .tdl-t{display:flex;flex-direction:column;width:3.3rem;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .tdl-t b{font-size:.95rem}
+  .tdl-t small{font-size:.74rem;color:var(--text-muted)}
+  .tdl-s{flex:1;min-width:0;display:flex;flex-direction:column}
+  .tdl-s b{font-size:.98rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tdl-s small{font-size:.8rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tdl-item>.fa-chevron-right{color:var(--text-muted);font-size:.78rem;opacity:.6}
+  .tdl-item.brk .tdl-s b{font-style:italic;font-weight:500;color:var(--text-muted)}
+  .tdl-item.empty .tdl-s b{font-weight:500;color:var(--primary)}
+  .tdl-add{min-height:3.1rem;padding:.6rem .9rem}
+  .tdl-sheet .tb-sheet-f{flex-wrap:wrap}
+  .tdl-sheet .tb-sheet-f .rs-btn.primary{flex:1 1 100%;order:-1}
+}
 
 /* ===== Grid builder ===== */
 .tb{position:relative}
@@ -1249,70 +1388,79 @@ body.tb-lock{overflow:hidden}
             <button type="button" data-td-mode="list"><i class="fas fa-list" aria-hidden="true"></i> List</button>
           </div>
           <div id="ttBuilder" class="tb" data-td-pane="build"></div>
-          <div data-td-pane="paste">
+          <div data-td-pane="paste" class="pz" data-pz="grid">
+            <div class="pz-tabs" role="tablist" aria-label="What to paste">
+              <button type="button" role="tab" data-pz-tab="grid"><i class="fas fa-table-cells" aria-hidden="true"></i> Whole grid</button>
+              <button type="button" role="tab" data-pz-tab="fill"><i class="fas fa-fill-drip" aria-hidden="true"></i> Rest of a day</button>
+              <button type="button" role="tab" data-pz-tab="bulk"><i class="fas fa-list" aria-hidden="true"></i> One per line</button>
+            </div>
 
-            <details class="bulk-box" id="gridPasteBox">
-                <summary><i class="fas fa-table"></i> Fastest: paste a whole grid (days × periods)</summary>
-                <p class="sess-hint" style="margin-top:.5rem">
-                    Paste the whole week as a table. <b>First line</b> = the period times (leave the first cell blank or write “Day”).
-                    <b>Each next line</b> = the day, then a subject per period. Separate cells with a comma, a | or a tab (copy straight from Excel/Sheets).
-                    Put a teacher in brackets, e.g. <code>Maths (Mr A)</code>. Leave a cell blank for a free period or a break.
-                    <b>More than one class on the same day?</b> Add the class/stream in brackets after the day, on its own line —
-                    e.g. <code>Monday (Science)</code> and <code>Monday (Arts)</code> as two separate lines — and each becomes its own
-                    row tagged with that Class/Stream. Leave the brackets off when every class follows the same timetable.
-                    A cell with more than one subject for that period (e.g. <code>PHY/GOVT</code> for a split class) is kept exactly
-                    as typed — only the brackets are read as a teacher, a bare <code>/</code> never is.
-                    <b>Tip:</b> to fill the rest of a day with one activity (e.g. <code>Skill Acquisition</code>), repeat the same text in each remaining
-                    period — identical neighbouring cells merge into one block automatically (across periods and, where you use Class/Stream, across streams too).
-                </p>
-                <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday (Science), Maths (Mr A), Physics&#10;Monday (Arts), Government, Literature&#10;Tuesday, English, Physics, Maths"></textarea>
-                <button class="btn btn-primary btn-sm" data-call="gridPaste"><i class="fas fa-bolt"></i> Build timetable from grid</button>
-                <div style="margin-top:.6rem">
-                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo of the timetable, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
-                    <pre id="tt-ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0"></pre>
-                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-ai-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
+            <section class="pz-card" id="gridPasteBox" data-pz-pane="grid">
+              <header class="pz-h"><h4>Paste the whole timetable</h4>
+                <p>Copy it from Excel, Google Sheets or WhatsApp — days down the side, periods across the top.</p></header>
+              <div class="pz-body">
+                <div class="pz-in">
+                  <textarea id="gridPasteText" rows="9" spellcheck="false" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday (Science), Maths (Mr A), Physics&#10;Monday (Arts), Government, Literature&#10;Tuesday, English, Physics, Maths"></textarea>
+                  <div class="pz-meta"><span class="pz-count" data-pz-count="grid">Nothing pasted yet</span>
+                    <button type="button" class="pz-clear" data-pz-clear="gridPasteText" hidden>Clear</button></div>
                 </div>
-            </details>
+                <details class="pz-help" open>
+                  <summary>How to lay it out</summary>
+                  <table class="pz-ex" aria-label="Example">
+                    <tr><th>Day</th><th>8:00–9:00</th><th>9:00–10:00</th></tr>
+                    <tr><td>Monday (Science)</td><td>Maths (Mr A)</td><td>Physics</td></tr>
+                    <tr><td>Monday (Arts)</td><td>Government</td><td>Literature</td></tr>
+                    <tr><td>Tuesday</td><td>English</td><td class="pz-blank">free</td></tr>
+                  </table>
+                  <ul>
+                    <li><b>First line:</b> the period times.</li>
+                    <li><b>Each next line:</b> the day (or date), then one subject per period.</li>
+                    <li>Separate cells with a comma, <code>|</code> or a tab.</li>
+                    <li>Teacher in brackets: <code>Maths (Mr A)</code>.</li>
+                    <li>Classes with different lessons: <code>Monday (Science)</code> and <code>Monday (Arts)</code> on their own lines.</li>
+                    <li>Leave a cell empty for a free period. <code>PHY/GOVT</code> is kept as typed.</li>
+                  </ul>
+                </details>
+              </div>
+              <details class="pz-ai">
+                <summary><i class="fas fa-camera" aria-hidden="true"></i><span><b>Only have a photo?</b><small>Let a chatbot type it out for you</small></span><i class="fas fa-chevron-down pz-chev" aria-hidden="true"></i></summary>
+                <ol class="pz-steps"><li>Open ChatGPT, Claude or Gemini and attach the photo.</li><li>Paste this prompt with it.</li><li>Paste its answer in the box above.</li></ol>
+                <pre id="tt-ai-prompt" class="pz-prompt"></pre>
+                <button type="button" class="rs-btn ghost sm" data-copy="tt-ai-prompt" data-copied="Copied"><i class="fas fa-copy" aria-hidden="true"></i> Copy prompt</button>
+              </details>
+              <footer class="pz-foot"><button type="button" class="rs-btn primary" data-call="gridPaste"><i class="fas fa-bolt" aria-hidden="true"></i> Build timetable</button></footer>
+            </section>
 
-            <details class="bulk-box" id="fillDayBox">
-                <summary><i class="fas fa-fill-drip"></i> Fill the rest of a day (e.g. Skill Acquisition)</summary>
-                <p class="sess-hint" style="margin-top:.5rem">
-                    Fills every remaining period of a day — after its last lesson — with one activity, for every Class/Stream.
-                    Those matching cells then merge into a single block on the sheet.
-                </p>
-                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
-                    <div class="form-group" style="margin:0;flex:1 1 8rem">
-                        <label class="form-label" style="font-size:.8rem">Day</label>
-                        <input id="fillDay" class="form-control" list="dayList" placeholder="e.g. Friday">
-                    </div>
-                    <div class="form-group" style="margin:0;flex:2 1 12rem">
-                        <label class="form-label" style="font-size:.8rem">Activity</label>
-                        <input id="fillAct" class="form-control" list="subjectList" placeholder="e.g. Skill Acquisition" value="Skill Acquisition">
-                    </div>
-                    <button class="btn btn-secondary btn-sm" data-call="fillRestOfDay" style="height:fit-content"><i class="fas fa-fill-drip"></i> Fill rest of day</button>
-                </div>
-            </details>
+            <section class="pz-card" id="fillDayBox" data-pz-pane="fill">
+              <header class="pz-h"><h4>Fill the rest of a day</h4>
+                <p>Every period after a day’s last lesson gets one activity — for every class. Handy for Skill Acquisition, sports or clubs.</p></header>
+              <div class="pz-form">
+                <label class="td-f"><span>Day</span><input id="fillDay" list="dayList" placeholder="e.g. Friday"></label>
+                <label class="td-f"><span>Activity</span><input id="fillAct" list="subjectList" placeholder="e.g. Skill Acquisition" value="Skill Acquisition"></label>
+              </div>
+              <footer class="pz-foot"><button type="button" class="rs-btn primary" data-call="fillRestOfDay"><i class="fas fa-fill-drip" aria-hidden="true"></i> Fill the rest of the day</button></footer>
+            </section>
 
-            <details class="bulk-box">
-                <summary><i class="fas fa-list"></i> Quick add (one session per line)</summary>
-                <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
-                <textarea id="bulkText" rows="6" placeholder=""></textarea>
-                <button class="btn btn-primary btn-sm" data-call="bulkAdd"><i class="fas fa-plus"></i> Add these</button>
-                <div style="margin-top:.6rem">
-                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo or paste a rough list, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
-                    <pre id="tt-bulk-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0"></pre>
-                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-bulk-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
-                </div>
-            </details>
-
+            <section class="pz-card" data-pz-pane="bulk">
+              <header class="pz-h"><h4>Add sessions, one per line</h4>
+                <p id="bulkHint"></p></header>
+              <div class="pz-in">
+                <textarea id="bulkText" rows="8" spellcheck="false" placeholder=""></textarea>
+                <div class="pz-meta"><span class="pz-count" data-pz-count="bulk">Nothing pasted yet</span>
+                  <button type="button" class="pz-clear" data-pz-clear="bulkText" hidden>Clear</button></div>
+              </div>
+              <details class="pz-ai">
+                <summary><i class="fas fa-camera" aria-hidden="true"></i><span><b>Only have a photo or rough notes?</b><small>Let a chatbot type it out for you</small></span><i class="fas fa-chevron-down pz-chev" aria-hidden="true"></i></summary>
+                <ol class="pz-steps"><li>Open ChatGPT, Claude or Gemini and attach the photo or notes.</li><li>Paste this prompt with it.</li><li>Paste its answer in the box above.</li></ol>
+                <pre id="tt-bulk-prompt" class="pz-prompt"></pre>
+                <button type="button" class="rs-btn ghost sm" data-copy="tt-bulk-prompt" data-copied="Copied"><i class="fas fa-copy" aria-hidden="true"></i> Copy prompt</button>
+              </details>
+              <footer class="pz-foot"><button type="button" class="rs-btn primary" data-call="bulkAdd"><i class="fas fa-plus" aria-hidden="true"></i> Add these sessions</button></footer>
+            </section>
           </div>
           <div data-td-pane="list">
-            <p class="sess-hint" id="sessHint"></p>
-            <div id="rowBody"></div>
-            <div class="sess-actions">
-                <button class="btn btn-secondary" data-call="addRow"><i class="fas fa-plus"></i> Add session</button>
-                <button class="btn btn-light btn-sm" type="button" data-call="clearRows"><i class="fas fa-eraser"></i> Clear all</button>
-            </div>
+            <p class="sess-hint tdl-hint" id="sessHint"></p>
+            <div id="rowBody" class="tdl"></div>
           </div>
         </div>
 

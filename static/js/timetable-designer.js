@@ -196,7 +196,9 @@ function renderEditor(){
         '. Separate with a comma, a | or a tab (paste straight from Excel/Sheets). Trailing fields can be left out.';
     el('tt-bulk-prompt').textContent = buildBulkPrompt();
     el('tt-ai-prompt').textContent = buildGridPrompt();
-    el('rowBody').innerHTML = rows.map(sessCard).join('');
+    // The List view is drawn by timetable-builder.js (grouped by day; inline rows on
+    // desktop, tappable rows + edit sheet on phones); fall back to plain cards.
+    el('rowBody').innerHTML = window.tdListHTML ? window.tdListHTML() : rows.map(sessCard).join('');
 }
 function focusCard(i){
     var card=document.querySelector('#rowBody .sess-card[data-i="'+i+'"]'); if(!card) return;

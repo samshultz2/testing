@@ -805,8 +805,52 @@
     document.querySelectorAll('[data-td-mode]').forEach(function (b) {
       if (b.closest('#tdModes')) { b.classList.toggle('on', b.dataset.tdMode === m); b.setAttribute('aria-pressed', b.dataset.tdMode === m); }
     });
-    if (m === 'paste') { var g = $('gridPasteBox'); if (g && g.style.display !== 'none') g.open = true; }
+    if (m === 'paste') pzSync();
     if (!quiet && m === 'build') render();
+  }
+  // Paste: three sub-tabs (whole grid, rest of a day, one per line) with a
+  // live count of what has been pasted.
+  var PZ = document.querySelector('.pz'), pzPick = null;
+  function pzAvail(n) { var p = PZ && PZ.querySelector('[data-pz-pane="' + n + '"]'); return !!p && p.style.display !== 'none'; }
+  function pzShow(n) {
+    if (!PZ) return;
+    if (!pzAvail(n)) n = pzAvail('grid') ? 'grid' : 'bulk';
+    PZ.dataset.pz = n;
+    PZ.querySelectorAll('[data-pz-tab]').forEach(function (b) {
+      var t = b.dataset.pzTab; b.hidden = !pzAvail(t);
+      b.classList.toggle('on', t === n); b.setAttribute('aria-selected', t === n);
+    });
+  }
+  function pzSync() { pzShow(pzPick || (pzAvail('grid') ? 'grid' : 'bulk')); pzCount(); }
+  function pzCount() {
+    if (!PZ) return;
+    var split = function (l) { return l.split(/\t|\||,/); };
+    var g = ($('gridPasteText').value || '').split('\n').filter(function (l) { return l.trim(); });
+    var gc = PZ.querySelector('[data-pz-count="grid"]');
+    if (gc) {
+      if (!g.length) gc.textContent = 'Nothing pasted yet';
+      else {
+        var per = split(g[0]).length - 1, days = g.length - 1;
+        gc.innerHTML = days > 0 ? '<b>' + days + '</b> day line' + (days === 1 ? '' : 's') + ' · <b>' + Math.max(per, 0) + '</b> period' + (per === 1 ? '' : 's')
+          : 'Now add a line for each day under the period times';
+      }
+    }
+    var bl = ($('bulkText').value || '').split('\n').filter(function (l) { return l.trim(); }).length;
+    var bc = PZ.querySelector('[data-pz-count="bulk"]');
+    if (bc) bc.innerHTML = bl ? '<b>' + bl + '</b> session' + (bl === 1 ? '' : 's') + ' to add' : 'Nothing pasted yet';
+    PZ.querySelectorAll('[data-pz-clear]').forEach(function (b) { b.hidden = !($(b.dataset.pzClear).value || '').trim(); });
+  }
+  if (PZ) {
+    PZ.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-pz-tab]');
+      if (t) { pzPick = t.dataset.pzTab; pzShow(pzPick); return; }
+      var c = e.target.closest('[data-pz-clear]');
+      if (c) { var ta = $(c.dataset.pzClear); ta.value = ''; ta.focus(); pzCount(); }
+    });
+    PZ.addEventListener('input', pzCount);
+    el('layout').addEventListener('change', function () { setTimeout(pzSync, 0); });
+    pzSync();
+    if (phone.matches) PZ.querySelectorAll('.pz-help').forEach(function (d) { d.open = false; });
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-td-mode]'); if (!b) return;
@@ -820,7 +864,7 @@
     window[fn] = function () {
       var before = rows.length; snap();
       var out = orig.apply(this, arguments);
-      if (rows.length !== before) { if (gridLayout()) setMode('build'); else setMode('list'); toast('Added ' + (rows.length - before) + ' lessons'); }
+      if (rows.length !== before) { if (gridLayout()) setMode('build'); else setMode('list'); pzCount(); toast('Added ' + (rows.length - before) + ' session' + (rows.length - before === 1 ? '' : 's')); }
       else undoStack.pop();
       return out;
     };
@@ -831,7 +875,7 @@
     if (!window.__tbQuiet) render();
     return out;
   };
-  phone.addEventListener && phone.addEventListener('change', function () { closeSheet(); render(); });
+  phone.addEventListener && phone.addEventListener('change', function () { closeSheet(); render(); relist(); });
   el('layout').addEventListener('change', function () { mode = null; undoStack = []; render(); });
 
   // Global undo / save shortcuts
@@ -842,13 +886,247 @@
     else if (e.key === 's' || e.key === 'S') { e.preventDefault(); quickSave(); }
   });
 
-  // List view (exam timetables): Enter in a session adds the next one.
+  // List view: Enter moves to the next session of the day, and adds one after the last.
   $('rowBody').addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || !e.target.matches('input')) return;
-    var card = e.target.closest('.sess-card'); if (!card) return;
+    var row = e.target.closest('.tdl-row[data-i]'); if (!row) return;
     e.preventDefault();
-    if (+card.dataset.i === rows.length - 1) addRow();
-    else { var nx = document.querySelector('#rowBody .sess-card[data-i="' + (+card.dataset.i + 1) + '"] [data-f="subject"]'); nx && nx.focus(); }
+    var f = e.target.dataset.f || 'subject', nx = row.nextElementSibling;
+    if (nx && nx.matches('.tdl-row[data-i]')) { var t = nx.querySelector('[data-f="' + f + '"]') || nx.querySelector('[data-f="subject"]'); t && t.focus(); }
+    else { var ni = listChange(function () { return newSessionAfter(+row.dataset.i); }); focusRow(ni); }
+  });
+
+  // ================================================================ List view
+  // Sessions grouped by day (and class/stream). Desktop: a compact editable
+  // table per day with the day's own fields in its header. Phone: a grouped
+  // list of tappable rows; each opens an edit sheet.
+  var GF = { week: 1, date: 1, day: 1, group: 1 };
+  var listDirty = false;
+  function lFields() { return layout().fields || []; }
+  function gFields() { var F = lFields(); return F.filter(function (f) { return GF[f] && !(f === 'day' && F.indexOf('date') >= 0); }); }
+  function cFields() { return lFields().filter(function (f) { return !GF[f]; }); }
+  function gKey(r) {
+    return gFields().map(function (f) { return f === 'date' ? (r.date ? toISO(r.date) : '') : (r[f] || '').trim(); }).join('§')
+      + (lFields().indexOf('date') >= 0 && !r.date ? '§' + (r.day || '') : '');
+  }
+  function gSort(r) {
+    var w = parseInt(r.week, 10);
+    return (w ? 'a' + ('0000' + w).slice(-4) : r.date ? 'b' + toISO(r.date) : 'c' + ('0' + dayRank(canonDay(r.day || ''))).slice(-2)) + '§' + (r.group || '');
+  }
+  function groups() {
+    var map = {}, out = [];
+    rows.forEach(function (r, i) {
+      var k = gKey(r);
+      if (!map[k]) { map[k] = { k: k, idx: [], s: gSort(r) }; out.push(map[k]); }
+      map[k].idx.push(i);
+    });
+    out.forEach(function (g) { g.idx.sort(function (a, b) { return (rows[a].time || '99').localeCompare(rows[b].time || '99') || a - b; }); });
+    out.sort(function (a, b) { return a.s < b.s ? -1 : a.s > b.s ? 1 : 0; });
+    return out;
+  }
+  function gTitle(r) {
+    var t = '';
+    if (lFields().indexOf('week') >= 0) t = r.week ? 'Week ' + r.week : 'No week set';
+    else if (r.date) { var p = parseDateAny(r.date); t = (dayFromDate(r.date) || '') + (p ? ', ' + p.d + ' ' + TL_MON[p.m - 1].charAt(0) + TL_MON[p.m - 1].slice(1).toLowerCase() : ''); }
+    else t = r.day || 'No day set';
+    return t;
+  }
+  function endOf(r) { return r.time && r.dur ? addMinutes(r.time, r.dur) : ''; }
+  var FL = { week: 'Week', date: 'Date', day: 'Day', group: 'Class / stream', time: 'Starts', dur: 'Minutes', subject: 'Subject', teacher: 'Teacher', venue: 'Venue' };
+  function fInput(f, v, attr) {
+    v = esc(v == null ? '' : v); attr = attr || '';
+    switch (f) {
+      case 'week': return '<input type="number" min="1" step="1" inputmode="numeric" ' + attr + ' value="' + v + '" placeholder="1">';
+      case 'date': return '<input type="date" ' + attr + ' value="' + v + '">';
+      case 'day': return '<input list="dayList" ' + attr + ' value="' + v + '" placeholder="e.g. Monday">';
+      case 'time': return '<input type="time" ' + attr + ' value="' + v + '">';
+      case 'dur': return '<input type="number" min="0" step="5" inputmode="numeric" ' + attr + ' value="' + v + '" placeholder="60">';
+      case 'subject': return '<input list="subjectList" ' + attr + ' value="' + v + '" placeholder="Subject">';
+      case 'group': return '<input ' + attr + ' value="' + v + '" placeholder="All classes">';
+      case 'teacher': return '<input ' + attr + ' value="' + v + '" placeholder="Teacher">';
+      case 'venue': return '<input ' + attr + ' value="' + v + '" placeholder="Hall / room">';
+    }
+    return '<input ' + attr + ' value="' + v + '">';
+  }
+  function listHTML() {
+    var gs = groups(), C = cFields(), G = gFields(), word = sat() ? 'week' : 'day';
+    var n = rows.length, filled = rows.filter(function (r) { return r.subject; }).length;
+    var bar = '<div class="tdl-bar"><div class="tdl-sum"><b>' + n + '</b> session' + (n === 1 ? '' : 's') + (gs.length ? ' · ' + gs.length + ' ' + (G.indexOf('group') >= 0 && gs.some(function (g) { return rows[g.idx[0]].group; }) ? 'groups' : word + (gs.length === 1 ? '' : 's')) : '') + '</div>'
+      + '<div class="tdl-bar-a"><button type="button" class="rs-btn ghost sm" data-sl="newgroup"><i class="fas fa-calendar-plus" aria-hidden="true"></i> Add ' + word + '</button>'
+      + (n ? '<button type="button" class="rs-icon-btn" data-sl="clear" title="Clear all sessions" aria-label="Clear all sessions"><i class="fas fa-eraser" aria-hidden="true"></i></button>' : '') + '</div></div>';
+    if (!n || (n === 1 && !rows[0].subject && !rows[0].time)) {
+      return bar + '<div class="tdl-empty"><i class="fas fa-list-ul" aria-hidden="true"></i><b>No sessions yet</b><span>Add them one at a time here, or use Paste to bring in a whole timetable at once.</span>'
+        + '<button type="button" class="rs-btn primary" data-sl="newgroup"><i class="fas fa-plus" aria-hidden="true"></i> Add the first session</button></div>';
+    }
+    var h = bar;
+    gs.forEach(function (g, gi) {
+      var r0 = rows[g.idx[0]], ids = g.idx.join(',');
+      var cnt = g.idx.length + ' session' + (g.idx.length === 1 ? '' : 's');
+      if (phone.matches) {
+        h += '<section class="tdl-g"><header class="tdl-gh"><button type="button" class="tdl-gt" data-sl="editgroup" data-is="' + ids + '"><b>' + esc(gTitle(r0)) + '</b>'
+          + '<small>' + esc([r0.group, cnt].filter(Boolean).join(' · ')) + '</small></button>'
+          + '<button type="button" class="rs-icon-btn" data-sl="editgroup" data-is="' + ids + '" aria-label="Edit this ' + word + '"><i class="fas fa-ellipsis" aria-hidden="true"></i></button></header><div class="tdl-list">';
+        g.idx.forEach(function (i) {
+          var r = rows[i], brk = breakish(r.subject), e = endOf(r);
+          h += '<button type="button" class="tdl-item' + (brk ? ' brk' : '') + (!r.subject ? ' empty' : '') + '" data-sl="edit" data-i="' + i + '">'
+            + '<span class="tdl-t"><b>' + esc(fmtT(r.time) || '—') + '</b><small>' + (e ? esc(fmtT(e)) : (r.dur ? esc(r.dur) + ' min' : '')) + '</small></span>'
+            + '<span class="tdl-s"><b>' + esc(r.subject || 'Choose a subject') + '</b>'
+            + ((r.teacher || r.venue) ? '<small>' + esc([r.teacher, r.venue].filter(Boolean).join(' · ')) + '</small>' : '') + '</span>'
+            + '<i class="fas fa-chevron-right" aria-hidden="true"></i></button>';
+        });
+        h += '<button type="button" class="tdl-add" data-sl="addto" data-is="' + ids + '"><i class="fas fa-plus" aria-hidden="true"></i> Add session</button></div></section>';
+        return;
+      }
+      // desktop
+      var head = G.map(function (f) {
+        var lab = f === 'group' ? 'Class / stream' : FL[f];
+        var extra = '';
+        return '<label class="tdl-gf tdl-gf-' + f + '"><span>' + lab + '</span>' + fInput(f, r0[f], 'data-gf="' + f + '" data-is="' + ids + '"') + extra + '</label>';
+      }).join('');
+      if (lFields().indexOf('date') >= 0 && lFields().indexOf('day') >= 0 && !r0.date)
+        head += '<label class="tdl-gf"><span>Day</span>' + fInput('day', r0.day, 'data-gf="day" data-is="' + ids + '"') + '</label>';
+      h += '<section class="tdl-g"><header class="tdl-gh"><div class="tdl-gtop"><b class="tdl-gtitle">' + esc(gTitle(r0)) + (r0.group ? ' <em>· ' + esc(r0.group) + '</em>' : '') + '</b><span class="tdl-gc">' + cnt + '</span>'
+        + '<button type="button" class="rs-icon-btn" data-sl="dupgroup" data-is="' + ids + '" title="Copy this ' + word + '" aria-label="Copy this ' + word + '"><i class="fas fa-clone" aria-hidden="true"></i></button>'
+        + '<button type="button" class="rs-icon-btn" data-sl="delgroup" data-is="' + ids + '" title="Remove this ' + word + '" aria-label="Remove this ' + word + '"><i class="fas fa-trash" aria-hidden="true"></i></button></div><div class="tdl-gfs">' + head + '</div></header>'
+        + '<div class="tdl-tbl" style="--gtc:' + C.map(function (f) { return { time: '5.6rem', dur: '6.6rem', subject: 'minmax(0,1.5fr)' }[f] || 'minmax(0,1fr)'; }).join(' ') + ' 4.2rem"><div class="tdl-row tdl-hd">' + C.map(function (f) { return '<span class="tdl-c-' + f + '">' + FL[f] + '</span>'; }).join('') + '<span></span></div>';
+      g.idx.forEach(function (i) {
+        var r = rows[i];
+        h += '<div class="tdl-row sess-card' + (breakish(r.subject) ? ' brk' : '') + '" data-i="' + i + '">'
+          + C.map(function (f) { return '<span class="tdl-c-' + f + '">' + fInput(f, r[f], 'data-f="' + f + '" aria-label="' + FL[f] + '"') + (f === 'dur' ? '<i>' + (endOf(r) ? 'to ' + esc(fmtT(endOf(r))) : 'min') + '</i>' : '') + '</span>'; }).join('')
+          + '<span class="tdl-act"><button type="button" class="rs-icon-btn sm" data-sl="dup" data-i="' + i + '" title="Duplicate" aria-label="Duplicate"><i class="fas fa-copy" aria-hidden="true"></i></button>'
+          + '<button type="button" class="rs-icon-btn sm" data-sl="del" data-i="' + i + '" title="Remove" aria-label="Remove"><i class="fas fa-xmark" aria-hidden="true"></i></button></span></div>';
+      });
+      h += '</div><button type="button" class="tdl-add" data-sl="addto" data-is="' + ids + '"><i class="fas fa-plus" aria-hidden="true"></i> Add session <kbd>Enter</kbd></button></section>';
+    });
+    return h;
+  }
+  window.tdListHTML = listHTML;
+  function relist() { window.__tbQuiet = 1; window.renderEditor(); window.__tbQuiet = 0; }
+  function idsOf(b) { return (b.dataset.is || '').split(',').filter(Boolean).map(Number); }
+  function newSessionAfter(i) {
+    var last = rows[i], r = blankRow();
+    if (last) {
+      ['week', 'date', 'day', 'group', 'venue'].forEach(function (f) { r[f] = last[f]; });
+      r.dur = last.dur; r.time = endOf(last) || last.time || '';
+    }
+    rows.push(r); return rows.length - 1;
+  }
+  function listChange(fn, msg) {
+    snap(); var out = fn(); relist(); window.renderSheet();
+    if (msg) toastUndo(msg);
+    return out;
+  }
+  function toastUndo(msg) {
+    toast(msg);
+    var t = $('tdToast'); if (!t) return;
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = 'Undo';
+    b.addEventListener('click', function () { t.classList.remove('on'); undo(); });
+    t.appendChild(b);
+    clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove('on'); }, 5000);
+  }
+  function focusRow(i) {
+    if (phone.matches) { openSession(i); return; }
+    var c = document.querySelector('#rowBody .tdl-row[data-i="' + i + '"] [data-f="subject"]'); c && c.focus();
+  }
+  function openSession(i) {
+    var r = rows[i]; if (!r) return;
+    var F = lFields();
+    var sh = openSheet(r.subject ? esc(r.subject) : 'New session',
+      '<div class="tdl-form" data-i="' + i + '">' + F.filter(function (f) { return !(f === 'day' && F.indexOf('date') >= 0 && r.date); }).map(function (f) {
+        return '<label class="td-f"><span>' + FL[f] + (f === 'teacher' || f === 'group' ? ' <em>(optional)</em>' : '') + '</span>' + fInput(f, r[f], 'data-sf="' + f + '"') + '</label>';
+      }).join('') + '</div>',
+      '<button type="button" class="rs-btn ghost" data-sf-act="dup"><i class="fas fa-copy" aria-hidden="true"></i> Duplicate</button>'
+      + '<button type="button" class="rs-btn danger" data-sf-act="del"><i class="fas fa-trash" aria-hidden="true"></i> Remove</button>'
+      + '<button type="button" class="rs-btn primary" data-sheet-x>Done</button>', 'tdl-sheet');
+    sh.addEventListener('input', function (e) {
+      var f = e.target.dataset.sf; if (!f) return;
+      if (!listDirty) snap();
+      rows[i][f] = e.target.value; listDirty = true;
+      if (f === 'date') { var a = dayFromDate(e.target.value); if (a) rows[i].day = a; }
+      window.renderSheet();
+    });
+    sh.querySelector('[data-sf-act="dup"]').addEventListener('click', function () {
+      closeSheet(); listChange(function () { rows.splice(i + 1, 0, Object.assign({}, rows[i])); }, 'Session duplicated');
+    });
+    sh.querySelector('[data-sf-act="del"]').addEventListener('click', function () {
+      closeSheet(); listChange(function () { rows.splice(i, 1); }, 'Session removed');
+    });
+    if (!r.subject) setTimeout(function () { var s = sh.querySelector('[data-sf="subject"]'); s && s.focus(); }, 250);
+  }
+  function openGroup(ids) {
+    var r0 = rows[ids[0]], G = gFields(), word = sat() ? 'week' : 'day'; if (!r0) return;
+    var sh = openSheet(esc(gTitle(r0)),
+      '<div class="tdl-form">' + G.map(function (f) { return '<label class="td-f"><span>' + FL[f] + (f === 'group' ? ' <em>(optional)</em>' : '') + '</span>' + fInput(f, r0[f], 'data-gsf="' + f + '"') + '</label>'; }).join('')
+      + '<p class="tdl-note">Changes apply to all ' + ids.length + ' session' + (ids.length === 1 ? '' : 's') + ' of this ' + word + '.</p></div>',
+      '<button type="button" class="rs-btn ghost" data-g-act="dup"><i class="fas fa-clone" aria-hidden="true"></i> Copy ' + word + '</button>'
+      + '<button type="button" class="rs-btn danger" data-g-act="del"><i class="fas fa-trash" aria-hidden="true"></i> Remove</button>'
+      + '<button type="button" class="rs-btn primary" data-sheet-x>Done</button>', 'tdl-sheet');
+    sh.addEventListener('input', function (e) {
+      var f = e.target.dataset.gsf; if (!f) return;
+      if (!listDirty) snap();
+      setGroupField(ids, f, e.target.value); listDirty = true; window.renderSheet();
+    });
+    sh.querySelector('[data-g-act="dup"]').addEventListener('click', function () { closeSheet(); dupGroup(ids); });
+    sh.querySelector('[data-g-act="del"]').addEventListener('click', function () { closeSheet(); delGroup(ids); });
+  }
+  function setGroupField(ids, f, v) {
+    ids.forEach(function (i) { rows[i][f] = v; if (f === 'date') { var a = dayFromDate(v); if (a) rows[i].day = a; } });
+  }
+  function nextGroupSpec(ids) {
+    var r0 = rows[ids[0]], s = { week: r0.week, date: r0.date, day: r0.day, group: r0.group };
+    if (lFields().indexOf('week') >= 0) { var mx = 0; rows.forEach(function (r) { mx = Math.max(mx, parseInt(r.week, 10) || 0); }); s.week = String(mx + 1); }
+    else if (r0.date) {
+      var last = ''; rows.forEach(function (r) { if (r.date && toISO(r.date) > last) last = toISO(r.date); });
+      var iso = addDaysISO(last, 1), guard = 0;
+      while (guard++ < 7 && /Saturday|Sunday/.test(dayFromDate(iso) || '')) iso = addDaysISO(iso, 1);
+      s.date = iso; s.day = dayFromDate(iso) || '';
+    } else if (r0.day) { s.day = DAY_ORDER[Math.min(dayRank(canonDay(r0.day)) + 1, 6)] || r0.day; }
+    return s;
+  }
+  function dupGroup(ids) {
+    var s = nextGroupSpec(ids);
+    listChange(function () { ids.forEach(function (i) { rows.push(Object.assign({}, rows[i], { week: s.week, date: s.date, day: s.day })); }); },
+      'Copied to ' + gTitle(s));
+  }
+  function delGroup(ids) {
+    listChange(function () { var set = {}; ids.forEach(function (i) { set[i] = 1; }); rows = rows.filter(function (r, i) { return !set[i]; }); },
+      'Removed ' + ids.length + ' session' + (ids.length === 1 ? '' : 's'));
+  }
+  // close of any sheet after edits: redraw the list once
+  var _close = closeSheet;
+  closeSheet = function () { _close(); if (listDirty) { listDirty = false; relist(); } };
+  $('rowBody').addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-sl]'); if (!b) return;
+    var a = b.dataset.sl, i = +b.dataset.i;
+    if (a === 'edit') openSession(i);
+    else if (a === 'editgroup') openGroup(idsOf(b));
+    else if (a === 'addto') { var ids = idsOf(b); var ni = listChange(function () { return newSessionAfter(ids[ids.length - 1]); }); focusRow(ni); }
+    else if (a === 'newgroup') {
+      var gs = groups(), ni2;
+      if (!gs.length || (rows.length === 1 && !rows[0].subject && !rows[0].time)) { ni2 = rows.length ? 0 : listChange(function () { rows.push(blankRow()); return 0; }); focusRow(ni2); return; }
+      var lastG = gs[gs.length - 1], s = nextGroupSpec(lastG.idx), src = rows[lastG.idx[0]];
+      ni2 = listChange(function () { var r = blankRow(); Object.assign(r, { week: s.week, date: s.date, day: s.day, group: src.group, time: src.time, dur: src.dur, venue: src.venue }); rows.push(r); return rows.length - 1; });
+      focusRow(ni2);
+    }
+    else if (a === 'clear') { if (confirm('Clear all ' + rows.length + ' sessions?')) listChange(function () { rows = [blankRow()]; }, 'Cleared'); }
+    else if (a === 'dup') listChange(function () { rows.splice(i + 1, 0, Object.assign({}, rows[i])); });
+    else if (a === 'del') listChange(function () { rows.splice(i, 1); }, 'Session removed');
+    else if (a === 'dupgroup') dupGroup(idsOf(b));
+    else if (a === 'delgroup') { var di = idsOf(b); if (di.length < 2 || confirm('Remove this ' + (sat() ? 'week' : 'day') + ' and its ' + di.length + ' sessions?')) delGroup(di); }
+  });
+  // desktop day header fields: apply to every session of that day
+  var gfSnapped = false;
+  $('rowBody').addEventListener('input', function (e) {
+    var f = e.target.dataset && e.target.dataset.gf; if (!f) return;
+    if (!gfSnapped) { snap(); gfSnapped = true; }
+    setGroupField(idsOf(e.target), f, e.target.value); window.renderSheet();
+  });
+  $('rowBody').addEventListener('change', function (e) {
+    if (e.target.dataset && e.target.dataset.gf) { gfSnapped = false; relist(); }
+    else if (e.target.dataset && (e.target.dataset.f === 'time' || e.target.dataset.f === 'dur')) {
+      var row = e.target.closest('.tdl-row'); var r = row && rows[+row.dataset.i]; var lab = row && row.querySelector('.tdl-c-dur i');
+      if (r && lab) lab.textContent = endOf(r) ? 'to ' + fmtT(endOf(r)) : 'min';
+    }
   });
 
   // ---------------------------------------------------------------- toast
