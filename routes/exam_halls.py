@@ -324,6 +324,24 @@ def _file(result, fmt, name, term):
         return Response(data, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         headers={'Content-Disposition': f'attachment; filename="{stem}.xlsx"'})
     result = dict(result, term=term)
+    if fmt in ('png', 'image'):
+        part = (request.values.get('part') or 'all').lower()
+        if part == 'all':
+            data = exam_hall_doc.render_png_zip(result, subtitle=name)
+            return Response(data, mimetype='application/zip',
+                            headers={'Content-Disposition': f'attachment; filename="{stem}_images.zip"'})
+        if part != 'overview':
+            try:
+                part = int(part)
+            except ValueError:
+                part = 'overview'
+        names = exam_hall_doc.hall_names(result)
+        if isinstance(part, int) and not 1 <= part <= len(names):
+            part = 'overview'
+        label = 'Overview' if part == 'overview' else re.sub(r'[^A-Za-z0-9]+', '_', names[part - 1]).strip('_')
+        data = exam_hall_doc.render_png(result, subtitle=name, part=part)
+        return Response(data, mimetype='image/png',
+                        headers={'Content-Disposition': f'attachment; filename="{stem}_{label}.png"'})
     data = exam_hall_doc.render_pdf(result, subtitle=name)
     return Response(data, mimetype='application/pdf',
                     headers={'Content-Disposition': f'attachment; filename="{stem}.pdf"'})

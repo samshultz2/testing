@@ -43,7 +43,9 @@ def _seats(hall):
 # --------------------------------------------------------------------------- #
 # PDF
 # --------------------------------------------------------------------------- #
-def render_pdf(result, title='Exam hall allocation', subtitle=''):
+def render_pdf(result, title='Exam hall allocation', subtitle='', part=None):
+    """``part``: None = overview + every hall; 'overview' = the overview only;
+    an int = only that hall (1-based, among halls with candidates)."""
     SLE._register_fonts()
     F = SLE.F
     from reportlab.lib import colors
@@ -205,61 +207,70 @@ def render_pdf(result, title='Exam hall allocation', subtitle=''):
     halls = result.get('halls') or []
     used = [h for h in halls if h.get('count')] or halls
     story = []
+    show_overview = part is None or part == 'overview'
+    hall_nums = list(range(1, len(used) + 1))
+    if part == 'overview':
+        hall_nums = []
+    elif isinstance(part, int):
+        hall_nums = [part] if 1 <= part <= len(used) else []
 
     # ---- overview -------------------------------------------------------
-    story.append(Paragraph(esc(title), st['h1']))
-    term = result.get('term') or ''
-    sub_bits = [b for b in [subtitle, '' if term and term in (subtitle or '') else term] if b]
-    if sub_bits:
-        story.append(Paragraph(esc(' · '.join(sub_bits)), st['sub']))
-    story.append(Spacer(1, 12))
-    fill = (round(100 * result.get('total_students', 0) / result['total_capacity'])
-            if result.get('total_capacity') else 0)
-    story.append(Tiles([('Candidates', result.get('total_students', 0), ''),
-                        ('Halls', len(halls), ''),
-                        ('Seats', result.get('total_capacity', 0), '%d%% filled' % fill),
-                        ('Classes', len(classes), '%d class arms' % len(result.get('groups') or []))]))
+    if show_overview:
+        story.append(Paragraph(esc(title), st['h1']))
+        term = result.get('term') or ''
+        sub_bits = [b for b in [subtitle, '' if term and term in (subtitle or '') else term] if b]
+        if sub_bits:
+            story.append(Paragraph(esc(' · '.join(sub_bits)), st['sub']))
+        story.append(Spacer(1, 12))
+        fill = (round(100 * result.get('total_students', 0) / result['total_capacity'])
+                if result.get('total_capacity') else 0)
+        story.append(Tiles([('Candidates', result.get('total_students', 0), ''),
+                            ('Halls', len(halls), ''),
+                            ('Seats', result.get('total_capacity', 0), '%d%% filled' % fill),
+                            ('Classes', len(classes), '%d class arms' % len(result.get('groups') or []))]))
 
-    story.append(Paragraph('Candidates per hall, by class', st['h2']))
-    head = ['Hall'] + classes + ['Female', 'Male', 'Total', 'Seats']
-    data = [head]
-    tot = {c: 0 for c in classes}
-    tf = tm = 0
-    for h in halls:
-        bc = h.get('by_class') or {}
-        g = h.get('gender') or {}
-        for c in classes:
-            tot[c] += bc.get(c, 0)
-        tf += g.get('Female', 0); tm += g.get('Male', 0)
-        data.append([Paragraph(esc(h['name']) + (' <font color="%s" size="6.5">MAIN</font>' % C['primary']
-                                                  if h.get('is_main') else ''), st['cellb'])]
-                    + [bc.get(c, 0) or '–' for c in classes]
-                    + [g.get('Female', 0), g.get('Male', 0), h.get('count', 0), h.get('capacity', 0)])
-    data.append(['Total'] + [tot[c] for c in classes] + [tf, tm, result.get('total_students', 0),
-                                                        result.get('total_capacity', 0)])
-    name_w = 120
-    rest = (avail - name_w) / max(1, len(head) - 1)
-    extra = [('FONTNAME', (0, -1), (-1, -1), F['BodyBold']), ('BACKGROUND', (0, -1), (-1, -1), hx(C['soft'])),
-             ('FONTNAME', (-2, 1), (-2, -1), F['BodyBold'])]
-    for i, c in enumerate(classes, 1):
-        extra.append(('TEXTCOLOR', (i, 0), (i, 0), hx(inks[c])))
-    story.append(table(data, [name_w] + [rest] * (len(head) - 1), extra=extra))
+        story.append(Paragraph('Candidates per hall, by class', st['h2']))
+        head = ['Hall'] + classes + ['Female', 'Male', 'Total', 'Seats']
+        data = [head]
+        tot = {c: 0 for c in classes}
+        tf = tm = 0
+        for h in halls:
+            bc = h.get('by_class') or {}
+            g = h.get('gender') or {}
+            for c in classes:
+                tot[c] += bc.get(c, 0)
+            tf += g.get('Female', 0); tm += g.get('Male', 0)
+            data.append([Paragraph(esc(h['name']) + (' <font color="%s" size="6.5">MAIN</font>' % C['primary']
+                                                      if h.get('is_main') else ''), st['cellb'])]
+                        + [bc.get(c, 0) or '–' for c in classes]
+                        + [g.get('Female', 0), g.get('Male', 0), h.get('count', 0), h.get('capacity', 0)])
+        data.append(['Total'] + [tot[c] for c in classes] + [tf, tm, result.get('total_students', 0),
+                                                            result.get('total_capacity', 0)])
+        name_w = 120
+        rest = (avail - name_w) / max(1, len(head) - 1)
+        extra = [('FONTNAME', (0, -1), (-1, -1), F['BodyBold']), ('BACKGROUND', (0, -1), (-1, -1), hx(C['soft'])),
+                 ('FONTNAME', (-2, 1), (-2, -1), F['BodyBold'])]
+        for i, c in enumerate(classes, 1):
+            extra.append(('TEXTCOLOR', (i, 0), (i, 0), hx(inks[c])))
+        story.append(table(data, [name_w] + [rest] * (len(head) - 1), extra=extra))
 
-    groups = result.get('groups') or []
-    if groups:
-        story.append(Paragraph('How widely each class arm is spread', st['h2']))
-        gd = [['Class / arm', 'Candidates', 'Halls used', 'Most in one hall']]
-        for g in groups:
-            gd.append([Paragraph(esc(g['key']), st['cell']), g['size'],
-                       '%d of %d' % (g['halls_used'], len(halls)), g['max_in_hall']])
-        story.append(table(gd, [avail * .4, avail * .2, avail * .2, avail * .2]))
-        story.append(Spacer(1, 5))
-        story.append(Paragraph('Lower “most in one hall” means classmates are spread more thinly — '
-                               'fewer chances to copy.', st['note']))
+        groups = result.get('groups') or []
+        if groups:
+            story.append(Paragraph('How widely each class arm is spread', st['h2']))
+            gd = [['Class / arm', 'Candidates', 'Halls used', 'Most in one hall']]
+            for g in groups:
+                gd.append([Paragraph(esc(g['key']), st['cell']), g['size'],
+                           '%d of %d' % (g['halls_used'], len(halls)), g['max_in_hall']])
+            story.append(table(gd, [avail * .4, avail * .2, avail * .2, avail * .2]))
+            story.append(Spacer(1, 5))
+            story.append(Paragraph('Lower “most in one hall” means classmates are spread more thinly — '
+                                   'fewer chances to copy.', st['note']))
 
     # ---- one page per hall ----------------------------------------------
-    for i, h in enumerate(used, 1):
-        story.append(PageBreak())
+    for i in hall_nums:
+        h = used[i - 1]
+        if story:
+            story.append(PageBreak())
         story.append(HallHead(h, i, len(used)))
         story.append(Spacer(1, 10))
         bc = h.get('by_class') or {}
@@ -283,6 +294,54 @@ def render_pdf(result, title='Exam hall allocation', subtitle=''):
                           PageTemplate('later', [later])])
     doc.build(story, canvasmaker=canvas_cls)
     return buf.getvalue()
+
+
+def _pages_png(pdf, dpi=150):
+    """One PNG for a PDF: a single page as is, several pages stacked (a long
+    hall roster that runs onto a second page stays one picture)."""
+    import fitz
+    from PIL import Image
+    doc = fitz.open(stream=pdf, filetype='pdf')
+    m = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+    imgs = [Image.frombytes('RGB', (p.width, p.height), p.samples) for p in (pg.get_pixmap(matrix=m) for pg in doc)]
+    if len(imgs) == 1:
+        out = io.BytesIO(); imgs[0].save(out, format='PNG', optimize=True); return out.getvalue()
+    # trim the empty space under the last page's rows (its footer goes too)
+    from PIL import ImageChops
+    last = imgs[-1]
+    foot = int(70 * dpi / 72.0)
+    body = last.crop((0, 0, last.width, last.height - foot))
+    box = ImageChops.difference(body, Image.new('RGB', body.size, 'white')).getbbox()
+    if box:
+        imgs[-1] = last.crop((0, 0, last.width, min(last.height, box[3] + int(24 * dpi / 72.0))))
+    gap = 12
+    canvas = Image.new('RGB', (max(i.width for i in imgs), sum(i.height for i in imgs) + gap * (len(imgs) - 1)), '#d9dde3')
+    y = 0
+    for im in imgs:
+        canvas.paste(im, (0, y)); y += im.height + gap
+    out = io.BytesIO(); canvas.save(out, format='PNG', optimize=True); return out.getvalue()
+
+
+def hall_names(result):
+    halls = result.get('halls') or []
+    return [h.get('name') or 'Hall' for h in ([h for h in halls if h.get('count')] or halls)]
+
+
+def render_png(result, title='Exam hall allocation', subtitle='', part='overview'):
+    """A4 page(s) as an image: ``part`` = 'overview' or a hall number."""
+    return _pages_png(render_pdf(result, title=title, subtitle=subtitle, part=part))
+
+
+def render_png_zip(result, title='Exam hall allocation', subtitle=''):
+    """Every page as images in a ZIP: the overview, then one image per hall."""
+    import re, zipfile
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('00_Overview.png', render_png(result, title, subtitle, 'overview'))
+        for i, name in enumerate(hall_names(result), 1):
+            safe = re.sub(r'[^A-Za-z0-9]+', '_', name).strip('_') or 'Hall'
+            z.writestr('%02d_%s.png' % (i, safe), render_png(result, title, subtitle, i))
+    return out.getvalue()
 
 
 # --------------------------------------------------------------------------- #

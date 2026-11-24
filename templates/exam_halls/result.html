@@ -69,6 +69,7 @@
 .eh-print-head b{display:block;font-size:1.1rem}
 .eh-actions form{display:inline}
 @media(max-width:640px){.eh-seat{width:70px}.eh-hh .cap{text-align:left}.eh-meter{margin-left:0}}
+@page{size:A4 portrait;margin:12mm}
 @media print{
   .no-print,.rs-head-a,.eh-save,.sidebar,.topbar{display:none!important}
   .eh-print-head{display:block}
@@ -82,19 +83,27 @@
 {% block content %}
 {% set palette = ['#0d6a4e', '#2563eb', '#b45309', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#dc2626', '#4f46e5', '#c2410c'] %}
 {% set classes = result.classes or [] %}
+{% set used_halls = (result.halls or [])|selectattr('count')|list or (result.halls or []) %}
 {% set ink = {} %}{% for c in classes %}{% set _ = ink.update({c: palette[loop.index0 % palette|length]}) %}{% endfor %}
 <div class="rs bx">
   {% call bx_head('fa-chair', plan.name if plan else 'Hall allocation', (term ~ ' · ' if term else '') ~ result.total_students ~ ' candidates in ' ~ (result.halls|length) ~ ' halls' ~ (' · saved ' ~ plan.created_at.strftime('%d %b %Y') if plan and plan.created_at else '')) %}
     <div class="eh-actions" style="display:flex;gap:.4rem;flex-wrap:wrap">
     {% if plan %}
-      {{ bx_menu('Download', [
-          (url_for('exam_halls.export_plan', plan_id=plan.id, format='pdf'), 'fa-file-pdf', 'PDF · overview + one page per hall'),
-          (url_for('exam_halls.export_plan', plan_id=plan.id, format='excel'), 'fa-file-excel', 'Excel · summary + a sheet per hall')], 'fa-download', True) }}
+      {% set dl = [
+          (url_for('exam_halls.export_plan', plan_id=plan.id, format='pdf'), 'fa-file-pdf', 'PDF (A4) · overview + one page per hall'),
+          (url_for('exam_halls.export_plan', plan_id=plan.id, format='png', part='all'), 'fa-images', 'Images · every page (ZIP)'),
+          (url_for('exam_halls.export_plan', plan_id=plan.id, format='png', part='overview'), 'fa-image', 'Image · overview')] %}
+      {% for h in used_halls %}{% set _ = dl.append((url_for('exam_halls.export_plan', plan_id=plan.id, format='png', part=loop.index), 'fa-image', 'Image · ' ~ h.name)) %}{% endfor %}
+      {% set _ = dl.append((url_for('exam_halls.export_plan', plan_id=plan.id, format='excel'), 'fa-file-excel', 'Excel · summary + a sheet per hall')) %}
+      {{ bx_menu('Download', dl, 'fa-download', True) }}
     {% else %}
       <details class="bx-menu">
         <summary class="rs-btn primary"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></summary>
         <div class="bx-menu-pop" role="menu">
-          <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="pdf"><button type="submit" role="menuitem"><i class="fas fa-file-pdf" aria-hidden="true"></i><span>PDF · overview + one page per hall</span></button></form>
+          <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="pdf"><button type="submit" role="menuitem"><i class="fas fa-file-pdf" aria-hidden="true"></i><span>PDF (A4) · overview + one page per hall</span></button></form>
+          <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="png"><input type="hidden" name="part" value="all"><button type="submit" role="menuitem"><i class="fas fa-images" aria-hidden="true"></i><span>Images · every page (ZIP)</span></button></form>
+          <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="png"><input type="hidden" name="part" value="overview"><button type="submit" role="menuitem"><i class="fas fa-image" aria-hidden="true"></i><span>Image · overview</span></button></form>
+          {% for h in used_halls %}<form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="png"><input type="hidden" name="part" value="{{ loop.index }}"><button type="submit" role="menuitem"><i class="fas fa-image" aria-hidden="true"></i><span>Image · {{ h.name }}</span></button></form>{% endfor %}
           <form method="POST" action="{{ url_for('exam_halls.pdf') }}">{{ carry(payload) }}<input type="hidden" name="format" value="excel"><button type="submit" role="menuitem"><i class="fas fa-file-excel" aria-hidden="true"></i><span>Excel · summary + a sheet per hall</span></button></form>
         </div>
       </details>

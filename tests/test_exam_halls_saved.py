@@ -84,3 +84,36 @@ def test_live_excel_export(app):
     c = _client(app)
     r = c.post('/tools/exam-halls/pdf', data=dict(_form(c, caa), format='excel'))
     assert r.status_code == 200 and r.data[:2] == b'PK'
+
+
+def test_exports_are_a4_and_images(app):
+    """PDF pages are A4; images come as the overview, one per hall, or a ZIP of all."""
+    import zipfile
+    import fitz
+    from PIL import Image
+    _ids, caa = _seed(app, 12)
+    c = _client(app)
+    c.post('/tools/exam-halls/save', data=dict(_form(c, caa), plan_name='Image halls'))
+    with app.app_context():
+        pid = ExamHallPlan.query.filter_by(name='Image halls').order_by(ExamHallPlan.id.desc()).first().id
+    pdf = c.get(f'/tools/exam-halls/plans/{pid}/export?format=pdf').data
+    for pg in fitz.open(stream=pdf, filetype='pdf'):
+        assert (round(pg.rect.width), round(pg.rect.height)) == (595, 842)          # A4 portrait
+
+    page = c.get(f'/tools/exam-halls/plans/{pid}').get_data(as_text=True)
+    assert 'format=png' in page and 'Image · Main Hall' in page and 'Images · every page (ZIP)' in page
+
+    ov = c.get(f'/tools/exam-halls/plans/{pid}/export?format=png&part=overview')
+    assert ov.status_code == 200 and ov.mimetype == 'image/png' and 'Overview' in ov.headers['Content-Disposition']
+    w, h = Image.open(io.BytesIO(ov.data)).size
+    assert abs(h / w - 842 / 595) < 0.01                                               # one A4 page
+    hall = c.get(f'/tools/exam-halls/plans/{pid}/export?format=png&part=1')
+    assert hall.mimetype == 'image/png' and 'Main_Hall' in hall.headers['Content-Disposition']
+
+    z = c.get(f'/tools/exam-halls/plans/{pid}/export?format=png&part=all')
+    assert z.mimetype == 'application/zip'
+    names = zipfile.ZipFile(io.BytesIO(z.data)).namelist()
+    assert names[0] == '00_Overview.png' and any('Main_Hall' in n for n in names)
+
+    live = c.post('/tools/exam-halls/pdf', data=dict(_form(c, caa), format='png', part='overview'))
+    assert live.status_code == 200 and live.mimetype == 'image/png'
