@@ -1076,7 +1076,7 @@ function tlModel(){
     periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
     // subject colours, in first-seen order; teachers per subject for the key
     var colour={}, teach={}, ci=0;
-    rows.forEach(function(r){ var sj=(r.subject||'').trim(); if(!sj || isAll(r.group)) return;
+    rows.forEach(function(r){ var sj=(r.subject||'').trim(); if(!sj || isAll(r.group) || subjIsBreak(sj)) return;
         if(!(sj in colour)){ colour[sj]=TL_COLOURS[ci++ % TL_COLOURS.length]; teach[sj]=[]; }
         // "Miss Gertrude" and "Miss. Gertrude" are the same person: compare
         // without dots, extra spaces or case so the key lists them once.
@@ -1271,23 +1271,31 @@ function renderTicketsSheet(){
         if(a0<periods.length) segs.push([a0,periods.length]);
         var lanesFor=function(from, to, withHead){
           var lanes='';
+          // Every class column shares the same rows (one per period, one per
+          // break), so breaks and periods line up across the columns and a
+          // double period takes two rows instead of pushing the rest up.
+          var isGap=function(i){ return i>from && periods[i-1].end && periods[i-1].end<periods[i].start; };
+          var rowOf={}, rowsT=[], rr=0;
+          for(var pi=from; pi<to; pi++){ if(isGap(pi)){ rowsT.push('auto'); rr++; } rowsT.push('minmax(0,1fr)'); rr++; rowOf[pi]=rr; }
+          var at=function(a,b){ return ' style="grid-row:'+rowOf[a]+' / '+(rowOf[b]+1)+'"'; };
           gsT.forEach(function(g){
             var items='';
             for(var i=from;i<to;){
                 var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr), j=i+1;
-                while(sg && j<to && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
-                if(i>from && periods[i].brk===undefined && periods[i-1].end && periods[i-1].end<periods[i].start){
-                    var mins=(function(a,b){ var x=a.split(':'),y=b.split(':'); return (+y[0]*60+ +y[1])-(+x[0]*60+ +x[1]); })(periods[i-1].end, periods[i].start);
-                    items+='<li class="tk-brk"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>'+brkName(periods[i])+' · '+mins+' min</span></li>';
+                while(sg && j<to && !isGap(j) && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
+                if(isGap(i)){
+                    var mins=tMin(periods[i].start)-tMin(periods[i-1].end);
+                    items+='<li class="tk-brk" style="grid-row:'+(rowOf[i]-1)+'"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>'+brkName(periods[i])+' · '+mins+' min</span></li>';
                 }
-                if(arr.length) arr.forEach(function(r){ items+=line(fmtT(periods[i].start), r, j-i); });
-                else items+='<li class="tk-free"><time>'+esc(fmtT(periods[i].start))+'</time><span>Free</span></li>';
+                if(arr.length===1) items+=line(fmtT(periods[i].start), arr[0], j-i).replace('<li style="', '<li style="grid-row:'+rowOf[i]+' / '+(rowOf[j-1]+1)+';');
+                else if(arr.length) items+='<li class="tk-multi"'+at(i,j-1)+'><ol>'+arr.map(function(r){ return line(fmtT(periods[i].start), r, j-i); }).join('')+'</ol></li>';
+                else items+='<li class="tk-free"'+at(i,j-1)+'><time>'+esc(fmtT(periods[i].start))+'</time><span>Free</span></li>';
                 // a break that falls inside a merged run is still shown after it
                 for(var q=i+1;q<j;q++){ if(periods[q-1].end && periods[q-1].end<periods[q].start){
                     items+='<li class="tk-brk"><time>'+esc(fmtT(periods[q-1].end))+'</time><span>'+brkName(periods[q])+'</span></li>'; } }
                 i=j;
             }
-            lanes+='<div class="tk-lane">'+(md.anyGroup && withHead?'<h4>'+esc(g||'—')+'</h4>':'')+'<ol>'+items+'</ol></div>';
+            lanes+='<div class="tk-lane">'+(md.anyGroup && withHead?'<h4>'+esc(g||'—')+'</h4>':'')+'<ol style="display:grid;grid-template-rows:'+rowsT.join(' ')+'">'+items+'</ol></div>';
           });
           return lanes;
         };
