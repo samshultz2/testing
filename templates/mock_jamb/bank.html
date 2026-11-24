@@ -431,6 +431,60 @@
 
 
 
+
+
+{% if filter_options %}
+<script type="application/json" id="bank-subs-by-topic">{{ filter_options.subtopics_by_topic|tojson }}</script>
+
+{% endif %}
+
+<script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
+
+{% endif %}
+</div>
+{% if subject and can_scrape %}
+<div class="qb-tools">
+  <details class="qb-tool" id="qbDownload">
+    <summary><span class="ic"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i></span><span class="tt"><b>Download from myschool.ng</b><small>Pick subjects and years; it saves straight to the bank</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+    <div class="tb">
+      <p>Downloads past questions for the ticked subjects across the chosen years, skipping duplicates. Each question is tagged with its section, topic and year. It runs in steps in your browser, so you can stop and resume at any time. Keep this tab open while it runs. Questions that <em>rely</em> on a diagram we can't fetch are saved but <strong>held out of exams</strong> until you add the picture.</p>
+      <p><i class="fas fa-circle-info" aria-hidden="true"></i> myschool draws most diagrams with JavaScript, so this download rarely captures them. For diagram-heavy subjects, run the local <code>waec_scraper.py --images</code> and paste its output.</p>
+      <div class="form-row" style="align-items:flex-end;">
+        <div class="form-group"><label class="form-label" for="scExam">Exam</label>
+          <select id="scExam" class="form-control"><option value="jamb">JAMB</option><option value="waec">WAEC</option><option value="neco">NECO</option><option value="post-utme">Post-UTME</option></select></div>
+        <div class="form-group"><label class="form-label" for="scYearFrom">Start year</label>
+          <input type="number" id="scYearFrom" class="form-control" value="2010" min="1990" max="2035"></div>
+        <div class="form-group"><label class="form-label" for="scYearTo">End year</label>
+          <input type="number" id="scYearTo" class="form-control" value="2023" min="1990" max="2035"></div>
+      </div>
+      <div class="form-group">
+        <div class="form-label" style="display:flex;gap:.6rem;align-items:center">Subjects <a href="#" id="scAll" style="text-transform:none;letter-spacing:0">all</a><a href="#" id="scNone" style="text-transform:none;letter-spacing:0">none</a></div>
+        <div id="scSubjects" class="qb-subj">
+          {% for s in subjects %}
+          <label class="sc-lbl" data-jamb="{{ '1' if s.id in jamb_ok_ids else '0' }}"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}<span class="sc-na rs-muted" style="display:none;font-size:.72rem;">(not on JAMB)</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;">
+        <button type="button" id="scStart" class="rs-btn primary"><i class="fas fa-play" aria-hidden="true"></i> Start download</button>
+        <button type="button" id="scResume" class="rs-btn primary" style="display:none;"><i class="fas fa-play" aria-hidden="true"></i> Resume</button>
+        <button type="button" id="scStop" class="rs-btn ghost danger" style="display:none;"><i class="fas fa-pause" aria-hidden="true"></i> Stop</button>
+      </div>
+      <div id="scProgressWrap" style="display:none;">
+        <div class="qb-prog"><i id="scBar"></i></div>
+        <div style="margin-top:.45rem;font-size:.84rem"><strong id="scStatus">—</strong> · <span id="scCounts">0 added</span> <span id="scCurrent" class="rs-muted"></span></div>
+      </div>
+      <div id="scError" role="alert" style="color:var(--warning);margin-top:.3rem;font-size:.84rem"></div>
+    </div>
+  </details>
+</div>
+{% endif %}
+<div class="ni-toast" id="qbToast" role="status" aria-live="polite" hidden></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{{ subject_picker_assets() }}
+{% if subject and can_write_sub("external_exams", "mock_jamb_bank_scrape") %}
 <script nonce="{{ csp_nonce }}">
 (function(){
     // ---- myschool.ng harvest chunker ----
@@ -541,71 +595,33 @@
     elStart.addEventListener('click', function(){
         var subs = chosen();
         if(!subs){ elError.textContent = 'Pick at least one subject.'; return; }
+        var yf = +document.getElementById('scYearFrom').value || 0, yt = +document.getElementById('scYearTo').value || 0;
+        if(yf && yt && yf > yt){ elError.textContent = 'The start year is after the end year.'; return; }
         var body = '_csrf_token=' + encodeURIComponent(CSRF)
             + '&subject_ids=' + encodeURIComponent(subs)
             + '&exam=' + encodeURIComponent(document.getElementById('scExam').value)
             + '&year_from=' + encodeURIComponent(document.getElementById('scYearFrom').value || '')
             + '&year_to=' + encodeURIComponent(document.getElementById('scYearTo').value || '');
         elError.textContent = '';
-        post(U.start, body).then(function(s){ if(s.error){ elError.textContent = s.error; return; } running = true; render(s); loop(); });
+        var label = elStart.innerHTML;
+        elStart.disabled = true; elStart.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Starting…';
+        elWrap.style.display = 'block'; elStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Connecting to myschool.ng…';
+        elCounts.textContent = ''; elCurrent.textContent = '';
+        post(U.start, body).then(function(s){
+            elStart.disabled = false; elStart.innerHTML = label;
+            if(s.error){ elError.textContent = s.error; render(lastState); return; }
+            running = true; render(s); loop();
+        }).catch(function(){
+            elStart.disabled = false; elStart.innerHTML = label; render(lastState);
+            elError.textContent = 'Could not start the download — check your connection and try again.';
+        });
     });
     elResume.addEventListener('click', function(){ post(U.resume).then(function(s){ if(s.error){ elError.textContent = s.error; return; } running = true; render(s); loop(); }); });
     elStop.addEventListener('click', function(){ running = false; post(U.stop).then(render); });
     fetch(U.status).then(function(r){ return r.json(); }).then(render).catch(function(){});
 })();
 </script>
-
-{% if filter_options %}
-<script type="application/json" id="bank-subs-by-topic">{{ filter_options.subtopics_by_topic|tojson }}</script>
-
 {% endif %}
-
-<script type="application/json" id="mjq-topics">{{ topic_tree|tojson }}</script>
-
-{% endif %}
-</div>
-{% if subject and can_scrape %}
-<div class="qb-tools">
-  <details class="qb-tool" id="qbDownload">
-    <summary><span class="ic"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i></span><span class="tt"><b>Download from myschool.ng</b><small>Pick subjects and years; it saves straight to the bank</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
-    <div class="tb">
-      <p>Downloads past questions for the ticked subjects across the chosen years, skipping duplicates. Each question is tagged with its section, topic and year. It runs in steps in your browser, so you can stop and resume at any time. Keep this tab open while it runs. Questions that <em>rely</em> on a diagram we can't fetch are saved but <strong>held out of exams</strong> until you add the picture.</p>
-      <p><i class="fas fa-circle-info" aria-hidden="true"></i> myschool draws most diagrams with JavaScript, so this download rarely captures them. For diagram-heavy subjects, run the local <code>waec_scraper.py --images</code> and paste its output.</p>
-      <div class="form-row" style="align-items:flex-end;">
-        <div class="form-group"><label class="form-label" for="scExam">Exam</label>
-          <select id="scExam" class="form-control"><option value="jamb">JAMB</option><option value="waec">WAEC</option><option value="neco">NECO</option><option value="post-utme">Post-UTME</option></select></div>
-        <div class="form-group"><label class="form-label" for="scYearFrom">Start year</label>
-          <input type="number" id="scYearFrom" class="form-control" value="2010" min="1990" max="2035"></div>
-        <div class="form-group"><label class="form-label" for="scYearTo">End year</label>
-          <input type="number" id="scYearTo" class="form-control" value="2023" min="1990" max="2035"></div>
-      </div>
-      <div class="form-group">
-        <div class="form-label" style="display:flex;gap:.6rem;align-items:center">Subjects <a href="#" id="scAll" style="text-transform:none;letter-spacing:0">all</a><a href="#" id="scNone" style="text-transform:none;letter-spacing:0">none</a></div>
-        <div id="scSubjects" class="qb-subj">
-          {% for s in subjects %}
-          <label class="sc-lbl" data-jamb="{{ '1' if s.id in jamb_ok_ids else '0' }}"><input type="checkbox" class="sc-subj" value="{{ s.id }}" {{ 'checked' if s.id == subject_id else '' }}> {{ s.name }}<span class="sc-na rs-muted" style="display:none;font-size:.72rem;">(not on JAMB)</span></label>
-          {% endfor %}
-        </div>
-      </div>
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem;">
-        <button type="button" id="scStart" class="rs-btn primary"><i class="fas fa-play" aria-hidden="true"></i> Start download</button>
-        <button type="button" id="scResume" class="rs-btn primary" style="display:none;"><i class="fas fa-play" aria-hidden="true"></i> Resume</button>
-        <button type="button" id="scStop" class="rs-btn ghost danger" style="display:none;"><i class="fas fa-pause" aria-hidden="true"></i> Stop</button>
-      </div>
-      <div id="scProgressWrap" style="display:none;">
-        <div class="qb-prog"><i id="scBar"></i></div>
-        <div style="margin-top:.45rem;font-size:.84rem"><strong id="scStatus">—</strong> · <span id="scCounts">0 added</span> <span id="scCurrent" class="rs-muted"></span></div>
-        <div id="scError" style="color:var(--warning);margin-top:.3rem;font-size:.84rem"></div>
-      </div>
-    </div>
-  </details>
-</div>
-{% endif %}
-<div class="ni-toast" id="qbToast" role="status" aria-live="polite" hidden></div>
-</div>
-{% endblock %}
-
-{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{{ qfig_js() }}{{ subject_picker_assets() }}
 <script nonce="{{ csp_nonce }}">
 (function(){
     // The question bank works in place: subject chips, sections, filters, search,
