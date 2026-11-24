@@ -538,7 +538,7 @@ function renderGridModeSheet(){
         var runStart=[], runLen=[];
         for(var pi=0; pi<periods.length;){
             if(uval[pi]!==null){
-                var pj=pi+1; while(pj<periods.length && uval[pj]===uval[pi]) pj++;
+                var pj=pi+1;   // one period per cell: a double is written out at both periods
                 for(var pk=pi; pk<pj; pk++){ runStart[pk]=pi; runLen[pk]=pj-pi; }
                 pi=pj;
             } else { runStart[pi]=-1; runLen[pi]=0; pi++; }
@@ -990,7 +990,9 @@ function tlRuns(d, gs, periods){
         if(j-i>=2) res[i]=j;
         i=j;
     }
-    return res;
+    // Every period is written out on its own (a double shows the subject at
+    // both periods), so no runs are merged into one block.
+    return [];
 }
 function tlRunInfo(d, gs, periods, i, j){
     var r=(d.cells[gs[0]+'§'+periods[i].k]||[])[0]||{};
@@ -1194,8 +1196,8 @@ function renderTimelineSheet(){
             for(var i=0;i<periods.length;){
                 var arr=d.cells[g+'§'+periods[i].k]||[], sig=arr.map(function(r){ return r.subject+'|'+r.teacher; }).join('§');
                 var j=i+1;
-                // merge a run of identical consecutive periods (no break between them)
-                while(sig && j<periods.length && !periods[j].brk &&
+                // each period is its own card (doubles are written out twice)
+                while(false && sig && j<periods.length && !periods[j].brk &&
                       (d.cells[g+'§'+periods[j].k]||[]).map(function(r){ return r.subject+'|'+r.teacher; }).join('§')===sig) j++;
                 var from=pcol[periods[i].k], to=pcol[periods[j-1].k]+1;
                 if(!arr.length) l+='<div class="tl-c empty" style="grid-column:'+from+' / '+to+'"></div>';
@@ -1233,8 +1235,9 @@ function renderTimelineSheet(){
 // ---------- "Tickets" theme ----------
 // Each date is a cut-out ticket: a stub with the week / date on the left, a
 // perforated tear line, then one column per Class/Stream listing every lesson
-// as time · coloured dot · subject · teacher, with breaks in place, double
-// periods marked ×2, the coming date in gold and lesson-free Saturdays greyed.
+// as time · coloured dot · subject · teacher, with breaks in place, each
+// period written out (a double appears twice), the coming date in gold and
+// lesson-free Saturdays greyed.
 function isTickets(){ return el('theme').value==='tickets'; }
 function renderTicketsSheet(){
     var md=tlModel(), periods=md.periods, colour=md.colour, dmap=md.dmap, order=md.order;
@@ -1272,8 +1275,7 @@ function renderTicketsSheet(){
         var lanesFor=function(from, to, withHead){
           var lanes='';
           // Every class column shares the same rows (one per period, one per
-          // break), so breaks and periods line up across the columns and a
-          // double period takes two rows instead of pushing the rest up.
+          // break), so breaks and periods line up across the columns.
           var isGap=function(i){ return i>from && periods[i-1].end && periods[i-1].end<periods[i].start; };
           var rowOf={}, rowsT=[], rr=0;
           for(var pi=from; pi<to; pi++){ if(isGap(pi)){ rowsT.push('auto'); rr++; } rowsT.push('minmax(0,1fr)'); rr++; rowOf[pi]=rr; }
@@ -1282,7 +1284,7 @@ function renderTicketsSheet(){
             var items='';
             for(var i=from;i<to;){
                 var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr), j=i+1;
-                while(sg && j<to && !isGap(j) && sig(d.cells[g+'§'+periods[j].k]||[])===sg) j++;
+                while(false && sg && j<to) j++;   // doubles written out at each period
                 if(isGap(i)){
                     var mins=tMin(periods[i].start)-tMin(periods[i-1].end);
                     items+='<li class="tk-brk" style="grid-row:'+(rowOf[i]-1)+'"><time>'+esc(fmtT(periods[i-1].end))+'</time><span>'+brkName(periods[i])+' · '+mins+' min</span></li>';
@@ -1329,7 +1331,7 @@ function renderTicketsSheet(){
     }
     var keyHtml=Object.keys(colour).map(function(sj){ return '<span style="--c:'+colour[sj]+'"><i></i>'+esc(sj)+'</span>'; }).join('');
     el('pBody').innerHTML='<div class="tl tkx"><div class="tl-list tk-grid">'+html+'</div>'
-        + '<div class="tk-foot"><div class="tk-key">'+keyHtml+'</div><div class="tk-p">'+(offAll.length?'No class: Sat '+esc(offAll.join(', '))+'<br>':'')+'×2 = double period<br>Printed '+tlPrinted()+'</div></div></div>';
+        + '<div class="tk-foot"><div class="tk-key">'+keyHtml+'</div><div class="tk-p">'+(offAll.length?'No class: Sat '+esc(offAll.join(', '))+'<br>':'')+'Printed '+tlPrinted()+'</div></div></div>';
 }
 
 // ---------- "Gazette" theme ----------
@@ -1373,8 +1375,7 @@ function renderGazetteSheet(){
             gs.forEach(function(g){
                 var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
                 var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
-                if(sg && sg===prev){ cells+='<td class="gz-cont">″</td>'; return; }
-                var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
+                var n=1;
                 cells+='<td>'+(arr.length?arr.map(function(r){
                     return '<b>'+tlSubj(r.subject)+'</b>'+(n>1?' <i>('+(n===2?'double':n+' periods')+')</i>':'')
                          + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join('<br>'):'<span class="gz-free">Free</span>')+'</td>';
@@ -1481,8 +1482,7 @@ function renderSwissSheet(){
             gs.forEach(function(g){
                 var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
                 var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
-                if(sg && sg===prev){ cells+='<td class="sw-cont">↓</td>'; return; }
-                var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
+                var n=1;
                 cells+='<td>'+(arr.length?arr.map(function(r){ return '<b>'+tlSubj(r.subject)+'</b>'+(n>1?'<sup>'+n+'×</sup>':'')
                     + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join(''):'<span class="sw-free">—</span>')+'</td>';
             });
@@ -1564,8 +1564,7 @@ function renderNotebookSheet(){
             gs.forEach(function(g){
                 var arr=d.cells[g+'§'+pd.k]||[], sg=sig(arr);
                 var prev=i>0?sig(d.cells[g+'§'+periods[i-1].k]||[]):'';
-                if(sg && sg===prev){ cells+='<div class="nb-c nb-cont">〃</div>'; return; }
-                var n=1; while(sg && i+n<periods.length && sig(d.cells[g+'§'+periods[i+n].k]||[])===sg) n++;
+                var n=1;
                 cells+='<div class="nb-c">'+(arr.length?arr.map(function(r){ return '<b>'+tlSubj(r.subject)+'</b>'+(n>1?'<u>'+(n===2?'double':n+' periods')+'</u>':'')
                     + ((r.teacher||'').trim()?'<small>'+esc(r.teacher)+'</small>':''); }).join(''):'<span class="nb-free">—</span>')+'</div>';
             });
@@ -1611,8 +1610,7 @@ function renderNotebookSheet(){
 // One light card per date, styled like a departures board: period times down
 // the left, one column per class/stream, so a row is one moment and it is
 // obvious every class is in a lesson at the same time. Lessons shared by all
-// classes for 2+ periods become one block across the card; double periods are
-// marked ×2 with ↓ in the next slot; past dates DONE, the coming date NEXT.
+// classes are written out at each period; past dates DONE, the coming date NEXT.
 function isBoard(){ return el('theme').value==='board'; }
 function renderBoardSheet(){
     var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order;
@@ -1660,9 +1658,8 @@ function renderBoardSheet(){
                     var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr);
                     var prev=i>0 && !(periods[i-1].end && periods[i-1].end<periods[i].start) ? sig(d.cells[g+'§'+periods[i-1].k]||[]) : '';
                     var nxt=i+1<periods.length && !(periods[i].end && periods[i].end<periods[i+1].start) ? sig(d.cells[g+'§'+periods[i+1].k]||[]) : '';
-                    if(sg && sg===prev){ cells+='<span class="bd-c">↓</span>'; return; }
                     if(!arr.length){ cells+='<span class="bd-f">—</span>'; return; }
-                    cells+='<span>'+arr.map(function(r){ return label(r.subject); }).join('<br>')+(sg && sg===nxt?'<em>×2</em>':'')
+                    cells+='<span>'+arr.map(function(r){ return label(r.subject); }).join('<br>')
                         + (arr.length===1 && (arr[0].teacher||'').trim() && !tight?'<small>'+esc(arr[0].teacher)+'</small>':'')+'</span>';
                 });
                 body+='<div class="bd-rw" style="'+tmpl+'"><b>'+esc(fmtT(periods[i].start))+'</b>'+cells+'</div>';
@@ -1758,8 +1755,7 @@ function renderQuietSheet(){
                 }
                 gs.forEach(function(gr,li){
                     var arr=d.cells[gr+'§'+periods[i].k]||[], sg=sig(arr);
-                    if(sg && i>0 && !gap(i) && sg===sig(d.cells[gr+'§'+periods[i-1].k]||[])) return;
-                    var j=i+1; while(sg && j<periods.length && !gap(j) && !runs[j] && sig(d.cells[gr+'§'+periods[j].k]||[])===sg) j++;
+                    var j=i+1;
                     var n=j-i;
                     var inner = arr.length ? arr.map(function(x){ return '<b>'+label(x.subject)+'</b>'; }).join('')
                         + (arr.length===1 && (arr[0].teacher||'').trim() ? '<small>'+esc(arr[0].teacher)+'</small>' : '')
@@ -1841,9 +1837,8 @@ function renderInlineSheet(){
                 var parts='';
                 gs.forEach(function(g,li){
                     var arr=d.cells[g+'§'+periods[i].k]||[], sg=sig(arr);
-                    if(sg && i>0 && !gap(i) && sg===sig(d.cells[g+'§'+periods[i-1].k]||[])){ parts+=pill(li,'<s>cont.</s>'); return; }
                     if(!arr.length){ parts+=pill(li,'<s>—</s>'); return; }
-                    var dbl = i+1<periods.length && !gap(i+1) && sg===sig(d.cells[g+'§'+periods[i+1].k]||[]);
+                    var dbl = false;
                     parts+=pill(li, arr.map(function(r){ return label(r.subject); }).join(' &amp; ')+(dbl?'<em>×2</em>':''));
                 });
                 lines+='<p class="il-ln"><time>'+esc(fmtT(periods[i].start))+'</time><span>'+parts+'</span></p>';
