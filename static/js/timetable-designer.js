@@ -465,7 +465,7 @@ function renderHead(){
 // full-width band (e.g. Mock Examination).
 function cellInner(arr){
     return arr.map(function(r){
-        return (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+        return (r.subject?'<span class="c-subj">'+esc(sheetSubj(r.subject))+'</span>':'')
              + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'');
     }).join('<hr class="c-sep">');
 }
@@ -583,7 +583,7 @@ function groupBlock(r){
     var bg=_groupColors[g]||'';
     return '<div class="g-block"'+(bg?(' style="background:'+bg+'"'):'')+'>'
         + (g?'<span class="g-tag">'+esc(g)+'</span>':'')
-        + (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+        + (r.subject?'<span class="c-subj">'+esc(sheetSubj(r.subject))+'</span>':'')
         + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'')
         + '</div>';
 }
@@ -598,7 +598,7 @@ function renderGridColumnsSheet(){
             var sig=(r.subject||'')+'|'+(r.teacher||'');
             pmap[k]._seen = pmap[k]._seen || {};
             if(!pmap[k]._seen[sig]){ pmap[k]._seen[sig]=1;
-                pmap[k].allText += (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+                pmap[k].allText += (r.subject?'<span class="c-subj">'+esc(sheetSubj(r.subject))+'</span>':'')
                                  + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':''); } }
     });
     periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
@@ -988,7 +988,74 @@ function tlRunInfo(d, gs, periods, i, j){
     return {r:r, n:j-i, from:fmtT(periods[i].start), to:end?clock12(end,true):'', who:gs.length>1?('All '+(isSaturdayLayout()?'streams':'classes')):''};
 }
 // Subject text that may break after "/" (BIO/CRS, CHEM/GOVT) instead of overflowing.
-function tlSubj(t){ return esc(t||'—').replace(/\//g,'/<wbr>'); }
+// ---------- Subject abbreviations ----------
+// Class timetables (Saturday / holiday lessons) show subjects as short
+// capitals — CHEM, PHY, CIV — in the Tap-to-fill grid, the preview and every
+// export. The full name is what is saved; the key/legend keeps full names.
+var SUBJ_ABBR = (function(){
+    var m = {}, add = function(code, names){ names.forEach(function(n){ m[n] = code; }); };
+    add('ENG',    ['english','english language','english studies','use of english']);
+    add('MTH',    ['mathematics','maths','math','general mathematics','general maths']);
+    add('F/MTH',  ['further mathematics','further maths','further math']);
+    add('PHY',    ['physics']);
+    add('CHEM',   ['chemistry']);
+    add('BIO',    ['biology']);
+    add('AGR',    ['agricultural science','agric science','agriculture','agric','agricultural sciences']);
+    add('B/SCI',  ['basic science']);
+    add('B/TECH', ['basic technology']);
+    add('BST',    ['basic science and technology']);
+    add('ICT',    ['computer studies','computer science','computer','ict','information and communication technology','information technology']);
+    add('DP',     ['data processing']);
+    add('PHE',    ['physical and health education','physical health education','physical education','phe']);
+    add('TD',     ['technical drawing']);
+    add('CIV',    ['civic education','civic','civics']);
+    add('ECO',    ['economics']);
+    add('GOVT',   ['government']);
+    add('GEO',    ['geography']);
+    add('LIT',    ['literature in english','literature','literature in english language']);
+    add('HIST',   ['history']);
+    add('CRS',    ['christian religious studies','christian religious knowledge','crs','crk']);
+    add('IRS',    ['islamic religious studies','islamic religious knowledge','islamic studies','irs','irk']);
+    add('SOS',    ['social studies']);
+    add('SEC',    ['security education']);
+    add('COMM',   ['commerce']);
+    add('ACCT',   ['financial accounting','accounting','accounts','book keeping','bookkeeping']);
+    add('BUS',    ['business studies']);
+    add('MKT',    ['marketing']);
+    add('FRE',    ['french','french language']);
+    add('YOR',    ['yoruba','yoruba language']);
+    add('IGB',    ['igbo','igbo language']);
+    add('HAU',    ['hausa','hausa language']);
+    add('HOME',   ['home economics']);
+    add('FN',     ['food and nutrition']);
+    add('CCA',    ['cultural and creative arts','cultural and creative art']);
+    add('ART',    ['fine art','fine arts','visual art','visual arts','creative art']);
+    add('MUS',    ['music']);
+    add('VR',     ['verbal reasoning']);
+    add('QR',     ['quantitative reasoning']);
+    return m;
+})();
+function subjNorm(t){ return String(t||'').toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9]+/g,' ').trim(); }
+// Break, lunch, assembly and the like stay as words.
+function subjIsBreak(t){ return /^(break|short break|long break|lunch|lunch break|recess|free|free period|assembly|devotion|prep|siesta)$/.test(subjNorm(t)); }
+// The known short form, or '' (used where only a known code should replace a name).
+function subjAbbrKnown(t){ return SUBJ_ABBR[subjNorm(t)] || ''; }
+function subjAbbr(t){
+    var raw=String(t||'').trim(); if(!raw) return raw;
+    if(subjAbbrKnown(raw)) return subjAbbrKnown(raw);      // "Further Mathematics", not split on "/"
+    return raw.split('/').map(function(p){
+        p=p.trim(); if(!p || subjIsBreak(p)) return p;
+        var k=subjAbbrKnown(p); if(k) return k;
+        var w=subjNorm(p).split(' ')[0]||p;          // unknown: first letters in capitals
+        return (w.length<=5 ? w : w.slice(0,3)).toUpperCase();
+    }).join('/');
+}
+// Abbreviate on the sheet only for class timetables (not exams, rosters or grids).
+function abbrOn(){ var v=el('layout') ? el('layout').value : ''; return v==='saturday' || v==='holiday'; }
+function sheetSubj(t){ return abbrOn() ? subjAbbr(t) : (t||''); }
+window.subjAbbr = subjAbbr; window.subjAbbrKnown = subjAbbrKnown; window.subjNorm = subjNorm; window.subjIsBreak = subjIsBreak;
+
+function tlSubj(t){ return esc(sheetSubj(t)||'—').replace(/\//g,'/<wbr>'); }
 
 function tlModel(){
     var pmap={}, periods=[];
@@ -1507,8 +1574,6 @@ function renderNotebookSheet(){
 // classes for 2+ periods become one block across the card; double periods are
 // marked ×2 with ↓ in the next slot; past dates DONE, the coming date NEXT.
 function isBoard(){ return el('theme').value==='board'; }
-var BD_SHORT={'ENGLISH':'ENG','BIOLOGY':'BIO','PHYSICS':'PHY','CHEMISTRY':'CHEM','MATHEMATICS':'MATHS','ECONOMICS':'ECONS','GOVERNMENT':'GOVT',
-  'LITERATURE':'LIT','GEOGRAPHY':'GEO','COMMERCE':'COMM','AGRICULTURE':'AGRIC','AGRIC SCIENCE':'AGRIC','CIVIC EDUCATION':'CIVIC','DATA PROCESSING':'DP'};
 function renderBoardSheet(){
     var md=tlModel(), periods=md.periods, dmap=md.dmap, order=md.order;
     if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
@@ -1521,9 +1586,10 @@ function renderBoardSheet(){
     var gsAll = md.anyGroup ? md.groupsAll : [''];
     var tight = gsAll.length>2;
     var label=function(t){
+        if(abbrOn()) return tlSubj(t);
         var up=(t||'').toUpperCase().trim();
         if(!tight) return esc(up).replace(/\//g,'/<wbr>');
-        return up.split('/').map(function(p){ p=p.trim(); return esc(BD_SHORT[p]||p); }).join('/<wbr>');
+        return up.split('/').map(function(p){ p=p.trim(); return esc(subjAbbrKnown(p)||p); }).join('/<wbr>');
     };
     var html='', offAll=[];
     order.forEach(function(k){
@@ -1607,10 +1673,11 @@ function renderQuietSheet(){
     var who = isSaturdayLayout()?'streams':'classes';
     // Long full names are shortened when three or more classes share a row.
     var label=function(t){
+        if(abbrOn()) return esc(sheetSubj(t)).replace(/\//g,'<i>/</i><wbr>');
         var raw=(t||'').trim();
         if(!tight) return esc(raw).replace(/\s*\/\s*/g,'<i>/</i><wbr>');
         var caps = raw===raw.toUpperCase();
-        return raw.split('/').map(function(p){ p=p.trim(); var sh=BD_SHORT[p.toUpperCase()];
+        return raw.split('/').map(function(p){ p=p.trim(); var sh=subjAbbrKnown(p);
             if(sh && !caps) sh=sh.charAt(0)+sh.slice(1).toLowerCase();
             return esc(sh||p); }).join('<i>/</i><wbr>');
     };
@@ -1645,7 +1712,7 @@ function renderQuietSheet(){
             for(var i=0;i<periods.length;){
                 if(runs[i]){
                     var ri=tlRunInfo(d,gs,periods,i,runs[i]);
-                    g+='<div class="qt-sk" style="grid-row:'+rowOf[i]+' / '+(rowOf[runs[i]-1]+1)+';grid-column:3 / -1"><b>'+esc(ri.r.subject||'')+'</b>'
+                    g+='<div class="qt-sk" style="grid-row:'+rowOf[i]+' / '+(rowOf[runs[i]-1]+1)+';grid-column:3 / -1"><b>'+esc(sheetSubj(ri.r.subject))+'</b>'
                         + '<span>'+esc([ri.who?ri.who+' together':'', (ri.r.teacher||'').trim()].filter(Boolean).join(' · '))+(ri.who||(ri.r.teacher||'').trim()?' · ':'')+'<u>'+esc(ri.from+(ri.to?' – '+ri.to:''))+'</u></span></div>';
                     i=runs[i]; continue;
                 }
@@ -1702,9 +1769,10 @@ function renderInlineSheet(){
     var tight = gsAll.length>2;
     var who = isSaturdayLayout()?'streams':'classes';
     var label=function(t){
+        if(abbrOn()) return tlSubj(t);
         var raw=(t||'').trim(); if(!tight) return esc(raw).replace(/\s*\/\s*/g,'/<wbr>');
         var caps = raw===raw.toUpperCase();
-        return raw.split('/').map(function(p){ p=p.trim(); var sh=BD_SHORT[p.toUpperCase()];
+        return raw.split('/').map(function(p){ p=p.trim(); var sh=subjAbbrKnown(p);
             if(sh && !caps) sh=sh.charAt(0)+sh.slice(1).toLowerCase(); return esc(sh||p); }).join('/<wbr>');
     };
     var pill=function(li, inner){ var c=IL_TAGS[li%IL_TAGS.length];
@@ -1726,7 +1794,7 @@ function renderInlineSheet(){
                 if(gap(i)) lines+='<p class="il-bk">Break · '+esc(fmtT(periods[i-1].end))+' – '+esc(fmtT(periods[i].start))+'</p>';
                 if(runs[i]){
                     var ri=tlRunInfo(d,gs,periods,i,runs[i]);
-                    lines+='<p class="il-ln sk"><time>'+esc(fmtT(periods[i].start))+'</time><span><b>'+esc(ri.r.subject||'')+'</b> <em>· '
+                    lines+='<p class="il-ln sk"><time>'+esc(fmtT(periods[i].start))+'</time><span><b>'+esc(sheetSubj(ri.r.subject))+'</b> <em>· '
                         + esc([ri.who?ri.who.replace(/^All /,'all '):'', ri.to?'until '+ri.to:'', (ri.r.teacher||'').trim()].filter(Boolean).join(', '))+'</em></span></p>';
                     i=runs[i]; continue;
                 }

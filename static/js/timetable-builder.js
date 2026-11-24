@@ -192,9 +192,30 @@
       + '<button type="button" class="rs-icon-btn" data-tb="restart" title="Start a new grid" aria-label="Start a new grid"><i class="fas fa-table-cells" aria-hidden="true"></i></button>'
       + '</div></div>';
   }
+  // Subjects show as short capitals (CHEM, PHY, CIV); the full name is saved.
+  function ab(x) { return typeof abbrOn === 'function' && abbrOn() ? subjAbbr(x) : (x || ''); }
+  function subjB(x) { var a = ab(x); return '<b' + (a !== x ? ' title="' + esc(x) + '"' : '') + '>' + esc(a) + '</b>'; }
+  // Typing "chem" or "CIV" picks the full subject name it stands for.
+  function fullName(v) {
+    v = (v || '').trim(); if (!v) return v;
+    var lv = v.toLowerCase(), s = subjects(), all = s.used.concat(s.rest), hit = '';
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].toLowerCase() === lv) return all[i];
+      if (!hit && ab(all[i]).toLowerCase() === lv) hit = all[i];
+    }
+    return hit || v;
+  }
+  // Subjects that share a short form (English Language / English Studies) keep
+  // their full names on the buttons so they can be told apart.
+  function twins(s) {
+    var n = {}, out = {}, all = s.used.concat(s.rest);
+    all.forEach(function (x) { var a = ab(x); n[a] = (n[a] || 0) + 1; });
+    all.forEach(function (x) { if (n[ab(x)] > 1 && ab(x) !== x) out[x] = 1; });
+    return out;
+  }
   function cellHTML(r) {
     if (!r || !r.subject) return '<span class="tb-empty">+</span>';
-    return '<b>' + esc(r.subject) + '</b>' + (r.teacher ? '<small>' + esc(r.teacher) + '</small>' : '');
+    return subjB(r.subject) + (r.teacher ? '<small>' + esc(r.teacher) + '</small>' : '');
   }
   function cellStyle(r) {
     if (!r || !r.subject) return '';
@@ -223,7 +244,8 @@
   }
   function paletteHTML(title) {
     var s = subjects();
-    function chip(x) { return '<button type="button" class="tb-chip" data-tb="pick" data-s="' + esc(x) + '" style="--h:' + hue(x) + '">' + esc(x) + '</button>'; }
+    var twin = twins(s);
+    function chip(x) { var a = twin[x] ? x : ab(x); return '<button type="button" class="tb-chip" data-tb="pick" data-s="' + esc(x) + '" data-a="' + esc(a) + '"' + (a !== x ? ' title="' + esc(x) + '" aria-label="' + esc(x) + '"' : '') + ' style="--h:' + hue(x) + '">' + esc(a) + '</button>'; }
     return '<div class="tb-pal"><div class="tb-pal-h">' + title + '</div>'
       + (s.used.length ? '<div class="tb-chips">' + s.used.map(chip).join('') + '</div>' : '')
       + (s.rest.length ? '<div class="tb-chips more">' + s.rest.map(chip).join('') + '</div>' : '') + '</div>';
@@ -245,7 +267,7 @@
       h += '<div class="tb-prow' + (on ? ' on' : '') + (on && breakish(r.subject) ? ' brk' : '') + '"' + cellStyle(r) + '>'
         + '<button type="button" class="tb-pt" data-tb="period" data-p="' + pi + '" aria-label="Change time of period ' + (pi + 1) + '"><b>' + esc(fmtT(p.time)) + '</b><small>' + esc(p.dur || '?') + 'm</small></button>'
         + '<button type="button" class="tb-ps" data-tb="pcell" data-p="' + pi + '">'
-        + (on ? '<b>' + esc(r.subject) + '</b>' + (r.teacher ? '<small>' + esc(r.teacher) + '</small>' : '') : '<span class="tb-ph-t">Tap to choose a subject</span>')
+        + (on ? subjB(r.subject) + (r.teacher ? '<small>' + esc(r.teacher) + '</small>' : '') : '<span class="tb-ph-t">Tap to choose a subject</span>')
         + '</button><i class="fas fa-chevron-right" aria-hidden="true"></i></div>';
     });
     h += '<button type="button" class="tb-addrow" data-tb="addperiod"><i class="fas fa-plus" aria-hidden="true"></i> Add a period <small>starts ' + esc(fmtT(nextTimeAfter(M.periods[M.periods.length - 1]))) + '</small></button></div>';
@@ -391,7 +413,7 @@
     var w = Math.max(cr.width, 230), left = Math.min(cr.left - br.left, B.clientWidth - w - 4);
     ed.style.left = Math.max(0, left) + 'px'; ed.style.top = (cr.top - br.top) + 'px'; ed.style.width = w + 'px';
     editor = { el: ed, di: sel.d, pi: sel.p, s: s, t: t };
-    s.addEventListener('input', function () { if (autoT) t.value = teacherFor(s.value); });
+    s.addEventListener('input', function () { if (autoT) t.value = teacherFor(fullName(s.value)); });
     t.addEventListener('input', function () { autoT = false; });
     ed.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); saveEditor(); move(0, 1, true); }
@@ -411,7 +433,7 @@
   function saveEditor() {
     if (!editor) return;
     var e = editor; editor = null;
-    commitCell(e.di, e.pi, e.s.value.trim(), e.t.value.trim());
+    commitCell(e.di, e.pi, fullName(e.s.value), e.t.value.trim());
     e.el.remove();
   }
   function closeEditor(silent) { if (editor) { editor.el.remove(); editor = null; } }
@@ -506,7 +528,7 @@
       var b = e.target.closest('[data-pk]'); if (!b) return;
       var a = b.dataset.pk;
       if (a === 'pick') pickerPick(b.dataset.s);
-      else if (a === 'use') pickerPick(sh.querySelector('.tb-pk-q').value.trim());
+      else if (a === 'use') pickerPick(fullName(sh.querySelector('.tb-pk-q').value));
       else if (a === 'prev') pickerGo(-1);
       else if (a === 'next') pickerGo(1);
       else if (a === 'clear') { commitCell(picker.di, picker.pi, '', ''); renderPhoneOnly(); paintPicker(); }
@@ -521,7 +543,8 @@
   }
   function paintPicker() {
     var d = M.days[picker.di], p = M.periods[picker.pi], r = cellRow(d, p), s = subjects(), cur = r ? r.subject : '';
-    function chip(x) { return '<button type="button" class="tb-chip' + (x === cur ? ' on' : '') + '" data-pk="pick" data-s="' + esc(x) + '" style="--h:' + hue(x) + '">' + esc(x) + '</button>'; }
+    var twin = twins(s);
+    function chip(x) { var a = twin[x] ? x : ab(x); return '<button type="button" class="tb-chip' + (x === cur ? ' on' : '') + '" data-pk="pick" data-s="' + esc(x) + '" data-a="' + esc(a) + '"' + (a !== x ? ' title="' + esc(x) + '" aria-label="' + esc(x) + '"' : '') + ' style="--h:' + hue(x) + '">' + esc(a) + '</button>'; }
     var b = picker.sh.querySelector('.tb-sheet-b');
     b.innerHTML = '<div class="tb-pk-h"><button type="button" class="rs-icon-btn" data-pk="prev" aria-label="Previous period"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>'
       + '<div><b>' + esc(dayLabel(d)) + (d.group ? ' · ' + esc(d.group) : '') + '</b><small>' + esc(plabel(p)) + ' · period ' + (picker.pi + 1) + ' of ' + M.periods.length + '</small></div>'
@@ -535,8 +558,9 @@
     q.addEventListener('input', function () {
       var v = q.value.trim().toLowerCase(), exact = false;
       b.querySelectorAll('.tb-chip').forEach(function (c) {
-        var m = !v || c.dataset.s.toLowerCase().indexOf(v) >= 0; c.hidden = !m;
-        if (c.dataset.s.toLowerCase() === v) exact = true;
+        var a = (c.dataset.a || '').toLowerCase();
+        var m = !v || c.dataset.s.toLowerCase().indexOf(v) >= 0 || a.indexOf(v) === 0; c.hidden = !m;
+        if (c.dataset.s.toLowerCase() === v || a === v) exact = true;
       });
       use.hidden = !v || exact;
       use.innerHTML = v ? '<button type="button" class="tb-chip new" data-pk="use"><i class="fas fa-plus" aria-hidden="true"></i> Use “' + esc(q.value.trim()) + '”</button>' : '';
@@ -545,7 +569,8 @@
       if (e.key !== 'Enter') return; e.preventDefault();
       var first = b.querySelector('.tb-chip:not([hidden])');
       var v = q.value.trim(); if (!v) return;
-      pickerPick(first && first.dataset.s && first.dataset.s.toLowerCase().indexOf(v.toLowerCase()) === 0 ? first.dataset.s : v);
+      var lv = v.toLowerCase();
+      pickerPick(first && first.dataset.s && (first.dataset.s.toLowerCase().indexOf(lv) === 0 || (first.dataset.a || '').toLowerCase().indexOf(lv) === 0) ? first.dataset.s : fullName(v));
     });
     t.addEventListener('input', function () { picker.tEdited = true; });
     t.addEventListener('change', pickerSaveTeacher);
