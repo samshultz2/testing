@@ -1,85 +1,229 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_menu, bx_menu_js with context %}
+{% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
 {% block title %}Question Bank - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>Question Bank</span>{% endblock %}
 {% block extra_css %}
-<style>.opt-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-row{grid-template-columns:1fr}}
-.qb{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.55rem}
-.qb .o{font-size:.85rem;padding:.1rem 0}.qb .o.c{color:var(--success);font-weight:600}</style>
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.cb-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%;padding:.1rem 0}
+.cb-chips::-webkit-scrollbar{display:none}
+.cb-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.4rem .85rem;font-size:.8rem;font-weight:650;color:var(--text-secondary);white-space:nowrap;text-decoration:none}
+.cb-chip:hover{border-color:var(--primary);color:var(--primary);text-decoration:none}
+.cb-chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.cb-chip em{font-style:normal;opacity:.7;margin-left:.3rem;font-variant-numeric:tabular-nums}
+.cb-filter{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.cb-search{flex:1 1 240px;display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:12px;padding:0 .75rem;background:var(--bg-card);color:var(--text-muted);height:42px}
+.cb-search:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}
+.cb-search input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:.88rem;color:var(--text-primary);outline:none}
+.cb-filter select{flex:0 1 200px;min-width:0;height:42px;border:1px solid var(--border-color);border-radius:12px;padding:0 .7rem;background:var(--bg-card);color:var(--text-primary);font:inherit;font-size:.86rem}
+.cb-seg a{display:inline-flex;align-items:center;height:36px;padding:0 .85rem;border-radius:10px;font-weight:600;font-size:.84rem;color:var(--text-muted);text-decoration:none;white-space:nowrap}
+.cb-seg a.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.cb-seg a:hover{text-decoration:none;color:var(--primary)}
+.cb-list{display:flex;flex-direction:column}
+.cb-q{display:grid;grid-template-columns:2.2rem minmax(0,1fr) auto;gap:.75rem;padding:.9rem 1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.cb-q:first-child{border-top:0}
+.cb-n{width:2.2rem;height:2.2rem;border-radius:10px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.78rem;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.cb-tx{font-weight:600;font-size:.93rem;line-height:1.55;overflow-wrap:anywhere}
+.cb-img{display:block;max-height:150px;max-width:100%;margin:.55rem 0 .2rem;border-radius:10px;border:1px solid var(--border-color);background:#fff}
+.cb-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.3rem;margin-top:.55rem}
+.cb-opt{display:flex;gap:.45rem;align-items:flex-start;font-size:.84rem;color:var(--text-secondary);padding:.35rem .5rem;border-radius:9px;background:var(--gray-50);min-width:0;overflow-wrap:anywhere}
+.cb-opt b{flex:none;width:1.35rem;height:1.35rem;border-radius:6px;background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:.7rem}
+.cb-opt.key{background:color-mix(in srgb,var(--success) 11%,var(--bg-card));color:var(--text-primary);font-weight:600}
+.cb-opt.key b{background:var(--success);color:#fff}
+.cb-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.6rem}
+.cb-tag{font-size:.71rem;font-weight:650;border-radius:999px;padding:.14rem .55rem;background:var(--gray-100);color:var(--text-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;text-decoration:none}
+.cb-tag.subj{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card));color:var(--primary)}
+a.cb-tag:hover{text-decoration:none;filter:brightness(.95)}
+.cb-tag.easy{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:#15803d}
+.cb-tag.medium{background:color-mix(in srgb,var(--warning) 15%,var(--bg-card));color:#a16207}
+.cb-tag.hard{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:#b91c1c}
+.cb-acts form{margin:0}
+.cb-ic{width:2.2rem;height:2.2rem;padding:0;justify-content:center}
+.cb-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.9rem;border-top:1px solid var(--border-light,var(--border-color));font-size:.85rem;color:var(--text-muted)}
+.cb-add{border:1px solid var(--border-color);border-radius:var(--rs-r,16px);background:var(--bg-card);overflow:hidden;scroll-margin-top:5rem}
+.cb-add>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:.75rem;padding:.85rem 1rem}
+.cb-add>summary::-webkit-details-marker{display:none}
+.cb-add>summary .ic{width:2.3rem;height:2.3rem;border-radius:11px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--primary) 11%,var(--bg-card));color:var(--primary);flex:none}
+.cb-add>summary .tt{flex:1;min-width:0}
+.cb-add>summary .tt b{display:block;font-size:.95rem}
+.cb-add>summary .tt small{display:block;font-size:.8rem;color:var(--text-muted);line-height:1.4}
+.cb-add>summary .ch{color:var(--text-muted);font-size:.75rem;transition:transform .15s}
+.cb-add[open]>summary .ch{transform:rotate(90deg)}
+.cb-add .tb{padding:.2rem 1rem 1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.cb-add .tb .form-group{margin-bottom:.85rem}
+.cb-optin{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+.cb-optin .form-group{position:relative}
+.cb-meta-in{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.6rem}
+.cb-foot{display:flex;justify-content:flex-end;gap:.5rem;border-top:1px solid var(--border-light,var(--border-color));padding-top:.9rem;margin-top:.2rem}
+@media (max-width:900px){.cb-meta-in{grid-template-columns:repeat(2,minmax(0,1fr))}.cb-meta-in .wide{grid-column:1/-1}}
+@media (max-width:759px){
+  .cb-q{grid-template-columns:minmax(0,1fr) auto;padding:.85rem .9rem;gap:.55rem}
+  .cb-n{display:none}
+  .cb-opts{grid-template-columns:1fr}
+  .cb-optin{grid-template-columns:1fr}
+  .cb-filter select{flex:1 1 100%}
+  .cb-search{flex-basis:100%}
+  .cb-seg{width:100%}
+  .cb-seg a{flex:1;justify-content:center;padding:0 .4rem}
+  .cb-foot{position:sticky;bottom:0;background:var(--bg-card);margin:0 -1rem -1rem;padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom))}
+  .cb-foot .rs-btn{flex:1}
+}
+</style>
 {% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>Question Bank</h1>
-    <div class="page-header-actions">
-        {% if can_write_sub('cbt', 'bank_import') %}<a href="{{ url_for('cbt.bank_import') }}" class="btn btn-secondary"><i class="fas fa-file-import"></i> Import</a>{% endif %}
+{% set can_add = can_write_sub('cbt', 'bank_create') %}
+{% set can_del = can_write_sub('cbt', 'bank_delete') %}
+{% set can_imp = can_write_sub('cbt', 'bank_import') %}
+{% set args = {'subject_id': subject_id, 'topic': topic or none, 'q': search or none, 'difficulty': difficulty or none} %}
+{% set filtered = topic or search or difficulty %}
+<div class="rs bx">
+  {% call bx_head('fa-layer-group', 'Question Bank', (subject.name ~ ' · ' ~ subject_counts.get(subject.id, 0) ~ ' question' ~ ('' if subject_counts.get(subject.id, 0) == 1 else 's')) if subject else (total ~ ' question' ~ ('' if total == 1 else 's') ~ ' · use them in any exam')) %}
+    {% if can_add %}<a href="#cbAdd" class="rs-btn primary" data-open="cbAdd"><i class="fas fa-plus" aria-hidden="true"></i><span class="rs-hide-sm">Add question</span></a>{% endif %}
+    {% set menu = [] %}
+    {% if can_imp %}{% set _ = menu.append((url_for('cbt.bank_import', subject_id=subject_id), 'fa-file-import', 'Import from Excel or CSV')) %}{% endif %}
+    {% set _ = menu.append((url_for('cbt.bank_template'), 'fa-download', 'Download Excel template')) %}
+    {{ bx_menu('More', menu + [(None, None, 'CBT'), (url_for('cbt.dashboard'), 'fa-chart-pie', 'CBT overview'), (url_for('cbt.add_exam'), 'fa-circle-plus', 'Create an exam')]) }}
+  {% endcall %}
+  {% include 'cbt/_tabs.html' %}
+
+  {% if total %}
+  <nav class="cb-chips" aria-label="Subjects">
+    <a class="cb-chip {{ 'on' if not subject_id }}" href="{{ url_for('cbt.bank') }}">All<em>{{ total }}</em></a>
+    {% for s in subjects if subject_counts.get(s.id) %}
+    <a class="cb-chip {{ 'on' if subject_id == s.id }}" href="{{ url_for('cbt.bank', subject_id=s.id) }}">{{ s.name }}<em>{{ subject_counts[s.id] }}</em></a>
+    {% endfor %}
+    {% if subject_counts.get(None) %}<span class="cb-chip" title="Questions without a subject">No subject<em>{{ subject_counts[None] }}</em></span>{% endif %}
+  </nav>
+
+  <form method="GET" class="cb-filter" role="search">
+    {% if subject_id %}<input type="hidden" name="subject_id" value="{{ subject_id }}">{% endif %}
+    {% if difficulty %}<input type="hidden" name="difficulty" value="{{ difficulty }}">{% endif %}
+    <label class="cb-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+      <input type="search" name="q" value="{{ search }}" placeholder="Search question text" aria-label="Search question text" enterkeyhint="search"></label>
+    {% if topics %}
+    <select name="topic" aria-label="Topic" data-autosubmit>
+      <option value="">All topics</option>
+      {% for t, n in topics %}<option value="{{ t }}" {{ 'selected' if topic and topic|lower == t|lower }}>{{ t }} ({{ n }})</option>{% endfor %}
+    </select>
+    {% endif %}
+    <div class="rs-seg cb-seg" role="group" aria-label="Difficulty">
+      {% for d in ['', 'Easy', 'Medium', 'Hard'] %}
+      <a href="{{ url_for('cbt.bank', **dict(args, difficulty=d or none, page=none)) }}" class="{{ 'on' if difficulty == d }}">{{ d or 'Any level' }}</a>
+      {% endfor %}
     </div>
-</div>
-{% include 'cbt/_tabs.html' %}
+  </form>
+  {% endif %}
 
-<div class="card mb-3"><div class="card-body">
-    <form method="GET" class="filter-form">
-        <div class="form-group"><label class="form-label">Subject</label>
-            <select name="subject_id" class="form-control" data-autosubmit><option value="">All</option>{% for s in subjects %}<option value="{{ s.id }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
-        <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" value="{{ topic }}"></div>
-        <div class="form-group"><label class="form-label">Search</label><input type="text" name="q" class="form-control" value="{{ search }}" placeholder="Question text"></div>
-        <div class="form-group" style="align-self:flex-end;"><button class="btn btn-secondary"><i class="fas fa-search"></i></button></div>
-    </form>
-    <div class="text-muted text-sm mt-2">{{ total }} question(s) in the bank. Build exams faster by adding from here (Exam → Add from bank).</div>
-</div></div>
+  {% if can_add %}
+  <details class="cb-add" id="cbAdd" {{ 'open' if not total }}>
+    <summary><span class="ic"><i class="fas fa-pen-to-square" aria-hidden="true"></i></span>
+      <span class="tt"><b>Add a question</b><small>Type it, or use the formula buttons for maths and science{% if subject %} · saved to {{ subject.name }}{% endif %}</small></span>
+      <i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
+    <div class="tb">
+      <form method="POST" action="{{ url_for('cbt.bank_add') }}" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group"><label class="form-label" for="qtext_bank">Question <span class="required">*</span></label>
+          {% with tid='qtext_bank', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+          <textarea name="question_text" id="qtext_bank" class="form-control" rows="3" required placeholder="Type the question. Use the buttons above for fractions, powers, units, equations and symbols."></textarea>
+          <small class="mx-help">Type words normally; tap a button to build a formula where your cursor is (question or the option you tapped last). <kbd>Ctrl</kbd>+<kbd>M</kbd> starts a blank formula. The symbols follow the subject chosen below.</small></div>
+        <div class="form-group"><span class="form-label">Figure or diagram <span class="text-muted" style="font-weight:400">(optional)</span></span>
+          {{ file_drop('image', 'qimage_bank', accept='image/png,image/jpeg,image/gif,image/webp', kind='image',
+                       title='Add a figure or diagram', hint='PNG, JPG, GIF or WebP · up to 10 MB', max_mb=10, paste=True) }}</div>
+        <div class="cb-optin">
+          {% for L in ['A','B','C','D'] %}
+          <div class="form-group"><label class="form-label" for="bopt_{{ L }}">Option {{ L }}</label><input type="text" name="option_{{ L|lower }}" id="bopt_{{ L }}" class="form-control" data-math-target="Option {{ L }}" data-letter="{{ L }}"></div>
+          {% endfor %}
+        </div>
+        <div class="form-group">{% with tid='qtext_bank' %}{% include 'cbt/_math_preview.html' %}{% endwith %}</div>
+        <div class="cb-meta-in">
+          <div class="form-group"><label class="form-label" for="cbCorrect">Correct answer <span class="required">*</span></label><select name="correct_option" id="cbCorrect" class="form-control" required><option value="">Choose</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+          <div class="form-group"><label class="form-label" for="cbSubj">Subject</label><select name="subject_id" id="cbSubj" class="form-control" data-math-kind-source><option value="" data-kind="general">None</option>{% for s in subjects %}<option value="{{ s.id }}" data-kind="{{ subject_kinds[s.id] }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+          <div class="form-group"><label class="form-label" for="cbTopic">Topic</label><input type="text" name="topic" id="cbTopic" class="form-control" value="{{ topic }}" list="cbTopics" autocomplete="off">
+            <datalist id="cbTopics">{% for t, n in topics %}<option value="{{ t }}">{% endfor %}</datalist></div>
+          <div class="form-group"><label class="form-label" for="cbDiff">Difficulty</label><select name="difficulty" id="cbDiff" class="form-control"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></div>
+          <div class="form-group"><label class="form-label" for="cbMarks">Marks</label><input type="number" name="marks" id="cbMarks" class="form-control" step="0.5" min="0.5" value="1" inputmode="decimal"></div>
+        </div>
+        <div class="cb-foot">
+          <button type="reset" class="rs-btn ghost"><i class="fas fa-eraser" aria-hidden="true"></i> Clear</button>
+          <button type="submit" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i> Add to bank</button>
+        </div>
+      </form>
+      {{ file_drop_assets() }}
+    </div>
+  </details>
+  {% endif %}
 
-{% if can_write_sub('cbt', 'bank_create') %}
-<div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-plus"></i> Add a question</h3></div>
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('cbt.bank_add') }}" enctype="multipart/form-data">
+  {% if questions %}
+  <section class="rs-card flush" aria-label="Questions">
+    <div class="rs-card-h" style="padding:.85rem 1rem 0;margin:0 0 .3rem">
+      <h3><i class="fas fa-list-ol" aria-hidden="true"></i> {{ pagination.total }} question{{ 's' if pagination.total != 1 }}{% if filtered %} found{% endif %}</h3>
+      {% if filtered %}<a class="rs-btn sm ghost" href="{{ url_for('cbt.bank', subject_id=subject_id) }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear filters</a>
+      {% elif pagination.pages > 1 %}<small>Page {{ pagination.page }} of {{ pagination.pages }}</small>{% endif %}
+    </div>
+    <div class="cb-list">
+      {% for q in questions %}
+      <article class="cb-q">
+        <span class="cb-n" aria-hidden="true">{{ (pagination.page - 1) * pagination.per_page + loop.index }}</span>
+        <div style="min-width:0">
+          <div class="cb-tx">{{ q.question_text }}</div>
+          {% if q.image_url %}<img class="cb-img" src="{{ q.image_url }}" alt="Question figure" loading="lazy">{% endif %}
+          <div class="cb-opts">
+            {% for letter, text in q.options %}{% if text %}
+            <div class="cb-opt {{ 'key' if q.correct_option == letter }}"><b>{{ letter }}</b><span>{{ text }}</span>{% if q.correct_option == letter %}<span class="sr-only"> (correct answer)</span>{% endif %}</div>
+            {% endif %}{% endfor %}
+          </div>
+          <div class="cb-meta">
+            {% if q.subject %}<a class="cb-tag subj" href="{{ url_for('cbt.bank', subject_id=q.subject_id) }}">{{ q.subject.name }}</a>{% else %}<span class="cb-tag">No subject</span>{% endif %}
+            {% if q.topic %}<a class="cb-tag" href="{{ url_for('cbt.bank', subject_id=q.subject_id, topic=q.topic) }}">{{ q.topic }}</a>{% endif %}
+            <span class="cb-tag {{ (q.difficulty or 'medium')|lower }}">{{ q.difficulty or 'Medium' }}</span>
+            <span class="cb-tag">{{ q.marks|round(1)|string|replace('.0', '') }} mark{{ 's' if q.marks != 1 }}</span>
+          </div>
+        </div>
+        <div class="cb-acts">
+          {% if can_del %}
+          <form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove this question from the bank?">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            {% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
-            <div class="form-group"><label class="form-label" for="qtext_bank">Question <span class="required">*</span></label>
-                {% with tid='qtext_bank', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
-                <textarea name="question_text" id="qtext_bank" class="form-control" rows="3" required placeholder="Type the question. Use the buttons above for fractions, powers, units, equations and symbols."></textarea>
-                <small class="mx-help">Type words normally; tap a button to build a formula where your cursor is (question or the option you clicked last). <kbd>Ctrl</kbd>+<kbd>M</kbd> starts a blank formula. The symbol set follows the Subject you choose below.</small></div>
-            <div class="form-group"><span class="form-label">Figure or diagram <span class="text-muted" style="font-weight:400">(optional)</span></span>
-                {{ file_drop('image', 'qimage_bank', accept='image/png,image/jpeg,image/gif,image/webp', kind='image',
-                             title='Add a figure or diagram', hint='PNG, JPG, GIF or WebP · up to 10 MB', max_mb=10, paste=True) }}</div>
-            <div class="opt-row">
-                {% for L in ['A','B','C','D'] %}
-                <div class="form-group"><label class="form-label" for="bopt_{{ L }}">Option {{ L }}</label><input type="text" name="option_{{ L|lower }}" id="bopt_{{ L }}" class="form-control" data-math-target="Option {{ L }}" data-letter="{{ L }}"></div>
-                {% endfor %}
-            </div>
-            <div class="form-group">{% with tid='qtext_bank' %}{% include 'cbt/_math_preview.html' %}{% endwith %}</div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
-                <div class="form-group"><label class="form-label">Subject</label><select name="subject_id" class="form-control" data-math-kind-source><option value="" data-kind="general">—</option>{% for s in subjects %}<option value="{{ s.id }}" data-kind="{{ subject_kinds[s.id] }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
-                <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" value="{{ topic }}"></div>
-                <div class="form-group"><label class="form-label">Difficulty</label><select name="difficulty" class="form-control"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></div>
-                <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
-            </div>
-            <div style="display:flex;justify-content:flex-end;gap:.5rem;border-top:1px solid var(--border-color);padding-top:1rem">
-                <button type="reset" class="btn btn-secondary"><i class="fas fa-eraser"></i> Clear</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add to bank</button>
-            </div>
-        </form>
-        {{ file_drop_assets() }}
+            <button class="rs-btn ghost danger cb-ic" title="Remove from bank" aria-label="Remove question {{ (pagination.page - 1) * pagination.per_page + loop.index }} from the bank"><i class="fas fa-trash" aria-hidden="true"></i></button>
+          </form>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
     </div>
+    {% if pagination.pages > 1 %}
+    <nav class="cb-pager" aria-label="Pages">
+      {% if pagination.has_prev %}<a class="rs-btn" href="{{ url_for('cbt.bank', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left" aria-hidden="true"></i> Prev</a>{% endif %}
+      <span>Page {{ pagination.page }} of {{ pagination.pages }}</span>
+      {% if pagination.has_next %}<a class="rs-btn" href="{{ url_for('cbt.bank', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+    </nav>
+    {% endif %}
+  </section>
+  {% elif total %}
+  <div class="rs-blank"><span><i class="fas fa-magnifying-glass" aria-hidden="true"></i></span>
+    <h3>No questions match</h3><p>Try another search, topic or difficulty.</p>
+    <a class="rs-btn" href="{{ url_for('cbt.bank', subject_id=subject_id) }}">Clear filters</a></div>
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-layer-group" aria-hidden="true"></i></span>
+    <h3>Your question bank is empty</h3>
+    <p>Add questions one at a time above, or import a whole set from Excel. Any exam can then pull questions from here.</p>
+    {% if can_imp %}<a class="rs-btn primary" href="{{ url_for('cbt.bank_import') }}"><i class="fas fa-file-import" aria-hidden="true"></i> Import from Excel</a>{% endif %}</div>
+  {% endif %}
 </div>
-{% endif %}
-
-<div class="card">
-    <div class="card-header"><h3>{{ questions|length }} shown</h3></div>
-    <div class="card-body">
-        {% if questions %}
-            {% for q in questions %}
-            <div class="qb">
-                <div class="d-flex justify-between gap-2">
-                    <strong>{{ q.question_text }}</strong>
-                    {% if q.image_url %}<div><img src="{{ q.image_url }}" alt="Question figure" style="max-width:200px;max-height:130px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
-                    {% if can_write_sub('cbt', 'bank_delete') %}<form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove from bank?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>{% endif %}
-                </div>
-                {% for letter, text in q.options %}{% if text %}<div class="o {% if q.correct_option==letter %}c{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
-                <div class="text-muted text-sm mt-1">{{ q.subject.name if q.subject else 'No subject' }}{% if q.topic %} · {{ q.topic }}{% endif %} · {{ q.difficulty }} · {{ q.marks }} mark(s)</div>
-            </div>
-            {% endfor %}
-        {% else %}<div class="empty-state"><i class="fas fa-layer-group"></i><h3>No questions</h3><p>Add questions above or import a file.</p></div>{% endif %}
-    </div>
-</div>
+{{ bx_menu_js() }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  // "Add question" opens the panel and brings it into view.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('[data-open]'); if (!a) return;
+    var el = document.getElementById(a.getAttribute('data-open')); if (!el) return;
+    e.preventDefault();
+    el.open = true;
+    el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    setTimeout(function () { var t = document.getElementById('qtext_bank'); if (t) t.focus({preventScroll: true}); }, 350);
+  });
+  if (location.hash === '#cbAdd') { var d = document.getElementById('cbAdd'); if (d) d.open = true; }
+})();
+</script>
 {% include 'cbt/_mathjax.html' %}
 {% endblock %}

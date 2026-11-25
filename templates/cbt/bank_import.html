@@ -1,23 +1,95 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head %}
+{% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
 {% block title %}Import Questions - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('cbt.bank') }}">Question Bank</a> / <span>Import</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <a href="{{ url_for('cbt.bank') }}">Question Bank</a> / <span>Import</span>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
+.ci-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:.9rem;align-items:start}
+.ci-step{display:flex;gap:.8rem;align-items:flex-start}
+.ci-step+.ci-step{margin-top:1.1rem;padding-top:1.1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.ci-num{flex:none;width:2rem;height:2rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--primary) 12%,var(--bg-card));color:var(--primary);font-weight:800;font-size:.86rem}
+.ci-body{flex:1;min-width:0}
+.ci-body h3{margin:.25rem 0 .35rem;font-size:.98rem}
+.ci-body p{margin:0 0 .65rem;color:var(--text-secondary);font-size:.87rem;line-height:1.55}
+.ci-body .form-group{margin:0}
+.ci-cols{display:flex;flex-wrap:wrap;gap:.3rem;margin:.1rem 0 .8rem}
+.ci-cols span{font-size:.75rem;font-weight:700;border-radius:8px;padding:.2rem .5rem;background:var(--gray-100);color:var(--text-secondary);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ci-cols span.req{background:color-mix(in srgb,var(--primary) 11%,var(--bg-card));color:var(--primary)}
+.ci-foot{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border-light,var(--border-color))}
+.ci-tips{display:flex;flex-direction:column;gap:.7rem;margin:0;padding:0;list-style:none}
+.ci-tips li{display:flex;gap:.6rem;font-size:.85rem;line-height:1.5;color:var(--text-secondary)}
+.ci-tips li i{flex:none;width:1.1rem;margin-top:.2rem;color:var(--primary)}
+.ci-tips code{white-space:nowrap;font-size:.78rem;background:var(--gray-100);border-radius:5px;padding:.05rem .3rem}
+@media (max-width:900px){.ci-grid{grid-template-columns:1fr}}
+@media (max-width:759px){
+  .ci-foot{position:sticky;bottom:0;background:var(--bg-card);margin:1rem -1.1rem -1rem;padding:.75rem 1.1rem calc(.75rem + env(safe-area-inset-bottom));border-radius:0 0 var(--rs-r) var(--rs-r)}
+  .ci-foot .rs-btn{flex:1}
+}
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-header"><h1>Import Questions</h1></div>
-{% include 'cbt/_tabs.html' %}
+<div class="rs bx">
+  {% call bx_head('fa-file-import', 'Import Questions', 'Add a whole set of questions to the bank from an Excel or CSV file') %}
+    <a href="{{ url_for('cbt.bank') }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">Back to bank</span></a>
+  {% endcall %}
+  {% include 'cbt/_tabs.html' %}
 
-<div class="card" style="max-width:640px;">
-    <div class="card-header"><h3><i class="fas fa-file-import"></i> Upload Excel or CSV</h3></div>
-    <div class="card-body">
-        <p class="text-muted">Columns (in any order): <strong>Question, A, B, C, D, Correct, Marks, Topic, Difficulty</strong>. <em>Correct</em> is the letter A–D (or the answer text). For True/False questions, just fill A &amp; B.</p>
-        <a href="{{ url_for('cbt.bank_template') }}" class="btn btn-secondary btn-sm mb-3"><i class="fas fa-download"></i> Download template</a>
-        <form method="POST" action="{{ url_for('cbt.bank_import') }}" enctype="multipart/form-data">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group"><label class="form-label">Subject (for all imported questions)</label>
-                <select name="subject_id" class="form-control"><option value="">—</option>{% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select></div>
-            <div class="form-group"><label class="form-label">File <span class="required">*</span></label><input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.csv" required></div>
-            <button class="btn btn-primary"><i class="fas fa-file-import"></i> Import into bank</button>
-            <a href="{{ url_for('cbt.bank') }}" class="btn btn-secondary">Cancel</a>
-        </form>
-    </div>
+  <div class="ci-grid">
+    <form method="POST" action="{{ url_for('cbt.bank_import') }}" enctype="multipart/form-data" class="rs-card">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="ci-step">
+        <span class="ci-num">1</span>
+        <div class="ci-body">
+          <h3>Get the template</h3>
+          <p>One question per row. Columns can be in any order:</p>
+          <div class="ci-cols" aria-label="Columns">
+            <span class="req">Question</span><span class="req">A</span><span class="req">B</span><span>C</span><span>D</span><span class="req">Correct</span><span>Marks</span><span>Topic</span><span>Difficulty</span>
+          </div>
+          <a href="{{ url_for('cbt.bank_template') }}" class="rs-btn sm"><i class="fas fa-download" aria-hidden="true"></i> Download Excel template</a>
+        </div>
+      </div>
+      <div class="ci-step">
+        <span class="ci-num">2</span>
+        <div class="ci-body">
+          <h3>Choose the subject</h3>
+          <p>Every question in the file is saved under this subject.</p>
+          <div class="form-group">
+            <label class="form-label sr-only" for="ciSubj">Subject</label>
+            <select name="subject_id" id="ciSubj" class="form-control">
+              <option value="">No subject</option>
+              {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if request.args.get('subject_id', type=int) == s.id }}>{{ s.name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="ci-step">
+        <span class="ci-num">3</span>
+        <div class="ci-body">
+          <h3>Upload your file</h3>
+          {{ file_drop('file', 'ciFile', accept='.xlsx,.xlsm,.csv', kind='sheet',
+                       title='Choose your Excel or CSV file', hint='.xlsx, .xlsm or .csv', max_mb=10, required=True) }}
+        </div>
+      </div>
+      <div class="ci-foot">
+        <a href="{{ url_for('cbt.bank') }}" class="rs-btn ghost">Cancel</a>
+        <button type="submit" class="rs-btn primary"><i class="fas fa-file-import" aria-hidden="true"></i> Import into bank</button>
+      </div>
+    </form>
+
+    <aside class="rs-card" aria-label="Tips">
+      <div class="rs-card-h"><h3><i class="fas fa-lightbulb" aria-hidden="true"></i> Good to know</h3></div>
+      <ul class="ci-tips">
+        <li><i class="fas fa-check" aria-hidden="true"></i><span><b>Correct</b> is the letter A–D, or the answer's text.</span></li>
+        <li><i class="fas fa-toggle-on" aria-hidden="true"></i><span>True/False questions: fill only A and B.</span></li>
+        <li><i class="fas fa-square-root-variable" aria-hidden="true"></i><span>Write formulas as LaTeX between <code>\(</code> and <code>\)</code>, e.g. <code>\(x^{2}\)</code>. The template has examples.</span></li>
+        <li><i class="fas fa-gauge" aria-hidden="true"></i><span><b>Difficulty</b> is Easy, Medium or Hard (Medium if left blank). <b>Marks</b> defaults to 1.</span></li>
+        <li><i class="fas fa-image" aria-hidden="true"></i><span>Questions with a figure or diagram: add those one at a time on the bank page, where you can attach the picture.</span></li>
+        <li><i class="fas fa-layer-group" aria-hidden="true"></i><span>Imported questions are in the bank straight away. Any exam can use them through <b>Add from bank</b>.</span></li>
+      </ul>
+    </aside>
+  </div>
 </div>
+{{ file_drop_assets() }}
 {% endblock %}

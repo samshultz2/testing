@@ -143,3 +143,33 @@ def test_visual_equation_editor_is_wired_and_vendored(app):
     assert 'exponentialE' in setup and 'placeholder' in setup
     r = c.get('/static/vendor/mathlive/mathlive.min.js')
     assert r.status_code == 200
+
+
+def test_cbt_bank_page_filters_and_pages(app, auth_client):
+    """The redesigned bank page: subject chips with counts, difficulty filter, 25 a page."""
+    import uuid
+    from models import db, QuestionBank, Subject
+    with app.app_context():
+        s = Subject.query.filter_by(name='Mathematics').first() or Subject(name='Mathematics', is_active=True)
+        db.session.add(s); db.session.flush()
+        tag = uuid.uuid4().hex[:6]
+        rows = [QuestionBank(subject_id=s.id, question_text='Bankq %s %d' % (tag, i), option_a='1', option_b='2',
+                             option_c='3', option_d='4', correct_option='A', marks=1,
+                             difficulty='Hard' if i < 3 else 'Easy', topic='Algebra', is_active=True)
+                for i in range(30)]
+        db.session.add_all(rows); db.session.commit()
+        sid = s.id
+    try:
+        r = auth_client.get('/cbt/bank?q=Bankq+%s' % tag)
+        html = r.get_data(as_text=True)
+        assert r.status_code == 200 and '30 questions' in html
+        assert html.count('class="cb-q"') == 25 and 'Page 1 of 2' in html
+        html = auth_client.get('/cbt/bank?q=Bankq+%s&page=2' % tag).get_data(as_text=True)
+        assert html.count('class="cb-q"') == 5
+        html = auth_client.get('/cbt/bank?q=Bankq+%s&difficulty=hard&subject_id=%d' % (tag, sid)).get_data(as_text=True)
+        assert html.count('class="cb-q"') == 3 and 'Algebra' in html
+        assert auth_client.get('/cbt/bank/import').status_code == 200
+    finally:
+        with app.app_context():
+            QuestionBank.query.filter(QuestionBank.question_text.like('Bankq %s%%' % tag)).delete(synchronize_session=False)
+            db.session.commit()

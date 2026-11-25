@@ -663,23 +663,42 @@ def delete_question(question_id):
 @cbt_bp.route('/bank')
 @login_required
 def bank():
+    from sqlalchemy import func
     subject_id = request.args.get('subject_id', type=int)
     topic = (request.args.get('topic') or '').strip()
     search = (request.args.get('q') or '').strip()
-    q = QuestionBank.query.filter_by(is_active=True)
+    difficulty = (request.args.get('difficulty') or '').strip().title()
+    if difficulty not in ('Easy', 'Medium', 'Hard'):
+        difficulty = ''
+    page = max(1, request.args.get('page', 1, type=int) or 1)
+    active = QuestionBank.query.filter_by(is_active=True)
+    q = active
     if subject_id:
         q = q.filter_by(subject_id=subject_id)
     if topic:
         q = q.filter(QuestionBank.topic.ilike(like_term(topic), escape='\\'))
     if search:
         q = q.filter(QuestionBank.question_text.ilike(like_term(search), escape='\\'))
-    questions = q.order_by(QuestionBank.id.desc()).limit(500).all()
+    if difficulty:
+        q = q.filter(QuestionBank.difficulty == difficulty)
+    pagination = q.order_by(QuestionBank.id.desc()).paginate(page=page, per_page=25, error_out=False)
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
-    total = QuestionBank.query.filter_by(is_active=True).count()
+    total = active.count()
+    # per-subject counts for the subject chips (only subjects that have questions)
+    subject_counts = dict(db.session.query(QuestionBank.subject_id, func.count(QuestionBank.id))
+                          .filter(QuestionBank.is_active.is_(True))
+                          .group_by(QuestionBank.subject_id).all())
+    # the selected subject's topics, for the topic filter
+    tq = db.session.query(QuestionBank.topic, func.count(QuestionBank.id)).filter(
+        QuestionBank.is_active.is_(True), QuestionBank.topic.isnot(None), QuestionBank.topic != '')
+    if subject_id:
+        tq = tq.filter(QuestionBank.subject_id == subject_id)
+    topics = sorted(tq.group_by(QuestionBank.topic).all(), key=lambda r: r[0].lower())
     from utils.cbt_symbols import editor_config, kind_for_subject
     sel = next((s for s in subjects if s.id == subject_id), None)
-    return render_template('cbt/bank.html', questions=questions, subjects=subjects,
-        subject_id=subject_id, topic=topic, search=search, total=total,
+    return render_template('cbt/bank.html', questions=pagination.items, pagination=pagination,
+        subjects=subjects, subject_id=subject_id, subject=sel, topic=topic, search=search,
+        difficulty=difficulty, total=total, subject_counts=subject_counts, topics=topics,
         math_editor=editor_config(sel.name if sel else ''),
         subject_kinds={s.id: kind_for_subject(s.name) for s in subjects})
 
