@@ -33,7 +33,11 @@ def test_bank_lists_sss3_subjects_only(app):
         other = Subject(name='NotOffered ' + tag, is_active=True)
         db.session.add_all([offered, other]); db.session.flush()
         db.session.add(ClassSubject(subject_id=offered.id, class_id=sss3.id, term_id=term.id, is_active=True))
-        for i in range(400):                      # make it the busiest SSS3 subject
+        # make it the busiest SSS3 subject, whatever other tests left in the shared DB
+        busiest = max([c for (c,) in db.session.query(db.func.count(MockJAMBQuestion.id))
+                       .filter(MockJAMBQuestion.mock_exam_id.is_(None))
+                       .group_by(MockJAMBQuestion.subject_id).all()] or [0])
+        for i in range(max(400, busiest + 50)):
             db.session.add(MockJAMBQuestion(mock_exam_id=None, subject_id=offered.id, question_text='Q%d %s' % (i, tag),
                                             option_a='a', option_b='b', option_c='c', option_d='d', correct_option='A', marks=1))
         db.session.commit()
