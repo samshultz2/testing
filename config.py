@@ -224,6 +224,8 @@ class Config:
     # installed. Only non-personal school branding is ever sent to the model.
     WEBSITE_AI_ENABLED = _as_bool(os.environ.get('WEBSITE_AI_ENABLED'), default=True)
     WEBSITE_AI_MODEL = os.environ.get('WEBSITE_AI_MODEL', 'claude-haiku-4-5')
+    # Effort for AI question tagging on models that think (low | medium | high).
+    AI_TAG_EFFORT = os.environ.get('AI_TAG_EFFORT', 'low')
 
     # Stock-photo CDN used to seed auto-generated sites with imagery (no API key).
     WEBSITE_STOCK_IMAGE_BASE = os.environ.get('WEBSITE_STOCK_IMAGE_BASE', 'https://picsum.photos')

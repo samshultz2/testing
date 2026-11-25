@@ -1651,7 +1651,8 @@ def bank_syllabus_retag():
     exam_body = (request.form.get('exam_body') or '').strip() or None
     mode = 'untagged' if request.form.get('mode') == 'untagged' else 'all'
 
-    res = coded_retag(subject, year=year, exam_body=exam_body, mode=mode)
+    res = coded_retag(subject, year=year, exam_body=exam_body, mode=mode,
+                      model=(request.form.get('model') or '').strip() or None)
     err = res.get('error')
     scope = ' '.join(filter(None, [exam_body, year]))
     scope = f' ({scope})' if scope else ''

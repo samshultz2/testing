@@ -69,6 +69,8 @@ def build_requests(subject_name, syllabus_block, rows, model, max_tokens=300):
     block; the per-question user text is tiny."""
     system = [{'type': 'text', 'text': _system_text(subject_name, syllabus_block),
                'cache_control': {'type': 'ephemeral'}}]
+    from utils.ai_tag_params import tag_params
+    max_tokens, extra = tag_params(model, max_tokens)
     reqs = []
     for r in rows:
         opts = ' | '.join(filter(None, [r.option_a, r.option_b, r.option_c, r.option_d]))
@@ -82,6 +84,7 @@ def build_requests(subject_name, syllabus_block, rows, model, max_tokens=300):
                 'max_tokens': max_tokens,
                 'system': system,
                 'messages': [{'role': 'user', 'content': user}],
+                **extra,
             },
         })
     return reqs

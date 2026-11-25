@@ -141,9 +141,9 @@ def _classify_chunk(client, model, subject_name, syllabus_block, rows):
         '"secondary": ["<syllabus ID>", ...]}]\n\n'
         "Questions:\n[" + ",\n".join(items) + "]"
     )
-    resp = client.messages.create(
-        model=model, max_tokens=2000,
-        messages=[{'role': 'user', 'content': prompt}])
+    from utils.ai_tag_params import create
+    resp = create(client, model, 2000,
+                  messages=[{'role': 'user', 'content': prompt}])
     text = ''.join(getattr(b, 'text', '') for b in (resp.content or []))
     out = {}
     for obj in _extract_json_array(text):
@@ -159,10 +159,11 @@ def _classify_chunk(client, model, subject_name, syllabus_block, rows):
     return out
 
 
-def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_MAX_DEFAULT):
+def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_MAX_DEFAULT,
+                model=None):
     """Tag a subject's stand-alone bank questions with coded syllabus items via the
     configured Anthropic key. ``mode='untagged'`` only touches questions with no
-    code yet. See module docstring."""
+    code yet. ``model`` overrides the Settings model. See module docstring."""
     from models import db, MockJAMBQuestion
     from utils.waec_ocr import _vision_config
 
@@ -218,7 +219,7 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
         rows = MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(chunk_ids)).all()
         result['scanned'] += len(rows)
         try:
-            mapping = _classify_chunk(client, cfg['model'], subject.name, syllabus_block, rows)
+            mapping = _classify_chunk(client, (model or '').strip() or cfg['model'], subject.name, syllabus_block, rows)
         except Exception:
             continue
         result['chunks'] += 1

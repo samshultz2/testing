@@ -74,9 +74,9 @@ def _tag_chunk(client, model, subject_name, topics, rows):
         f'[{{"id": <id>, "topic": "<exact topic or null>", "subtopic": "<phrase or null>"}}]\n\n'
         f"Questions:\n[" + ",\n".join(items) + "]"
     )
-    resp = client.messages.create(
-        model=model, max_tokens=1600,
-        messages=[{'role': 'user', 'content': prompt}])
+    from utils.ai_tag_params import create
+    resp = create(client, model, 1600,
+                  messages=[{'role': 'user', 'content': prompt}])
     text = ''.join(getattr(b, 'text', '') for b in (resp.content or []))
     out = {}
     for obj in _extract_json_array(text):
