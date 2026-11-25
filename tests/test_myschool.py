@@ -740,3 +740,20 @@ def test_same_novel_is_spelling_proof():
         assert ms.same_novel(full, tag), tag
     assert not ms.same_novel(full, 'The Life Changer — Khadija Abubakar Jalli')
     assert not ms.same_novel(full, 'Recommended Novel') and ms.is_generic_novel_tag('Recommended Novel')
+
+
+def test_parse_detail_reads_from_the_novel_box():
+    """Newer myschool pages: 'From the novel; <strong>The Lekki Headmaster</strong>'
+    in a box of its own above the question (not a prevent-copy block)."""
+    from utils import myschool as ms
+    html = _fixture("What caused Mr Bepo's emotional breakdown during the school assembly?").replace(
+        '<div class="card">',
+        '<nav><a href="/classroom/novels/the-lekki-headmaster">The Lekki Headmaster</a> novel</nav>'
+        '<div class="card"><div class="rounded-2xl bg-amber-50 px-4 py-3"><p>From the novel; '
+        '<strong>The Lekki Headmaster</strong></p></div>')
+    p = ms.parse_detail(html)
+    assert p['is_novel'] and p['novel_title'] == 'The Lekki Headmaster'
+    # a plain question with only the site's Novels menu is NOT a novel question
+    plain = _fixture('Choose the word nearest in meaning').replace(
+        '<div class="card">', '<nav><a href="/classroom/novels">From the novel archive</a></nav><div class="card">')
+    assert not ms.parse_detail(plain)['is_novel']

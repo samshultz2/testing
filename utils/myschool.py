@@ -1433,6 +1433,27 @@ def parse_detail(html):
             novel_title = novel_title or _novel_title_from_note(t)
         elif len(t) > len(passage_text):
             passage_text = t                     # keep the longest = the passage
+    if not is_novel:
+        # newer pages show the book in a small box of its own above the question
+        # ("From the novel; <strong>The Lekki Headmaster</strong>") rather than a
+        # prevent-copy block: find the smallest short block saying so, outside the
+        # options and away from menus / links (myschool's "Novels" menu).
+        best = None
+        for el in soup.find_all(["div", "p", "span", "section", "aside", "small", "em"]):
+            if el.find_parent(["nav", "header", "footer", "a", "ul", "li"]) or el.select_one("span.uppercase, h1"):
+                continue
+            t = clean(el.get_text(" ", strip=True))
+            if not t or len(t) > 220 or t == stem or not _NOVEL_NOTE.search(t):
+                continue
+            if best is None or len(t) <= len(best[1]):
+                best = (el, t)
+        if best:
+            el, t = best
+            is_novel = True
+            strong = el.find(["strong", "b"])
+            novel_title = novel_title or (clean(strong.get_text(" ", strip=True)) if strong else None) \
+                or _novel_title_from_note(t)
+            instruction = instruction or t
     if len(passage_text) < 120:                  # too short to be a real passage
         passage_text = ""
     else:
