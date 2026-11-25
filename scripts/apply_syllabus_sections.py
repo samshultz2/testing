@@ -1,6 +1,7 @@
 """Bring every subject's imported syllabus up to date with the bundled
-topic -> paper-section mappings, then re-section the questions that already
-have a syllabus code (no AI, no tokens).
+topic -> paper-section mappings and per-paper counts (only where you haven't
+changed them yourself), then re-section the questions that already have a
+syllabus code (no AI, no tokens).
 
     .venv/bin/python scripts/apply_syllabus_sections.py            # report only
     .venv/bin/python scripts/apply_syllabus_sections.py --apply    # save
@@ -17,9 +18,14 @@ def main():
     app = create_app()
     with app.app_context():
         from models import Subject, MockJAMBSyllabus
-        from utils.syllabus_sections import sync_mappings, resection
+        from utils.syllabus_sections import sync_mappings, resection, sync_blueprint
         ids = {s.subject_id for s in MockJAMBSyllabus.query.all()}
         for subj in Subject.query.filter(Subject.id.in_(ids)).order_by(Subject.name).all():
+            bp = sync_blueprint(subj, commit=apply)
+            if bp:
+                print('\n== %s: paper blueprint %s: %s' % (
+                    subj.name, 'updated' if apply else 'would update',
+                    ', '.join('%s %s -> %s' % (k, a, b) for k, a, b in bp)))
             n = sync_mappings(subj, commit=apply)      # a dry run rolls it back in resection()
             moves, samples = resection(subj, apply=apply)
             if not n and not moves:
@@ -31,6 +37,9 @@ def main():
                 print('   %5d  %s' % (c, k))
                 for line in samples.get(k, []):
                     print('          ' + line)
+        if not apply:
+            from models import db
+            db.session.rollback()
         print('\n' + ('APPLIED.' if apply else 'DRY RUN - nothing changed. Run with --apply to save.'))
 
 

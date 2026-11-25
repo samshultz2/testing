@@ -46,9 +46,12 @@ def test_bank_draw_follows_blueprint(app):
         att = MockJAMBAttempt(mock_exam_id=eid, student_id=sid); db.session.add(att); db.session.flush()
         items, served = subject_items(exam, subj_id, att)
         # Maths blueprint totals 40 (10+12+10+4+4); each section has 8 in the bank,
-        # so calculus/statistics (want 4) draw 4, others draw all 8 they have.
-        # number(8)+algebra(8)+geometry(8)+calculus(4)+statistics(4) = 32
-        assert len(served) == 32
+        # so number/algebra/geometry come up 8 short in all (2+4+2). The paper is
+        # topped up to the full 40 from the spare calculus/statistics questions.
+        assert len(served) == 40
+        from collections import Counter
+        by_sec = Counter(q.section for q in MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(served)))
+        assert by_sec['calculus'] == 8 and by_sec['statistics'] == 8
         # every served question really is a Maths bank question
         qs = MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(served)).all()
         assert all(q.subject_id == subj_id and q.mock_exam_id is None for q in qs)

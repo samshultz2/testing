@@ -332,6 +332,10 @@ def _draw_balanced(pool, want, rng, item_topic_map):
     return chosen
 
 
+# Reading sections that can stand in for each other when one runs short.
+_PASSAGE_ALTERNATES = {'summary': ('comprehension',), 'comprehension': ('summary',)}
+
+
 def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrange=False,
                item_topic_map=None):
     """Draw a JAMB-shaped paper for one subject.
@@ -353,36 +357,87 @@ def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrang
 
     Returns ``(items, served_ids)`` where items are ``{'kind':'passage', 'passage', 'questions'}``
     or ``{'kind':'question', 'q'}`` (passages kept whole).
-    Sections short of stock draw whatever is available.
+    A section short of stock draws what it has; a short reading section borrows
+    from its sister section (summary <-> comprehension), and any remaining gap is
+    topped up from the other stand-alone sections so the paper still reaches the
+    blueprint total when the bank holds enough questions.
     """
-    items = []
+    # Draw section by section (kept per section so a top-up lands in its own
+    # section and an arranged paper keeps JAMB's order).
+    per_sec = {}
+    used_passages, used_q = set(), set()
+
+    def take_passages(groups, want, out):
+        taken = 0
+        groups = [g for g in groups if id(g['passage']) not in used_passages]
+        rng.shuffle(groups)
+        for g in groups:
+            if taken >= want:
+                break
+            qs = [q for q in g['questions'] if q.id not in used_q]
+            rng.shuffle(qs)
+            # keep the passage, but never overshoot the section target — trim the
+            # last passage's questions to the remaining need (e.g. a scraped
+            # 10-blank cloze passage under a 5-question cloze section serves 5).
+            qs = qs[:want - taken]
+            if not qs:
+                continue
+            used_passages.add(id(g['passage']))
+            used_q.update(q.id for q in qs)
+            out.append({'kind': 'passage', 'passage': g['passage'], 'questions': qs})
+            taken += len(qs)
+        return taken
+
+    target = 0
     for sec in blueprint['sections']:
         want = sec['count']
         if want <= 0:
             continue
+        target += want
+        out = per_sec.setdefault(sec['section'], [])
         if sec['passage']:
-            groups = list(passages_by_section.get(sec['section'], []))
-            rng.shuffle(groups)
-            taken = 0
-            for g in groups:
-                if taken >= want:
+            got = take_passages(passages_by_section.get(sec['section'], []), want, out)
+            # short of its own passages: a sister reading section serves the rest
+            # (summary questions are set on comprehension passages, and vice versa)
+            for alt in _PASSAGE_ALTERNATES.get(sec['section'], ()):
+                if got >= want:
                     break
-                qs = list(g['questions'])
-                rng.shuffle(qs)
-                # keep the passage, but never overshoot the section target — trim the
-                # last passage's questions to the remaining need (e.g. a scraped
-                # 10-blank cloze passage under a 5-question cloze section serves 5).
-                remaining = want - taken
-                if len(qs) > remaining:
-                    qs = qs[:remaining]
-                if not qs:
-                    break
-                items.append({'kind': 'passage', 'passage': g['passage'], 'questions': qs})
-                taken += len(qs)
+                got += take_passages(passages_by_section.get(alt, []), want - got, out)
         else:
-            pool = questions_by_section.get(sec['section'], [])
+            pool = [q for q in questions_by_section.get(sec['section'], []) if q.id not in used_q]
             for q in _draw_balanced(pool, want, rng, item_topic_map):
-                items.append({'kind': 'question', 'q': q})
+                used_q.add(q.id)
+                out.append({'kind': 'question', 'q': q})
+
+    # Still short (a section had too few questions): top the paper up to its
+    # blueprint total from the other stand-alone sections, largest first, so
+    # every candidate gets a full-length paper. The novel section is never used
+    # for this -- it is limited to the mock's own book.
+    def n_served():
+        return sum(len(it['questions']) if it['kind'] == 'passage' else 1
+                   for lst in per_sec.values() for it in lst)
+
+    short = target - n_served()
+    if short > 0:
+        donors = sorted((s for s in blueprint['sections']
+                         if s['count'] > 0 and not s['passage'] and s['section'] != 'novel'),
+                        key=lambda s: -s['count'])
+        spare = {}
+        for s in donors:
+            pool = [q for q in questions_by_section.get(s['section'], []) if q.id not in used_q]
+            rng.shuffle(pool)
+            spare[s['section']] = pool
+        while short > 0 and any(spare.values()):
+            for s in donors:
+                if short <= 0:
+                    break
+                if spare[s['section']]:
+                    q = spare[s['section']].pop()
+                    used_q.add(q.id)
+                    per_sec.setdefault(s['section'], []).append({'kind': 'question', 'q': q})
+                    short -= 1
+
+    items = [it for sec in blueprint['sections'] for it in per_sec.pop(sec['section'], [])]
     if not arrange:
         rng.shuffle(items)
     served = set()

@@ -5,8 +5,8 @@
   "version": "2026",
   "total": 60,
   "blueprint": [
-    {"section": "comprehension", "label": "Comprehension passage", "count": 5, "passage": true, "per_passage": 5},
-    {"section": "summary", "label": "Summary passage", "count": 5, "passage": true, "per_passage": 5},
+    {"section": "comprehension", "label": "Comprehension passage", "count": 10, "passage": true, "per_passage": 5},
+    {"section": "summary", "label": "Summary passage", "count": 0, "passage": true, "per_passage": 5},
     {"section": "cloze", "label": "Cloze passage", "count": 10, "passage": true, "per_passage": 10},
     {"section": "reading_text", "label": "Reading text", "count": 5},
     {"section": "sentence_interpretation", "label": "Sentence interpretation", "count": 5},

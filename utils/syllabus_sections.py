@@ -91,3 +91,42 @@ def resection(subject, apply=False, limit_samples=6):
     else:
         db.session.rollback()
     return moves, samples
+
+
+# Earlier bundled blueprints, as {section: count} changes from the current file.
+# A school's stored blueprint that still equals one of these exactly was never
+# edited by hand, so it is safe to bring up to date.
+_PREVIOUS_BLUEPRINTS = {
+    # Summary was its own 5-question passage section; JAMB sets those questions
+    # on the comprehension passages, so Comprehension is now 10 and Summary 0.
+    'english language': [{'comprehension': 5, 'summary': 5}],
+}
+
+
+def sync_blueprint(subject, commit=True):
+    """Bring the subject's stored (imported) blueprint up to the bundled one when
+    it still holds an earlier bundled version unchanged. Returns a list of
+    ``(section, old, new)`` count changes ([] when nothing to do)."""
+    from models import db, MockJAMBSyllabus
+    from utils.myschool import norm_subject
+    syll = MockJAMBSyllabus.query.filter_by(subject_id=subject.id).first()
+    path = _bundled_path(subject.name)
+    if not syll or not syll.blueprint or not path:
+        return []
+    try:
+        stored = json.loads(syll.blueprint)
+        bundled = json.load(open(path, encoding='utf-8')).get('blueprint') or []
+    except Exception:
+        return []
+    have = {x.get('section'): int(x.get('count', 0)) for x in stored}
+    new = {x.get('section'): int(x.get('count', 0)) for x in bundled}
+    if not bundled or have == new:
+        return []
+    for diff in _PREVIOUS_BLUEPRINTS.get(norm_subject(subject.name), []):
+        if have == {**new, **diff}:
+            changes = [(k, have.get(k), new.get(k)) for k in new if have.get(k) != new.get(k)]
+            syll.blueprint = json.dumps(bundled)
+            if commit:
+                db.session.commit()
+            return changes
+    return []

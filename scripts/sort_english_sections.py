@@ -42,6 +42,19 @@ def main():
               '%d are there only by default (no clear instruction).' % (words, default))
         for line in gsamples:
             print('       ' + line)
+        from models import MockJAMBQuestion
+        loose = (MockJAMBQuestion.query.filter(MockJAMBQuestion.subject_id == subj.id,
+                                               MockJAMBQuestion.mock_exam_id.is_(None),
+                                               MockJAMBQuestion.passage_id.is_(None),
+                                               MockJAMBQuestion.section == 'summary')
+                 .order_by(MockJAMBQuestion.id).all())
+        if loose:
+            print('\nSummary questions with no passage: %d. A mock never draws these (Summary is '
+                  'a passage section). Give each one its passage, move it to another section, '
+                  'or delete it:' % len(loose))
+            for q in loose[:40]:
+                print('       #%s %s | %s' % (q.id, q.exam_year or '----',
+                                            (q.question_text or '')[:110].replace('\n', ' ')))
         if stuck:
             print('\nLeft where they are - wording does not say which section (re-tag or edit by hand):')
             for k, n in stuck.most_common():
