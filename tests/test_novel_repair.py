@@ -135,3 +135,57 @@ def test_repair_finds_2025_question_by_known_character(app):
         q = db.session.get(MockJAMBQuestion, q.id)
         assert q.section == 'novel' and 'Lekki' in q.topic
         db.session.delete(q); db.session.commit()
+
+
+def test_title_match_is_whole_words():
+    from utils.novel_repair import _title_in_text
+    assert _title_in_text('Choose the option that best complete the gap: The students had a ... On Independence Day') is None
+    assert 'Lekki' in _title_in_text('The following question is based on The Lekki Headmaster . The dominant message')
+    assert 'Forcados' in _title_in_text("This question is from the novel 'The Last Days at Forcados High school'. Who was")
+    assert 'Dependence' in _title_in_text('In the novel In Dependence, Tayo')
+
+
+def test_book_named_in_question_beats_the_page_check(app, monkeypatch):
+    """#32007: myschool's page has no novel note (the book is named in the question
+    itself), so the page check says 'not novel' — the question must stay in Novel."""
+    from utils import novel_repair
+    monkeypatch.setattr(novel_repair, '_myschool_verdict', lambda *a, **k: (False, None))
+    with app.app_context():
+        subj = _english()
+        t = uuid.uuid4().hex[:5]
+        q = _q(subj.id, f'The following question is based on The Lekki Headmaster . The dominant message {t}',
+               'novel', 'The Lekki Headmaster', year='2026')
+        q.source, q.source_ref = 'myschool', '99999'
+        c = _q(subj.id, f'Why did Mr Guta complain? {t}', 'novel', 'What the questions test', year='2026')
+        c.source, c.source_ref = 'myschool', '99998'
+        db.session.add_all([q, c]); db.session.commit()
+        novel_repair.repair(subj, apply=True, use_myschool=True, log=lambda *a: None, find_elsewhere=False)
+        q, c = db.session.get(MockJAMBQuestion, q.id), db.session.get(MockJAMBQuestion, c.id)
+        assert q.section == 'novel' and 'Lekki' in q.topic
+        assert c.section == 'novel' and 'Lekki' in c.topic           # named character, 2026
+        db.session.delete(q); db.session.delete(c); db.session.commit()
+
+
+def test_learned_names_skip_authors_and_title_words():
+    from utils.novel_repair import _names
+    n = _names('Kabir Alabi Garba wrote The Lekki Headmaster. Questions about Stardom Schools and Bepo')
+    assert 'Bepo' in n and 'Stardom' in n
+    assert not ({'Kabir', 'Alabi', 'Garba', 'Questions', 'Schools', 'Lekki', 'Headmaster'} & n)
+
+
+def test_elsewhere_character_found_even_when_page_says_no(app, monkeypatch):
+    from utils import novel_repair
+    monkeypatch.setattr(novel_repair, '_myschool_verdict', lambda *a, **k: (False, None))
+    with app.app_context():
+        subj = _english()
+        t = uuid.uuid4().hex[:5]
+        q = _q(subj.id, f'Why did Mr Guta complain about Mr Fafore? {t}', 'lexis_structure', 'Lexis and Structure', year='2025')
+        q.source, q.source_ref = 'myschool', '99997'
+        g = _q(subj.id, f'Ade as well as Jide comes to school {t}', 'lexis_structure', 'Lexis and Structure', year='2025')
+        g.source, g.source_ref = 'myschool', '99996'
+        db.session.add_all([q, g]); db.session.commit()
+        novel_repair.repair(subj, apply=True, use_myschool=True, log=lambda *a: None, from_year=2025)
+        q, g = db.session.get(MockJAMBQuestion, q.id), db.session.get(MockJAMBQuestion, g.id)
+        assert q.section == 'novel' and 'Lekki' in q.topic
+        assert g.section == 'lexis_structure'
+        db.session.delete(q); db.session.delete(g); db.session.commit()

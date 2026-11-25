@@ -92,7 +92,8 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12,
     rows = base.filter(MockJAMBQuestion.section == 'novel').order_by(MockJAMBQuestion.id).all()
     log('Checking %d Novel-section questions%s…' % (len(rows), ' (re-reading myschool.ng pages)' if use_myschool else ''))
     for i, q in enumerate(rows, 1):
-        verdict = _myschool_verdict(q, subject, session, cache) if use_myschool else None
+        named = _title_in_text(q.question_text)
+        verdict = (True, named) if named else (_myschool_verdict(q, subject, session, cache) if use_myschool else None)
         if verdict is None:
             # can't check the page: keep it as a novel question (and title it by
             # year) unless its wording clearly belongs to another section — real
@@ -100,7 +101,12 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12,
             is_novel = ms.looks_like_novel_question(q.question_text) or not _clearly_other(q.question_text)
             title, how = None, 'wording'
         else:
-            (is_novel, title), how = verdict, 'myschool'
+            (is_novel, title), how = verdict, ('title' if named else 'myschool')
+            if not is_novel:
+                known = ms.book_from_characters(q.question_text)
+                if known and ms.same_novel(known, ms.novel_for_year(q.exam_year) or '') \
+                        and not _clearly_other(q.question_text):
+                    is_novel, title = True, known
         stats['checked_' + how] += 1
         if is_novel:
             if _title_ok(q.topic) and not title:
@@ -151,25 +157,42 @@ In On At Of For And But Or Not None All Both Each Every This That These Those Hi
 January February March April May June July August September October November December Monday Tuesday
 Wednesday Thursday Friday Saturday Sunday English Nigeria Nigerian Lagos Abuja God Allah Christmas
 Book Novel Chapter Author Writer Narrator Story Text Question Following Option Options Answer Based
-Life Changer Lekki Headmaster Last Days Forcados High School Sweet Sixteen Dependence'''.split())
+Life Changer Lekki Headmaster Last Days Forcados High School Sweet Sixteen Dependence Questions Schools
+Independence Paragraph Passage Sentence Students Teacher Teachers Principal'''.split())
 
 
-def _names(text):
+def _book_words():
+    from utils.myschool import novel_catalogue
     out = set()
-    for m in _NAME.finditer(text or ''):
-        w = m.group(0)
-        if w.split()[-1] in _NOT_NAMES:
-            continue
-        out.add(w.split()[-1])
+    for c in novel_catalogue():
+        out.update(w.capitalize() for w in re.findall(r"[A-Za-z]+", c['value']))
     return out
 
 
+def _names(text):
+    out, skip = set(), _NOT_NAMES | _book_words()
+    for m in _NAME.finditer(text or ''):
+        w = m.group(0).split()[-1]
+        if w in skip or w.capitalize() in skip:
+            continue
+        out.add(w)
+    return out
+
+
+def _words(text):
+    return ' ' + ' '.join(re.sub(r"[^a-z0-9]+", " ", (text or '').lower()).split()) + ' '
+
+
 def _title_in_text(text):
-    from utils.myschool import novel_catalogue, novel_key
-    k = novel_key(text)
+    """The recommended text named in a question, matched as whole words
+    ("…based on The Lekki Headmaster…"); "Independence Day" is not "In Dependence"."""
+    from utils.myschool import novel_catalogue
+    w = _words(text)
     for c in novel_catalogue():
-        ck = novel_key(c['title'])
-        if ck and len(ck) >= 6 and ck in k:
+        t = _words(c['title']).strip()
+        if t.startswith('the '):
+            t = t[4:]
+        if len(t) >= 6 and (' %s ' % t) in w:
             return c['value']
     return None
 
@@ -190,7 +213,7 @@ def _find_elsewhere(subject, base, apply, session, cache, note, log, from_year):
             if str(q.exam_year or '')[:4].isdigit() and int(str(q.exam_year)[:4]) >= from_year
             or _title_in_text(q.question_text)]
     log('Looking for novel questions filed elsewhere among %d English questions from %d on…' % (len(pool), from_year))
-    found, unchecked = [], []
+    found, unchecked, page_no = [], [], []
     for i, q in enumerate(pool, 1):
         title = _title_in_text(q.question_text)
         if title:
@@ -200,6 +223,8 @@ def _find_elsewhere(subject, base, apply, session, cache, note, log, from_year):
             unchecked.append(q)
         elif v[0]:
             found.append((q, (v[1] or '').strip() or _book_for_year(q.exam_year), 'myschool page'))
+        else:
+            page_no.append(q)                 # page has no novel note: the school's character list may still tell
         if i % 50 == 0:
             log('  …%d/%d' % (i, len(pool)))
     # learn each book's character names from every confirmed novel question
@@ -210,11 +235,23 @@ def _find_elsewhere(subject, base, apply, session, cache, note, log, from_year):
         for n in _names(text):
             seen.setdefault((book or '').strip(), {}).setdefault(n, 0)
             seen[(book or '').strip()][n] += 1
-    names = {b: {n for n, c in d.items() if c >= 2} for b, d in seen.items() if b}
+    merged = {}
+    for b, d in seen.items():
+        if not b:
+            continue
+        key = next((k for k in merged if same_novel(k, b)), b)
+        for n, c in d.items():
+            merged.setdefault(key, {}).setdefault(n, 0)
+            merged[key][n] += c
+    names = {b: {n for n, c in d.items() if c >= 2} for b, d in merged.items()}
     for b, ns in names.items():
         if ns:
             log('  names learned for %s: %s' % (b, ', '.join(sorted(ns)[:25])))
     from utils.myschool import book_from_characters
+    for q in page_no:
+        book, known = _book_for_year(q.exam_year), book_from_characters(q.question_text)
+        if known and book and same_novel(known, book) and not _clearly_other(q.question_text):
+            found.append((q, known, 'known character'))
     for q in unchecked:
         book = _book_for_year(q.exam_year)
         known = book_from_characters(q.question_text)
@@ -227,7 +264,8 @@ def _find_elsewhere(subject, base, apply, session, cache, note, log, from_year):
         if hit and not _clearly_other(q.question_text):
             found.append((q, book, 'character ' + ', '.join(sorted(hit))))
     for q, title, why in found:
-        note('found in another section -> Novel', q, '%s (%s)' % (title or 'untitled', why))
+        book = (title or 'untitled').split(' — ')[0]
+        note('found in another section -> Novel: %s' % book, q, why)
         if apply:
             q.section = 'novel'
             if title:
