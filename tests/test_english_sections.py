@@ -308,3 +308,12 @@ def test_english_coded_placement_follows_wording_not_code():
     assert place('Abdullahi, having written extensively over the years', 'comprehension') == 'basic_grammar'
     assert place('Some question with no instruction', 'antonyms') == 'antonyms'
     assert place('Some passage question', 'cloze', cur='comprehension', passage=5) == 'cloze'
+
+
+def test_1978_80_wordings():
+    from utils.english_sections import rule_section as r
+    assert r('Choose the option that best conveys the meaning of the underlined portion in the following sentence; In the ma') == 'synonyms'
+    assert r('Choose the option that best convey the meaning of the underlined portion in each of the following sentence; I') == 'synonyms'
+    assert r('Choosing the word or phrase from A to E which has the same meaning as the underlined word or words in each sen') == 'synonyms'
+    assert r('Substitute for the underlined word in the following sentence the word that most closely expresses the opposite') == 'antonyms'
+    assert r('If my father had not arrived, I would have starved. This sentence means') == 'sentence_interpretation'

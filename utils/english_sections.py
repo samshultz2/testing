@@ -78,7 +78,8 @@ RULES = [
     ('rhymes', re.compile(r"\brhymes?\b|\brhyming\b", _I)),
     ('consonants', re.compile(r"consonant", _I)),
     ('vowels', re.compile(r"\bvowel|diphthong|monophthong", _I)),
-    ('antonyms', re.compile(r"opposite in meaning|most nearly opposite|\bantonym|opposite of the word", _I)),
+    ('antonyms', re.compile(r"opposite in meaning|most nearly opposite|\bantonym|opposite of the word|"
+                            r"expresses the opposite|opposite meaning", _I)),
     ('synonyms', re.compile(
         r"(?:nearest|closest|same|similar) in meaning to the (?:word|words|underlined|italicized|expression|phrase|word\(s\))|"
         r"nearest in meaning to the word|\bsynonym|"
@@ -86,10 +87,13 @@ RULES = [
         # "best express(es) the meaning of the phrase or word underlined"
         r"nearest (?:in )?meaning (?:to|of) the (?:underline[ds]?|word|phrase|expression)|"
         r"best express(?:es)? the meaning of the (?:word|phrase|expression)|"
-        r"meaning of the (?:word|phrase|expression)s?(?: or (?:word|phrase)s?)? underlined", _I)),
+        r"meaning of the (?:word|phrase|expression)s?(?: or (?:word|phrase)s?)? underlined|"
+        # 1978-80 papers: "best conveys the meaning of the underlined portion",
+        # "has the same meaning as the underlined word or words"
+        r"conveys? the meaning of the underlined|same meaning as the underlined", _I)),
     ('sentence_interpretation', re.compile(
         r"best explains? the (?:information|meaning|sentence)|information conveyed|interpretation of the sentence|"
-        r"best interpretation|the sentence (?:means|implies)|the statement (?:means|implies)|"
+        r"best interpretation|(?:the|this) sentence (?:means|implies)|(?:the|this) statement (?:means|implies)|"
         r"nearest in meaning to the (?:sentence|statement)|means that\b|is implied", _I)),
     ('basic_grammar', re.compile(
         r"best completes?|completes? (?:each of )?the (?:following )?(?:sentence|gap)|"
