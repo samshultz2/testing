@@ -173,6 +173,18 @@ _EXTRA_SECTIONS = {
 }
 
 
+# An imported syllabus may name a section differently from the app's built-in
+# key. "Reading text" (reading_text) is the recommended-novel slot: it is mapped
+# to the app's ``novel`` section so novel questions count, are drawn and are
+# filtered to the mock's chosen book exactly as for the built-in plan.
+SECTION_ALIASES = {'reading_text': 'novel', 'recommended_novel': 'novel', 'prescribed_text': 'novel'}
+
+
+def canon_section(section):
+    s = (section or '').strip()
+    return SECTION_ALIASES.get(s, s)
+
+
 def imported_blueprint(subject_name):
     """The blueprint from an admin-imported syllabus for this subject, or None.
 
@@ -189,7 +201,7 @@ def imported_blueprint(subject_name):
             if norm_subject(s.subject_name or (s.subject.name if s.subject else '')) == key:
                 secs = json.loads(s.blueprint)
                 if secs:
-                    return [_sec(x['section'], x.get('label', x['section']), int(x.get('count', 0)),
+                    return [_sec(canon_section(x['section']), x.get('label', x['section']), int(x.get('count', 0)),
                                  bool(x.get('passage')), int(x.get('per_passage') or 5)) for x in secs]
     except Exception:
         pass
@@ -207,6 +219,7 @@ def blueprint_for(subject_name, override=None):
         base = JAMB_BLUEPRINT.get(norm_subject(subject_name), DEFAULT_BLUEPRINT)
         sections = [dict(s) for s in base['sections']]
     if override:
+        override = {canon_section(k): v for k, v in override.items()}
         for s in sections:
             if s['section'] in override and override[s['section']] is not None:
                 try:

@@ -64,6 +64,8 @@ def _resolve_blueprint_section(node, by_id, valid_sections):
         seen.add(cur.id)
         bs = (cur.blueprint_section or '').strip()
         if bs:
+            from utils.jamb_blueprint import canon_section
+            bs = canon_section(bs)
             return bs if bs in valid_sections else None
         cur = by_id.get(cur.parent_id)
     return None

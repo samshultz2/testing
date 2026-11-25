@@ -1,0 +1,96 @@
+"""Use of English sections under an imported syllabus: Reading text = the novel
+slot, and questions re-filed by wording into Vowels / Basic grammar / …"""
+import json
+import uuid
+
+import pytest
+
+from models import db, Subject, MockJAMBQuestion
+from models.mock_jamb import MockJAMBSyllabus
+
+BP = [{"section": "comprehension", "label": "Comprehension passage", "count": 5, "passage": True, "per_passage": 5},
+      {"section": "cloze", "label": "Cloze passage", "count": 10, "passage": True, "per_passage": 10},
+      {"section": "reading_text", "label": "Reading text", "count": 5},
+      {"section": "sentence_interpretation", "label": "Sentence interpretation", "count": 5},
+      {"section": "antonyms", "label": "Antonyms", "count": 5},
+      {"section": "synonyms", "label": "Synonyms", "count": 5},
+      {"section": "basic_grammar", "label": "Basic grammar", "count": 10},
+      {"section": "vowels", "label": "Vowels", "count": 2},
+      {"section": "consonants", "label": "Consonants", "count": 2},
+      {"section": "rhymes", "label": "Rhymes", "count": 2},
+      {"section": "word_stress", "label": "Word stress", "count": 2},
+      {"section": "emphatic_stress", "label": "Emphatic stress", "count": 2}]
+
+
+def test_rule_section_wordings():
+    from utils.english_sections import rule_section as r
+    assert r('Choose the word that has the same vowel sound as the one underlined') == 'vowels'
+    assert r('Choose the word that has the same consonant sound as the underlined') == 'consonants'
+    assert r('Choose the option that rhymes with the given word') == 'rhymes'
+    assert r('Choose the word that has a different stress pattern from the others') == 'word_stress'
+    assert r('The word in capital letters has the emphatic stress. Choose the option to which the sentence relates') == 'emphatic_stress'
+    assert r('Choose the option opposite in meaning to the word in italics') == 'antonyms'
+    assert r('Choose the option nearest in meaning to the word in italics') == 'synonyms'
+    assert r('Choose the option that best explains the information conveyed in the sentence') == 'sentence_interpretation'
+    assert r('Choose the option that best completes the gap: He ____ to school') == 'basic_grammar'
+    assert r('Who is Mr Bepo?') is None
+
+
+@pytest.fixture
+def imported_english(app):
+    import utils.english_sections as es
+    with app.app_context():
+        subj = Subject.query.filter_by(name='English').first()
+        if subj is None:
+            subj = Subject(name='English', is_active=False); db.session.add(subj); db.session.flush()
+        syl = MockJAMBSyllabus(subject_id=subj.id, subject_name='English', code='T-ENG', blueprint=json.dumps(BP))
+        db.session.add(syl); db.session.commit()
+        es._CACHE.update(at=0, sec={})
+        yield subj
+        db.session.delete(syl); db.session.commit()
+        es._CACHE.update(at=0, sec={})
+
+
+def test_reading_text_is_the_novel_slot(app, imported_english):
+    from utils.jamb_blueprint import sections_for, blueprint_for
+    with app.app_context():
+        secs = {s['section']: s['label'] for s in sections_for('English')}
+        assert secs.get('novel') == 'Reading text' and 'reading_text' not in secs
+        bp = blueprint_for('English', {'reading_text': 7})          # old per-mock override key still applies
+        assert next(s for s in bp['sections'] if s['section'] == 'novel')['count'] == 7
+
+
+def test_sort_bank_files_into_imported_sections(app, imported_english):
+    from utils.english_sections import sort_bank
+    with app.app_context():
+        subj = imported_english
+        t = uuid.uuid4().hex[:5]
+
+        def q(text, sec):
+            return MockJAMBQuestion(mock_exam_id=None, subject_id=subj.id, section=sec, topic=None, exam_year='2020',
+                                    question_text=f'{text} {t}', option_a='a', option_b='b', option_c='c', option_d='d',
+                                    correct_option='A', marks=1)
+        rows = [q('Choose the word that has the same vowel sound as the one underlined: seat', 'oral'),
+                q('Choose the option that best completes the gap: He ____ to school daily', 'lexis_structure'),
+                q('Choose the option opposite in meaning to the word in italics', 'synonyms'),   # misfiled
+                q('Why was Mr Ayesoro transferred?', 'novel'),
+                q('He bought a typewriter with a view .... to type', 'antonyms'),               # dots = a gap
+                q('Lagos is a big city', 'oral')]                                                # no clue
+        db.session.add_all(rows); db.session.commit()
+        moves, _s, stuck = sort_bank(subj, apply=False, log=lambda *a: None)
+        assert db.session.get(MockJAMBQuestion, rows[0].id).section == 'oral'                   # dry run
+        sort_bank(subj, apply=True, log=lambda *a: None)
+        g = [db.session.get(MockJAMBQuestion, r.id).section for r in rows]
+        assert g[:5] == ['vowels', 'basic_grammar', 'antonyms', 'novel', 'basic_grammar']
+        assert g[5] == 'oral' and stuck['oral'] >= 1                                            # left for a person
+        for r in rows:
+            db.session.delete(db.session.get(MockJAMBQuestion, r.id))
+        db.session.commit()
+
+
+def test_classify_uses_imported_sections(app, imported_english):
+    from utils import myschool as ms
+    with app.app_context():
+        assert ms.classify('English', 'Choose the word that has the same vowel sound as the underlined')[0] == 'vowels'
+        assert ms.classify('English', 'Choose the option that best completes the gap: She ____ here')[0] == 'basic_grammar'
+        assert ms.classify('English', 'What did Mr Bepo tell the staff?', year=2025)[0] == 'novel'

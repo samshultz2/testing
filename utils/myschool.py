@@ -940,6 +940,39 @@ def _norm_apos(s):
 
 
 def classify(subject, text, year=None, novel_title=None):
+    """Keyword-match a question to (section, topic, subtopic); for English the
+    section is then fitted to the active blueprint from the question's wording
+    (see ``utils.english_sections``)."""
+    return _fit_english(subject, text, _classify_raw(subject, text, year, novel_title))
+
+
+def classify_confident(subject, text, year=None, novel_title=None):
+    """Like ``classify`` but only on a genuine match (no guessed section)."""
+    out = _classify_confident_raw(subject, text, year, novel_title)
+    if norm_subject(subject) == "english language" and out[0] is None:
+        try:
+            from utils.english_sections import rule_section, active_sections
+            r = rule_section(text)
+            act = active_sections(subject)
+            if r and (not act or r in act):
+                return (r, None, None)
+        except Exception:
+            pass
+    return _fit_english(subject, text, out)
+
+
+def _fit_english(subject, text, out):
+    if norm_subject(subject) != "english language" or not out or out[0] is None:
+        return out
+    try:
+        from utils.english_sections import fit_section
+        sec = fit_section(subject, out[0], text)
+    except Exception:
+        return out
+    return (sec, out[1], out[2]) if sec else (None, out[1], out[2])
+
+
+def _classify_raw(subject, text, year=None, novel_title=None):
     """Keyword-match a question to (section, topic, subtopic).
 
     For English, a question confidently classified into the Novel section has its
@@ -992,7 +1025,7 @@ def classify(subject, text, year=None, novel_title=None):
     return (sections[sum(ord(c) for c in (text or "")) % len(sections)], None, None)
 
 
-def classify_confident(subject, text, year=None, novel_title=None):
+def _classify_confident_raw(subject, text, year=None, novel_title=None):
     """Like ``classify`` but returns a match ONLY on a genuine keyword hit — no
     hash-based section fallback. Returns ``(section, topic, subtopic)`` or
     ``(None, None, None)`` when nothing matched. Used by the bank auto-tagger so a
