@@ -158,7 +158,9 @@ January February March April May June July August September October November Dec
 Wednesday Thursday Friday Saturday Sunday English Nigeria Nigerian Lagos Abuja God Allah Christmas
 Book Novel Chapter Author Writer Narrator Story Text Question Following Option Options Answer Based
 Life Changer Lekki Headmaster Last Days Forcados High School Sweet Sixteen Dependence Questions Schools
-Independence Paragraph Passage Sentence Students Teacher Teachers Principal'''.split())
+Independence Paragraph Passage Sentence Students Teacher Teachers Principal Black Day Group Heritage Hope
+Kingdom Museum United States America Britain London Africa African Ibadan Badagry Ajegunle Ikeja Lekki Island
+Victoria Yaba Ikoyi Japa School Church Mosque Hospital University College Bank Market Street Road State'''.split())
 
 
 def _book_words():

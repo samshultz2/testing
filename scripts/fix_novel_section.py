@@ -28,7 +28,8 @@ def main():
             print('No English Language subject found.'); return
         stats, samples = repair(subj, apply=apply, use_myschool=web, from_year=fy)
         print('\n' + ('APPLIED' if apply else 'DRY RUN - nothing changed. Re-run with --apply to save.'))
-        print('Checked via myschool page: %d, by wording: %d' % (stats.pop('checked_myschool', 0), stats.pop('checked_wording', 0)))
+        print('Checked via myschool page: %d, by the book named in it: %d, by wording: %d' % (
+            stats.pop('checked_myschool', 0), stats.pop('checked_title', 0), stats.pop('checked_wording', 0)))
         for kind, n in stats.most_common():
             print('\n%5d  %s' % (n, kind))
             for line in samples.get(kind, []):
