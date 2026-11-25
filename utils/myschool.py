@@ -148,6 +148,10 @@ NOVEL_CHARACTERS = {
         "weak": ["Seri", "Nike", "Kike", "Jide", "Kemi", "Tai", "Sola", "Audu", "Ibe", "Ignatius",
                  "Favour", "Ogo", "Grace", "Amos", "Adewale", "Gloss", "Mary", "Aje", "Egi"],
     },
+    "The Last Days at Forcados High School": {
+        "strong": ["Aliya", "Ansa", "Efua", "Forcados"],
+        "weak": ["Jimi"],
+    },
     "The Life Changer": {
         "strong": ["Ummi", "Bint", "Talle", "Teemah", "Labeeb", "Zainab", "Salma"],
         "weak": ["Omar", "Zara", "Kabir", "Hakeem", "Rabiu"],

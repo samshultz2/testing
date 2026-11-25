@@ -272,3 +272,14 @@ def test_sort_bank_files_novel_question_with_its_book(app):
             assert got.section == 'novel' and got.topic == "The Potter's Wheel — Chukwuemeka Ike"
         finally:
             db.session.delete(db.session.get(MockJAMBQuestion, q.id)); db.session.commit()
+
+
+def test_forcados_characters_and_emphatic_relates():
+    from utils.english_sections import rule_section as r, novel_by_characters as c, novel_book as b
+    forc = 'The Last Days at Forcados High School — A.H. Mohammed'
+    assert c('Ansa licked his lips and said furtively, look this is between you and me. Jimi would be an', '2016') == forc
+    assert c('Ansa licked his lips', '2023') is None            # not that book's years
+    assert c('Jimi went to the market ____', '2016') is None   # one common name only
+    assert b('In the novel, Aliya suffers body shaming from which of these characters?', '2019') == forc
+    assert b('In the novel, the boy was', '2022').startswith('The Life Changer')
+    assert r('Choose the option to which the given sentence relates My Boss has an amiable DISPOSITION') == 'emphatic_stress'

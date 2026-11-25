@@ -28,6 +28,28 @@ _NOVEL_SRC = re.compile(
 _NOVEL_ALIASES = {'the successes': 'The Successor'}
 
 
+def novel_by_characters(text, year=None):
+    """The recommended novel whose characters the question names, but only when
+    the question's year (if known) is one of that book's years -- so a common
+    name in a grammar sentence of another year doesn't pull it into Novel."""
+    from utils import myschool as ms
+    book = ms.book_from_characters(text)
+    if not book:
+        return None
+    if year and str(year).strip():
+        that_year = ms.novel_for_year(year)
+        if not that_year or not ms.same_novel(that_year, book):
+            return None
+    return book
+
+
+def novel_book(text, year=None):
+    """Best 'Title — Author' for a novel question: named in it, else from its
+    characters, else the recommended novel of its year."""
+    from utils import myschool as ms
+    return novel_source(text) or ms.book_from_characters(text) or ms.novel_for_year(year)
+
+
 def novel_source(text):
     """'Title — Author' named in a "based on <Author>'s <Title>" question, matched
     to the recommended-novel list when it's a known book; else None."""
@@ -47,7 +69,8 @@ RULES = [
     ('novel', NOVEL_CUE),
     ('emphatic_stress', re.compile(
         r"emphatic(?:ally)?\s+stress|emphatically stressed|in capital letters[^.?]{0,80}(?:stress|emphas|relates|answer)|"
-        r"(?:stress|emphasis)[^.?]{0,60}in capital letters|carries the (?:emphatic|main) stress", _I)),
+        r"(?:stress|emphasis)[^.?]{0,60}in capital letters|carries the (?:emphatic|main) stress|"
+        r"to which the (?:given )?sentence relates", _I)),
     ('word_stress', re.compile(
         r"primary stress|stressed syllable|stress pattern|correct(?:ly)? stress|wrong(?:ly)? stress|"
         r"stressed on the (?:first|second|third|fourth|last|final)|(?:first|second|third|last) syllable|"
@@ -156,6 +179,8 @@ def sort_bank(subject, apply=False, log=print, limit_samples=8):
                 q.section = 'novel'
             continue
         new = fit_section(subject.name, cur or None, q.question_text)
+        if new != 'novel' and 'novel' in active and novel_by_characters(q.question_text, q.exam_year):
+            new = 'novel'
         if new is None:
             if cur not in active:
                 k = cur or '(no section)'
@@ -176,7 +201,7 @@ def sort_bank(subject, apply=False, log=print, limit_samples=8):
             q.section = new
             if new == 'novel':
                 from utils import myschool as ms
-                book = novel_source(q.question_text)
+                book = novel_book(q.question_text, q.exam_year)
                 if book and (not (q.topic or '').strip() or ms.is_generic_novel_tag(q.topic)
                              or not any(ms.same_novel(q.topic, b['value']) for b in ms.novel_catalogue())):
                     q.topic = book
