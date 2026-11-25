@@ -123,10 +123,8 @@ def local_tag(subject, mode='untagged', year=None, threshold=_DEFAULT_THRESHOLD,
                 qt = ' '.join(filter(None, [row.question_text, row.option_a,
                                             row.option_b, row.option_c, row.option_d]))
                 sec = ms.classify_confident(subject.name, qt, year=row.exam_year)[0]
-                if sec in valid_sections:
-                    row.section = sec
-                elif draw:
-                    row.section = draw[sum(ord(c) for c in qt) % len(draw)]
+                if sec in valid_sections and sec != 'novel':
+                    row.section = sec      # never a guessed section
             pending += 1
         if pending >= _COMMIT_EVERY:
             db.session.commit(); pending = 0

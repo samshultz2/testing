@@ -94,3 +94,30 @@ def test_classify_uses_imported_sections(app, imported_english):
         assert ms.classify('English', 'Choose the word that has the same vowel sound as the underlined')[0] == 'vowels'
         assert ms.classify('English', 'Choose the option that best completes the gap: She ____ here')[0] == 'basic_grammar'
         assert ms.classify('English', 'What did Mr Bepo tell the staff?', year=2025)[0] == 'novel'
+
+
+def test_coded_tag_places_english_section_by_wording(app, imported_english):
+    """After a coded tag, an English question's section follows its wording;
+    Novel questions never move; nothing is guessed."""
+    from utils.mock_bank_coded_retag import place_section
+    from utils.jamb_blueprint import sections_for
+    with app.app_context():
+        valid = {s['section'] for s in sections_for('English')}
+
+        class R:
+            def __init__(self, text, sec):
+                self.question_text, self.section, self.exam_year = text, sec, '2020'
+                self.option_a = self.option_b = self.option_c = self.option_d = ''
+        node = type('N', (), {'blueprint_section': None, 'parent_id': None, 'id': -1})()
+        a = R('Choose the word that has the same vowel sound as the underlined', 'oral'); place_section(a, 'English', node, {}, valid)
+        b = R('Why was Mr Ayesoro transferred?', 'novel'); place_section(b, 'English', node, {}, valid)
+        c = R('Lagos is a big city', 'synonyms'); place_section(c, 'English', node, {}, valid)
+        assert (a.section, b.section, c.section) == ('vowels', 'novel', 'synonyms')
+
+
+def test_old_ai_retag_never_guesses_sections():
+    import inspect
+    import utils.mock_bank_ai_retag as ai
+    import utils.mock_bank_local_tag as lt
+    for mod in (ai, lt):
+        assert 'sum(ord(c)' not in inspect.getsource(mod)          # the old hash 'guess'

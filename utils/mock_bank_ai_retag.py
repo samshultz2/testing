@@ -103,6 +103,17 @@ def ai_retag(subject, year=None, max_questions=_MAX_DEFAULT):
     result = {'scanned': 0, 'topic_set': 0, 'still_untagged': 0, 'chunks': 0,
               'total': 0, 'capped': False, 'error': None}
 
+    # A subject with an imported, coded syllabus is tagged against THAT (stable
+    # codes, the same topics the syllabus page and the paper blueprint use),
+    # never the older built-in topic list.
+    from utils.mock_bank_coded_retag import coded_nodes, coded_retag
+    if coded_nodes(subject.id)[0]:
+        r = coded_retag(subject, year=year, mode='all', max_questions=max_questions)
+        result.update(scanned=r['scanned'], topic_set=r['tagged'], still_untagged=r['still_untagged'],
+                      chunks=r['chunks'], total=r['total'], capped=r['capped'], error=r['error'])
+        result['coded'] = True
+        return result
+
     cfg = _vision_config()
     if not cfg['installed']:
         result['error'] = 'not_installed'; return result
@@ -156,10 +167,8 @@ def ai_retag(subject, year=None, max_questions=_MAX_DEFAULT):
                 text = ' '.join(filter(None, [row.question_text, row.option_a,
                                               row.option_b, row.option_c, row.option_d]))
                 sec = ms.classify_confident(subject.name, text, year=row.exam_year)[0]
-                if sec in valid_sections:
-                    row.section = sec
-                elif draw:
-                    row.section = draw[sum(ord(c) for c in text) % len(draw)]
+                if sec in valid_sections and sec != 'novel':
+                    row.section = sec      # never a guessed section
         db.session.commit()
 
     result['still_untagged'] = result['scanned'] - result['topic_set']

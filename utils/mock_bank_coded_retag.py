@@ -71,6 +71,33 @@ def _resolve_blueprint_section(node, by_id, valid_sections):
     return None
 
 
+def place_section(row, subject_name, node, by_id, valid_sections):
+    """Set the paper section for a question just given a coded syllabus item:
+    the syllabus's curated mapping when there is one; for English, the question's
+    instruction wording ("same vowel sound", "opposite in meaning"…); otherwise
+    only repair a section that isn't in the paper at all, and only on a
+    confident match. Never a guess; Novel questions are never moved."""
+    from utils.jamb_blueprint import canon_section
+    if canon_section(row.section) == 'novel':
+        return
+    bp = _resolve_blueprint_section(node, by_id, valid_sections)
+    if bp:
+        row.section = bp
+        return
+    from utils import myschool as ms
+    text = ' '.join(filter(None, [row.question_text, row.option_a, row.option_b, row.option_c, row.option_d]))
+    if ms.norm_subject(subject_name) == 'english language':
+        from utils.english_sections import fit_section
+        sec = fit_section(subject_name, row.section, row.question_text)
+        if sec and sec in valid_sections:
+            row.section = sec
+        return
+    if row.section not in valid_sections:
+        sec = ms.classify_confident(subject_name, text, year=row.exam_year)[0]
+        if sec in valid_sections and sec != 'novel':
+            row.section = sec
+
+
 def _extract_json_array(text):
     if not text:
         return []
@@ -215,9 +242,7 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
             # the coded classification is more reliable than the free-text
             # keyword classifier that otherwise owns this field, so a confident
             # coded match should win.
-            bp_section = _resolve_blueprint_section(node, by_id, valid_sections)
-            if bp_section:
-                row.section = bp_section
+            place_section(row, subject.name, node, by_id, valid_sections)
             result['tagged'] += 1
         db.session.commit()
 

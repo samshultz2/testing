@@ -158,9 +158,8 @@ def apply_results(client, batch_id, subject, by_code, by_id):
         parent = by_id.get(node.parent_id)
         row.subtopic = (node.name or '')[:120] or None
         row.topic = ((parent.name if parent else node.name) or '')[:100] or None
-        bp_section = _resolve_blueprint_section(node, by_id, valid_sections)
-        if bp_section:
-            row.section = bp_section
+        from utils.mock_bank_coded_retag import place_section
+        place_section(row, subject.name, node, by_id, valid_sections)
         summary['tagged'] += 1
     db.session.commit()
     return summary
