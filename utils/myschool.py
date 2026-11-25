@@ -297,7 +297,7 @@ def _novel_from_listing_html(html):
         return None
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
-    for div in soup.select("div.bg-primary_accent"):
+    for div in soup.select(".bg-primary_accent"):
         strong = div.find("strong")
         if strong:
             txt = clean(strong.get_text(" ", strip=True))
@@ -1421,8 +1421,10 @@ def parse_detail(html):
     # instruction / reading passage / recommended-novel note — the shared stimulus
     # myschool renders in a ``prevent-copy`` block (never the stem or an option row).
     instruction, passage_text, novel_title, is_novel = "", "", None, False
-    for d in soup.select("div.prevent-copy"):
+    for d in soup.select(".prevent-copy"):      # a div, or the novel box — an <a> to the book's page
         if d.select_one("span.uppercase"):       # an option row → not an instruction
+            continue
+        if d.find_parent(class_="prevent-copy"):  # nested: the outer block is read already
             continue
         t = clean(d.get_text(" ", strip=True))
         if not t or t == stem:
@@ -1439,8 +1441,8 @@ def parse_detail(html):
         # prevent-copy block: find the smallest short block saying so, outside the
         # options and away from menus / links (myschool's "Novels" menu).
         best = None
-        for el in soup.find_all(["div", "p", "span", "section", "aside", "small", "em"]):
-            if el.find_parent(["nav", "header", "footer", "a", "ul", "li"]) or el.select_one("span.uppercase, h1"):
+        for el in soup.find_all(["div", "p", "span", "section", "aside", "small", "em", "a"]):
+            if el.find_parent(["nav", "header", "footer", "ul", "li"]) or el.select_one("span.uppercase, h1"):
                 continue
             t = clean(el.get_text(" ", strip=True))
             if not t or len(t) > 220 or t == stem or not _NOVEL_NOTE.search(t):

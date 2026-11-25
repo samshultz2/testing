@@ -757,3 +757,35 @@ def test_parse_detail_reads_from_the_novel_box():
     plain = _fixture('Choose the word nearest in meaning').replace(
         '<div class="card">', '<nav><a href="/classroom/novels">From the novel archive</a></nav><div class="card">')
     assert not ms.parse_detail(plain)['is_novel']
+
+
+_REAL_NOVEL_PAGE = """<div class="space-y-16 mb-6"><div class="space-y-8"><div><div class="flex gap-3">
+<a href="/classroom/english-language" class="mb-2 block"><span class="inline-flex rounded-full text-[#00527C] bg-[#EAF4FF] px-3 py-0.5 text-sm self-start"><!----> English Language <!----></span></a>
+<a href="/classroom/english-language?exam_type=jamb&amp;exam_year=2025" class="mb-2 block"><span class="inline-flex rounded-full px-3 py-0.5 text-sm uppercase self-start"><!----> jamb 2025 <!----></span></a></div><!---->
+<a href="/classroom/novels/the-lekki-headmaster" class="mb-2 bg-primary_accent rounded-2xl inline-block p-3 prevent-copy"> From the novel; <strong>The Lekki Headmaster</strong></a>
+<h1 class="mb-6 text-xl font-semibold"><p>What caused Mr Bepo's emotional breakdown during the school assembly?</p></h1><!----></div>
+<div class="space-y-1">
+<div class="flex gap-6 items-center rounded-lg px-4 border py-2 justify-between border-divider"><div class="flex items-center gap-6"><span class="uppercase font-medium">a</span><p class="font-medium">A student's rude behaviour</p></div><!----></div>
+<div class="flex gap-6 items-center rounded-lg px-4 border py-2 justify-between border-divider"><div class="flex items-center gap-6"><span class="uppercase font-medium">b</span><p class="font-medium">Financial troubles at the school</p></div><!----></div>
+<div class="flex gap-6 items-center rounded-lg px-4 border py-2 justify-between bg-[#DFFFEC] !border-[#0C5132]"><div class="flex items-center gap-6"><span class="uppercase font-medium">c</span><p class="font-medium">His upcoming relocation to the UK</p></div></div>
+<div class="flex gap-6 items-center rounded-lg px-4 border py-2 justify-between border-divider"><div class="flex items-center gap-6"><span class="uppercase font-medium">d</span><p class="font-medium">A conflict with the MD</p></div><!----></div></div>
+<div class="flex flex-col flex-wrap gap-6"><div class="bg-surface px-4 py-3 rounded-xl flex-1 space-y-1"><div class="flex justify-between items-center"><h4 class="font-semibold fancy-text text-sm"> Explanation </h4>
+<div class="flex gap-1 items-center text-xs"><span class="font-medium text-tx_tertiary">Correct Option</span></div><span class="font-semibold uppercase">c</span></div>
+<p class="text-tx_secondary"><p>Mr. Bepo's breakdown was due to internal conflict and pressure to leave Stardom Schools for the UK.</p></p></div></div></div></div>"""
+
+
+def test_parse_detail_real_2025_novel_page():
+    """The real markup a school sent: the book is in an <a class="... prevent-copy">
+    box linking to the novel, not a div."""
+    from utils import myschool as ms
+    p = ms.parse_detail(_REAL_NOVEL_PAGE)
+    assert p is not None
+    assert p['is_novel'] is True
+    assert p['novel_title'] == 'The Lekki Headmaster'
+    assert 'emotional breakdown' in p['stem']
+
+
+def test_listing_badge_as_a_link():
+    from utils import myschool as ms
+    html = '<a href="/classroom/novels/the-lekki-headmaster" class="bg-primary_accent rounded-2xl p-3"><strong>The Lekki Headmaster</strong></a>'
+    assert ms._novel_from_listing_html(html) == 'The Lekki Headmaster'
