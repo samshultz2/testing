@@ -16,14 +16,42 @@ _I = re.I
 _IPA_VOWEL = re.compile(r"/[^/\s]*(?:ɪ|iː|æ|ɑː|ɒ|ɔː|ʊ|uː|ʌ|ɜː|ə|eɪ|aɪ|ɔɪ|əʊ|aʊ|ɪə|eə|ʊə)[^/\s]*/")
 _IPA_CONS = re.compile(r"/[^/\s]*(?:θ|ð|ʃ|ʒ|tʃ|dʒ|ŋ|j|w|h|p|b|t|d|k|g|f|v|s|z|m|n|l|r)[^/\s]*/")
 
+# A question on the recommended novel ("This question is based on Chukwuemeka
+# Ike's The Potter's Wheel…", "In the novel, …", "According to the novel, …").
+NOVEL_CUE = re.compile(
+    r"(?:question|questions)\s+(?:is|are)\s+base[d]?\s+on\s+[A-Z][^.?]{0,40}?['’]s\s+[A-Z]|"
+    r"\b(?:in|from|according to) the novel\b|inferred from the novel", _I)
+_NOVEL_SRC = re.compile(
+    r"base[d]?\s+on\s+(?P<author>[A-Z][\w.\-]*(?:\s+[A-Z][\w.\-]*){0,3})['’]s\s+"
+    r"(?P<title>[A-Z][\w'’]*(?:\s+[\w'’]+){0,5}?)(?=\s*[.:,;?]|\s+(?:In|According|From|It|The\s+\w+\s+was|Who|What|Why|How)\b)")
+# misspelt titles seen in the bank -> the real book
+_NOVEL_ALIASES = {'the successes': 'The Successor'}
+
+
+def novel_source(text):
+    """'Title — Author' named in a "based on <Author>'s <Title>" question, matched
+    to the recommended-novel list when it's a known book; else None."""
+    from utils import myschool as ms
+    m = _NOVEL_SRC.search(text or '')
+    if not m:
+        return None
+    title = m.group('title').strip()
+    title = _NOVEL_ALIASES.get(title.lower(), title)
+    for b in ms.novel_catalogue():
+        if ms.same_novel(b['value'], title):
+            return b['value']
+    return '%s — %s' % (title, m.group('author').strip())
+
+
 RULES = [
+    ('novel', NOVEL_CUE),
     ('emphatic_stress', re.compile(
         r"emphatic(?:ally)?\s+stress|emphatically stressed|in capital letters[^.?]{0,80}(?:stress|emphas|relates|answer)|"
         r"(?:stress|emphasis)[^.?]{0,60}in capital letters|carries the (?:emphatic|main) stress", _I)),
     ('word_stress', re.compile(
         r"primary stress|stressed syllable|stress pattern|correct(?:ly)? stress|wrong(?:ly)? stress|"
         r"stressed on the (?:first|second|third|fourth|last|final)|(?:first|second|third|last) syllable|"
-        r"different stress|syllable (?:is|that is) stressed|which (?:word|syllable) (?:is|carries)[^?]{0,40}stress", _I)),
+        r"different stress|same (?:pattern of )?stress|syllable (?:is|that is) stressed|which (?:word|syllable) (?:is|carries)[^?]{0,40}stress", _I)),
     ('rhymes', re.compile(r"\brhymes?\b|\brhyming\b", _I)),
     ('consonants', re.compile(r"consonant", _I)),
     ('vowels', re.compile(r"\bvowel|diphthong|monophthong", _I)),
@@ -33,7 +61,7 @@ RULES = [
         r"nearest in meaning to the word|\bsynonym|"
         # older JAMB wordings: "nearest meaning to the word or phrase underlined",
         # "best express(es) the meaning of the phrase or word underlined"
-        r"nearest (?:in )?meaning to the (?:underline[ds]?|word|phrase|expression)|"
+        r"nearest (?:in )?meaning (?:to|of) the (?:underline[ds]?|word|phrase|expression)|"
         r"best express(?:es)? the meaning of the (?:word|phrase|expression)|"
         r"meaning of the (?:word|phrase|expression)s?(?: or (?:word|phrase)s?)? underlined", _I)),
     ('sentence_interpretation', re.compile(
@@ -42,7 +70,7 @@ RULES = [
         r"nearest in meaning to the (?:sentence|statement)|means that\b|is implied", _I)),
     ('basic_grammar', re.compile(
         r"best completes?|completes? (?:each of )?the (?:following )?(?:sentence|gap)|"
-        r"fill(?:s|ing|\(s\))? (?:in )?the (?:gap|blank)|"
+        r"fil{1,3}(?:s|ing)?(?:\(s\)|s\(s\))? (?:in )?the (?:gap|blank)|-{4,}|"
         r"(?:wrongly|correctly|incorrectly) spelt|spelling|correctly punctuated|punctuation|"
         r"most (?:appropriate|suitable)ly? (?:fills?|completes?)|question tag|correct (?:form|option) (?:of|to)|"
         r"grammatically correct|_{3,}|\.{4,}", _I)),
@@ -146,6 +174,12 @@ def sort_bank(subject, apply=False, log=print, limit_samples=8):
             lst.append('#%s %s | %s' % (q.id, q.exam_year or '----', (q.question_text or '')[:90].replace('\n', ' ')))
         if apply:
             q.section = new
+            if new == 'novel':
+                from utils import myschool as ms
+                book = novel_source(q.question_text)
+                if book and (not (q.topic or '').strip() or ms.is_generic_novel_tag(q.topic)
+                             or not any(ms.same_novel(q.topic, b['value']) for b in ms.novel_catalogue())):
+                    q.topic = book
         if apply and i % 200 == 0:
             db.session.commit()
     if apply:

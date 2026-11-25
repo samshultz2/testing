@@ -111,6 +111,8 @@ JAMB_ENGLISH_NOVELS = [
 OTHER_JAMB_NOVELS = [
     "Sweet Sixteen — Bolaji Abdullahi",
     "In Dependence — Sarah Ladipo Manyika",
+    "The Successor — Jerry Agada",
+    "The Potter's Wheel — Chukwuemeka Ike",
 ]
 
 

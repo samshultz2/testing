@@ -237,3 +237,38 @@ def test_older_jamb_wordings():
     assert r('In the question below choose the word(s) or phrase(s) which best fill(s) the gap(s) : The manager') == 'basic_grammar'
     assert r('Select the wrongly spelt word from the options below :') == 'basic_grammar'
     assert r('Choose the option nearest in meaning to the sentence: He is a wet blanket') == 'sentence_interpretation'
+
+
+def test_novel_stress_and_blank_wordings():
+    from utils.english_sections import rule_section as r, novel_source as n
+    t = "This question is based on Chukwuemeka Ike's The Potter's Wheel. In the novel, Nwomiko was"
+    assert r(t) == 'novel' and n(t) == "The Potter's Wheel — Chukwuemeka Ike"
+    t = "This questions are base on Jerry Agada's The successes It can be inferred from the novel that"
+    assert r(t) == 'novel' and n(t) == 'The Successor — Jerry Agada'
+    assert r('Select the word that has the same pattern of stress as the given word. Enormous') == 'word_stress'
+    assert r('Choose the option that has the same stress as the given word. apparent') == 'word_stress'
+    assert r('Shakespearian ------------------- are generally the victims of circumstance.') == 'basic_grammar'
+    assert r('From the options, choose the word(s) that best filll the gap. Mrs Godwin') == 'basic_grammar'
+    assert r('Choose the most appropriate option nearest in meaning of the underlined word.') == 'synonyms'
+    assert r('We have to iron out our difference at once?') is None
+    assert n('Choose the option opposite in meaning to the word in italics') is None
+
+
+def test_sort_bank_files_novel_question_with_its_book(app):
+    import uuid
+    from models import db, Subject, MockJAMBQuestion
+    from utils.english_sections import sort_bank
+    with app.app_context():
+        subj = Subject.query.filter_by(name='English').first() or Subject(name='English', is_active=False)
+        db.session.add(subj); db.session.flush()
+        q = MockJAMBQuestion(mock_exam_id=None, subject_id=subj.id, section='oral', exam_year='2013',
+                             question_text="This question is based on Chukwuemeka Ike's The Potter's Wheel. "
+                                           "Uke was conscripted because %s" % uuid.uuid4().hex[:6],
+                             option_a='a', option_b='b', option_c='c', option_d='d', correct_option='A', marks=1)
+        db.session.add(q); db.session.commit()
+        try:
+            sort_bank(subj, apply=True, log=lambda *a: None)
+            got = db.session.get(MockJAMBQuestion, q.id)
+            assert got.section == 'novel' and got.topic == "The Potter's Wheel — Chukwuemeka Ike"
+        finally:
+            db.session.delete(db.session.get(MockJAMBQuestion, q.id)); db.session.commit()
