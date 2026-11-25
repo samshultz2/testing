@@ -128,7 +128,8 @@ def test_english_novel_and_antonym_items_are_distinct(app):
         valid = {s['section'] for s in sections_for(subj.name)}
         novel_node = by_code['ENG.CMP.2.D']     # "Approved reading text"
         antonym_node = by_code['ENG.LEX.1.B']   # "Antonyms"
-        assert _resolve_blueprint_section(novel_node, by_id, valid) == 'reading_text'
+        # the syllabus's "reading_text" slot is the app's novel section
+        assert _resolve_blueprint_section(novel_node, by_id, valid) == 'novel'
         assert _resolve_blueprint_section(antonym_node, by_id, valid) == 'antonyms'
 
 
@@ -196,8 +197,8 @@ def test_english_blueprint_drives_selection(app):
         bp = blueprint_for('Use of English')     # alias resolves to english language
         assert bp['total'] == 60
         secs = {s['section'] for s in sections_for('English Language')}
-        assert {'comprehension', 'summary', 'cloze', 'reading_text',
-                'basic_grammar', 'vowels', 'emphatic_stress'} <= secs
+        assert {'comprehension', 'summary', 'cloze', 'novel',            # reading_text -> novel
+                'basic_grammar', 'vowels', 'emphatic_stress'} <= secs and 'reading_text' not in secs
 
 
 def test_bank_syllabus_route_imports_bundled(app):
