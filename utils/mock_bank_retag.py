@@ -34,7 +34,8 @@ def _target_ids(subject, mode, year=None):
     # syllabus classifier would overwrite (e.g. with "What the questions test")
     q = q.filter((MockJAMBQuestion.section.is_(None)) | (MockJAMBQuestion.section != 'novel'))
     if year:
-        q = q.filter(MockJAMBQuestion.exam_year == str(year))
+        from utils.mock_bank_retag import filter_years
+        q = filter_years(q, MockJAMBQuestion.exam_year, year)
     if mode != 'all':
         q = q.filter((MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
     return [row[0] for row in q.order_by(MockJAMBQuestion.id).all()]
@@ -110,3 +111,20 @@ def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=F
 
     return {'scanned': scanned, 'topic_set': topic_set, 'section_set': section_set,
             'section_ensured': section_ensured, 'still_untagged': scanned - topic_set}
+
+
+def year_values(year):
+    """``year`` may be one year, a list of years or None; return a clean list
+    of year strings (empty = all years)."""
+    if year is None:
+        return []
+    vals = year if isinstance(year, (list, tuple, set)) else [year]
+    return sorted({str(v).strip() for v in vals if str(v or '').strip()})
+
+
+def filter_years(q, column, year):
+    """Limit query ``q`` to the given year(s); no years leaves it unchanged."""
+    vals = year_values(year)
+    if not vals:
+        return q
+    return q.filter(column == vals[0]) if len(vals) == 1 else q.filter(column.in_(vals))

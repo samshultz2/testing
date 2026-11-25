@@ -1634,6 +1634,16 @@ def bank_syllabus_clear():
     return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
 
 
+
+def _years_label(years):
+    """'2025', '2024 & 2025', or '2021–2026 (4 years)' for flash messages."""
+    years = list(years or [])
+    if not years:
+        return ''
+    if len(years) <= 2:
+        return ' & '.join(years)
+    return f'{years[0]}–{years[-1]} ({len(years)} years)'
+
 @mock_jamb_bp.route('/bank/syllabus/retag', methods=['POST'])
 @login_required
 @csrf_protect
@@ -1647,14 +1657,15 @@ def bank_syllabus_retag():
     if not subject:
         flash('Pick a subject first.', 'error')
         return redirect(url_for('mock_jamb.bank_syllabus'))
-    year = (request.form.get('year') or '').strip() or None
+    from utils.mock_bank_retag import year_values
+    year = year_values(request.form.getlist('year')) or None   # one, several or all years
     exam_body = (request.form.get('exam_body') or '').strip() or None
     mode = 'untagged' if request.form.get('mode') == 'untagged' else 'all'
 
     res = coded_retag(subject, year=year, exam_body=exam_body, mode=mode,
                       model=(request.form.get('model') or '').strip() or None)
     err = res.get('error')
-    scope = ' '.join(filter(None, [exam_body, year]))
+    scope = ' '.join(filter(None, [exam_body, _years_label(year)]))
     scope = f' ({scope})' if scope else ''
     if err == 'no_key':
         flash('No Anthropic API key is set. Add one under Settings → AI Vision OCR to use AI tagging.', 'error')
@@ -1683,6 +1694,7 @@ def bank_syllabus_batch_retag():
     """Queue a batch AI-retag (Anthropic Message Batches API — 50% cheaper, async)
     to the coded syllabus. Runs in the background jobs worker."""
     from utils import jobs
+    from utils.mock_bank_retag import year_values
     subject_id = request.form.get('subject_id', type=int)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     if not subject:
@@ -1696,7 +1708,7 @@ def bank_syllabus_batch_retag():
     params = {
         'subject_id': subject_id,
         'model': (request.form.get('model') or '').strip(),
-        'year': (request.form.get('year') or '').strip() or None,
+        'year': year_values(request.form.getlist('year')) or None,
         'exam_body': (request.form.get('exam_body') or '').strip() or None,
         'force': request.form.get('force') == '1',       # re-tag already-coded too
         'phase': 'submit',

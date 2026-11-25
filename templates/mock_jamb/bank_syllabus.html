@@ -8,6 +8,23 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
+.yp{position:relative}
+.yp>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:.5rem;cursor:pointer;user-select:none}
+.yp>summary::-webkit-details-marker{display:none}
+.yp>summary i{color:var(--text-muted);font-size:.8rem;transition:transform .15s}
+.yp[open]>summary{border-color:var(--primary)}
+.yp[open]>summary i{transform:rotate(180deg)}
+.yp-pop{margin-top:.4rem;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-card);padding:.7rem;box-shadow:0 10px 30px rgba(15,23,42,.10)}
+.yp-quick{display:flex;gap:.35rem;flex-wrap:nowrap;align-items:center;margin-bottom:.6rem;min-width:0}
+.yp-quick .sy-chip{padding:.36rem .7rem}
+.yp-done{margin-left:auto;flex:none;border:0;background:none;color:var(--primary);font:inherit;font-weight:700;font-size:.85rem;padding:.35rem .5rem;cursor:pointer}
+.yp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(4.6rem,1fr));gap:.4rem;max-height:15rem;overflow-y:auto;overscroll-behavior:contain}
+.yp-y{position:relative;margin:0;cursor:pointer}
+.yp-y input{position:absolute;opacity:0;pointer-events:none}
+.yp-y span{display:flex;align-items:center;justify-content:center;min-height:2.5rem;border:1px solid var(--border-color);border-radius:10px;font-size:.88rem;font-weight:650;color:var(--text-secondary);font-variant-numeric:tabular-nums;transition:background .1s,border-color .1s}
+.yp-y:hover span{border-color:var(--primary);color:var(--primary)}
+.yp-y input:checked+span{background:var(--primary);border-color:var(--primary);color:#fff}
+.yp-y input:focus-visible+span{outline:2px solid var(--primary);outline-offset:2px}
 .sy-chips{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;max-width:100%;padding:.1rem 0}
 .sy-chips::-webkit-scrollbar{display:none}
 .sy-chip{flex:none;border:1px solid var(--border-color);background:var(--bg-card);border-radius:999px;padding:.36rem .8rem;font:inherit;font-size:.8rem;font-weight:650;color:var(--text-secondary);white-space:nowrap;text-decoration:none;cursor:pointer}
@@ -205,8 +222,25 @@
           </select></div>
         <div class="form-group"><label class="form-label">Exam type</label>
           <select name="exam_body" class="form-control"><option value="">All</option><option value="JAMB">JAMB</option><option value="WAEC">WAEC</option><option value="Both">Both</option></select></div>
-        <div class="form-group"><label class="form-label">Year</label>
-          <select name="year" class="form-control"><option value="">All years</option>{% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="form-group">
+        <span class="form-label" id="ypLabel">Years</span>
+        <details class="yp" id="yearPick">
+          <summary class="form-control" aria-labelledby="ypLabel ypSum"><span id="ypSum">All years</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+          <div class="yp-pop" role="group" aria-label="Years to tag">
+            <div class="yp-quick">
+              <button type="button" class="sy-chip" data-yp="all">All years</button>
+              {% if years|length > 2 %}<button type="button" class="sy-chip" data-yp="2">Latest 2</button>{% endif %}
+              {% if years|length > 5 %}<button type="button" class="sy-chip" data-yp="5">Latest 5</button>{% endif %}
+              <button type="button" class="yp-done" data-yp="done">Done</button>
+            </div>
+            <div class="yp-grid">
+              {% for y in years %}<label class="yp-y"><input type="checkbox" name="year" value="{{ y }}"><span>{{ y }}</span></label>{% endfor %}
+            </div>
+            {% if not years %}<p class="sy-note" style="margin:.4rem 0 0">No dated questions for this subject yet.</p>{% endif %}
+          </div>
+        </details>
+        <span class="form-hint">Tick one or more years. None ticked tags every year.</span>
       </div>
       <div class="form-group">
         <label class="checkbox-label"><input type="checkbox" name="force" id="retagForce" value="1">
@@ -252,6 +286,31 @@
     if (!m) { m = document.createElement('input'); m.type = 'hidden'; m.name = 'mode'; form.appendChild(m); }
     m.value = (force && force.checked) ? 'all' : 'untagged';
   }, true);
+
+  // Year picker: several years at once; the summary reads like a select.
+  (function(){
+    var box = document.getElementById('yearPick'); if (!box) return;
+    var sum = document.getElementById('ypSum');
+    var boxes = [].slice.call(box.querySelectorAll('input[name="year"]'));
+    function label(){
+      var on = boxes.filter(function(b){ return b.checked; }).map(function(b){ return b.value; });
+      if (!on.length) sum.textContent = 'All years';
+      else if (on.length <= 3) sum.textContent = on.join(', ');
+      else sum.textContent = on.length + ' years (' + on[on.length-1] + '–' + on[0] + ')';
+    }
+    box.addEventListener('change', label);
+    box.addEventListener('click', function(e){
+      var b = e.target.closest('[data-yp]'); if (!b) return;
+      var v = b.getAttribute('data-yp');
+      if (v === 'done') { box.open = false; return; }
+      var n = v === 'all' ? 0 : parseInt(v, 10);
+      boxes.forEach(function(c, i){ c.checked = i < n; });   // years are newest first
+      label();
+    });
+    document.addEventListener('click', function(e){ if (box.open && !box.contains(e.target)) box.open = false; });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && box.open) { box.open = false; box.querySelector('summary').focus(); } });
+    label();
+  })();
 
   // Menu links open (and scroll to) a panel.
   document.addEventListener('click', function(e){

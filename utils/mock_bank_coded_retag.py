@@ -195,7 +195,8 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
         MockJAMBQuestion.passage_id.is_(None),
         (MockJAMBQuestion.section.is_(None)) | (MockJAMBQuestion.section != 'novel'))   # keep Novel titles
     if year:
-        q = q.filter(MockJAMBQuestion.exam_year == str(year))
+        from utils.mock_bank_retag import filter_years
+        q = filter_years(q, MockJAMBQuestion.exam_year, year)
     if exam_body:
         q = q.filter(MockJAMBQuestion.exam_body == exam_body)
     if mode == 'untagged':
