@@ -79,8 +79,12 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12,
     session = ms._session() if use_myschool else None
     cache, stats, samples = {}, Counter(), {}
 
+    years = {}
+
     def note(kind, q, extra=''):
         stats[kind] += 1
+        y = str(q.exam_year or '')[:4] or 'no year'
+        years.setdefault(kind, Counter())[y] += 1
         lst = samples.setdefault(kind, [])
         if len(lst) < limit_samples:
             lst.append('#%s %s | %s%s' % (q.id, q.exam_year or '----', (q.question_text or '')[:80].replace('\n', ' '),
@@ -147,6 +151,7 @@ def repair(subject, apply=False, use_myschool=True, log=print, limit_samples=12,
         db.session.commit()
     if find_elsewhere:
         _find_elsewhere(subject, base, apply, session, cache, note, log, from_year)
+    samples['_years'] = years
     return stats, samples
 
 

@@ -30,8 +30,11 @@ def main():
         print('\n' + ('APPLIED' if apply else 'DRY RUN - nothing changed. Re-run with --apply to save.'))
         print('Checked via myschool page: %d, by the book named in it: %d, by wording: %d' % (
             stats.pop('checked_myschool', 0), stats.pop('checked_title', 0), stats.pop('checked_wording', 0)))
+        years = samples.pop('_years', {})
         for kind, n in stats.most_common():
             print('\n%5d  %s' % (n, kind))
+            if kind in years:
+                print('       by year: ' + ', '.join('%s: %d' % (y, c) for y, c in sorted(years[kind].items(), reverse=True)))
             for line in samples.get(kind, []):
                 print('       ' + line)
 
