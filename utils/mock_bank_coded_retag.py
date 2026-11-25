@@ -86,9 +86,24 @@ def _place_english(row, code_section, valid_sections):
         sec = 'novel'                     # the novel's characters, in one of its years
     if sec and sec in valid_sections:
         row.section = sec
+        if sec == 'novel':
+            _tag_novel_book(row)
         return
     if code_section and not (row.passage_id is None and code_section in _PASSAGE_SECTIONS):
         row.section = code_section
+
+
+def _tag_novel_book(row):
+    """A question just placed in Novel carries its book as the topic, so a mock
+    on that book draws it (unless it already names a real book)."""
+    from utils import myschool as ms
+    from utils.english_sections import novel_book
+    if (row.topic or '').strip() and not ms.is_generic_novel_tag(row.topic) and \
+            any(ms.same_novel(row.topic, b['value']) for b in ms.novel_catalogue()):
+        return
+    book = novel_book(row.question_text, row.exam_year)
+    if book:
+        row.topic = book
 
 
 def place_section(row, subject_name, node, by_id, valid_sections):

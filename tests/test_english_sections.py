@@ -292,8 +292,10 @@ def test_english_coded_placement_follows_wording_not_code():
          'sentence_interpretation', 'summary', 'synonyms', 'word_stress'}
 
     def place(text, code, cur='basic_grammar', year='2020', passage=None):
-        r = NS(question_text=text, section=cur, passage_id=passage, exam_year=year)
+        r = NS(question_text=text, section=cur, passage_id=passage, exam_year=year, topic='Comprehension')
         _place_english(r, code, V)
+        if r.section == 'novel':
+            assert r.topic.startswith('The Life Changer')
         return r.section
     assert place('Select the option that best explains the information conveyed in the sentence.',
                  'comprehension') == 'sentence_interpretation'
