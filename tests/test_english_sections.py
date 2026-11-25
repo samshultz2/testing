@@ -283,3 +283,26 @@ def test_forcados_characters_and_emphatic_relates():
     assert b('In the novel, Aliya suffers body shaming from which of these characters?', '2019') == forc
     assert b('In the novel, the boy was', '2022').startswith('The Life Changer')
     assert r('Choose the option to which the given sentence relates My Boss has an amiable DISPOSITION') == 'emphatic_stress'
+
+
+def test_english_coded_placement_follows_wording_not_code():
+    from types import SimpleNamespace as NS
+    from utils.mock_bank_coded_retag import _place_english
+    V = {'antonyms', 'basic_grammar', 'cloze', 'comprehension', 'emphatic_stress', 'novel',
+         'sentence_interpretation', 'summary', 'synonyms', 'word_stress'}
+
+    def place(text, code, cur='basic_grammar', year='2020', passage=None):
+        r = NS(question_text=text, section=cur, passage_id=passage, exam_year=year)
+        _place_english(r, code, V)
+        return r.section
+    assert place('Select the option that best explains the information conveyed in the sentence.',
+                 'comprehension') == 'sentence_interpretation'
+    assert place('Jide couldn\'t have said that. This means that Jide', 'basic_grammar',
+                 cur='sentence_interpretation') == 'sentence_interpretation'
+    assert place('Choose the option to which the given sentence relates My Boss has an amiable DISPOSITION',
+                 'basic_grammar', cur='emphatic_stress') == 'emphatic_stress'
+    assert place('Omar had ______ credits in the WAEC examination', 'comprehension', year='2022') == 'novel'
+    # no wording: the code decides, but never a reading section for a question with no passage
+    assert place('Abdullahi, having written extensively over the years', 'comprehension') == 'basic_grammar'
+    assert place('Some question with no instruction', 'antonyms') == 'antonyms'
+    assert place('Some passage question', 'cloze', cur='comprehension', passage=5) == 'cloze'

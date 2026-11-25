@@ -153,8 +153,8 @@ NOVEL_CHARACTERS = {
         "weak": ["Jimi"],
     },
     "The Life Changer": {
-        "strong": ["Ummi", "Bint", "Talle", "Teemah", "Labeeb", "Zainab", "Salma"],
-        "weak": ["Omar", "Zara", "Kabir", "Hakeem", "Rabiu"],
+        "strong": ["Ummi", "Bint", "Talle", "Teemah", "Labeeb", "Zainab", "Salma", "Omar"],
+        "weak": ["Zara", "Kabir", "Hakeem", "Rabiu"],
     },
 }
 _TITLE_WORD = r"(?:Mr|Mrs|Miss|Ms|Dr|Prof|Chief|Alhaji|Mallam|Malam|Aunty|Uncle|Madam)\.?\s+"

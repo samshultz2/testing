@@ -71,6 +71,26 @@ def _resolve_blueprint_section(node, by_id, valid_sections):
     return None
 
 
+_PASSAGE_SECTIONS = {'comprehension', 'cloze', 'summary'}
+
+
+def _place_english(row, code_section, valid_sections):
+    """Use of English: JAMB's instruction wording ("opposite in meaning", "the
+    information conveyed", "in capital letters"…) or the novel's characters say
+    the section reliably; the AI's syllabus code is only used when the wording
+    says nothing -- and never to put a question with no passage into a reading
+    (passage) section, which a mock can't draw."""
+    from utils.english_sections import rule_section, novel_by_characters
+    sec = rule_section(row.question_text)
+    if 'novel' in valid_sections and novel_by_characters(row.question_text, row.exam_year):
+        sec = 'novel'                     # the novel's characters, in one of its years
+    if sec and sec in valid_sections:
+        row.section = sec
+        return
+    if code_section and not (row.passage_id is None and code_section in _PASSAGE_SECTIONS):
+        row.section = code_section
+
+
 def place_section(row, subject_name, node, by_id, valid_sections):
     """Set the paper section for a question just given a coded syllabus item:
     the syllabus's curated mapping when there is one; for English, the question's
@@ -78,20 +98,17 @@ def place_section(row, subject_name, node, by_id, valid_sections):
     only repair a section that isn't in the paper at all, and only on a
     confident match. Never a guess; Novel questions are never moved."""
     from utils.jamb_blueprint import canon_section
+    from utils import myschool as ms
     if canon_section(row.section) == 'novel':
         return
     bp = _resolve_blueprint_section(node, by_id, valid_sections)
+    if ms.norm_subject(subject_name) == 'english language':
+        _place_english(row, bp, valid_sections)
+        return
     if bp:
         row.section = bp
         return
-    from utils import myschool as ms
     text = ' '.join(filter(None, [row.question_text, row.option_a, row.option_b, row.option_c, row.option_d]))
-    if ms.norm_subject(subject_name) == 'english language':
-        from utils.english_sections import fit_section
-        sec = fit_section(subject_name, row.section, row.question_text)
-        if sec and sec in valid_sections:
-            row.section = sec
-        return
     if row.section not in valid_sections:
         sec = ms.classify_confident(subject_name, text, year=row.exam_year)[0]
         if sec in valid_sections and sec != 'novel':
