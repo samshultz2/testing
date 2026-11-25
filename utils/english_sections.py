@@ -30,13 +30,20 @@ RULES = [
     ('antonyms', re.compile(r"opposite in meaning|most nearly opposite|\bantonym|opposite of the word", _I)),
     ('synonyms', re.compile(
         r"(?:nearest|closest|same|similar) in meaning to the (?:word|words|underlined|italicized|expression|phrase|word\(s\))|"
-        r"nearest in meaning to the word|\bsynonym", _I)),
+        r"nearest in meaning to the word|\bsynonym|"
+        # older JAMB wordings: "nearest meaning to the word or phrase underlined",
+        # "best express(es) the meaning of the phrase or word underlined"
+        r"nearest (?:in )?meaning to the (?:underline[ds]?|word|phrase|expression)|"
+        r"best express(?:es)? the meaning of the (?:word|phrase|expression)|"
+        r"meaning of the (?:word|phrase|expression)s?(?: or (?:word|phrase)s?)? underlined", _I)),
     ('sentence_interpretation', re.compile(
         r"best explains? the (?:information|meaning|sentence)|information conveyed|interpretation of the sentence|"
         r"best interpretation|the sentence (?:means|implies)|the statement (?:means|implies)|"
         r"nearest in meaning to the (?:sentence|statement)|means that\b|is implied", _I)),
     ('basic_grammar', re.compile(
-        r"best completes?|completes? (?:each of )?the (?:following )?(?:sentence|gap)|fill(?:s|ing)? (?:in )?the (?:gap|blank)|"
+        r"best completes?|completes? (?:each of )?the (?:following )?(?:sentence|gap)|"
+        r"fill(?:s|ing|\(s\))? (?:in )?the (?:gap|blank)|"
+        r"(?:wrongly|correctly|incorrectly) spelt|spelling|correctly punctuated|punctuation|"
         r"most (?:appropriate|suitable)ly? (?:fills?|completes?)|question tag|correct (?:form|option) (?:of|to)|"
         r"grammatically correct|_{3,}|\.{4,}", _I)),
 ]
@@ -123,7 +130,12 @@ def sort_bank(subject, apply=False, log=print, limit_samples=8):
         new = fit_section(subject.name, cur or None, q.question_text)
         if new is None:
             if cur not in active:
-                stuck[cur or '(no section)'] += 1
+                k = cur or '(no section)'
+                stuck[k] += 1
+                lst = samples.setdefault('stuck: ' + k, [])
+                if len(lst) < limit_samples:
+                    lst.append('#%s %s | %s' % (q.id, q.exam_year or '----',
+                                                (q.question_text or '')[:110].replace('\n', ' ')))
             continue
         if new == cur:
             continue

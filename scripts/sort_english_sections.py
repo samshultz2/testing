@@ -46,6 +46,8 @@ def main():
             print('\nLeft where they are - wording does not say which section (re-tag or edit by hand):')
             for k, n in stuck.most_common():
                 print('  %5d  in %s' % (n, k))
+                for line in samples.get('stuck: ' + k, []):
+                    print('         ' + line)
 
 
 if __name__ == '__main__':

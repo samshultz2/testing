@@ -227,3 +227,13 @@ def test_sort_passages_moves_passage_and_questions(app):
             for q in qs:
                 db.session.delete(db.session.get(MockJAMBQuestion, q.id))
             db.session.delete(db.session.get(MockJAMBPassage, p.id)); db.session.commit()
+
+
+def test_older_jamb_wordings():
+    from utils.english_sections import rule_section as r
+    assert r('Choose the option nearest in meaning to the underline statement or word. My Headmaster') == 'synonyms'
+    assert r('In the question below select the option which best express the meaning of the phrase or word underlined : The') == 'synonyms'
+    assert r('In the question below choose the option nearest meaning to the word or phrase underlined : If Garba') == 'synonyms'
+    assert r('In the question below choose the word(s) or phrase(s) which best fill(s) the gap(s) : The manager') == 'basic_grammar'
+    assert r('Select the wrongly spelt word from the options below :') == 'basic_grammar'
+    assert r('Choose the option nearest in meaning to the sentence: He is a wet blanket') == 'sentence_interpretation'
