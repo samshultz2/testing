@@ -139,3 +139,90 @@ def sort_bank(subject, apply=False, log=print, limit_samples=8):
     if apply:
         db.session.commit()
     return moves, samples, stuck
+
+
+# A summary question: what the passage / a paragraph is mainly about.
+SUMMARY = re.compile(
+    r"summar(?:y|ise|ize|ises|izes|ising|izing)|main (?:idea|point|theme|concern|argument|message)|"
+    r"central (?:idea|theme|point|message)|(?:best|most suitable|most appropriate|suitable|appropriate) title|"
+    r"(?:passage|paragraph|writer|author)(?:'s)? (?:is )?(?:mainly|chiefly|primarily|essentially) "
+    r"(?:about|concerned)|the gist", _I)
+
+
+def passage_section(body, stems):
+    """The section a whole reading passage belongs in, from its text and all its
+    questions' stems: 'cloze', 'summary' or 'comprehension'. Summary needs most
+    of its questions to be summary questions (one "best title" question in an
+    ordinary passage doesn't make it a summary passage)."""
+    from utils import myschool as ms
+    stems = [s or '' for s in stems]
+    bare = sum(1 for s in stems if not s.strip() or ms._BARE_STEM.match(s.strip()))
+    if ms.passage_kind(body, '') == 'cloze' or (stems and bare * 2 >= len(stems)):
+        return 'cloze'
+    if stems and sum(1 for s in stems if SUMMARY.search(s)) * 2 > len(stems):
+        return 'summary'
+    return 'comprehension'
+
+
+def sort_passages(subject, apply=False, limit_samples=8):
+    """Re-file the English bank's reading passages (and every question on them)
+    as cloze / summary / comprehension. Novel passages are left alone. Only
+    sections that exist in the subject's blueprint are used. Returns
+    (moves Counter, samples {key: [lines]})."""
+    from collections import Counter
+    from models import db, MockJAMBPassage, MockJAMBQuestion
+    from utils.jamb_blueprint import canon_section
+    active = active_sections(subject.name)
+    moves, samples = Counter(), {}
+    passages = (MockJAMBPassage.query.filter(MockJAMBPassage.subject_id == subject.id,
+                                             MockJAMBPassage.mock_exam_id.is_(None))
+                .order_by(MockJAMBPassage.id).all())
+    for p in passages:
+        qs = MockJAMBQuestion.query.filter(MockJAMBQuestion.passage_id == p.id).all()
+        if canon_section(p.section) == 'novel' or any(canon_section(q.section) == 'novel' for q in qs):
+            continue
+        new = passage_section(p.body, [q.question_text for q in qs])
+        if active and new not in active:
+            new = 'comprehension' if 'comprehension' in active else None
+        if not new:
+            continue
+        changed_q = [q for q in qs if (q.section or '') != new]
+        if (p.section or '') == new and not changed_q:
+            continue
+        key = '%s -> %s' % (p.section or '(no section)', new)
+        moves[key] += 1
+        lst = samples.setdefault(key, [])
+        if len(lst) < limit_samples:
+            lst.append('passage #%s (%d q) | %s' % (p.id, len(qs), (p.body or '')[:90].replace('\n', ' ')))
+        if apply:
+            p.section = new
+            p.kind = new
+            for q in changed_q:
+                q.section = new
+    if apply:
+        db.session.commit()
+    return moves, samples
+
+
+def grammar_audit(subject, limit_samples=12):
+    """How the Basic grammar section was filled: questions whose wording says
+    'complete the sentence / fill the gap' vs ones only put there by default
+    (old 'Lexis and Structure' with no clear instruction). Returns
+    (by_wording, by_default, samples_of_default)."""
+    from models import MockJAMBQuestion
+    rows = (MockJAMBQuestion.query.filter(MockJAMBQuestion.subject_id == subject.id,
+                                          MockJAMBQuestion.mock_exam_id.is_(None),
+                                          MockJAMBQuestion.passage_id.is_(None),
+                                          MockJAMBQuestion.section == 'basic_grammar')
+            .order_by(MockJAMBQuestion.id).all())
+    by_wording = by_default = 0
+    samples = []
+    for q in rows:
+        if rule_section(q.question_text) == 'basic_grammar':
+            by_wording += 1
+        else:
+            by_default += 1
+            if len(samples) < limit_samples:
+                samples.append('#%s %s | %s' % (q.id, q.exam_year or '----',
+                                                (q.question_text or '')[:110].replace('\n', ' ')))
+    return by_wording, by_default, samples

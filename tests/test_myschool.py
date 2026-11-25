@@ -239,10 +239,13 @@ def test_parse_detail_captures_passage_and_kind():
     assert 'passage' in p['flags']
     assert p['passage_text'].startswith('The victory of the small Greek')  # lead-in gone
     assert ms.passage_kind(p['passage_text'], p['stem']) == 'comprehension'
-    # cloze: a blank in the stem makes it a cloze passage
+    # a blank in an ordinary stem is still comprehension ("According to the passage,
+    # Athens had ____") -- only the passage's own gaps, the cloze instruction or a
+    # bare gap-number stem make it cloze
     q = ms.parse_detail(_fixture("Athens had ________ the Greek states.",
                                  instruction=lead + _PASSAGE))
-    assert ms.passage_kind(q['passage_text'], q['stem']) == 'cloze'
+    assert ms.passage_kind(q['passage_text'], q['stem']) == 'comprehension'
+    assert ms.passage_kind(q['passage_text'], '...1...') == 'cloze'
 
 
 def test_on_jamb_flags_school_only_subjects():

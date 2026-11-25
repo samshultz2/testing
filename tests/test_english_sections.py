@@ -171,3 +171,59 @@ def test_resection_from_codes_without_ai(app):
         for n in MockJAMBSyllabusNode.query.filter_by(syllabus_id=syl.id).all():
             n.blueprint_section = saved.get(n.id)
         db.session.commit()
+
+
+def test_cloze_gap_styles():
+    from utils import myschool as ms
+    for gap in ('...{n}...', '…{n}…', '-{n}-', '__{n}__', '[{n}]', '({n})', '{n}.______'):
+        body = ' '.join('The farmer went %s to the market.' % gap.format(n=n) for n in range(1, 5))
+        assert ms.passage_kind(body) == 'cloze', gap
+    assert ms.passage_kind('In the passage below, the numbered gaps indicate missing words. '
+                           'The farmer went to the market.') == 'cloze'
+    plain = 'The farmer went to the market in 1990-1995 and sold 12 yams on 2 May.'
+    assert ms.passage_kind(plain) == 'comprehension'
+    assert ms.passage_kind(plain, 'According to the passage, the farmer was ______') == 'comprehension'
+
+
+def test_passage_section():
+    from utils.english_sections import passage_section
+    body = 'Long ago, the people of the village gathered to choose a new chief.'
+    assert passage_section(body, ['According to the passage, the people', 'The word "gathered" means']) == 'comprehension'
+    assert passage_section(body, ['...1...', '...2...', '3']) == 'cloze'
+    assert passage_section(body, ['Which of the following best summarises paragraph 1?',
+                                  'The main point of the passage is that',
+                                  'According to the passage, the chief']) == 'summary'
+    # one "best title" question doesn't make a summary passage
+    assert passage_section(body, ['The best title for the passage is', 'The chief was',
+                                  'The villagers were', 'The word "gathered" means']) == 'comprehension'
+
+
+def test_sort_passages_moves_passage_and_questions(app):
+    import uuid
+    from models import db, Subject, MockJAMBPassage, MockJAMBQuestion
+    from utils.english_sections import sort_passages
+    with app.app_context():
+        subj = Subject.query.filter_by(name='English').first() or Subject(name='English', is_active=False)
+        db.session.add(subj); db.session.flush()
+        tag = uuid.uuid4().hex[:6]
+        body = ' '.join('Word %s ...%d... more text.' % (tag, n) for n in range(1, 6))
+        p = MockJAMBPassage(mock_exam_id=None, subject_id=subj.id, section='comprehension',
+                            kind='comprehension', body=body)
+        db.session.add(p); db.session.flush()
+        qs = [MockJAMBQuestion(mock_exam_id=None, subject_id=subj.id, passage_id=p.id,
+                               section='comprehension' if n % 2 else 'cloze',
+                               question_text='...%d...' % n, option_a='a', option_b='b',
+                               option_c='c', option_d='d', correct_option='A', marks=1)
+              for n in range(1, 6)]
+        db.session.add_all(qs); db.session.commit()
+        try:
+            moves, samples = sort_passages(subj, apply=False)
+            assert moves.get('comprehension -> cloze', 0) >= 1
+            assert db.session.get(MockJAMBPassage, p.id).section == 'comprehension'   # dry run
+            sort_passages(subj, apply=True)
+            assert db.session.get(MockJAMBPassage, p.id).section == 'cloze'
+            assert {db.session.get(MockJAMBQuestion, q.id).section for q in qs} == {'cloze'}
+        finally:
+            for q in qs:
+                db.session.delete(db.session.get(MockJAMBQuestion, q.id))
+            db.session.delete(db.session.get(MockJAMBPassage, p.id)); db.session.commit()

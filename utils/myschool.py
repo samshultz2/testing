@@ -246,7 +246,19 @@ def novel_for_year(year):
 # for Comprehension/Cloze it holds the shared reading passage. Both let us tag and
 # group English questions faithfully, server-side.
 _NOVEL_NOTE = re.compile(r"based on .*\bnovel\b|from the novel|recommended (?:novel|text)", re.I)
-_CLOZE_GAP = re.compile(r"_{3,}|\(\s*\d{1,2}\s*\)")
+# A numbered cloze gap however it is printed: "...1...", "…1…", "-1-", "__1__",
+# "[1]", "(1)", "1._____" — or an unnumbered run of underscores.
+_CLOZE_GAP = re.compile(
+    r"_{3,}"
+    r"|\(\s*\d{1,2}\s*\)|\[\s*\d{1,2}\s*\]"
+    r"|(?:\.{2,}|…|-{1,3}|_{1,})\s*\d{1,2}\s*(?:\.{2,}|…|-{1,3}|_{1,})"
+    r"|\b\d{1,2}\s*\.?\s*(?:\.{4,}|_{3,})")
+# The instruction JAMB prints above a cloze passage.
+CLOZE_INSTRUCTION = re.compile(
+    r"numbered (?:gaps?|spaces?|blanks?)|gaps? (?:in the (?:following )?passage|indicates?)|"
+    r"fill (?:in )?(?:each of )?the (?:numbered )?(?:gaps?|blanks?|spaces?)|cloze", re.I)
+# A cloze item's own stem is just its gap: "...1...", "1", "(1)" or nothing.
+_BARE_STEM = re.compile(r"^[\s.\-_…()\[\]\d]*$")
 
 
 def _novel_title_from_note(text):
@@ -260,14 +272,18 @@ def _novel_title_from_note(text):
 
 
 def passage_kind(passage_text, stem=""):
-    """Classify a reading stimulus as a JAMB ``cloze`` passage (gaps to fill) or
-    ordinary ``comprehension``. A cloze question's stem is itself a sentence with
-    a blank, so a blank in the stem is the surest per-question signal; a passage
-    body dense with numbered gaps counts too."""
-    if re.search(r"_{3,}|\.\.\.\.+", stem or ""):
+    """Classify a reading stimulus as a JAMB ``cloze`` passage (numbered gaps to
+    fill) or ordinary ``comprehension``. The passage decides: three or more gaps
+    in its body, or the cloze instruction. A cloze item's stem is usually just
+    its gap number, so a bare stem counts too. A blank inside an ordinary stem
+    does NOT ("According to the passage, the farmer was ____" is comprehension)."""
+    body = passage_text or ""
+    if len(_CLOZE_GAP.findall(body)) >= 3 or CLOZE_INSTRUCTION.search(body[:400]):
         return "cloze"
-    gaps = len(_CLOZE_GAP.findall(passage_text or ""))
-    return "cloze" if gaps >= 3 else "comprehension"
+    st = (stem or "").strip()
+    if st and _BARE_STEM.match(st):
+        return "cloze"
+    return "comprehension"
 
 
 _PASSAGE_LEADIN = re.compile(

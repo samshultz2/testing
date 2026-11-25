@@ -190,6 +190,7 @@ def _process_one(cell, qid, state, session):
         sec = ms.passage_kind(p['passage_text'], p['stem'])   # 'comprehension' | 'cloze'
         top, sub = None, None
         passage = _get_or_create_passage(sid, sec, p['passage_text'])
+        sec = passage.section or sec          # every question of one passage in one section
     else:
         sec, top, sub = ms.classify(cell['subject'], p['stem'] + ' ' + ' '.join(p['options']),
                                     year=cell['year'], novel_title=set_text)
