@@ -189,3 +189,31 @@ def test_elsewhere_character_found_even_when_page_says_no(app, monkeypatch):
         assert q.section == 'novel' and 'Lekki' in q.topic
         assert g.section == 'lexis_structure'
         db.session.delete(q); db.session.delete(g); db.session.commit()
+
+
+def test_real_lekki_questions_found_in_antonyms(app, monkeypatch):
+    """Real 2025 myschool questions a school found filed under Antonyms; their
+    pages carry no novel note, so only the character list identifies them."""
+    from utils import novel_repair
+    monkeypatch.setattr(novel_repair, '_myschool_verdict', lambda *a, **k: (False, None))
+    texts = ['How much was the boarding house fee per session at Stardom before it was reduced?',
+             'Why is Mr. Bepo reluctant to relocate to the United Kingdom?',
+             'Where does Bepo live?',
+             'Why was Mr Ayesoro transferred from his teaching role?',
+             'What is the primary reason Mr Bepo organises excursions for the students at Stardom?',
+             'Why was Mr Bepo moved during his visit to the Black Heritage Museum?']
+    with app.app_context():
+        subj = _english()
+        t = uuid.uuid4().hex[:5]
+        rows = []
+        for i, x in enumerate(texts):
+            q = _q(subj.id, f'{x} {t}', 'antonyms', 'What the questions test', year='2025')
+            q.source, q.source_ref = 'myschool', str(88000 + i)
+            rows.append(q)
+        db.session.add_all(rows); db.session.commit()
+        novel_repair.repair(subj, apply=True, use_myschool=True, log=lambda *a: None, from_year=2025)
+        for q in rows:
+            q = db.session.get(MockJAMBQuestion, q.id)
+            assert q.section == 'novel' and 'Lekki' in q.topic, q.question_text
+            db.session.delete(q)
+        db.session.commit()
