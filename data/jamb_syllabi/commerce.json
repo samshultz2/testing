@@ -30,7 +30,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "OCC",
@@ -54,7 +55,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "PRD",
@@ -82,7 +84,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "TRD",
@@ -126,7 +129,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "PSG",
@@ -154,7 +158,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "AID",
@@ -194,7 +199,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "BUN",
@@ -230,7 +236,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "business"
     },
     {
       "code": "FIN",
@@ -262,7 +269,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "finance"
     },
     {
       "code": "TAS",
@@ -286,7 +294,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "business"
     },
     {
       "code": "MON",
@@ -310,7 +319,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "finance"
     },
     {
       "code": "STK",
@@ -338,7 +348,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "finance"
     },
     {
       "code": "MGT",
@@ -370,7 +381,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "business"
     },
     {
       "code": "MKT",
@@ -406,7 +418,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "business"
     },
     {
       "code": "LAW",
@@ -442,7 +455,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "business"
     },
     {
       "code": "CMX",
@@ -478,7 +492,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "trade"
     },
     {
       "code": "ENV",
@@ -502,7 +517,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "business"
     }
   ]
 }

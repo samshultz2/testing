@@ -121,3 +121,53 @@ def test_old_ai_retag_never_guesses_sections():
     import utils.mock_bank_local_tag as lt
     for mod in (ai, lt):
         assert 'sum(ord(c)' not in inspect.getsource(mod)          # the old hash 'guess'
+
+
+def test_bundled_syllabi_map_every_sectioned_subject():
+    """Every bundled syllabus whose subject has paper sections maps each of its
+    sections (or all their topics) to one, so coded tags give a section."""
+    import glob
+    from utils.jamb_blueprint import JAMB_BLUEPRINT, _EXTRA_SECTIONS, norm_subject
+    for f in glob.glob('data/jamb_syllabi/*.json'):
+        d = json.load(open(f))
+        key = norm_subject(d.get('subject') or f.split('/')[-1][:-5].replace('_', ' '))
+        has_sections = bool(d.get('blueprint')) or key in JAMB_BLUEPRINT or _EXTRA_SECTIONS.get(key)
+        if not has_sections or key == 'english language':        # English: by wording
+            continue
+        for s in d['sections']:
+            assert s.get('blueprint_section') or all(t.get('blueprint_section') for t in s.get('topics', [])), (f, s['code'])
+
+
+def test_resection_from_codes_without_ai(app):
+    """A coded Biology question in the wrong section is moved by its code alone."""
+    from utils.jamb_syllabus_import import import_syllabus
+    from utils.syllabus_sections import resection, sync_mappings
+    from models import MockJAMBSyllabusNode
+    with app.app_context():
+        subj = Subject.query.filter_by(name='Biology').first()
+        if subj is None:
+            subj = Subject(name='Biology', is_active=True); db.session.add(subj); db.session.commit()
+        if not MockJAMBSyllabus.query.filter_by(subject_id=subj.id).first():
+            import_syllabus(subj, open('data/jamb_syllabi/biology.json').read(), fmt='json')
+        syl = MockJAMBSyllabus.query.filter_by(subject_id=subj.id).first()
+        # forget the mappings, as on a server that imported before they existed
+        nodes = MockJAMBSyllabusNode.query.filter_by(syllabus_id=syl.id).all()
+        saved = {n.id: n.blueprint_section for n in nodes}
+        for n in nodes:
+            n.blueprint_section = None
+        db.session.commit()
+        code = next(n.code for n in nodes if n.code.endswith('FRM.2'))          # Nutrition
+        q = MockJAMBQuestion(mock_exam_id=None, subject_id=subj.id, section='ecology', syllabus_item_code=code,
+                             question_text='Which enzyme digests starch? ' + uuid.uuid4().hex[:5], option_a='a',
+                             option_b='b', option_c='c', option_d='d', correct_option='A', marks=1)
+        db.session.add(q); db.session.commit()
+        assert sync_mappings(subj) > 0
+        moves, _s = resection(subj, apply=False)
+        assert db.session.get(MockJAMBQuestion, q.id).section == 'ecology'           # dry run
+        assert moves['ecology -> nutrition'] >= 1
+        resection(subj, apply=True)
+        assert db.session.get(MockJAMBQuestion, q.id).section == 'nutrition'
+        db.session.delete(db.session.get(MockJAMBQuestion, q.id))
+        for n in MockJAMBSyllabusNode.query.filter_by(syllabus_id=syl.id).all():
+            n.blueprint_section = saved.get(n.id)
+        db.session.commit()

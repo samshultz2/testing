@@ -38,7 +38,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "DENT",
@@ -78,7 +79,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "ETH",
@@ -106,7 +108,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "CASH",
@@ -130,7 +133,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "BANK",
@@ -162,7 +166,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "SOLE",
@@ -186,7 +191,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "final"
     },
     {
       "code": "STOCK",
@@ -210,7 +216,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "CTRL",
@@ -234,7 +241,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "INCM",
@@ -266,7 +274,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     },
     {
       "code": "MANF",
@@ -294,7 +303,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "final"
     },
     {
       "code": "NPO",
@@ -322,7 +332,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "final"
     },
     {
       "code": "DEPT",
@@ -350,7 +361,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "specialised"
     },
     {
       "code": "BRAN",
@@ -382,7 +394,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "specialised"
     },
     {
       "code": "JV",
@@ -410,7 +423,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "specialised"
     },
     {
       "code": "PART",
@@ -446,7 +460,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "specialised"
     },
     {
       "code": "COMP",
@@ -478,7 +493,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "specialised"
     },
     {
       "code": "PUB",
@@ -522,7 +538,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "specialised"
     },
     {
       "code": "IT",
@@ -554,7 +571,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "principles"
     }
   ]
 }

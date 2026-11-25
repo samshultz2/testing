@@ -68,7 +68,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "practical"
     },
     {
       "code": "PHYS",
@@ -318,7 +319,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "physical"
     },
     {
       "code": "HUM",
@@ -410,7 +412,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "human"
     },
     {
       "code": "REG",
@@ -494,7 +497,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "regional"
     }
   ]
 }

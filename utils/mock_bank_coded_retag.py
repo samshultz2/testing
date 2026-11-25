@@ -175,6 +175,11 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
     if not cfg['has_key']:
         result['error'] = 'no_key'; return result
 
+    try:                                   # latest topic -> paper-section mappings first
+        from utils.syllabus_sections import sync_mappings
+        sync_mappings(subject)
+    except Exception:
+        pass
     by_code, _syll = coded_nodes(subject.id)
     if not by_code:
         result['error'] = 'no_syllabus'; return result

@@ -235,7 +235,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "concepts"
     },
     {
       "code": "PDN",
@@ -315,7 +316,8 @@
               "code": "PDN.4.A",
               "name": "Clifford (1922), Richards (1946), Macpherson (1951), Lyttleton (1954) and Independence (1960) Constitutions - features, merits and demerits"
             }
-          ]
+          ],
+          "blueprint_section": "constitution"
         },
         {
           "code": "PDN.5",
@@ -325,7 +327,8 @@
               "code": "PDN.5.A",
               "name": "1963, 1979, 1989 and 1999 (as amended) - characteristics and shortcomings"
             }
-          ]
+          ],
+          "blueprint_section": "constitution"
         },
         {
           "code": "PDN.6",
@@ -343,7 +346,8 @@
               "code": "PDN.6.C",
               "name": "The Judiciary - structure, functions and workings"
             }
-          ]
+          ],
+          "blueprint_section": "constitution"
         },
         {
           "code": "PDN.7",
@@ -453,7 +457,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "nigeria"
     },
     {
       "code": "FOR",
@@ -531,7 +536,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "international"
     },
     {
       "code": "IORG",
@@ -547,7 +553,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "international"
     }
   ]
 }

@@ -176,7 +176,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "atomic_bonding"
     },
     {
       "code": "SOL",
@@ -200,7 +201,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "states_gas"
     },
     {
       "code": "POLL",
@@ -242,7 +244,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "periodic_metals"
     },
     {
       "code": "ACID",

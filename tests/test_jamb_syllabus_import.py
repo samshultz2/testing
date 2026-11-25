@@ -90,6 +90,10 @@ def test_curated_blueprint_sections_are_valid(app):
             else:
                 bp = JAMB_BLUEPRINT.get(norm_subject(data['subject']), DEFAULT_BLUEPRINT)
                 valid = {s['section'] for s in bp['sections']}
+            # + the subject's no-quota label sections (micro/macro, trade/finance…):
+            # sections_for() offers them, so a mapping to one resolves too
+            from utils.jamb_blueprint import _EXTRA_SECTIONS
+            valid |= {s['section'] for s in _EXTRA_SECTIONS.get(norm_subject(data['subject']), [])}
             curated = [n.get('blueprint_section') for n in data['nodes'] if n.get('blueprint_section')]
             bad = [c for c in curated if c not in valid]
             assert not bad, f'{fn}: blueprint_section(s) not in this subject\'s blueprint: {bad}'

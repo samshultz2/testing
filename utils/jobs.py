@@ -226,6 +226,11 @@ def _handle_bank_batch_retag(job, subject_id=None, model='', year=None, exam_bod
     if not cfg['has_key']:
         job.message = 'No Anthropic API key is set (Settings → AI Vision OCR).'
         return {'error': 'no_key'}
+    try:                                   # latest topic -> paper-section mappings first
+        from utils.syllabus_sections import sync_mappings
+        sync_mappings(subject)
+    except Exception:
+        pass
     by_code, _syll = coded_nodes(subject.id)
     if not by_code:
         job.message = f'No coded syllabus imported for {subject.name}.'

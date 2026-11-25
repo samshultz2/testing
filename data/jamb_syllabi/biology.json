@@ -51,7 +51,8 @@
               "code": "VAR.2.E",
               "name": "Animalia: invertebrates and vertebrates"
             }
-          ]
+          ],
+          "blueprint_section": "genetics_evolution"
         },
         {
           "code": "VAR.3",
@@ -69,7 +70,8 @@
               "code": "VAR.3.C",
               "name": "Structural adaptations in organisms"
             }
-          ]
+          ],
+          "blueprint_section": "cell"
         }
       ]
     },
@@ -89,7 +91,8 @@
               "code": "FRM.1.B",
               "name": "Internal structure of a mammal"
             }
-          ]
+          ],
+          "blueprint_section": "cell"
         },
         {
           "code": "FRM.2",
@@ -402,7 +405,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "ecology"
     },
     {
       "code": "HER",
@@ -465,7 +469,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "genetics_evolution"
     },
     {
       "code": "EVO",
@@ -501,7 +506,8 @@
             }
           ]
         }
-      ]
+      ],
+      "blueprint_section": "genetics_evolution"
     }
   ]
 }
