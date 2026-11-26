@@ -1596,6 +1596,7 @@ def bank_syllabus():
                            years=years, tagged_count=tagged_count, total_questions_q=total_q,
                            key_set=key_set, batch_async=batch_async, batch_job=batch_job,
                            batch_job_in_progress=_batch_job_in_progress(batch_job),
+                           batch_view=(_batch_view(batch_job) if batch_job else None),
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''))
 
 
@@ -1778,7 +1779,7 @@ def bank_syllabus_batch_retag():
     return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
 
 
-_BATCH_IN_PROGRESS_MARKERS = ('awaiting results', 'processing… (poll')
+_BATCH_IN_PROGRESS_MARKERS = ('awaiting results', 'processing… (poll', 'Claude is tagging', 'Saving results')
 
 
 def _batch_job_in_progress(job):
@@ -1789,6 +1790,8 @@ def _batch_job_in_progress(job):
     stale-job watchdog reaped it after a worker crash mid-call)."""
     if not job or (job.status or '') == 'failed':
         return False
+    if (job.status or '') in ('queued', 'running'):
+        return True              # the next check is waiting for / on the worker
     message = job.message or job.status or ''
     return any(marker in message for marker in _BATCH_IN_PROGRESS_MARKERS)
 
@@ -1809,8 +1812,41 @@ def bank_syllabus_batch_status():
                .order_by(BackgroundJob.id.desc()).first())
     if not job:
         return jsonify({'found': False})
-    return jsonify({'found': True, 'message': job.message or job.status, 'total': job.total or 0,
-                    'in_progress': _batch_job_in_progress(job)})
+    return jsonify(_batch_view(job))
+
+
+def _json_subject(job):
+    import json
+    try:
+        return json.loads(job.params or '{}').get('subject_id')
+    except Exception:
+        return None
+
+
+def _batch_view(job):
+    """What the progress card shows for the latest batch-retag job row."""
+    from models import local_now, BackgroundJob
+    shown = job
+    if not job.message and (job.status or '') in ('queued', 'running'):
+        # this check hasn't run yet: show the last one that reported something
+        prev = (BackgroundJob.query.filter(BackgroundJob.kind == job.kind, BackgroundJob.params.like(
+                    '%"subject_id": ' + str(_json_subject(job)) + '%'), BackgroundJob.id < job.id,
+                    BackgroundJob.message.isnot(None))
+                .order_by(BackgroundJob.id.desc()).first())
+        shown = prev or job
+    msg = shown.message or job.status or ''
+    running = _batch_job_in_progress(job)
+    if running:
+        stage = ('submitted' if 'awaiting results' in msg else
+                 'saving' if 'Saving results' in msg else 'tagging')
+    else:
+        stage = 'done' if msg.startswith('Batch done') else ('failed' if (job.status or '') == 'failed' else 'stopped')
+    when = shown.finished_at or shown.started_at or shown.created_at
+    ago = int((local_now() - when).total_seconds()) if when else None
+    total, progress = shown.total or 0, shown.progress or 0
+    detail = (f'{progress:,} of {total:,} questions done' if stage == 'tagging' and total else msg)
+    return {'found': True, 'message': msg, 'detail': detail, 'total': total, 'progress': progress,
+            'in_progress': running, 'stage': stage, 'checked_ago': ago}
 
 
 @mock_jamb_bp.route('/bank/analytics')

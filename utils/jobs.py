@@ -246,6 +246,7 @@ def _handle_bank_batch_retag(job, subject_id=None, model='', year=None, exam_bod
         from models import MockJAMBQuestion
         ids = batch.target_ids(subject, year=year, exam_body=exam_body, force=force)[:batch._MAX_REQUESTS]
         job.total = len(ids)
+        job.progress = 0
         db.session.commit()
         if not ids:
             job.message = f'No {subject.name} questions to tag.'
@@ -263,8 +264,11 @@ def _handle_bank_batch_retag(job, subject_id=None, model='', year=None, exam_bod
         return {'phase': 'submitted', 'batch_id': bid, 'requests': len(ids)}
 
     # phase == 'poll'
-    status = batch.batch_status(client, batch_id)
+    status, done, total = batch.batch_progress(client, batch_id)
+    job.progress, job.total = done, total
     if status == 'ended':
+        job.message = f'Saving results… ({total} question(s) tagged by Claude)'
+        db.session.commit()
         summary = batch.apply_results(client, batch_id, subject, by_code, by_id)
         job.message = (f"Batch done — tagged {summary['tagged']} of {summary['scanned']} "
                        f"{subject.name} question(s)"
@@ -279,7 +283,8 @@ def _handle_bank_batch_retag(job, subject_id=None, model='', year=None, exam_bod
         return {'phase': status, 'batch_id': batch_id}
     # still processing — poll again next tick (non-blocking)
     if attempt < _BATCH_MAX_POLLS:
-        job.message = f'Claude batch processing… (poll {attempt + 1})'
+        job.message = f'Claude is tagging — {done:,} of {total:,} done'
+
         db.session.commit()
         enqueue('bank_batch_retag', {'subject_id': subject_id, 'model': model, 'year': year,
                                      'exam_body': exam_body, 'force': force,

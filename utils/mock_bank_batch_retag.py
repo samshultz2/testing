@@ -103,6 +103,18 @@ def batch_status(client, batch_id):
     return getattr(b, 'processing_status', None) or (b.get('processing_status') if isinstance(b, dict) else None)
 
 
+def batch_progress(client, batch_id):
+    """(processing_status, done, total) -- done = requests Claude has finished
+    (succeeded, errored, canceled or expired) out of all in the batch."""
+    b = client.messages.batches.retrieve(batch_id)
+    get = (lambda o, k: getattr(o, k, None) if not isinstance(o, dict) else o.get(k))
+    status = get(b, 'processing_status')
+    rc = get(b, 'request_counts') or {}
+    n = {k: int(get(rc, k) or 0) for k in ('processing', 'succeeded', 'errored', 'canceled', 'expired')}
+    done = n['succeeded'] + n['errored'] + n['canceled'] + n['expired']
+    return status, done, done + n['processing']
+
+
 def _parse_result_obj(obj):
     """A result may be an object or a single-element array; return (primary, [secondary])."""
     if isinstance(obj, list):

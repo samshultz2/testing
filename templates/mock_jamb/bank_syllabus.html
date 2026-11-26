@@ -8,6 +8,34 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
+.sy-prog{border:1px solid var(--border-color);border-radius:var(--rs-r,16px);background:var(--bg-card);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.6rem}
+.sy-prog.tagging,.sy-prog.submitted,.sy-prog.saving{border-color:color-mix(in srgb,var(--primary) 40%,var(--border-color))}
+.sy-prog.done{border-color:color-mix(in srgb,var(--success) 45%,var(--border-color))}
+.sy-prog.failed,.sy-prog.stopped{border-color:color-mix(in srgb,var(--warning) 50%,var(--border-color))}
+.sy-prog-h{display:flex;align-items:center;gap:.75rem}
+.sy-prog-h .ic{width:2.3rem;height:2.3rem;border-radius:11px;display:flex;align-items:center;justify-content:center;flex:none;background:color-mix(in srgb,var(--primary) 11%,var(--bg-card));color:var(--primary)}
+.sy-prog.done .ic{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:var(--success)}
+.sy-prog.failed .ic,.sy-prog.stopped .ic{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:var(--warning)}
+.sy-prog-h .tt{flex:1;min-width:0}
+.sy-prog-h .tt b{display:block;font-size:.95rem}
+.sy-prog-h .tt small{display:block;font-size:.82rem;color:var(--text-muted);line-height:1.4;overflow-wrap:anywhere}
+.sy-prog-pct{font-weight:800;font-size:1.15rem;font-variant-numeric:tabular-nums;font-family:'Space Grotesk',sans-serif}
+.sy-prog-bar{height:10px;border-radius:999px;background:var(--gray-100);overflow:hidden;position:relative}
+.sy-prog-bar i{display:block;height:100%;border-radius:999px;background:var(--primary);transition:width .6s ease}
+.sy-prog.done .sy-prog-bar i{background:var(--success)}
+.sy-prog-bar.busy i{width:35%!important;position:absolute;animation:syBusy 1.4s ease-in-out infinite}
+@keyframes syBusy{0%{left:-35%}100%{left:100%}}
+@media (prefers-reduced-motion:reduce){.sy-prog-bar.busy i{animation:none;left:0;width:100%!important;opacity:.35}}
+.sy-steps{display:flex;gap:.35rem;margin:0;padding:0;list-style:none;flex-wrap:wrap}
+.sy-steps li{font-size:.74rem;font-weight:700;padding:.18rem .6rem;border-radius:999px;background:var(--gray-100);color:var(--text-muted)}
+.sy-steps li.ok{background:color-mix(in srgb,var(--success) 12%,var(--bg-card));color:#15803d}
+.sy-steps li.ok::before{content:"✓ "}
+.sy-steps li.on{background:var(--primary);color:#fff}
+.sy-prog-when{font-size:.78rem;color:var(--text-muted)}
+.sy-prog-when:empty{display:none}
+.sy-inline-busy{display:none;margin-top:.7rem;padding:.75rem .9rem;border-radius:12px;background:color-mix(in srgb,var(--primary) 7%,var(--bg-card));font-size:.85rem}
+.sy-inline-busy.on{display:block}
+.sy-inline-busy .sy-prog-bar{margin-top:.5rem}
 .yp{position:relative}
 .yp>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:.5rem;cursor:pointer;user-select:none}
 .yp>summary::-webkit-details-marker{display:none}
@@ -193,16 +221,34 @@
     </div>
   </details>
 
+  {% if syllabus and batch_view %}
+  {% set bv = batch_view %}
+  {% set pct = ((100 * bv.progress / bv.total)|round(0, 'floor')|int) if bv.total else 0 %}
+  <section class="sy-prog {{ bv.stage }}" id="batchJobPill" aria-live="polite"
+           data-inprogress="{{ 1 if bv.in_progress else 0 }}"
+           data-status="{{ url_for('mock_jamb.bank_syllabus_batch_status', subject_id=subject_id or '') }}">
+    <div class="sy-prog-h">
+      <span class="ic"><i class="fas {{ 'fa-circle-check' if bv.stage == 'done' else ('fa-triangle-exclamation' if bv.stage in ('failed', 'stopped') else 'fa-wand-magic-sparkles') }}" aria-hidden="true" id="bpIcon"></i></span>
+      <div class="tt"><b id="bpTitle">{{ {'submitted': 'AI retag sent to Claude', 'tagging': 'Claude is tagging ' ~ subject.name, 'saving': 'Saving the tags', 'done': 'AI retag finished', 'failed': 'AI retag stopped', 'stopped': 'AI retag stopped'}[bv.stage] }}</b>
+        <small id="bpMsg">{{ bv.detail }}</small></div>
+      <span class="sy-prog-pct" id="bpPct">{% if bv.total %}{{ 100 if bv.stage == 'done' else pct }}%{% endif %}</span>
+    </div>
+    <div class="sy-prog-bar {{ 'busy' if bv.in_progress and not bv.progress }}" role="progressbar" aria-valuemin="0" aria-valuemax="{{ bv.total }}" aria-valuenow="{{ bv.progress }}" aria-label="Questions tagged"><i id="bpBar" style="width:{{ 100 if bv.stage == 'done' else pct }}%"></i></div>
+    <ol class="sy-steps" id="bpSteps">
+      {% set order = ['submitted', 'tagging', 'saving', 'done'] %}
+      {% set at = order.index(bv.stage) if bv.stage in order else -1 %}
+      {% for k, l in [('submitted', 'Sent'), ('tagging', 'Tagging'), ('saving', 'Saving'), ('done', 'Done')] %}
+      <li data-k="{{ k }}" class="{{ 'on' if loop.index0 == at else ('ok' if loop.index0 < at else '') }}">{{ l }}</li>{% endfor %}
+    </ol>
+    <small class="sy-prog-when" id="bpWhen">{% if bv.in_progress %}Runs on the server — you can close this page and come back. Batches usually finish within an hour.{% endif %}</small>
+  </section>
+  {% endif %}
   {% if syllabus %}
-  <details class="qb-tool" id="syRetag" {{ 'open' if batch_job_in_progress }}>
+  <details class="qb-tool" id="syRetag">
     <summary><span class="ic"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span><span class="tt"><b>AI retag questions</b><small>{{ tagged_count }}/{{ total_questions_q }} coded · tag the rest to exact syllabus items</small></span><i class="fas fa-chevron-right ch" aria-hidden="true"></i></summary>
     <div class="tb">
     <p class="sy-note">Classifies {{ subject.name }}'s bank questions against this coded syllabus using your Anthropic key (Settings &rarr; AI Vision OCR). The model can only pick from these codes — it never invents an item, and marks a question <code>OUTSIDE_SYLLABUS</code> when none fits.</p>
     {% if not key_set %}<p class="sy-note" style="color:var(--warning)"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>{% endif %}
-    {% if batch_job %}
-    <div class="sy-batch" id="batchJobPill" data-inprogress="{{ 1 if batch_job_in_progress else 0 }}" data-status="{{ url_for('mock_jamb.bank_syllabus_batch_status', subject_id=subject_id or '') }}"><strong>Batch:</strong> <span id="batchJobMessage">{{ batch_job.message or batch_job.status }}</span>
-      <span id="batchJobTotal" class="rs-muted">{% if batch_job.total %}({{ batch_job.total }} question(s) submitted){% endif %}</span></div>
-    {% endif %}
     <form method="POST" id="retagForm" action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
           data-confirm="Retag {{ subject.name }} questions to the coded syllabus with AI? This calls your Anthropic key.">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -248,6 +294,11 @@
       </div>
       <button type="submit" class="rs-btn primary" {% if not key_set %}disabled{% endif %}><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Retag with AI</button>
       <span class="form-hint">Inline runs up to 400 questions per click; batch tags the whole set at about half price in the background.</span>
+      <div class="sy-inline-busy" id="syInlineBusy" role="status" aria-live="polite">
+        <b><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Tagging up to 400 questions with Claude…</b>
+        <div>This usually takes 1–3 minutes. Keep this page open — the result appears here when it's done.</div>
+        <div class="sy-prog-bar busy"><i></i></div>
+      </div>
     </form>
     </div>
   </details>
@@ -282,6 +333,14 @@
     var form = e.target; if (form.id !== 'retagForm') return;
     var method = document.getElementById('retagMethod'), force = document.getElementById('retagForce');
     form.setAttribute('action', (method && method.value === 'batch') ? BATCH : INLINE);
+    // Inline runs while you wait: once the submit really goes ahead (after the
+    // confirm), show a working state instead of a silent page.
+    setTimeout(function(){
+      if (e.defaultPrevented || !(method && method.value !== 'batch')) return;
+      var busy = document.getElementById('syInlineBusy'), btn = form.querySelector('button[type=submit]');
+      if (busy) busy.classList.add('on');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Tagging…'; }
+    }, 0);
     var m = form.querySelector('input[name="mode"]');
     if (!m) { m = document.createElement('input'); m.type = 'hidden'; m.name = 'mode'; form.appendChild(m); }
     m.value = (force && force.checked) ? 'all' : 'untagged';
@@ -356,13 +415,36 @@
     clearInterval(poll);
     var pill = document.getElementById('batchJobPill');
     if (!pill || pill.dataset.inprogress !== '1') return;
+    var TITLES = {submitted: 'AI retag sent to Claude', tagging: 'Claude is tagging', saving: 'Saving the tags',
+                  done: 'AI retag finished', failed: 'AI retag stopped', stopped: 'AI retag stopped'};
+    var ORDER = ['submitted', 'tagging', 'saving', 'done'];
+    function show(d){
+      var pct = d.total ? Math.floor(100 * d.progress / d.total) : 0;
+      if (d.stage === 'done') pct = 100;
+      pill.className = 'sy-prog ' + d.stage;
+      document.getElementById('bpTitle').textContent = TITLES[d.stage] || 'AI retag';
+      document.getElementById('bpMsg').textContent = d.detail || d.message || '';
+      document.getElementById('bpPct').textContent = d.total ? pct + '%' : '';
+      var bar = document.getElementById('bpBar');
+      bar.style.width = pct + '%';
+      bar.parentNode.classList.toggle('busy', d.in_progress && !d.progress);
+      bar.parentNode.setAttribute('aria-valuenow', d.progress || 0);
+      bar.parentNode.setAttribute('aria-valuemax', d.total || 0);
+      var at = ORDER.indexOf(d.stage);
+      [].forEach.call(document.querySelectorAll('#bpSteps li'), function(li, i){
+        li.className = i === at ? 'on' : (at > i ? 'ok' : '');
+      });
+      var when = document.getElementById('bpWhen');
+      if (d.in_progress) {
+        var ago = d.checked_ago == null ? '' : (d.checked_ago < 90 ? 'just now' : Math.round(d.checked_ago / 60) + ' min ago');
+        when.textContent = 'Last checked ' + ago + ' · runs on the server — you can close this page and come back.';
+      } else when.textContent = '';
+    }
     poll = setInterval(function(){
       fetch(pill.dataset.status, {headers: {'X-Requested-With': 'fetch'}}).then(function(r){ return r.json(); }).then(function(d){
         if (!d.found) return;
-        var msg = document.getElementById('batchJobMessage'), tot = document.getElementById('batchJobTotal');
-        if (msg) msg.textContent = d.message;
-        if (tot) tot.textContent = d.total ? '(' + d.total + ' question(s) submitted)' : '';
-        if (!d.in_progress) { clearInterval(poll); window.mjLoad(location.pathname + location.search, {}); }
+        show(d);
+        if (!d.in_progress) { clearInterval(poll); setTimeout(function(){ window.mjLoad(location.pathname + location.search, {}); }, 2500); }
       }).catch(function(){});
     }, 6000);
   }

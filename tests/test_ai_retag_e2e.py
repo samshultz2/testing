@@ -103,3 +103,32 @@ def test_batch_retag_applies_codes_and_sections(app, fake_key):
             assert 'nat' in {x['section'] for x in sections_for(s.name)}
         finally:
             _cleanup(s, y)
+
+
+def test_batch_progress_counts():
+    from utils.mock_bank_batch_retag import batch_progress
+    b = NS(processing_status='in_progress',
+           request_counts=NS(processing=600, succeeded=1170, errored=10, canceled=0, expired=0))
+    client = NS(messages=NS(batches=NS(retrieve=lambda bid: b)))
+    assert batch_progress(client, 'x') == ('in_progress', 1180, 1780)
+
+
+def test_syllabus_page_shows_batch_progress(app, auth_client):
+    from models import BackgroundJob
+    with app.app_context():
+        s, y, q = _setup('Economics', 'economics', 'micro')
+        sid = s.id
+        done = BackgroundJob(kind='bank_batch_retag', status='done', params=json.dumps({'subject_id': sid}),
+                             message='Claude is tagging — 1,180 of 1,780 done', progress=1180, total=1780)
+        waiting = BackgroundJob(kind='bank_batch_retag', status='queued', params=json.dumps({'subject_id': sid}))
+        db.session.add_all([done, waiting]); db.session.commit()
+        try:
+            html = auth_client.get('/mock-jamb/bank/syllabus?subject_id=%d' % sid).get_data(as_text=True)
+            assert 'id="batchJobPill"' in html and '66%' in html and 'Claude is tagging' in html
+            d = auth_client.get('/mock-jamb/bank/syllabus/batch-status?subject_id=%d' % sid).get_json()
+            # the newest row is a queued check: still in progress, showing the last numbers
+            assert d['in_progress'] and d['stage'] == 'tagging' and d['progress'] == 1180 and d['total'] == 1780
+        finally:
+            BackgroundJob.query.filter(BackgroundJob.id.in_([done.id, waiting.id])).delete(synchronize_session=False)
+            db.session.commit()
+            _cleanup(s, y)
