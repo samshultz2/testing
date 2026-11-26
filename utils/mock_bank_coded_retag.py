@@ -77,9 +77,11 @@ _PASSAGE_SECTIONS = {'comprehension', 'cloze', 'summary'}
 def _place_english(row, code_section, valid_sections):
     """Use of English: JAMB's instruction wording ("opposite in meaning", "the
     information conveyed", "in capital letters"…) or the novel's characters say
-    the section reliably; the AI's syllabus code is only used when the wording
-    says nothing -- and never to put a question with no passage into a reading
-    (passage) section, which a mock can't draw."""
+    the section reliably -- the same rules scripts/sort_english_sections uses.
+    When the wording says nothing, a question already filed in a paper section
+    stays there; the AI's syllabus code only fills a missing / stale section,
+    and never puts a question with no passage into a reading (passage)
+    section, which a mock can't draw."""
     from utils.english_sections import rule_section, novel_by_characters
     sec = rule_section(row.question_text)
     if 'novel' in valid_sections and novel_by_characters(row.question_text, row.exam_year):
@@ -88,6 +90,11 @@ def _place_english(row, code_section, valid_sections):
         row.section = sec
         if sec == 'novel':
             _tag_novel_book(row)
+        return
+    # The wording says nothing: keep the section the question is already filed
+    # in (the school's own arrangement). The AI's code only fills a section
+    # that is missing or no longer in the paper.
+    if (row.section or '') in valid_sections:
         return
     if code_section and not (row.passage_id is None and code_section in _PASSAGE_SECTIONS):
         row.section = code_section

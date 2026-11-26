@@ -304,10 +304,14 @@ def test_english_coded_placement_follows_wording_not_code():
     assert place('Choose the option to which the given sentence relates My Boss has an amiable DISPOSITION',
                  'basic_grammar', cur='emphatic_stress') == 'emphatic_stress'
     assert place('Omar had ______ credits in the WAEC examination', 'comprehension', year='2022') == 'novel'
-    # no wording: the code decides, but never a reading section for a question with no passage
+    # no wording: an already-filed question keeps its section; the code only fills a missing one,
+    # and never a reading section for a question with no passage
     assert place('Abdullahi, having written extensively over the years', 'comprehension') == 'basic_grammar'
-    assert place('Some question with no instruction', 'antonyms') == 'antonyms'
-    assert place('Some passage question', 'cloze', cur='comprehension', passage=5) == 'cloze'
+    assert place('Had it not rained, it would not have been so bad', 'sentence_interpretation') == 'basic_grammar'
+    assert place('Some question with no instruction', 'antonyms', cur=None) == 'antonyms'
+    assert place('Some question with no instruction', 'antonyms', cur='oral') == 'antonyms'      # stale section
+    assert place('Some question with no instruction', 'comprehension', cur=None) is None
+    assert place('Some passage question', 'cloze', cur='comprehension', passage=5) == 'comprehension'   # stays put
 
 
 def test_1978_80_wordings():
