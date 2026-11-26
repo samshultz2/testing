@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_menu, bx_menu_js with context %}
 {% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
+{% from "cbt/_select.html" import qsel_bar, qsel_check, qsel_assets with context %}
 {% block title %}Question Bank - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>Question Bank</span>{% endblock %}
 {% block extra_css %}
@@ -39,6 +40,12 @@ a.cb-tag:hover{text-decoration:none;filter:brightness(.95)}
 .cb-tag.medium{background:color-mix(in srgb,var(--warning) 15%,var(--bg-card));color:#a16207}
 .cb-tag.hard{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:#b91c1c}
 .cb-acts form{margin:0}
+.cb-lh{padding:.85rem 1rem .5rem;margin:0}
+.cb-lh .qsel{flex:1}
+.cb-list[data-qsel].on .cb-q{grid-template-columns:auto minmax(0,1fr) auto}
+.cb-list[data-qsel].on .cb-n{display:none}
+.cb-q .qsel-box{margin-top:.6rem}
+.cb-list .qsel-item.picked{background:color-mix(in srgb,var(--primary) 7%,var(--bg-card))}
 .cb-ic{width:2.2rem;height:2.2rem;padding:0;justify-content:center}
 .cb-pager{display:flex;gap:.5rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.9rem;border-top:1px solid var(--border-light,var(--border-color));font-size:.85rem;color:var(--text-muted)}
 .cb-add{border:1px solid var(--border-color);border-radius:var(--rs-r,16px);background:var(--bg-card);overflow:hidden;scroll-margin-top:5rem}
@@ -60,6 +67,7 @@ a.cb-tag:hover{text-decoration:none;filter:brightness(.95)}
 @media (max-width:759px){
   .cb-q{grid-template-columns:minmax(0,1fr) auto;padding:.85rem .9rem;gap:.55rem}
   .cb-n{display:none}
+  .cb-list[data-qsel].on .cb-q{grid-template-columns:auto minmax(0,1fr)}
   .cb-opts{grid-template-columns:1fr}
   .cb-optin{grid-template-columns:1fr}
   .cb-filter select{flex:1 1 100%}
@@ -156,15 +164,18 @@ a.cb-tag:hover{text-decoration:none;filter:brightness(.95)}
 
   {% if questions %}
   <section class="rs-card flush" aria-label="Questions">
-    <div class="rs-card-h" style="padding:.85rem 1rem 0;margin:0 0 .3rem">
+    <div class="rs-card-h qsel-wrap cb-lh">
       <h3><i class="fas fa-list-ol" aria-hidden="true"></i> {{ pagination.total }} question{{ 's' if pagination.total != 1 }}{% if filtered %} found{% endif %}</h3>
-      {% if filtered %}<a class="rs-btn sm ghost" href="{{ url_for('cbt.bank', subject_id=subject_id) }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear filters</a>
+      {% if filtered %}<a class="rs-btn sm ghost qsel-hide-bar" href="{{ url_for('cbt.bank', subject_id=subject_id) }}"><i class="fas fa-xmark" aria-hidden="true"></i> Clear filters</a>
       {% elif pagination.pages > 1 %}<small>Page {{ pagination.page }} of {{ pagination.pages }}</small>{% endif %}
+      {% if can_del %}{{ qsel_bar('cbQsel', url_for('cbt.bank_delete_bulk'), 'Remove',
+            'Exams that already use them keep their own copies.') }}{% endif %}
     </div>
-    <div class="cb-list">
+    <div class="cb-list" data-qsel="cbQsel">
       {% for q in questions %}
-      <article class="cb-q">
+      <article class="cb-q qsel-item">
         <span class="cb-n" aria-hidden="true">{{ (pagination.page - 1) * pagination.per_page + loop.index }}</span>
+        {% if can_del %}{{ qsel_check('cbQsel', q.id, 'question ' ~ ((pagination.page - 1) * pagination.per_page + loop.index)) }}{% endif %}
         <div style="min-width:0">
           <div class="cb-tx">{{ q.question_text }}</div>
           {% if q.image_url %}<img class="cb-img" src="{{ q.image_url }}" alt="Question figure" loading="lazy">{% endif %}
@@ -182,7 +193,7 @@ a.cb-tag:hover{text-decoration:none;filter:brightness(.95)}
         </div>
         <div class="cb-acts">
           {% if can_del %}
-          <form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove this question from the bank?">
+          <form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove this question from the bank?" class="qsel-hide">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="rs-btn ghost danger cb-ic" title="Remove from bank" aria-label="Remove question {{ (pagination.page - 1) * pagination.per_page + loop.index }} from the bank"><i class="fas fa-trash" aria-hidden="true"></i></button>
           </form>
@@ -211,6 +222,7 @@ a.cb-tag:hover{text-decoration:none;filter:brightness(.95)}
   {% endif %}
 </div>
 {{ bx_menu_js() }}
+{% if can_del and questions %}{{ qsel_assets() }}{% endif %}
 <script nonce="{{ csp_nonce }}">
 (function () {
   // "Add question" opens the panel and brings it into view.

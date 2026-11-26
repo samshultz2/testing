@@ -163,11 +163,11 @@ def test_cbt_bank_page_filters_and_pages(app, auth_client):
         r = auth_client.get('/cbt/bank?q=Bankq+%s' % tag)
         html = r.get_data(as_text=True)
         assert r.status_code == 200 and '30 questions' in html
-        assert html.count('class="cb-q"') == 25 and 'Page 1 of 2' in html
+        assert html.count('<article class="cb-q') == 25 and 'Page 1 of 2' in html
         html = auth_client.get('/cbt/bank?q=Bankq+%s&page=2' % tag).get_data(as_text=True)
-        assert html.count('class="cb-q"') == 5
+        assert html.count('<article class="cb-q') == 5
         html = auth_client.get('/cbt/bank?q=Bankq+%s&difficulty=hard&subject_id=%d' % (tag, sid)).get_data(as_text=True)
-        assert html.count('class="cb-q"') == 3 and 'Algebra' in html
+        assert html.count('<article class="cb-q') == 3 and 'Algebra' in html
         assert auth_client.get('/cbt/bank/import').status_code == 200
     finally:
         with app.app_context():

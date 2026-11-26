@@ -331,9 +331,11 @@ def dashboard():
                    'avg': stats.get(e.id, (0, 0, None))[2],
                    'monitor_url': url_for('cbt.monitor', exam_id=e.id),
                    'detail_url': url_for('cbt.exam_detail', exam_id=e.id),
-                   'results_url': url_for('cbt.results', exam_id=e.id)} for e in exams],
+                   'results_url': url_for('cbt.results', exam_id=e.id),
+                   'delete_url': url_for('cbt.delete_exam', exam_id=e.id)} for e in exams],
         'self_url': url_for('cbt.dashboard'),
         'urls': {'add': url_for('cbt.add_exam'), 'export_all': url_for('cbt.results_export_all'),
+                 'delete_many': url_for('cbt.delete_exams_bulk'),
                  'subject_topics': url_for('cbt.subject_topics')},
     })
 
@@ -481,11 +483,64 @@ def toggle_publish(exam_id):
 def delete_exam(exam_id):
     e = _exam_403(exam_id)
     from utils.audit import log_action
+    title = e.title
     log_action('cbt.exam_delete', detail=getattr(e, 'title', None), target=e)
     db.session.delete(e)
     db.session.commit()
-    flash('Exam deleted.', 'success')
-    return redirect(url_for('cbt.dashboard'))
+    return _ok(f'Deleted “{title}”.', url_for('cbt.dashboard'), deleted=1)
+
+
+def _picked_ids():
+    """The ticked ids from a select-and-delete form (``ids`` repeated, or one
+    comma-separated value from the React app)."""
+    out = []
+    for raw in request.form.getlist('ids'):
+        for part in str(raw).split(','):
+            part = part.strip()
+            if part.isdigit():
+                out.append(int(part))
+    return list(dict.fromkeys(out))
+
+
+@cbt_bp.route('/exams/delete', methods=['POST'])
+@login_required
+def delete_exams_bulk():
+    """Delete several exams at once (with their questions and every student
+    attempt), from the overview's select mode."""
+    ids = _picked_ids()
+    if not ids:
+        return _err('Tick at least one exam to delete.', url_for('cbt.dashboard'))
+    from utils.audit import log_action
+    titles = []
+    for eid in ids:
+        e = _exam_403(eid)
+        titles.append(e.title)
+        log_action('cbt.exam_delete', detail=e.title, target=e)
+        db.session.delete(e)
+    db.session.commit()
+    n = len(titles)
+    return _ok(f'Deleted {n} exam{"" if n == 1 else "s"}.', url_for('cbt.dashboard'), deleted=n)
+
+
+@cbt_bp.route('/exams/<int:exam_id>/questions/delete', methods=['POST'])
+@login_required
+def delete_questions_bulk(exam_id):
+    """Delete the ticked questions of one exam."""
+    e = _exam_403(exam_id)
+    ids = _picked_ids()
+    rows = e.questions.filter(CBTQuestion.id.in_(ids)).all() if ids else []
+    back = url_for('cbt.exam_detail', exam_id=e.id)
+    if not rows:
+        flash('Tick at least one question to delete.', 'error')
+        return redirect(back)
+    from utils.audit import log_action
+    log_action('cbt.question_delete', detail=f'exam={e.id} questions={len(rows)}',
+               target_type='cbtexam', target_id=e.id)
+    for q in rows:
+        db.session.delete(q)
+    db.session.commit()
+    flash(f'Deleted {len(rows)} question{"" if len(rows) == 1 else "s"}.', 'success')
+    return redirect(back)
 
 
 @cbt_bp.route('/exams/<int:exam_id>/questions/add', methods=['POST'])
@@ -736,6 +791,21 @@ def bank_delete(bank_id):
     bq.is_active = False
     db.session.commit()
     flash('Question removed from the bank.', 'success')
+    return safe_redirect(url_for('cbt.bank'))
+
+
+@cbt_bp.route('/bank/delete', methods=['POST'])
+@login_required
+def bank_delete_bulk():
+    """Remove the ticked questions from the bank."""
+    ids = _picked_ids()
+    n = (QuestionBank.query.filter(QuestionBank.id.in_(ids), QuestionBank.is_active.is_(True))
+         .update({QuestionBank.is_active: False}, synchronize_session=False)) if ids else 0
+    db.session.commit()
+    if n:
+        flash(f'Removed {n} question{"" if n == 1 else "s"} from the bank.', 'success')
+    else:
+        flash('Tick at least one question to remove.', 'error')
     return safe_redirect(url_for('cbt.bank'))
 
 

@@ -1,0 +1,94 @@
+{# Select-and-delete for CBT question lists (an exam's questions, the bank).
+   qsel_bar() renders a standalone form (so it never nests inside the per-row
+   delete forms) and its toolbar; qsel_check() is a card's checkbox, bound to
+   that form with the HTML `form` attribute. Checkboxes only show once
+   "Select" is tapped; the list container needs data-qsel="<form id>". #}
+{% macro qsel_bar(form_id, action, verb='Delete', confirm_tail="This can't be undone.") -%}
+<form method="post" action="{{ action }}" id="{{ form_id }}" class="qsel" data-verb="{{ verb }}" data-tail="{{ confirm_tail }}"
+      data-confirm="{{ verb }} the selected questions? {{ confirm_tail }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <button type="button" class="qsel-start" data-qsel-start><i class="fas fa-check-double" aria-hidden="true"></i> Select</button>
+  <div class="qsel-bar" hidden>
+    <label class="qsel-all"><input type="checkbox" data-qsel-all> All on this page</label>
+    <b class="qsel-n" aria-live="polite">None selected</b>
+    <button type="button" class="qsel-cancel" data-qsel-cancel>Cancel</button>
+    <button type="submit" class="qsel-go" disabled><i class="fas fa-trash" aria-hidden="true"></i> <span>{{ verb }}</span></button>
+  </div>
+</form>
+{%- endmacro %}
+
+{% macro qsel_check(form_id, value, label) -%}
+<input type="checkbox" class="qsel-box" name="ids" value="{{ value }}" form="{{ form_id }}" aria-label="Select {{ label }}">
+{%- endmacro %}
+
+{% macro qsel_assets() -%}
+<style>
+.qsel{margin:0;display:flex;align-items:center;justify-content:flex-end;gap:.5rem;flex-wrap:wrap}
+.qsel-start,.qsel-cancel,.qsel-go{display:inline-flex;align-items:center;gap:.4rem;height:36px;padding:0 .85rem;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font:inherit;font-weight:700;font-size:.84rem;cursor:pointer;white-space:nowrap}
+.qsel-start:hover,.qsel-cancel:hover{border-color:var(--primary);color:var(--primary)}
+.qsel-go{background:var(--danger);border-color:var(--danger);color:#fff}
+.qsel-go:disabled{opacity:.5;cursor:not-allowed}
+.qsel-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;flex:1;justify-content:flex-end}
+.qsel-bar[hidden],.qsel-start[hidden]{display:none}
+.qsel-all{display:inline-flex;align-items:center;gap:.45rem;margin:0;font-size:.85rem;font-weight:600;cursor:pointer}
+.qsel-all input,.qsel-box{width:20px;height:20px;accent-color:var(--primary);cursor:pointer;margin:0;flex:none}
+.qsel-n{flex:1;font-size:.88rem;min-width:7rem}
+.qsel-wrap.on{position:sticky;top:var(--header-height,60px);z-index:6;background:color-mix(in srgb,var(--primary) 6%,var(--bg-card))}
+.qsel-box{display:none}
+[data-qsel].on .qsel-box{display:inline-block}
+[data-qsel].on .qsel-item{cursor:pointer}
+[data-qsel].on .qsel-item.picked{background:color-mix(in srgb,var(--primary) 7%,var(--bg-card));border-color:color-mix(in srgb,var(--primary) 45%,var(--border-color))}
+[data-qsel].on .qsel-hide{display:none!important}
+@media (max-width:759px){.qsel-n{flex-basis:100%;order:-1}.qsel-bar .qsel-go,.qsel-bar .qsel-cancel{flex:1;justify-content:center}}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  if (window.__qsel) return; window.__qsel = 1;
+  function parts(form) {
+    var list = document.querySelector('[data-qsel="' + form.id + '"]');
+    return { list: list, bar: form.querySelector('.qsel-bar'), start: form.querySelector('[data-qsel-start]'),
+             all: form.querySelector('[data-qsel-all]'), n: form.querySelector('.qsel-n'), go: form.querySelector('.qsel-go'),
+             wrap: form.closest('.qsel-wrap'),
+             boxes: list ? list.querySelectorAll('input.qsel-box[form="' + form.id + '"]') : [] };
+  }
+  function sync(form) {
+    var p = parts(form), n = 0;
+    p.boxes.forEach(function (b) { if (b.checked) n++; var it = b.closest('.qsel-item'); if (it) it.classList.toggle('picked', b.checked); });
+    var noun = 'question' + (n === 1 ? '' : 's');
+    p.n.textContent = n ? (n + ' ' + noun + ' selected') : 'Tap questions to select';
+    p.go.disabled = !n;
+    p.go.querySelector('span').textContent = n ? (form.dataset.verb + ' ' + n) : form.dataset.verb;
+    form.setAttribute('data-confirm', form.dataset.verb + ' ' + n + ' ' + noun + '? ' + form.dataset.tail);
+    if (p.all) { p.all.checked = n > 0 && n === p.boxes.length; p.all.indeterminate = n > 0 && n < p.boxes.length; }
+  }
+  function mode(form, on) {
+    var p = parts(form);
+    if (!p.list) return;
+    p.list.classList.toggle('on', on);
+    if (p.wrap) p.wrap.classList.toggle('on', on);
+    p.bar.hidden = !on; p.start.hidden = on;
+    if (!on) p.boxes.forEach(function (b) { b.checked = false; });
+    sync(form);
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target, form;
+    if ((form = t.closest && t.closest('[data-qsel-start]'))) { mode(form.form, true); return; }
+    if ((form = t.closest && t.closest('[data-qsel-cancel]'))) { mode(form.form, false); return; }
+    // in select mode, tapping a card toggles it (links and buttons inside are inert)
+    var list = t.closest && t.closest('[data-qsel].on');
+    var item = list && t.closest('.qsel-item');
+    if (item && !t.classList.contains('qsel-box')) {
+      var box = item.querySelector('input.qsel-box');
+      if (box) { e.preventDefault(); box.checked = !box.checked; sync(document.getElementById(box.getAttribute('form'))); }
+    }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.hasAttribute && t.hasAttribute('data-qsel-all')) {
+      parts(t.form).boxes.forEach(function (b) { b.checked = t.checked; }); sync(t.form); return;
+    }
+    if (t.classList && t.classList.contains('qsel-box')) sync(document.getElementById(t.getAttribute('form')));
+  });
+})();
+</script>
+{%- endmacro %}

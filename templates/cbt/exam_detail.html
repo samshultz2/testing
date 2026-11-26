@@ -49,7 +49,13 @@
 .ex-facts{display:flex;flex-wrap:wrap;gap:.35rem .9rem;font-size:.85rem;color:var(--text-secondary)}
 .ex-facts strong{color:var(--text-primary)}
 .qhead{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
-.qtext{font-weight:600;line-height:1.6;min-width:0;overflow-wrap:anywhere}
+.qtext{font-weight:600;line-height:1.6;min-width:0;overflow-wrap:anywhere;flex:1}
+.qhead .qsel-box{margin-top:.2rem}
+.ex-qhead{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.ex-qhead h3{margin:0}
+.ex-qhead .qsel{flex:1}
+.btn-outline-danger.ex-del{background:var(--bg-card);border:1px solid color-mix(in srgb,var(--danger) 45%,var(--border-color));color:var(--danger)}
+.btn-outline-danger.ex-del:hover{background:color-mix(in srgb,var(--danger) 9%,var(--bg-card));border-color:var(--danger)}
 .qtext .qn{color:var(--text-muted);margin-right:.25rem}
 .qdel{flex:none;display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;padding:0;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);color:var(--danger);cursor:pointer}
 .qdel:hover{background:var(--danger-light,#fde8e8);border-color:var(--danger)}
@@ -82,6 +88,14 @@
         <form method="POST" action="{{ url_for('cbt.toggle_publish', exam_id=e.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="btn {{ 'btn-secondary' if e.is_published else 'btn-primary' }}"><i class="fas fa-globe"></i> {{ 'Unpublish' if e.is_published else 'Publish' }}</button>
+        </form>
+        {% endif %}
+        {% if can_write_sub('cbt', 'exams_delete') %}
+        {% set n_att = e.attempts.count() %}
+        <form method="POST" action="{{ url_for('cbt.delete_exam', exam_id=e.id) }}"
+              data-confirm="Delete “{{ e.title }}”? Its {{ e.question_count }} question{{ '' if e.question_count == 1 else 's' }}{% if n_att %} and {{ n_att }} student submission{{ '' if n_att == 1 else 's' }} (scores included){% endif %} will be deleted too. This can't be undone.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-outline-danger ex-del"><i class="fas fa-trash"></i> Delete exam</button>
         </form>
         {% endif %}
     </div>
@@ -260,15 +274,19 @@
 })();
 </script>
 
+{% from "cbt/_select.html" import qsel_bar, qsel_check, qsel_assets with context %}
+{% set can_qdel = can_write_sub('cbt', 'exams_questions_edit') and questions %}
 <div class="card">
-    <div class="card-header"><h3>Questions ({{ questions|length }})</h3></div>
-    <div class="card-body">
+    <div class="card-header qsel-wrap ex-qhead"><h3>Questions ({{ questions|length }})</h3>
+        {% if can_qdel %}{{ qsel_bar('exQsel', url_for('cbt.delete_questions_bulk', exam_id=e.id)) }}{% endif %}</div>
+    <div class="card-body" data-qsel="exQsel">
         {% if questions %}
             {% for q in questions %}
-            <div class="qcard">
+            <div class="qcard qsel-item">
                 <div class="qhead">
+                    {% if can_qdel %}{{ qsel_check('exQsel', q.id, 'question ' ~ loop.index) }}{% endif %}
                     <div class="qtext"><span class="qn">{{ loop.index }}.</span>{{ q.question_text }}</div>
-                    {% if can_write_sub('cbt', 'exams_questions_edit') %}<form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="qdel" title="Delete question {{ loop.index }}" aria-label="Delete question {{ loop.index }}"><i class="fas fa-trash"></i></button></form>{% endif %}
+                    {% if can_write_sub('cbt', 'exams_questions_edit') %}<form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?" class="qsel-hide"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="qdel" title="Delete question {{ loop.index }}" aria-label="Delete question {{ loop.index }}"><i class="fas fa-trash"></i></button></form>{% endif %}
                 </div>
                 {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="Question figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
                 {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
@@ -278,5 +296,6 @@
         {% else %}<div class="empty-state"><i class="fas fa-circle-question"></i><h3>No questions yet</h3><p>Add questions above. You can publish once there's at least one.</p></div>{% endif %}
     </div>
 </div>
+{% if can_qdel %}{{ qsel_assets() }}{% endif %}
 {% include 'cbt/_mathjax.html' %}
 {% endblock %}

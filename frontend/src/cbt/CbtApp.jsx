@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { Banner, SectionShell, SectionTabs, Empty, Table } from '../components/ui';
+import { Banner, SectionShell, SectionTabs, Empty, Table, confirm } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import { copyText } from '../lib/clipboard';
 
@@ -54,18 +54,25 @@ function CbMenu({ items }) {
     <div className="cb-menu" ref={ref}>
       <button type="button" className="cb-btn" aria-haspopup="true" aria-expanded={open} aria-label="More" onClick={() => setOpen((v) => !v)}><i aria-hidden="true" className="fas fa-ellipsis" /></button>
       {open && <div className="cb-menu-pop" role="menu">
-        {list.map((it, i) => <a key={i} role="menuitem" href={it.href} {...(it.native ? { 'data-native': '1' } : {})} {...(it.download ? { download: true } : {})}
-          target={it.blank ? '_blank' : undefined} rel={it.blank ? 'noopener' : undefined} onClick={() => setOpen(false)}>
-          <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</a>)}
+        {list.map((it, i) => (it.onClick
+          ? <button key={i} type="button" role="menuitem" className={it.danger ? 'danger' : ''} onClick={() => { setOpen(false); it.onClick(); }}>
+              <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</button>
+          : <a key={i} role="menuitem" href={it.href} {...(it.native ? { 'data-native': '1' } : {})} {...(it.download ? { download: true } : {})}
+              target={it.blank ? '_blank' : undefined} rel={it.blank ? 'noopener' : undefined} onClick={() => setOpen(false)}>
+              <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</a>))}
       </div>}
     </div>
   );
 }
 
-function Dashboard({ d }) {
+function Dashboard({ d, notify }) {
   const nav = useNav();
   const [filter, setFilter] = useState('');
   const [q, setQ] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const canDelete = canWrite(d, 'exams_delete');
   const exams = d.exams || [];
   const count = (st) => exams.filter((e) => e.state === st).length;
   const live = exams.filter((e) => e.state === 'live');
@@ -80,6 +87,29 @@ function Dashboard({ d }) {
   const canCreate = canWrite(d, 'exams_create');
   const scoreTone = (v) => (v == null ? '' : v >= 70 ? 'good' : v >= 50 ? 'warn' : 'bad');
   const window_ = (e) => (e.opens || e.closes ? `${e.opens || 'start of day'} – ${e.closes || 'end of day'}` : 'All day');
+  const toggle = (id) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const stopPicking = () => { setPicking(false); setPicked(new Set()); };
+  const allShownPicked = shown.length > 0 && shown.every((e) => picked.has(e.id));
+
+  // Delete one or several exams, after a confirm that says what goes with them.
+  async function removeExams(list) {
+    if (!list.length || busy) return;
+    const subs = list.reduce((n, e) => n + (e.done || 0) + (e.live || 0), 0);
+    const live = list.filter((e) => e.state === 'live');
+    const one = list.length === 1;
+    const ok = await confirm({
+      title: one ? `Delete “${list[0].title}”?` : `Delete ${list.length} exams?`,
+      message: (live.length ? `${live.length === 1 && one ? 'This exam is' : `${live.length} of them ${live.length === 1 ? 'is' : 'are'}`} open right now. ` : '')
+        + `${one ? 'Its' : 'Their'} questions${subs ? ` and ${subs} student submission${subs === 1 ? '' : 's'} (scores included)` : ''} will be deleted too. This can't be undone.`,
+      confirmText: one ? 'Delete exam' : `Delete ${list.length} exams`, tone: 'danger',
+    });
+    if (!ok) return;
+    setBusy(true);
+    const r = await submitJson(one ? list[0].delete_url : d.urls.delete_many, { ids: list.map((e) => e.id).join(',') });
+    setBusy(false);
+    if (r.ok) { stopPicking(); notify && notify('success', r.message); nav.refresh(); }
+    else notify && notify('error', r.error || 'Could not delete. Please try again.');
+  }
 
   return (
     <div className="cb">
@@ -148,7 +178,20 @@ function Dashboard({ d }) {
       </div>
 
       <section className="cb-card">
+        {picking ? (
+          <header className="cb-card-h cb-pickbar" aria-live="polite">
+            <label className="cb-pick-all"><input type="checkbox" checked={allShownPicked}
+              onChange={() => setPicked(allShownPicked ? new Set() : new Set(shown.map((e) => e.id)))} /> All shown</label>
+            <b className="cb-pick-n">{picked.size ? `${picked.size} selected` : 'Tap exams to select'}</b>
+            <button type="button" className="cb-btn" onClick={stopPicking}>Cancel</button>
+            <button type="button" className="cb-btn danger" disabled={!picked.size || busy}
+              onClick={() => removeExams(exams.filter((e) => picked.has(e.id)))}>
+              <i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-trash')} /> <span>Delete{picked.size ? ` ${picked.size}` : ''}</span></button>
+          </header>
+        ) : (
         <header className="cb-card-h">
+          {canDelete && exams.length > 0 && <button type="button" className="cb-btn cb-select-btn" onClick={() => setPicking(true)}>
+            <i aria-hidden="true" className="fas fa-check-double" /> <span>Select</span></button>}
           <div className="cb-search"><i aria-hidden="true" className="fas fa-search" />
             <input type="search" placeholder="Search title, subject or class…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search exams" /></div>
           <div className="cb-seg" role="radiogroup" aria-label="Status">
@@ -156,13 +199,16 @@ function Dashboard({ d }) {
               .filter(([k, , n]) => !k || n).map(([k, l, n]) => (
                 <button key={k || 'all'} type="button" role="radio" aria-checked={filter === k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)}>{l}<span>{n}</span></button>))}
           </div>
-        </header>
+        </header>)}
         {shown.length ? (
-          <ul className="cb-list">
+          <ul className={'cb-list' + (picking ? ' picking' : '')}>
             {shown.map((e) => {
               const st = CB_STATE[e.state] || CB_STATE.draft;
+              const on = picked.has(e.id);
               return (
-                <li key={e.id} className={'cb-exam ' + st.tone}>
+                <li key={e.id} className={'cb-exam ' + st.tone + (on ? ' picked' : '')}
+                    onClickCapture={picking ? (ev) => { if (ev.target.type !== 'checkbox') { ev.preventDefault(); ev.stopPropagation(); toggle(e.id); } } : undefined}>
+                  {picking && <input type="checkbox" className="cb-pick" checked={on} onChange={() => toggle(e.id)} aria-label={`Select ${e.title}`} />}
                   <a href={e.detail_url} className="cb-exam-main">
                     <span className={'cb-state ' + st.tone}><i aria-hidden="true" className={'fas ' + st.icon} /> {st.label}</span>
                     <strong>{e.title}</strong>
@@ -187,6 +233,9 @@ function Dashboard({ d }) {
                     {e.state === 'live' && <a href={e.monitor_url} className="cb-btn primary" data-native="1" title="Watch students live"><i aria-hidden="true" className="fas fa-display" /><span> Monitor</span></a>}
                     <a href={e.results_url} className="cb-btn" title="Results"><i aria-hidden="true" className="fas fa-chart-column" /><span> Results</span></a>
                     <a href={e.detail_url} className="cb-btn" title="Manage questions and settings"><i aria-hidden="true" className="fas fa-pen" /><span> Manage</span></a>
+                    {canDelete && !picking && <CbMenu items={[
+                      { icon: 'fa-trash', label: 'Delete exam', danger: true, onClick: () => removeExams([e]) },
+                    ]} />}
                   </div>
                 </li>
               );
