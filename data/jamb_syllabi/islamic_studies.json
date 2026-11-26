@@ -5,9 +5,9 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "quran_hadith", "label": "Qur'an and Hadith", "count": 14},
-    {"section": "tawhid_fiqh", "label": "Tawhid and Fiqh", "count": 16},
-    {"section": "islamic_history", "label": "Islamic history and civilization", "count": 10}
+    {"section": "quran_hadith", "label": "Part I - The Qur'an and Hadith", "count": 14},
+    {"section": "tawhid_fiqh", "label": "Part II - Tawhid and Fiqh", "count": 16},
+    {"section": "islamic_history", "label": "Part III - Islamic History and Civilization", "count": 10}
   ],
   "sections": [
     {

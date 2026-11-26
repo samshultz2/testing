@@ -5,9 +5,22 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "trade", "label": "Trade and aids to trade", "count": 18},
-    {"section": "business", "label": "Business units and management", "count": 15},
-    {"section": "finance", "label": "Money and finance", "count": 7}
+    {"section": "com", "label": "Commerce", "count": 2},
+    {"section": "occ", "label": "Occupation", "count": 2},
+    {"section": "prd", "label": "Production", "count": 2},
+    {"section": "trd", "label": "Trade", "count": 3},
+    {"section": "psg", "label": "Purchase and Sale of Goods", "count": 2},
+    {"section": "aid", "label": "Aids-to-Trade", "count": 3},
+    {"section": "bun", "label": "Business Units", "count": 3},
+    {"section": "fin", "label": "Financing Business", "count": 3},
+    {"section": "tas", "label": "Trade Associations", "count": 2},
+    {"section": "mon", "label": "Money", "count": 2},
+    {"section": "stk", "label": "Stock Exchange", "count": 2},
+    {"section": "mgt", "label": "Elements of Business Management", "count": 3},
+    {"section": "mkt", "label": "Elements of Marketing", "count": 3},
+    {"section": "law", "label": "Legal Aspects of Business", "count": 3},
+    {"section": "cmx", "label": "Commodity Exchange", "count": 3},
+    {"section": "env", "label": "Business Environment and Social Responsibility", "count": 2}
   ],
   "sections": [
     {
@@ -37,7 +50,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "com"
     },
     {
       "code": "OCC",
@@ -62,7 +75,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "occ"
     },
     {
       "code": "PRD",
@@ -91,7 +104,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "prd"
     },
     {
       "code": "TRD",
@@ -136,7 +149,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "trd"
     },
     {
       "code": "PSG",
@@ -165,7 +178,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "psg"
     },
     {
       "code": "AID",
@@ -206,7 +219,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "aid"
     },
     {
       "code": "BUN",
@@ -243,7 +256,7 @@
           ]
         }
       ],
-      "blueprint_section": "business"
+      "blueprint_section": "bun"
     },
     {
       "code": "FIN",
@@ -276,7 +289,7 @@
           ]
         }
       ],
-      "blueprint_section": "finance"
+      "blueprint_section": "fin"
     },
     {
       "code": "TAS",
@@ -301,7 +314,7 @@
           ]
         }
       ],
-      "blueprint_section": "business"
+      "blueprint_section": "tas"
     },
     {
       "code": "MON",
@@ -326,7 +339,7 @@
           ]
         }
       ],
-      "blueprint_section": "finance"
+      "blueprint_section": "mon"
     },
     {
       "code": "STK",
@@ -355,7 +368,7 @@
           ]
         }
       ],
-      "blueprint_section": "finance"
+      "blueprint_section": "stk"
     },
     {
       "code": "MGT",
@@ -388,7 +401,7 @@
           ]
         }
       ],
-      "blueprint_section": "business"
+      "blueprint_section": "mgt"
     },
     {
       "code": "MKT",
@@ -425,7 +438,7 @@
           ]
         }
       ],
-      "blueprint_section": "business"
+      "blueprint_section": "mkt"
     },
     {
       "code": "LAW",
@@ -462,7 +475,7 @@
           ]
         }
       ],
-      "blueprint_section": "business"
+      "blueprint_section": "law"
     },
     {
       "code": "CMX",
@@ -499,7 +512,7 @@
           ]
         }
       ],
-      "blueprint_section": "trade"
+      "blueprint_section": "cmx"
     },
     {
       "code": "ENV",
@@ -524,7 +537,7 @@
           ]
         }
       ],
-      "blueprint_section": "business"
+      "blueprint_section": "env"
     }
   ]
 }

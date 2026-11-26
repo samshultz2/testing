@@ -91,6 +91,20 @@ def test_sync_blueprint_updates_only_untouched(app):
             db.session.commit()
 
 
+def test_blueprints_follow_the_jamb_syllabus_parts():
+    """Outside English/Literature: one section per top-level syllabus part,
+    labelled with the part's name, counts summing to 40, at least 1 each."""
+    import glob, json
+    for f in glob.glob('data/jamb_syllabi/*.json'):
+        d = json.load(open(f))
+        if d['subject'] in ('English Language', 'Literature in English'):
+            continue
+        bp = d['blueprint']
+        assert [x['label'] for x in bp] == [p['name'] for p in d['sections']], f
+        assert [x['section'] for x in bp] == [p['blueprint_section'] for p in d['sections']], f
+        assert sum(x['count'] for x in bp) == 40 and min(x['count'] for x in bp) >= 1, f
+
+
 def test_every_bundled_syllabus_blueprint_tallies_with_its_mappings():
     import glob, json
     for f in glob.glob('data/jamb_syllabi/*.json'):
@@ -131,8 +145,42 @@ def test_sync_blueprint_adopts_bundled_when_stored_is_empty(app):
         db.session.add(y); db.session.commit()
         try:
             ch = sync_blueprint(s)
-            assert {k for k, _, _ in ch} == {'micro', 'macro', 'development', 'international'}
+            import json as _j
+            parts = {p['code'].lower() for p in _j.load(open('data/jamb_syllabi/economics.json'))['sections']}
+            assert {k for k, _, _ in ch} == parts                # one section per JAMB syllabus part
             assert sum(x['count'] for x in json.loads(y.blueprint)) == 40
             assert sync_blueprint(s) == []                       # second run: nothing to do
         finally:
+            db.session.delete(y); db.session.delete(s); db.session.commit()
+
+
+def test_server_update_replaces_stale_mappings_and_old_blueprint(app):
+    """A server that imported Economics with the earlier micro/macro sections
+    is brought onto the JAMB parts; a mapping someone set to a valid section stays."""
+    import json
+    from models import db, Subject, MockJAMBSyllabus, MockJAMBSyllabusNode
+    from utils.jamb_syllabus_import import import_syllabus
+    from utils.syllabus_sections import sync_blueprint, sync_mappings
+    with app.app_context():
+        s = Subject(name='Economics', is_active=False); db.session.add(s); db.session.commit()
+        import_syllabus(s, open('data/jamb_syllabi/economics.json').read(), fmt='json')
+        y = MockJAMBSyllabus.query.filter_by(subject_id=s.id).first()
+        try:
+            # make it look like the earlier version
+            y.blueprint = json.dumps([{'section': 'micro', 'label': 'Microeconomics', 'count': 18},
+                                      {'section': 'macro', 'label': 'Money, income and finance', 'count': 9},
+                                      {'section': 'development', 'label': 'Public finance and development', 'count': 9},
+                                      {'section': 'international', 'label': 'International trade', 'count': 4}])
+            nodes = {n.code: n for n in MockJAMBSyllabusNode.query.filter_by(syllabus_id=y.id)}
+            dem = next(c for c in nodes if c.endswith('.DEM'))
+            sup = next(c for c in nodes if c.endswith('.SUP'))
+            nodes[dem].blueprint_section = 'micro'           # stale
+            nodes[sup].blueprint_section = 'dem'             # someone's own (valid) choice
+            db.session.commit()
+            assert sync_blueprint(s)
+            assert {x['section'] for x in json.loads(y.blueprint)} >= {'dem', 'sup', 'nat', 'org'}
+            sync_mappings(s)
+            assert nodes[dem].blueprint_section == 'dem' and nodes[sup].blueprint_section == 'dem'
+        finally:
+            MockJAMBSyllabusNode.query.filter_by(syllabus_id=y.id).delete()
             db.session.delete(y); db.session.delete(s); db.session.commit()

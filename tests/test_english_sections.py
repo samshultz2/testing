@@ -164,9 +164,9 @@ def test_resection_from_codes_without_ai(app):
         assert sync_mappings(subj) > 0
         moves, _s = resection(subj, apply=False)
         assert db.session.get(MockJAMBQuestion, q.id).section == 'ecology'           # dry run
-        assert moves['ecology -> nutrition'] >= 1
+        assert moves['ecology -> frm'] >= 1                 # Form and Functions (JAMB part)
         resection(subj, apply=True)
-        assert db.session.get(MockJAMBQuestion, q.id).section == 'nutrition'
+        assert db.session.get(MockJAMBQuestion, q.id).section == 'frm'
         db.session.delete(db.session.get(MockJAMBQuestion, q.id))
         for n in MockJAMBSyllabusNode.query.filter_by(syllabus_id=syl.id).all():
             n.blueprint_section = saved.get(n.id)

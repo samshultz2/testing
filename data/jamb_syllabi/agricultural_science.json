@@ -5,11 +5,11 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "general_agric", "label": "General agriculture", "count": 7},
-    {"section": "agronomy", "label": "Agronomy", "count": 13},
-    {"section": "animal", "label": "Animal production", "count": 7},
-    {"section": "agric_econ", "label": "Agricultural economics and extension", "count": 7},
-    {"section": "agric_tech", "label": "Agricultural technology", "count": 6}
+    {"section": "general_agric", "label": "General Agriculture", "count": 8},
+    {"section": "agronomy", "label": "Agronomy", "count": 12},
+    {"section": "animal", "label": "Animal Production", "count": 7},
+    {"section": "agric_econ", "label": "Agricultural Economics and Extension", "count": 7},
+    {"section": "agric_tech", "label": "Agricultural Technology", "count": 6}
   ],
   "sections": [
     {

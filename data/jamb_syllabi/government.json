@@ -5,10 +5,10 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "concepts", "label": "Elements of government", "count": 14},
-    {"section": "nigeria", "label": "Political development in Nigeria", "count": 10},
-    {"section": "constitution", "label": "Constitutions and institutions", "count": 8},
-    {"section": "international", "label": "Foreign policy and international organizations", "count": 8}
+    {"section": "concepts", "label": "Part I: Elements of Government", "count": 16},
+    {"section": "nigeria", "label": "Part II: Political Development in Nigeria", "count": 16},
+    {"section": "for", "label": "Part III: Foreign Policy and Nigeria's Relationship with the International Community", "count": 6},
+    {"section": "iorg", "label": "Part IV: International Organizations", "count": 2}
   ],
   "sections": [
     {
@@ -323,8 +323,7 @@
               "code": "PDN.4.A",
               "name": "Clifford (1922), Richards (1946), Macpherson (1951), Lyttleton (1954) and Independence (1960) Constitutions - features, merits and demerits"
             }
-          ],
-          "blueprint_section": "constitution"
+          ]
         },
         {
           "code": "PDN.5",
@@ -334,8 +333,7 @@
               "code": "PDN.5.A",
               "name": "1963, 1979, 1989 and 1999 (as amended) - characteristics and shortcomings"
             }
-          ],
-          "blueprint_section": "constitution"
+          ]
         },
         {
           "code": "PDN.6",
@@ -353,8 +351,7 @@
               "code": "PDN.6.C",
               "name": "The Judiciary - structure, functions and workings"
             }
-          ],
-          "blueprint_section": "constitution"
+          ]
         },
         {
           "code": "PDN.7",
@@ -544,7 +541,7 @@
           ]
         }
       ],
-      "blueprint_section": "international"
+      "blueprint_section": "for"
     },
     {
       "code": "IORG",
@@ -561,7 +558,7 @@
           ]
         }
       ],
-      "blueprint_section": "international"
+      "blueprint_section": "iorg"
     }
   ]
 }

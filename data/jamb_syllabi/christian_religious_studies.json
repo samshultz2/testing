@@ -5,10 +5,10 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "ot_creation", "label": "Creation to the division of the kingdom", "count": 9},
-    {"section": "ot_prophets", "label": "Division of the kingdom to the prophets", "count": 7},
-    {"section": "gospels_acts", "label": "The Gospels and Acts", "count": 16},
-    {"section": "epistles", "label": "Selected Epistles", "count": 8}
+    {"section": "ot_creation", "label": "Themes from Creation to the Division of the Kingdom", "count": 9},
+    {"section": "ot_prophets", "label": "Themes from the Division of the Kingdom to the Return from Exile and the Prophets", "count": 6},
+    {"section": "gospels_acts", "label": "Themes from the four Gospels and the Acts of the Apostles", "count": 16},
+    {"section": "epistles", "label": "Themes from Selected Epistles", "count": 9}
   ],
   "sections": [
     {

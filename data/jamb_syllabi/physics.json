@@ -5,12 +5,46 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "measurement", "label": "Measurement & Units", "count": 2},
-    {"section": "mechanics", "label": "Mechanics", "count": 12},
-    {"section": "thermal", "label": "Heat & Thermal Physics", "count": 6},
-    {"section": "waves_optics", "label": "Waves & Optics", "count": 8},
-    {"section": "electromagnetism", "label": "Electricity & Magnetism", "count": 10},
-    {"section": "modern", "label": "Modern Physics", "count": 2}
+    {"section": "measurement", "label": "Measurements and Units", "count": 1},
+    {"section": "vec", "label": "Scalars, Vectors and Position", "count": 1},
+    {"section": "mot", "label": "Motion", "count": 1},
+    {"section": "grav", "label": "Gravitational Field", "count": 1},
+    {"section": "equi", "label": "Equilibrium of Forces", "count": 1},
+    {"section": "fric", "label": "Friction", "count": 1},
+    {"section": "wep", "label": "Work, Energy and Power", "count": 1},
+    {"section": "mach", "label": "Simple Machines", "count": 1},
+    {"section": "elas", "label": "Elasticity", "count": 1},
+    {"section": "pres", "label": "Pressure", "count": 1},
+    {"section": "liq", "label": "Liquids At Rest", "count": 1},
+    {"section": "temp", "label": "Temperature and Its Measurement", "count": 1},
+    {"section": "heat", "label": "Quantity of Heat", "count": 1},
+    {"section": "state", "label": "Change of State", "count": 1},
+    {"section": "exp", "label": "Thermal Expansion", "count": 1},
+    {"section": "gas", "label": "Gas Laws", "count": 1},
+    {"section": "vap", "label": "Vapours", "count": 1},
+    {"section": "kin", "label": "Structure of Matter and Kinetic Theory", "count": 1},
+    {"section": "tran", "label": "Heat Transfer", "count": 1},
+    {"section": "wave", "label": "Waves", "count": 1},
+    {"section": "snd", "label": "Propagation of Sound Waves", "count": 1},
+    {"section": "sndc", "label": "Characteristics of Sound Waves", "count": 1},
+    {"section": "lght", "label": "Light Energy", "count": 1},
+    {"section": "refl", "label": "Reflection of Light at Plane and Curved Surfaces", "count": 1},
+    {"section": "refr", "label": "Refraction of Light Through Plane and Curved Surfaces", "count": 1},
+    {"section": "opt", "label": "Optical Instruments", "count": 1},
+    {"section": "disp", "label": "Dispersion of Light and Electromagnetic Spectrum", "count": 1},
+    {"section": "estat", "label": "Electrostatics", "count": 1},
+    {"section": "cap", "label": "Capacitors", "count": 1},
+    {"section": "cell", "label": "Electric Cells", "count": 1},
+    {"section": "cur", "label": "Current Electricity", "count": 1},
+    {"section": "epow", "label": "Electrical Energy and Power", "count": 1},
+    {"section": "mag", "label": "Magnets and Magnetic Fields", "count": 1},
+    {"section": "force", "label": "Force on a Current-Carrying Conductor in a Magnetic Field", "count": 1},
+    {"section": "emi", "label": "Electromagnetic Induction, Inductance and Eddy Currents", "count": 1},
+    {"section": "ac", "label": "Simple A.C. Circuits", "count": 1},
+    {"section": "cond", "label": "Conduction of Electricity Through Liquids and Gases", "count": 1},
+    {"section": "mod", "label": "Elementary Modern Physics", "count": 1},
+    {"section": "elec", "label": "Introductory Electronics", "count": 1},
+    {"section": "fib", "label": "Introduction to Fibre Optics and Lasers", "count": 1}
   ],
   "sections": [
     {
@@ -75,7 +109,7 @@
     {
       "code": "VEC",
       "name": "Scalars, Vectors and Position",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "vec",
       "topics": [
         {
           "code": "VEC.A",
@@ -114,7 +148,7 @@
     {
       "code": "MOT",
       "name": "Motion",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "mot",
       "topics": [
         {
           "code": "MOT.A",
@@ -229,7 +263,7 @@
     {
       "code": "GRAV",
       "name": "Gravitational Field",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "grav",
       "topics": [
         {
           "code": "GRAV.A",
@@ -262,7 +296,7 @@
     {
       "code": "EQUI",
       "name": "Equilibrium of Forces",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "equi",
       "topics": [
         {
           "code": "EQUI.A",
@@ -313,7 +347,7 @@
     {
       "code": "FRIC",
       "name": "Friction",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "fric",
       "topics": [
         {
           "code": "FRIC.1",
@@ -342,7 +376,7 @@
     {
       "code": "WEP",
       "name": "Work, Energy and Power",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "wep",
       "topics": [
         {
           "code": "WEP.A",
@@ -407,7 +441,7 @@
     {
       "code": "MACH",
       "name": "Simple Machines",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "mach",
       "topics": [
         {
           "code": "MACH.1",
@@ -428,7 +462,7 @@
     {
       "code": "ELAS",
       "name": "Elasticity",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "elas",
       "topics": [
         {
           "code": "ELAS.1",
@@ -453,7 +487,7 @@
     {
       "code": "PRES",
       "name": "Pressure",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "pres",
       "topics": [
         {
           "code": "PRES.A",
@@ -492,7 +526,7 @@
     {
       "code": "LIQ",
       "name": "Liquids At Rest",
-      "blueprint_section": "mechanics",
+      "blueprint_section": "liq",
       "topics": [
         {
           "code": "LIQ.1",
@@ -517,7 +551,7 @@
     {
       "code": "TEMP",
       "name": "Temperature and Its Measurement",
-      "blueprint_section": "thermal",
+      "blueprint_section": "temp",
       "topics": [
         {
           "code": "TEMP.1",
@@ -542,7 +576,7 @@
     {
       "code": "HEAT",
       "name": "Quantity of Heat",
-      "blueprint_section": "thermal",
+      "blueprint_section": "heat",
       "topics": [
         {
           "code": "HEAT.1",
@@ -567,7 +601,7 @@
     {
       "code": "STATE",
       "name": "Change of State",
-      "blueprint_section": "thermal",
+      "blueprint_section": "state",
       "topics": [
         {
           "code": "STATE.1",
@@ -596,7 +630,7 @@
     {
       "code": "EXP",
       "name": "Thermal Expansion",
-      "blueprint_section": "thermal",
+      "blueprint_section": "exp",
       "topics": [
         {
           "code": "EXP.A",
@@ -631,7 +665,7 @@
     {
       "code": "GAS",
       "name": "Gas Laws",
-      "blueprint_section": "thermal",
+      "blueprint_section": "gas",
       "topics": [
         {
           "code": "GAS.1",
@@ -656,7 +690,7 @@
     {
       "code": "VAP",
       "name": "Vapours",
-      "blueprint_section": "thermal",
+      "blueprint_section": "vap",
       "topics": [
         {
           "code": "VAP.1",
@@ -685,7 +719,7 @@
     {
       "code": "KIN",
       "name": "Structure of Matter and Kinetic Theory",
-      "blueprint_section": "thermal",
+      "blueprint_section": "kin",
       "topics": [
         {
           "code": "KIN.A",
@@ -720,7 +754,7 @@
     {
       "code": "TRAN",
       "name": "Heat Transfer",
-      "blueprint_section": "thermal",
+      "blueprint_section": "tran",
       "topics": [
         {
           "code": "TRAN.1",
@@ -749,7 +783,7 @@
     {
       "code": "WAVE",
       "name": "Waves",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "wave",
       "topics": [
         {
           "code": "WAVE.A",
@@ -806,7 +840,7 @@
     {
       "code": "SND",
       "name": "Propagation of Sound Waves",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "snd",
       "topics": [
         {
           "code": "SND.1",
@@ -831,7 +865,7 @@
     {
       "code": "SNDC",
       "name": "Characteristics of Sound Waves",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "sndc",
       "topics": [
         {
           "code": "SNDC.1",
@@ -860,7 +894,7 @@
     {
       "code": "LGHT",
       "name": "Light Energy",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "lght",
       "topics": [
         {
           "code": "LGHT.A",
@@ -891,7 +925,7 @@
     {
       "code": "REFL",
       "name": "Reflection of Light at Plane and Curved Surfaces",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "refl",
       "topics": [
         {
           "code": "REFL.1",
@@ -916,7 +950,7 @@
     {
       "code": "REFR",
       "name": "Refraction of Light Through Plane and Curved Surfaces",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "refr",
       "topics": [
         {
           "code": "REFR.A",
@@ -959,7 +993,7 @@
     {
       "code": "OPT",
       "name": "Optical Instruments",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "opt",
       "topics": [
         {
           "code": "OPT.1",
@@ -984,7 +1018,7 @@
     {
       "code": "DISP",
       "name": "Dispersion of Light and Electromagnetic Spectrum",
-      "blueprint_section": "waves_optics",
+      "blueprint_section": "disp",
       "topics": [
         {
           "code": "DISP.A",
@@ -1019,7 +1053,7 @@
     {
       "code": "ESTAT",
       "name": "Electrostatics",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "estat",
       "topics": [
         {
           "code": "ESTAT.1",
@@ -1052,7 +1086,7 @@
     {
       "code": "CAP",
       "name": "Capacitors",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "cap",
       "topics": [
         {
           "code": "CAP.1",
@@ -1077,7 +1111,7 @@
     {
       "code": "CELL",
       "name": "Electric Cells",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "cell",
       "topics": [
         {
           "code": "CELL.1",
@@ -1106,7 +1140,7 @@
     {
       "code": "CUR",
       "name": "Current Electricity",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "cur",
       "topics": [
         {
           "code": "CUR.1",
@@ -1135,7 +1169,7 @@
     {
       "code": "EPOW",
       "name": "Electrical Energy and Power",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "epow",
       "topics": [
         {
           "code": "EPOW.1",
@@ -1160,7 +1194,7 @@
     {
       "code": "MAG",
       "name": "Magnets and Magnetic Fields",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "mag",
       "topics": [
         {
           "code": "MAG.1",
@@ -1197,7 +1231,7 @@
     {
       "code": "FORCE",
       "name": "Force on a Current-Carrying Conductor in a Magnetic Field",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "force",
       "topics": [
         {
           "code": "FORCE.1",
@@ -1226,7 +1260,7 @@
     {
       "code": "EMI",
       "name": "Electromagnetic Induction, Inductance and Eddy Currents",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "emi",
       "topics": [
         {
           "code": "EMI.A",
@@ -1267,7 +1301,7 @@
     {
       "code": "AC",
       "name": "Simple A.C. Circuits",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "ac",
       "topics": [
         {
           "code": "AC.1",
@@ -1296,7 +1330,7 @@
     {
       "code": "COND",
       "name": "Conduction of Electricity Through Liquids and Gases",
-      "blueprint_section": "electromagnetism",
+      "blueprint_section": "cond",
       "topics": [
         {
           "code": "COND.A",
@@ -1327,7 +1361,7 @@
     {
       "code": "MOD",
       "name": "Elementary Modern Physics",
-      "blueprint_section": "modern",
+      "blueprint_section": "mod",
       "topics": [
         {
           "code": "MOD.1",
@@ -1368,7 +1402,7 @@
     {
       "code": "ELEC",
       "name": "Introductory Electronics",
-      "blueprint_section": "modern",
+      "blueprint_section": "elec",
       "topics": [
         {
           "code": "ELEC.1",
@@ -1397,7 +1431,7 @@
     {
       "code": "FIB",
       "name": "Introduction to Fibre Optics and Lasers",
-      "blueprint_section": "modern",
+      "blueprint_section": "fib",
       "topics": [
         {
           "code": "FIB.1",

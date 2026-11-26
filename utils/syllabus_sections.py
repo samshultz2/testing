@@ -45,10 +45,19 @@ def sync_mappings(subject, commit=True):
     except Exception:
         return 0
     want = {n['code']: n['blueprint_section'] for n in parsed['nodes'] if n.get('blueprint_section')}
+    try:
+        valid = {x.get('section') for x in json.load(open(path, encoding='utf-8')).get('blueprint') or []}
+    except Exception:
+        valid = set()
     n = 0
     for code, node in by_code.items():
-        if not (node.blueprint_section or '').strip() and want.get(code):
+        cur = (node.blueprint_section or '').strip()
+        if not cur and want.get(code):
             node.blueprint_section = want[code]
+            n += 1
+        elif cur and valid and cur not in valid and cur != 'novel':
+            # stale: points at a section the paper blueprint no longer has
+            node.blueprint_section = want.get(code)
             n += 1
     if n and commit:
         db.session.commit()
@@ -103,6 +112,27 @@ _PREVIOUS_BLUEPRINTS = {
 }
 
 
+# Earlier bundled blueprints as full {section: count} maps: a stored blueprint
+# equal to one of these came from the app, not from someone's own edits.
+# (Subjects keyed by the bundled file's "subject" name, lower-cased.)
+_PREVIOUS_FULL = {
+    "agricultural science": [{"general_agric": 7, "agronomy": 13, "animal": 7, "agric_econ": 7, "agric_tech": 6}],
+    "biology": [{"cell": 6, "nutrition": 5, "transport_respiration": 6, "excretion_regulation": 4, "support_movement": 3, "reproduction": 5, "ecology": 6, "genetics_evolution": 5}],
+    "chemistry": [{"separation": 2, "atomic_bonding": 6, "stoichiometry": 6, "states_gas": 4, "energetics_rates": 5, "acids_bases_salts": 5, "redox_electro": 4, "periodic_metals": 4, "organic": 4}],
+    "christian religious studies": [{"ot_creation": 9, "ot_prophets": 7, "gospels_acts": 16, "epistles": 8}],
+    "commerce": [{"trade": 18, "business": 15, "finance": 7}],
+    "computer studies": [{"foundations": 8, "applications": 11, "ict": 8, "programming": 10, "ethics": 3}],
+    "economics": [{"micro": 18, "macro": 9, "development": 9, "international": 4}],
+    "geography": [{"practical": 6, "physical": 16, "human": 9, "regional": 9}],
+    "government": [{"concepts": 14, "nigeria": 10, "constitution": 8, "international": 8}],
+    "history": [{"nig_pre1800": 5, "nig_1800_1900": 9, "nig_1900_1960": 7, "nig_since_1960": 8, "africa": 11}],
+    "islamic studies": [{"quran_hadith": 14, "tawhid_fiqh": 16, "islamic_history": 10}],
+    "mathematics": [{"number": 10, "algebra": 12, "geometry": 10, "calculus": 4, "statistics": 4}],
+    "physics": [{"measurement": 2, "mechanics": 12, "thermal": 6, "waves_optics": 8, "electromagnetism": 10, "modern": 2}],
+    "principles of accounts": [{"principles": 20, "final": 6, "specialised": 14}],
+}
+
+
 def sync_blueprint(subject, commit=True):
     """Bring the subject's stored (imported) blueprint up to the bundled one when
     it still holds an earlier bundled version unchanged. Returns a list of
@@ -131,8 +161,10 @@ def sync_blueprint(subject, commit=True):
     new = {x.get('section'): int(x.get('count', 0)) for x in bundled}
     if not bundled or have == new:
         return []
-    for diff in _PREVIOUS_BLUEPRINTS.get(norm_subject(subject.name), []):
-        if have == {**new, **diff}:
+    olds = [{**new, **diff} for diff in _PREVIOUS_BLUEPRINTS.get(norm_subject(subject.name), [])]
+    olds += [m for k, ms in _PREVIOUS_FULL.items() if norm_subject(k) == norm_subject(subject.name) for m in ms]
+    for prev in olds:
+        if have == prev:
             changes = [(k, have.get(k), new.get(k)) for k in new if have.get(k) != new.get(k)]
             syll.blueprint = json.dumps(bundled)
             if commit:

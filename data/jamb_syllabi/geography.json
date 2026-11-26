@@ -5,10 +5,10 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "practical", "label": "Practical geography", "count": 6},
-    {"section": "physical", "label": "Physical geography", "count": 16},
-    {"section": "human", "label": "Human geography", "count": 9},
-    {"section": "regional", "label": "Regional geography", "count": 9}
+    {"section": "practical", "label": "Practical Geography", "count": 4},
+    {"section": "physical", "label": "Physical Geography", "count": 20},
+    {"section": "human", "label": "Human Geography", "count": 8},
+    {"section": "regional", "label": "Regional Geography", "count": 8}
   ],
   "sections": [
     {

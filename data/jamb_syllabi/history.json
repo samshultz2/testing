@@ -5,11 +5,13 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "nig_pre1800", "label": "Nigeria up to 1800", "count": 5},
-    {"section": "nig_1800_1900", "label": "Nigeria 1800-1900", "count": 9},
-    {"section": "nig_1900_1960", "label": "Nigeria 1900-1960", "count": 7},
-    {"section": "nig_since_1960", "label": "Nigeria since independence", "count": 8},
-    {"section": "africa", "label": "Africa", "count": 11}
+    {"section": "nig_pre1800", "label": "Part I - The Nigeria Area up to 1800", "count": 5},
+    {"section": "nig_1800_1900", "label": "Part I - The Nigeria Area 1800-1900", "count": 8},
+    {"section": "nig_1900_1960", "label": "Part I - Nigeria 1900-1960", "count": 7},
+    {"section": "nig_since_1960", "label": "Part I - Nigeria Since Independence", "count": 7},
+    {"section": "afr1", "label": "Part II - West and North Africa", "count": 3},
+    {"section": "afr2", "label": "Part II - Horn of Africa and Southern Africa", "count": 3},
+    {"section": "afr3", "label": "Part II - Imperialism, Colonialism and Problems of Nation-Building in Africa", "count": 7}
   ],
   "sections": [
     {
@@ -617,7 +619,7 @@
     {
       "code": "AFR1",
       "name": "Part II - West and North Africa",
-      "blueprint_section": "africa",
+      "blueprint_section": "afr1",
       "topics": [
         {
           "code": "AFR1.1",
@@ -678,7 +680,7 @@
     {
       "code": "AFR2",
       "name": "Part II - Horn of Africa and Southern Africa",
-      "blueprint_section": "africa",
+      "blueprint_section": "afr2",
       "topics": [
         {
           "code": "AFR2.1",
@@ -731,7 +733,7 @@
     {
       "code": "AFR3",
       "name": "Part II - Imperialism, Colonialism and Problems of Nation-Building in Africa",
-      "blueprint_section": "africa",
+      "blueprint_section": "afr3",
       "topics": [
         {
           "code": "AFR3.1",

@@ -5,15 +5,22 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "separation", "label": "Separation techniques", "count": 2},
-    {"section": "atomic_bonding", "label": "Atomic structure & bonding", "count": 6},
-    {"section": "stoichiometry", "label": "Mole concept & stoichiometry", "count": 6},
-    {"section": "states_gas", "label": "States of matter & gas laws", "count": 4},
-    {"section": "energetics_rates", "label": "Energetics, rates & equilibrium", "count": 5},
-    {"section": "acids_bases_salts", "label": "Acids, bases & salts", "count": 5},
-    {"section": "redox_electro", "label": "Redox & electrochemistry", "count": 4},
-    {"section": "periodic_metals", "label": "Periodic table, metals & non-metals", "count": 4},
-    {"section": "organic", "label": "Organic chemistry", "count": 4}
+    {"section": "separation", "label": "Separation of Mixtures and Purification of Chemical Substances", "count": 3},
+    {"section": "stoichiometry", "label": "Chemical Combination", "count": 2},
+    {"section": "gas", "label": "Kinetic Theory of Matter and Gas Laws", "count": 2},
+    {"section": "atom", "label": "Atomic Structure and Bonding", "count": 3},
+    {"section": "nuc", "label": "Nuclear Chemistry", "count": 2},
+    {"section": "sol", "label": "Solubility", "count": 2},
+    {"section": "poll", "label": "Environmental Pollution", "count": 3},
+    {"section": "acids_bases_salts", "label": "Acids, Bases and Salts", "count": 2},
+    {"section": "redox", "label": "Oxidation and Reduction (Redox)", "count": 2},
+    {"section": "elec", "label": "Electrolysis", "count": 2},
+    {"section": "ener", "label": "Energy Changes", "count": 2},
+    {"section": "rate", "label": "Rates of Chemical Reaction", "count": 2},
+    {"section": "equil", "label": "Chemical Equilibria", "count": 2},
+    {"section": "nonmet", "label": "Non-metals and their Compounds", "count": 4},
+    {"section": "met", "label": "Metals and their Compounds", "count": 4},
+    {"section": "organic", "label": "Organic Compounds", "count": 3}
   ],
   "sections": [
     {
@@ -77,7 +84,7 @@
     {
       "code": "GAS",
       "name": "Kinetic Theory of Matter and Gas Laws",
-      "blueprint_section": "states_gas",
+      "blueprint_section": "gas",
       "topics": [
         {
           "code": "GAS.1",
@@ -116,7 +123,7 @@
     {
       "code": "ATOM",
       "name": "Atomic Structure and Bonding",
-      "blueprint_section": "atomic_bonding",
+      "blueprint_section": "atom",
       "topics": [
         {
           "code": "ATOM.1",
@@ -189,7 +196,7 @@
           ]
         }
       ],
-      "blueprint_section": "atomic_bonding"
+      "blueprint_section": "nuc"
     },
     {
       "code": "SOL",
@@ -214,7 +221,7 @@
           ]
         }
       ],
-      "blueprint_section": "states_gas"
+      "blueprint_section": "sol"
     },
     {
       "code": "POLL",
@@ -257,7 +264,7 @@
           ]
         }
       ],
-      "blueprint_section": "periodic_metals"
+      "blueprint_section": "poll"
     },
     {
       "code": "ACID",
@@ -295,7 +302,7 @@
     {
       "code": "REDOX",
       "name": "Oxidation and Reduction (Redox)",
-      "blueprint_section": "redox_electro",
+      "blueprint_section": "redox",
       "topics": [
         {
           "code": "REDOX.1",
@@ -328,7 +335,7 @@
     {
       "code": "ELEC",
       "name": "Electrolysis",
-      "blueprint_section": "redox_electro",
+      "blueprint_section": "elec",
       "topics": [
         {
           "code": "ELEC.1",
@@ -361,7 +368,7 @@
     {
       "code": "ENER",
       "name": "Energy Changes",
-      "blueprint_section": "energetics_rates",
+      "blueprint_section": "ener",
       "topics": [
         {
           "code": "ENER.1",
@@ -386,7 +393,7 @@
     {
       "code": "RATE",
       "name": "Rates of Chemical Reaction",
-      "blueprint_section": "energetics_rates",
+      "blueprint_section": "rate",
       "topics": [
         {
           "code": "RATE.1",
@@ -411,7 +418,7 @@
     {
       "code": "EQUIL",
       "name": "Chemical Equilibria",
-      "blueprint_section": "energetics_rates",
+      "blueprint_section": "equil",
       "topics": [
         {
           "code": "EQUIL.1",
@@ -432,7 +439,7 @@
     {
       "code": "NONMET",
       "name": "Non-metals and their Compounds",
-      "blueprint_section": "periodic_metals",
+      "blueprint_section": "nonmet",
       "topics": [
         {
           "code": "NONMET.1",
@@ -513,7 +520,7 @@
     {
       "code": "MET",
       "name": "Metals and their Compounds",
-      "blueprint_section": "periodic_metals",
+      "blueprint_section": "met",
       "topics": [
         {
           "code": "MET.1",

@@ -5,17 +5,21 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "foundations", "label": "Computing foundations and maintenance", "count": 8},
-    {"section": "applications", "label": "Application packages and files", "count": 11},
-    {"section": "ict", "label": "ICT", "count": 8},
-    {"section": "programming", "label": "Problem solving, programming and AI", "count": 10},
-    {"section": "ethics", "label": "Computer ethics", "count": 3}
+    {"section": "evol", "label": "Evolution of Computing", "count": 3},
+    {"section": "fund", "label": "Fundamentals of Computing", "count": 4},
+    {"section": "apps", "label": "Computer Application Packages", "count": 8},
+    {"section": "files", "label": "Managing Computer Files", "count": 3},
+    {"section": "maint", "label": "Computer Maintenance and Safety Measures", "count": 2},
+    {"section": "ict", "label": "Information and Communication Technology (ICT)", "count": 7},
+    {"section": "prog", "label": "Developing Problem-Solving Skills", "count": 7},
+    {"section": "ai", "label": "Artificial Intelligence (AI) and Robotics", "count": 3},
+    {"section": "ethics", "label": "Computer Ethics and Human Issues", "count": 3}
   ],
   "sections": [
     {
       "code": "EVOL",
       "name": "Evolution of Computing",
-      "blueprint_section": "foundations",
+      "blueprint_section": "evol",
       "topics": [
         {
           "code": "EVOL.1",
@@ -62,7 +66,7 @@
     {
       "code": "FUND",
       "name": "Fundamentals of Computing",
-      "blueprint_section": "foundations",
+      "blueprint_section": "fund",
       "topics": [
         {
           "code": "FUND.1",
@@ -113,7 +117,7 @@
     {
       "code": "APPS",
       "name": "Computer Application Packages",
-      "blueprint_section": "applications",
+      "blueprint_section": "apps",
       "topics": [
         {
           "code": "APPS.1",
@@ -244,7 +248,7 @@
     {
       "code": "FILES",
       "name": "Managing Computer Files",
-      "blueprint_section": "applications",
+      "blueprint_section": "files",
       "topics": [
         {
           "code": "FILES.1",
@@ -295,7 +299,7 @@
     {
       "code": "MAINT",
       "name": "Computer Maintenance and Safety Measures",
-      "blueprint_section": "foundations",
+      "blueprint_section": "maint",
       "topics": [
         {
           "code": "MAINT.1",
@@ -465,7 +469,7 @@
     {
       "code": "PROG",
       "name": "Developing Problem-Solving Skills",
-      "blueprint_section": "programming",
+      "blueprint_section": "prog",
       "topics": [
         {
           "code": "PROG.1",
@@ -584,7 +588,7 @@
     {
       "code": "AI",
       "name": "Artificial Intelligence (AI) and Robotics",
-      "blueprint_section": "programming",
+      "blueprint_section": "ai",
       "topics": [
         {
           "code": "AI.1",

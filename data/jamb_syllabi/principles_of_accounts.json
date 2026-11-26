@@ -5,9 +5,24 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "principles", "label": "Book-keeping principles", "count": 20},
-    {"section": "final", "label": "Final accounts", "count": 6},
-    {"section": "specialised", "label": "Specialised accounts", "count": 14}
+    {"section": "book", "label": "Nature and Significance of Book Keeping and Accounting", "count": 3},
+    {"section": "dent", "label": "Principles of Double Entry", "count": 3},
+    {"section": "eth", "label": "Ethics, Professional and Regulatory Bodies in Accounting", "count": 2},
+    {"section": "cash", "label": "Cash Book", "count": 2},
+    {"section": "bank", "label": "Bank Transactions and Reconciliation Statements", "count": 2},
+    {"section": "sole", "label": "Final Accounts of a Sole Trader/Proprietor", "count": 2},
+    {"section": "stock", "label": "Stock Valuation", "count": 2},
+    {"section": "ctrl", "label": "Control Accounts", "count": 2},
+    {"section": "incm", "label": "Incomplete Records and Single Entry", "count": 2},
+    {"section": "manf", "label": "Manufacturing Accounts", "count": 2},
+    {"section": "npo", "label": "Accounts of Not-For-Profit-Making Organizations", "count": 2},
+    {"section": "dept", "label": "Departmental Accounts", "count": 2},
+    {"section": "bran", "label": "Branch Accounts", "count": 2},
+    {"section": "jv", "label": "Joint Venture Accounts", "count": 2},
+    {"section": "part", "label": "Partnership Accounts", "count": 3},
+    {"section": "comp", "label": "Introduction to Company Accounts", "count": 2},
+    {"section": "pub", "label": "Public Sector Accounting", "count": 3},
+    {"section": "it", "label": "Information Technology in Accounting", "count": 2}
   ],
   "sections": [
     {
@@ -45,7 +60,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "book"
     },
     {
       "code": "DENT",
@@ -86,7 +101,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "dent"
     },
     {
       "code": "ETH",
@@ -115,7 +130,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "eth"
     },
     {
       "code": "CASH",
@@ -140,7 +155,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "cash"
     },
     {
       "code": "BANK",
@@ -173,7 +188,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "bank"
     },
     {
       "code": "SOLE",
@@ -198,7 +213,7 @@
           ]
         }
       ],
-      "blueprint_section": "final"
+      "blueprint_section": "sole"
     },
     {
       "code": "STOCK",
@@ -223,7 +238,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "stock"
     },
     {
       "code": "CTRL",
@@ -248,7 +263,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "ctrl"
     },
     {
       "code": "INCM",
@@ -281,7 +296,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "incm"
     },
     {
       "code": "MANF",
@@ -310,7 +325,7 @@
           ]
         }
       ],
-      "blueprint_section": "final"
+      "blueprint_section": "manf"
     },
     {
       "code": "NPO",
@@ -339,7 +354,7 @@
           ]
         }
       ],
-      "blueprint_section": "final"
+      "blueprint_section": "npo"
     },
     {
       "code": "DEPT",
@@ -368,7 +383,7 @@
           ]
         }
       ],
-      "blueprint_section": "specialised"
+      "blueprint_section": "dept"
     },
     {
       "code": "BRAN",
@@ -401,7 +416,7 @@
           ]
         }
       ],
-      "blueprint_section": "specialised"
+      "blueprint_section": "bran"
     },
     {
       "code": "JV",
@@ -430,7 +445,7 @@
           ]
         }
       ],
-      "blueprint_section": "specialised"
+      "blueprint_section": "jv"
     },
     {
       "code": "PART",
@@ -467,7 +482,7 @@
           ]
         }
       ],
-      "blueprint_section": "specialised"
+      "blueprint_section": "part"
     },
     {
       "code": "COMP",
@@ -500,7 +515,7 @@
           ]
         }
       ],
-      "blueprint_section": "specialised"
+      "blueprint_section": "comp"
     },
     {
       "code": "PUB",
@@ -545,7 +560,7 @@
           ]
         }
       ],
-      "blueprint_section": "specialised"
+      "blueprint_section": "pub"
     },
     {
       "code": "IT",
@@ -578,7 +593,7 @@
           ]
         }
       ],
-      "blueprint_section": "principles"
+      "blueprint_section": "it"
     }
   ]
 }

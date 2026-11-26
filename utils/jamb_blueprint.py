@@ -158,18 +158,6 @@ _EXTRA_SECTIONS = {
     # 'registers' and 'summary' are taggable extras at count 0 — give them a per-mock
     # count if you want them drawn as their own section.
     'english language': [_sec('summary', 'Summary', 0), _sec('registers', 'Registers', 0)],
-    'economics': [_sec('micro', 'Microeconomics', 0), _sec('macro', 'Macroeconomics', 0),
-                  _sec('development', 'Development & public finance', 0),
-                  _sec('international', 'International economics', 0)],
-    'government': [_sec('concepts', 'Basic concepts', 0), _sec('constitution', 'Constitution & institutions', 0),
-                   _sec('nigeria', 'Nigerian government & politics', 0),
-                   _sec('international', 'International relations', 0)],
-    'commerce': [_sec('trade', 'Trade & aids to trade', 0), _sec('business', 'Business organisations', 0),
-                 _sec('finance', 'Finance & institutions', 0)],
-    'accounting': [_sec('principles', 'Principles & double entry', 0), _sec('final', 'Final accounts', 0),
-                   _sec('specialised', 'Specialised accounts', 0)],
-    'geography': [_sec('physical', 'Physical geography', 0), _sec('human', 'Human geography', 0),
-                  _sec('regional', 'Regional geography (Nigeria)', 0), _sec('practical', 'Practical & map work', 0)],
 }
 
 

@@ -5,10 +5,29 @@
   "version": "2026",
   "total": 40,
   "blueprint": [
-    {"section": "micro", "label": "Microeconomics", "count": 18},
-    {"section": "macro", "label": "Money, income and finance", "count": 9},
-    {"section": "development", "label": "Public finance and development", "count": 9},
-    {"section": "international", "label": "International trade", "count": 4}
+    {"section": "sci", "label": "Economics as a Science", "count": 1},
+    {"section": "sys", "label": "Economic Systems", "count": 1},
+    {"section": "mth", "label": "Methods and Tools of Economic Analysis", "count": 2},
+    {"section": "dem", "label": "The Theory of Demand", "count": 2},
+    {"section": "con", "label": "The Theory of Consumer Behaviour", "count": 2},
+    {"section": "sup", "label": "The Theory of Supply", "count": 1},
+    {"section": "prc", "label": "The Theory of Price Determination", "count": 2},
+    {"section": "prd", "label": "The Theory of Production", "count": 2},
+    {"section": "cst", "label": "Theory of Costs and Revenue", "count": 2},
+    {"section": "mkt", "label": "Market Structures", "count": 1},
+    {"section": "nat", "label": "National Income", "count": 2},
+    {"section": "mon", "label": "Money and Inflation", "count": 2},
+    {"section": "fin", "label": "Financial Institutions", "count": 2},
+    {"section": "pub", "label": "Public Finance", "count": 2},
+    {"section": "gro", "label": "Economic Growth and Development", "count": 2},
+    {"section": "agr", "label": "Agriculture in Nigeria", "count": 2},
+    {"section": "ind", "label": "Industry and Industrialization", "count": 2},
+    {"section": "res", "label": "Natural Resources and the Nigerian Economy", "count": 2},
+    {"section": "bus", "label": "Business Organizations", "count": 2},
+    {"section": "pop", "label": "Population", "count": 2},
+    {"section": "int", "label": "International Trade", "count": 1},
+    {"section": "org", "label": "International Economic Organizations", "count": 1},
+    {"section": "fac", "label": "Factors of Production and their Theories", "count": 2}
   ],
   "sections": [
     {
@@ -34,7 +53,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "sci"
     },
     {
       "code": "SYS",
@@ -59,7 +78,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "sys"
     },
     {
       "code": "MTH",
@@ -92,7 +111,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "mth"
     },
     {
       "code": "DEM",
@@ -121,7 +140,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "dem"
     },
     {
       "code": "CON",
@@ -154,7 +173,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "con"
     },
     {
       "code": "SUP",
@@ -179,7 +198,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "sup"
     },
     {
       "code": "PRC",
@@ -208,7 +227,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "prc"
     },
     {
       "code": "PRD",
@@ -249,7 +268,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "prd"
     },
     {
       "code": "CST",
@@ -282,7 +301,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "cst"
     },
     {
       "code": "MKT",
@@ -307,7 +326,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "mkt"
     },
     {
       "code": "NAT",
@@ -348,7 +367,7 @@
           ]
         }
       ],
-      "blueprint_section": "macro"
+      "blueprint_section": "nat"
     },
     {
       "code": "MON",
@@ -385,7 +404,7 @@
           ]
         }
       ],
-      "blueprint_section": "macro"
+      "blueprint_section": "mon"
     },
     {
       "code": "FIN",
@@ -426,7 +445,7 @@
           ]
         }
       ],
-      "blueprint_section": "macro"
+      "blueprint_section": "fin"
     },
     {
       "code": "PUB",
@@ -471,7 +490,7 @@
           ]
         }
       ],
-      "blueprint_section": "development"
+      "blueprint_section": "pub"
     },
     {
       "code": "GRO",
@@ -504,7 +523,7 @@
           ]
         }
       ],
-      "blueprint_section": "development"
+      "blueprint_section": "gro"
     },
     {
       "code": "AGR",
@@ -537,7 +556,7 @@
           ]
         }
       ],
-      "blueprint_section": "development"
+      "blueprint_section": "agr"
     },
     {
       "code": "IND",
@@ -570,7 +589,7 @@
           ]
         }
       ],
-      "blueprint_section": "development"
+      "blueprint_section": "ind"
     },
     {
       "code": "RES",
@@ -607,7 +626,7 @@
           ]
         }
       ],
-      "blueprint_section": "development"
+      "blueprint_section": "res"
     },
     {
       "code": "BUS",
@@ -644,7 +663,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "bus"
     },
     {
       "code": "POP",
@@ -677,7 +696,7 @@
           ]
         }
       ],
-      "blueprint_section": "development"
+      "blueprint_section": "pop"
     },
     {
       "code": "INT",
@@ -706,7 +725,7 @@
           ]
         }
       ],
-      "blueprint_section": "international"
+      "blueprint_section": "int"
     },
     {
       "code": "ORG",
@@ -723,7 +742,7 @@
           ]
         }
       ],
-      "blueprint_section": "international"
+      "blueprint_section": "org"
     },
     {
       "code": "FAC",
@@ -756,7 +775,7 @@
           ]
         }
       ],
-      "blueprint_section": "micro"
+      "blueprint_section": "fac"
     }
   ]
 }
