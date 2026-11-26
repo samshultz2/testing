@@ -3,6 +3,15 @@
   "code": "JAMB-PHY",
   "prefix": "PHY",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "measurement", "label": "Measurement & Units", "count": 2},
+    {"section": "mechanics", "label": "Mechanics", "count": 12},
+    {"section": "thermal", "label": "Heat & Thermal Physics", "count": 6},
+    {"section": "waves_optics", "label": "Waves & Optics", "count": 8},
+    {"section": "electromagnetism", "label": "Electricity & Magnetism", "count": 10},
+    {"section": "modern", "label": "Modern Physics", "count": 2}
+  ],
   "sections": [
     {
       "code": "MEAS",

@@ -3,10 +3,17 @@
   "code": "JAMB-ISL",
   "prefix": "ISL",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "quran_hadith", "label": "Qur'an and Hadith", "count": 14},
+    {"section": "tawhid_fiqh", "label": "Tawhid and Fiqh", "count": 16},
+    {"section": "islamic_history", "label": "Islamic history and civilization", "count": 10}
+  ],
   "sections": [
     {
       "code": "QUR",
       "name": "Part I - The Qur'an and Hadith",
+      "blueprint_section": "quran_hadith",
       "topics": [
         {
           "code": "QUR.1",
@@ -187,6 +194,7 @@
     {
       "code": "FIQH",
       "name": "Part II - Tawhid and Fiqh",
+      "blueprint_section": "tawhid_fiqh",
       "topics": [
         {
           "code": "FIQH.8",
@@ -383,6 +391,7 @@
     {
       "code": "HIST",
       "name": "Part III - Islamic History and Civilization",
+      "blueprint_section": "islamic_history",
       "topics": [
         {
           "code": "HIST.15",

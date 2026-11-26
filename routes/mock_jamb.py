@@ -3033,6 +3033,10 @@ def exam_blueprint(exam_id):
         for x in sv['sections']:
             x['stock'] = st.get(x['section'], 0)
         sv['stock'] = sum(st.values())
+        keys = {x['section'] for x in sv['sections']}
+        # questions not yet sorted into this blueprint's sections (e.g. 'general'):
+        # they still fill a paper when a section runs short
+        sv['unsorted'] = sum(n for sec, n in st.items() if sec not in keys and sec != 'novel')
         sv['short'] = sum(1 for x in sv['sections'] if x['count'] and x['stock'] < x['count'])
     # Well-known JAMB recommended novels (suggestions; the field is free text).
     novel_cards, novel_pick, novel_other = _novel_choices(exam.novel_title or '')

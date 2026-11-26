@@ -3,10 +3,18 @@
   "code": "JAMB-CRS",
   "prefix": "CRS",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "ot_creation", "label": "Creation to the division of the kingdom", "count": 9},
+    {"section": "ot_prophets", "label": "Division of the kingdom to the prophets", "count": 7},
+    {"section": "gospels_acts", "label": "The Gospels and Acts", "count": 16},
+    {"section": "epistles", "label": "Selected Epistles", "count": 8}
+  ],
   "sections": [
     {
       "code": "A",
       "name": "Themes from Creation to the Division of the Kingdom",
+      "blueprint_section": "ot_creation",
       "topics": [
         {
           "code": "A.1",
@@ -153,6 +161,7 @@
     {
       "code": "B",
       "name": "Themes from the Division of the Kingdom to the Return from Exile and the Prophets",
+      "blueprint_section": "ot_prophets",
       "topics": [
         {
           "code": "B.1",
@@ -269,6 +278,7 @@
     {
       "code": "C",
       "name": "Themes from the four Gospels and the Acts of the Apostles",
+      "blueprint_section": "gospels_acts",
       "topics": [
         {
           "code": "C.1",
@@ -526,6 +536,7 @@
     {
       "code": "D",
       "name": "Themes from Selected Epistles",
+      "blueprint_section": "epistles",
       "topics": [
         {
           "code": "D.1",

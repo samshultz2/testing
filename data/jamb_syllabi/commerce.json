@@ -3,6 +3,12 @@
   "code": "JAMB-COMM",
   "prefix": "COMM",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "trade", "label": "Trade and aids to trade", "count": 18},
+    {"section": "business", "label": "Business units and management", "count": 15},
+    {"section": "finance", "label": "Money and finance", "count": 7}
+  ],
   "sections": [
     {
       "code": "COM",

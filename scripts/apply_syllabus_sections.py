@@ -25,7 +25,7 @@ def main():
             if bp:
                 print('\n== %s: paper blueprint %s: %s' % (
                     subj.name, 'updated' if apply else 'would update',
-                    ', '.join('%s %s -> %s' % (k, a, b) for k, a, b in bp)))
+                    ', '.join(('%s %s' % (k, b)) if a is None else ('%s %s -> %s' % (k, a, b)) for k, a, b in bp)))
             n = sync_mappings(subj, commit=apply)      # a dry run rolls it back in resection()
             moves, samples = resection(subj, apply=apply)
             if not n and not moves:

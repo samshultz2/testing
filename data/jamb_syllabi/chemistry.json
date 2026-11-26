@@ -3,6 +3,18 @@
   "code": "JAMB-CHEM",
   "prefix": "CHEM",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "separation", "label": "Separation techniques", "count": 2},
+    {"section": "atomic_bonding", "label": "Atomic structure & bonding", "count": 6},
+    {"section": "stoichiometry", "label": "Mole concept & stoichiometry", "count": 6},
+    {"section": "states_gas", "label": "States of matter & gas laws", "count": 4},
+    {"section": "energetics_rates", "label": "Energetics, rates & equilibrium", "count": 5},
+    {"section": "acids_bases_salts", "label": "Acids, bases & salts", "count": 5},
+    {"section": "redox_electro", "label": "Redox & electrochemistry", "count": 4},
+    {"section": "periodic_metals", "label": "Periodic table, metals & non-metals", "count": 4},
+    {"section": "organic", "label": "Organic chemistry", "count": 4}
+  ],
   "sections": [
     {
       "code": "SEP",

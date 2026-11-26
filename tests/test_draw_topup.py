@@ -89,3 +89,50 @@ def test_sync_blueprint_updates_only_untouched(app):
             for s, y, _ in out:
                 db.session.delete(y); db.session.delete(s)
             db.session.commit()
+
+
+def test_every_bundled_syllabus_blueprint_tallies_with_its_mappings():
+    import glob, json
+    for f in glob.glob('data/jamb_syllabi/*.json'):
+        d = json.load(open(f))
+        if d.get('subject') == 'Literature in English':
+            continue                     # uses the built-in Literature blueprint
+        bp = {x['section']: x['count'] for x in d.get('blueprint') or []}
+        assert bp, f
+        assert sum(bp.values()) == (d.get('total') or 40), f
+        used = set()
+
+        def walk(nodes):
+            for n in nodes:
+                if n.get('blueprint_section'):
+                    used.add(n['blueprint_section'])
+                walk(n.get('topics') or n.get('items') or [])
+        walk(d['sections'])
+        assert used == set(bp), (f, used ^ set(bp))
+
+
+def test_short_paper_topped_up_from_unsorted_questions():
+    bp = _bp(('micro', 6, False), ('macro', 4, False))
+    standalone = {'micro': [_q('micro') for _ in range(2)], 'general': [_q('general') for _ in range(20)],
+                  'novel': [_q('novel') for _ in range(5)]}
+    items, served = draw_paper(bp, {}, standalone, random.Random(5), arrange=True)
+    assert len(served) == 10
+    secs = [i['q'].section for i in items]
+    assert secs[:2] == ['micro', 'micro'] and set(secs[2:]) == {'general'} and 'novel' not in secs
+
+
+def test_sync_blueprint_adopts_bundled_when_stored_is_empty(app):
+    import json
+    from models import db, Subject, MockJAMBSyllabus
+    from utils.syllabus_sections import sync_blueprint
+    with app.app_context():
+        s = Subject(name='Economics', is_active=False); db.session.add(s); db.session.flush()
+        y = MockJAMBSyllabus(subject_id=s.id, subject_name='Economics', blueprint=None)
+        db.session.add(y); db.session.commit()
+        try:
+            ch = sync_blueprint(s)
+            assert {k for k, _, _ in ch} == {'micro', 'macro', 'development', 'international'}
+            assert sum(x['count'] for x in json.loads(y.blueprint)) == 40
+            assert sync_blueprint(s) == []                       # second run: nothing to do
+        finally:
+            db.session.delete(y); db.session.delete(s); db.session.commit()

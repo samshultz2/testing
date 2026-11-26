@@ -3,6 +3,13 @@
   "code": "JAMB-ECON",
   "prefix": "ECON",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "micro", "label": "Microeconomics", "count": 18},
+    {"section": "macro", "label": "Money, income and finance", "count": 9},
+    {"section": "development", "label": "Public finance and development", "count": 9},
+    {"section": "international", "label": "International trade", "count": 4}
+  ],
   "sections": [
     {
       "code": "SCI",

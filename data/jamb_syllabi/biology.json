@@ -3,6 +3,17 @@
   "code": "JAMB-BIO",
   "prefix": "BIO",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "cell", "label": "Cell biology & living organisms", "count": 6},
+    {"section": "nutrition", "label": "Nutrition", "count": 5},
+    {"section": "transport_respiration", "label": "Transport & respiration", "count": 6},
+    {"section": "excretion_regulation", "label": "Excretion & regulation", "count": 4},
+    {"section": "support_movement", "label": "Support & movement", "count": 3},
+    {"section": "reproduction", "label": "Reproduction, growth & development", "count": 5},
+    {"section": "ecology", "label": "Ecology", "count": 6},
+    {"section": "genetics_evolution", "label": "Genetics & evolution", "count": 5}
+  ],
   "sections": [
     {
       "code": "VAR",

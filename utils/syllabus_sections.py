@@ -111,13 +111,22 @@ def sync_blueprint(subject, commit=True):
     from utils.myschool import norm_subject
     syll = MockJAMBSyllabus.query.filter_by(subject_id=subject.id).first()
     path = _bundled_path(subject.name)
-    if not syll or not syll.blueprint or not path:
+    if not syll or not path:
         return []
     try:
-        stored = json.loads(syll.blueprint)
-        bundled = json.load(open(path, encoding='utf-8')).get('blueprint') or []
+        stored = json.loads(syll.blueprint) if syll.blueprint else []
+        data = json.load(open(path, encoding='utf-8'))
+        bundled = data.get('blueprint') or []
     except Exception:
         return []
+    if not stored and bundled:
+        # imported before the file had a blueprint: adopt it (nothing to overwrite)
+        syll.blueprint = json.dumps(bundled)
+        if data.get('total') and not syll.total_questions:
+            syll.total_questions = int(data['total'])
+        if commit:
+            db.session.commit()
+        return [(x.get('section'), None, int(x.get('count', 0))) for x in bundled]
     have = {x.get('section'): int(x.get('count', 0)) for x in stored}
     new = {x.get('section'): int(x.get('count', 0)) for x in bundled}
     if not bundled or have == new:

@@ -468,7 +468,8 @@ def _draw_subject_items(exam, subject_id, attempt, subject=None):
     item_topic_map = _coded_item_topic_map(subject_id)
 
     # Structured JAMB draw when the subject has a blueprint AND tagged questions.
-    if norm_subject(subj_name) in JAMB_BLUEPRINT and has_sections:
+    from utils.jamb_blueprint import imported_blueprint
+    if (norm_subject(subj_name) in JAMB_BLUEPRINT or imported_blueprint(subj_name)) and has_sections:
         bp = blueprint_for(subj_name, _blueprint_override(exam, subj_name))
         passages_by_section = {}
         for p in passages:

@@ -120,7 +120,7 @@
     {% for s in subjects %}
     <div class="bp-card {{ 'short' if s.short }}" data-custom="{{ 1 if s.customised else 0 }}" data-short="{{ 1 if s.short else 0 }}">
       <div class="bp-head">
-        <span class="t">{{ s.name }}<small>{{ s.stock }} usable question{{ '' if s.stock == 1 else 's' }} in the bank{% if s.short %} · {{ s.short }} section{{ '' if s.short == 1 else 's' }} short{% endif %}</small></span>
+        <span class="t">{{ s.name }}<small>{{ s.stock }} usable question{{ '' if s.stock == 1 else 's' }} in the bank{% if s.short %} · {{ s.short }} section{{ '' if s.short == 1 else 's' }} short{% endif %}{% if s.unsorted %} · {{ s.unsorted }} not yet in a section (used to fill short sections){% endif %}</small></span>
         <span class="bp-pill cust" data-cust {{ '' if s.customised else 'hidden' }}>custom</span>
         <span class="bp-pill tot" title="Questions drawn"><span data-total>{{ s.total }}</span> Q</span>
         <button type="button" class="bp-reset" data-reset title="Back to the UTME default"><i class="fas fa-rotate-left" aria-hidden="true"></i><span class="sr-only">Reset {{ s.name }}</span></button>

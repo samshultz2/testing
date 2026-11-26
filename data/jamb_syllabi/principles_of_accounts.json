@@ -3,6 +3,12 @@
   "code": "JAMB-ACC",
   "prefix": "ACC",
   "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "principles", "label": "Book-keeping principles", "count": 20},
+    {"section": "final", "label": "Final accounts", "count": 6},
+    {"section": "specialised", "label": "Specialised accounts", "count": 14}
+  ],
   "sections": [
     {
       "code": "BOOK",

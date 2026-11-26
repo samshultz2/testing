@@ -436,8 +436,20 @@ def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrang
                     used_q.add(q.id)
                     per_sec.setdefault(s['section'], []).append({'kind': 'question', 'q': q})
                     short -= 1
+        # Last resort: stand-alone questions filed under a section this blueprint
+        # doesn't draw (not yet sorted into the syllabus's sections, e.g.
+        # 'general'). They go at the end of the paper.
+        if short > 0:
+            drawn = {s['section'] for s in blueprint['sections']}
+            rest = [q for sec, qs in questions_by_section.items()
+                    if sec not in drawn and sec != 'novel' for q in qs if q.id not in used_q]
+            rng.shuffle(rest)
+            for q in rest[:short]:
+                used_q.add(q.id)
+                per_sec.setdefault('__other__', []).append({'kind': 'question', 'q': q})
 
-    items = [it for sec in blueprint['sections'] for it in per_sec.pop(sec['section'], [])]
+    items = [it for sec in blueprint['sections'] for it in per_sec.pop(sec['section'], [])] + per_sec.pop('__other__', [])
+
     if not arrange:
         rng.shuffle(items)
     served = set()
