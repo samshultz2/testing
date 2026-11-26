@@ -208,7 +208,18 @@ def _engine_and_session():
         if url.startswith('sqlite'):
             path = url.replace('sqlite:///', '')
             os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-        _engine = create_engine(url, future=True)
+        opts = {}
+        if url.startswith('postgresql'):
+            # Same hardening as the tenant engines: pool_pre_ping replaces a
+            # connection Postgres has closed (restart, idle timeout,
+            # pg_terminate_backend) instead of failing the request with
+            # "terminating connection due to administrator command".
+            from config import Config
+            base = getattr(Config, 'SQLALCHEMY_ENGINE_OPTIONS', {}) or {}
+            opts = {'pool_pre_ping': True, 'pool_recycle': base.get('pool_recycle', 1800)}
+            if base.get('connect_args'):
+                opts['connect_args'] = dict(base['connect_args'])
+        _engine = create_engine(url, future=True, **opts)
         # expire_on_commit=False so returned rows stay readable after the session
         # closes (callers get a detached snapshot).
         _Session = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
@@ -217,19 +228,29 @@ def _engine_and_session():
 
 def _reset_engine():
     """Drop the cached engine/session (used by tests that repoint the URL)."""
-    global _engine, _Session
+    global _engine, _Session, _control_ready
     if _engine is not None:
         _engine.dispose()
     _engine = _Session = None
+    _control_ready = False
+
+
+_control_ready = False
 
 
 def init_control_plane():
     """Create the ``tenants`` table if missing (idempotent), and add any columns
-    introduced after a control-plane DB was first created."""
+    introduced after a control-plane DB was first created. Runs once per
+    process (it is called on every request via get_tenant); a failed attempt
+    is retried on the next call."""
+    global _control_ready
+    if _control_ready:
+        return
     engine, _ = _engine_and_session()
     _ControlBase.metadata.create_all(engine)
     _ensure_columns(engine)
     _ensure_audit_columns(engine)
+    _control_ready = True
 
 
 # Columns added after the first release; ``create_all`` won't add columns to an
