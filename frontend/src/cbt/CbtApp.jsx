@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { Banner, SectionShell, SectionTabs, Empty, Table, confirm } from '../components/ui';
@@ -39,28 +40,51 @@ const CB_STATE = {
   draft: { label: 'Draft', icon: 'fa-pen-ruler', tone: 'draft' },
 };
 
+// A small "more" menu. On a phone it opens as a bottom sheet (on <body>, above
+// the app's bottom navigation, with a backdrop); on wider screens it's a
+// dropdown that opens upwards when there isn't room below.
 function CbMenu({ items }) {
   const [open, setOpen] = useState(false);
+  const [up, setUp] = useState(false);
   const ref = React.useRef(null);
+  const popRef = React.useRef(null);
+  const phone = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 759px)').matches;
   React.useEffect(() => {
     if (!open) return undefined;
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const close = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      if (popRef.current && popRef.current.contains(e.target)) return;
+      setOpen(false);
+    };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', close); document.addEventListener('touchstart', close);
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); };
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); document.removeEventListener('keydown', esc); };
   }, [open]);
   const list = items.filter(Boolean);
   if (!list.length) return null;
+  const toggle = () => {
+    if (!open && !phone && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setUp(window.innerHeight - r.bottom < 60 + list.length * 44);
+    }
+    setOpen((v) => !v);
+  };
+  const entries = list.map((it, i) => (it.onClick
+    ? <button key={i} type="button" role="menuitem" className={it.danger ? 'danger' : ''} onClick={() => { setOpen(false); it.onClick(); }}>
+        <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</button>
+    : <a key={i} role="menuitem" href={it.href} {...(it.native ? { 'data-native': '1' } : {})} {...(it.download ? { download: true } : {})}
+        target={it.blank ? '_blank' : undefined} rel={it.blank ? 'noopener' : undefined} onClick={() => setOpen(false)}>
+        <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</a>));
   return (
     <div className="cb-menu" ref={ref}>
-      <button type="button" className="cb-btn" aria-haspopup="true" aria-expanded={open} aria-label="More" onClick={() => setOpen((v) => !v)}><i aria-hidden="true" className="fas fa-ellipsis" /></button>
-      {open && <div className="cb-menu-pop" role="menu">
-        {list.map((it, i) => (it.onClick
-          ? <button key={i} type="button" role="menuitem" className={it.danger ? 'danger' : ''} onClick={() => { setOpen(false); it.onClick(); }}>
-              <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</button>
-          : <a key={i} role="menuitem" href={it.href} {...(it.native ? { 'data-native': '1' } : {})} {...(it.download ? { download: true } : {})}
-              target={it.blank ? '_blank' : undefined} rel={it.blank ? 'noopener' : undefined} onClick={() => setOpen(false)}>
-              <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</a>))}
-      </div>}
+      <button type="button" className="cb-btn" aria-haspopup="true" aria-expanded={open} aria-label="More" onClick={toggle}><i aria-hidden="true" className="fas fa-ellipsis" /></button>
+      {open && !phone && <div className={'cb-menu-pop' + (up ? ' up' : '')} role="menu" ref={popRef}>{entries}</div>}
+      {open && phone && createPortal(<>
+        <div className="cb-sheet-bg" onClick={() => setOpen(false)} />
+        <div className="cb-menu-pop cb-sheet" role="menu" ref={popRef}>{entries}
+          <button type="button" className="cb-sheet-x" onClick={() => setOpen(false)}>Cancel</button></div>
+      </>, document.body)}
     </div>
   );
 }
