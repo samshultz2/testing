@@ -2947,6 +2947,21 @@ def api_student_progress(student_id):
 # ADMIN: publish an exam for the online sitting + set its duration
 # =============================================================================
 
+def _editable_blueprints():
+    """[(subject key, sections)] the paper blueprint page edits: for each JAMB
+    subject (and any subject with an imported syllabus), the SAME base
+    blueprint the draw uses -- the imported syllabus's sections and counts when
+    one exists, else the built-in default -- with no per-mock override."""
+    from utils.jamb_blueprint import JAMB_BLUEPRINT, blueprint_for, norm_subject
+    from models import MockJAMBSyllabus
+    keys = list(JAMB_BLUEPRINT.keys())
+    for row in MockJAMBSyllabus.query.all():
+        k = norm_subject(row.subject_name or (row.subject.name if row.subject else ''))
+        if k and k not in keys:
+            keys.append(k)
+    return [(k, blueprint_for(k)['sections']) for k in keys]
+
+
 @mock_jamb_bp.route('/exam/<int:exam_id>/blueprint', methods=['GET', 'POST'])
 @login_required
 @csrf_protect
@@ -2955,13 +2970,13 @@ def exam_blueprint(exam_id):
     from each section. A value equal to the JAMB default stores nothing; real
     deviations are kept as a compact override on the mock."""
     import json
-    from utils.jamb_blueprint import JAMB_BLUEPRINT
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)
+    editable = _editable_blueprints()
     if request.method == 'POST':
         override = {}
-        for subj_key, bp in JAMB_BLUEPRINT.items():
-            for s in bp['sections']:
+        for subj_key, secs_base in editable:
+            for s in secs_base:
                 raw = request.form.get(f'{subj_key}__{s["section"]}')
                 if raw in (None, ''):
                     continue
@@ -2988,15 +3003,16 @@ def exam_blueprint(exam_id):
         except Exception:
             current = {}
     subjects_view = []
-    for subj_key, bp in JAMB_BLUEPRINT.items():
+    for subj_key, secs_base in editable:
         ov = current.get(subj_key, {})
         secs = [{'section': s['section'], 'label': s['label'], 'passage': s['passage'],
                  'count': ov.get(s['section'], s['count']), 'default': s['count']}
-                for s in bp['sections']]
+                for s in secs_base]
         subjects_view.append({'key': subj_key, 'name': subj_key.title(),
                               'total': sum(x['count'] for x in secs),
                               'default_total': sum(x['default'] for x in secs),
-                              'sections': secs, 'customised': subj_key in current})
+                              'sections': secs,
+                              'customised': any(x['count'] != x['default'] for x in secs)})
     # Bank stock per blueprint subject and section, so short sections stand out.
     from utils.jamb_blueprint import norm_subject
     stock = {}
@@ -3009,6 +3025,8 @@ def exam_blueprint(exam_id):
                         .group_by(MockJAMBQuestion.subject_id, sec_col).all()):
         k = key_of.get(sid)
         if k and sec:
+            from utils.jamb_blueprint import canon_section
+            sec = canon_section(sec)
             stock.setdefault(k, {})[sec] = stock.get(k, {}).get(sec, 0) + n
     for sv in subjects_view:
         st = stock.get(sv['key'], {})
