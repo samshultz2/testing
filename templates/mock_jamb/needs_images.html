@@ -244,7 +244,7 @@
       <div class="ni-meta">
         <span class="ni-tag subj">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
         {% if q.exam_year %}<span class="ni-tag yr">{{ q.exam_body or '' }} {{ q.exam_year }}</span>{% endif %}
-        {% if q.topic %}<span class="ni-tag">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+        {% set _tl = qlabel(q) %}{% if _tl[0] %}<span class="ni-tag">{{ _tl[0] }}{% if _tl[1] %} › {{ _tl[1] }}{% endif %}</span>{% endif %}
         <span class="ni-tag why"><i class="fas fa-image" aria-hidden="true"></i> {{ reasons.get(q.id) }}</span>
       </div>
       <span class="ni-dot" aria-hidden="true"></span>
@@ -255,7 +255,7 @@
       <div class="ni-bhead">
         <span class="ni-tag subj">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
         {% if q.exam_year %}<span class="ni-tag">{{ q.exam_body or '' }} {{ q.exam_year }}</span>{% endif %}
-        {% if q.topic %}<span class="ni-tag">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+        {% set _tl = qlabel(q) %}{% if _tl[0] %}<span class="ni-tag">{{ _tl[0] }}{% if _tl[1] %} › {{ _tl[1] }}{% endif %}</span>{% endif %}
         <span class="ni-tag why"><i class="fas fa-image" aria-hidden="true"></i> {{ reasons.get(q.id) }}</span>
         <span class="ni-num" style="margin-left:auto">#{{ n }}</span>
       </div>

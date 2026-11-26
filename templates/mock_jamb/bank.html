@@ -120,7 +120,7 @@
         (None, None, 'Bank'),
         (analytics_url, 'fa-chart-pie', 'Topic analytics'),
         (coded_syllabus_url, 'fa-list-ol', 'Coded syllabus'),
-        (syllabus_url, 'fa-list-check', 'Syllabus topics'),
+        (syllabus_url, 'fa-list-check', 'Syllabus topics') if syllabus_url else (None, None, None),
         (url_for('mock_jamb.bank_needs_images'), 'fa-image', 'Questions needing images'),
         (None, None, 'Mock JAMB'),
         (index_url, 'fa-clipboard-list', 'All mock exams')]) }}
@@ -247,7 +247,7 @@
     </div>
     <div class="qb-meta">
       {% if q.section %}<span class="qb-tag sec">{{ q.section|replace('_',' ')|title }}</span>{% endif %}
-      {% if q.topic %}<span class="qb-tag">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+      {% set _tl = qlabel(q) %}{% if _tl[0] %}<span class="qb-tag{{ ' warn' if _tl[0] == 'Not yet coded' }}">{{ _tl[0] }}{% if _tl[1] %} › {{ _tl[1] }}{% endif %}</span>{% endif %}
       {% if q.exam_body %}<span class="qb-tag">{{ q.exam_body }}</span>{% endif %}
       {% if q.exam_year %}<span class="qb-tag">{{ q.exam_year }}</span>{% endif %}
       {% if q.difficulty %}<span class="qb-tag">{{ q.difficulty|title }}</span>{% endif %}

@@ -42,20 +42,33 @@ def _submitted_attempts(student_id=None, allowed_ids=None, exam_id=None):
     return q.all()
 
 
+from utils.coded_topics import NOT_CODED  # noqa: E402
+
+
 def _answer_rows(attempt_ids):
     """(subject_name, topic, subtopic, is_correct) for every answered question in
     the given attempts — one round-trip, joined to the question and its subject."""
     if not attempt_ids:
         return []
+    from collections import namedtuple
     from models import db, MockJAMBAnswer, MockJAMBQuestion, Subject
-    rows = (db.session.query(
+    from utils.coded_topics import label_maps, label
+    raw = (db.session.query(
                 Subject.name, MockJAMBQuestion.topic, MockJAMBQuestion.subtopic,
-                MockJAMBAnswer.is_correct, MockJAMBAnswer.attempt_id)
-            .join(MockJAMBQuestion, MockJAMBAnswer.question_id == MockJAMBQuestion.id)
-            .outerjoin(Subject, MockJAMBQuestion.subject_id == Subject.id)
-            .filter(MockJAMBAnswer.attempt_id.in_(list(attempt_ids)))
-            .all())
-    return rows
+                MockJAMBAnswer.is_correct, MockJAMBAnswer.attempt_id,
+                MockJAMBQuestion.subject_id, MockJAMBQuestion.syllabus_item_code)
+           .join(MockJAMBQuestion, MockJAMBAnswer.question_id == MockJAMBQuestion.id)
+           .outerjoin(Subject, MockJAMBQuestion.subject_id == Subject.id)
+           .filter(MockJAMBAnswer.attempt_id.in_(list(attempt_ids)))
+           .all())
+    # report topics by the coded syllabus (see utils.coded_topics)
+    maps, coded = label_maps({r[5] for r in raw})
+    Row = namedtuple('Row', 'name topic subtopic is_correct attempt_id')
+    out = []
+    for r in raw:
+        t, st = label(r[5], r[6], r[1], r[2], maps, coded)
+        out.append(Row(r[0], t, st, r[3], r[4]))
+    return out
 
 
 def _aggregate(rows, key):
@@ -105,7 +118,7 @@ def student_mastery(student_id, allowed_ids=None, min_attempts=2):
                               'rate': _rate(tot_c, tot_t)})
 
     # ---- strengths / weaknesses (topic level, enough evidence) ----------------
-    topic_agg = _aggregate(rows, lambda r: (r.topic or None))
+    topic_agg = _aggregate(rows, lambda r: (r.topic if r.topic and r.topic != NOT_CODED else None))
     ranked = [{'topic': tp, 'correct': c, 'total': t, 'rate': _rate(c, t),
                'band': _band(_rate(c, t))}
               for tp, (c, t) in topic_agg.items() if t >= min_attempts]
@@ -115,7 +128,7 @@ def student_mastery(student_id, allowed_ids=None, min_attempts=2):
                         key=lambda x: (x['rate'], -x['total']))[:8]
 
     # ---- sub-topic detail (weakest first) ------------------------------------
-    sub_agg = _aggregate(rows, lambda r: ((r.topic or '(untagged)'), r.subtopic) if r.subtopic else None)
+    sub_agg = _aggregate(rows, lambda r: ((r.topic or '(untagged)'), r.subtopic) if r.subtopic and r.topic != NOT_CODED else None)
     subtopics = sorted(
         [{'topic': tp, 'subtopic': st, 'correct': c, 'total': t,
           'rate': _rate(c, t), 'band': _band(_rate(c, t))}
@@ -170,7 +183,7 @@ def cohort_topic_gaps(allowed_ids=None, exam_id=None, min_attempts=10, limit=15)
                 'weak_subtopics': [], 'has_data': False}
     rows = _answer_rows([a.id for a in attempts])
 
-    topic_agg = _aggregate(rows, lambda r: (r.topic or None))
+    topic_agg = _aggregate(rows, lambda r: (r.topic if r.topic and r.topic != NOT_CODED else None))
     students_by_topic = {}
     # count distinct students struggling isn't needed; rate over answers is enough
     ranked = [{'topic': tp, 'correct': c, 'total': t, 'rate': _rate(c, t),
@@ -181,7 +194,7 @@ def cohort_topic_gaps(allowed_ids=None, exam_id=None, min_attempts=10, limit=15)
     strong = sorted([r for r in ranked if r['rate'] is not None],
                     key=lambda x: (-x['rate'], -x['total']))[:limit]
 
-    sub_agg = _aggregate(rows, lambda r: ((r.topic or '(untagged)'), r.subtopic) if r.subtopic else None)
+    sub_agg = _aggregate(rows, lambda r: ((r.topic or '(untagged)'), r.subtopic) if r.subtopic and r.topic != NOT_CODED else None)
     weak_sub = sorted(
         [{'topic': tp, 'subtopic': st, 'correct': c, 'total': t, 'rate': _rate(c, t),
           'band': _band(_rate(c, t))}

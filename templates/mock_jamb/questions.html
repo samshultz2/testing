@@ -126,7 +126,7 @@
         (url_for('mock_jamb.view_exam', exam_id=exam.id), 'fa-users', 'Results'),
         (None, None, 'Bank'),
         (url_for('mock_jamb.bank', subject_id=subject_id or none), 'fa-database', 'Central question bank'),
-        (syllabus_url, 'fa-list-check', 'Syllabus topics')]) }}
+        (syllabus_url, 'fa-list-check', 'Syllabus topics') if syllabus_url else (None, None, None)]) }}
   {% endcall %}
   <div class="no-print">{{ mj_exam_nav(exam, 'questions') }}</div>
 
@@ -200,7 +200,7 @@
       {% for opt, val in q.options %}{% if val %}<div class="qb-opt {{ 'key' if q.correct_option == opt }}"><b>{{ opt }}</b><span>{{ val | question_html }}</span></div>{% endif %}{% endfor %}
     </div>
     <div class="qb-meta">
-      {% if q.topic %}<span class="qb-tag sec">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+      {% set _tl = qlabel(q) %}{% if _tl[0] %}<span class="qb-tag sec">{{ _tl[0] }}{% if _tl[1] %} › {{ _tl[1] }}{% endif %}</span>{% endif %}
       <span class="qb-tag">{{ q.marks|round(1)|string|replace('.0', '') }} mark{{ '' if q.marks == 1 else 's' }}</span>
     </div>
   </div>

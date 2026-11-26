@@ -138,6 +138,7 @@ def _item_flags(p, d, distractors, correct_letter, served):
 def _analyse_items(questions, answers_by_q, served_ids_by_q, upper_ids, lower_ids):
     """Full item analysis for every question that was served at least once."""
     items = []
+    _lm = None
     for q in questions:
         served_atts = served_ids_by_q.get(q.id, set())
         served = len(served_atts)
@@ -180,11 +181,16 @@ def _analyse_items(questions, answers_by_q, served_ids_by_q, upper_ids, lower_id
 
         diff_band, diff_label = _difficulty_band(p)
         disc_band, disc_label = _discrimination_band(d)
+        if _lm is None:                      # coded-syllabus names, built once
+            from utils.coded_topics import label_maps
+            _lm = label_maps({x.subject_id for x in questions})
+        from utils.coded_topics import label as _label
+        _tl = _label(q.subject_id, q.syllabus_item_code, q.topic, q.subtopic, *_lm)
         flags = _item_flags(p, d, distractors, correct_letter, served)
         items.append({
             'id': q.id, 'order': q.order, 'subject': q.subject.name if q.subject else '',
-            'subject_id': q.subject_id, 'topic': q.topic or 'Untagged',
-            'subtopic': q.subtopic or '', 'text': q.question_text,
+            'subject_id': q.subject_id, 'topic': _tl[0] or 'Untagged',
+            'subtopic': _tl[1] or '', 'text': q.question_text,
             'correct_option': correct_letter,
             'served': served, 'answered': served - blank, 'blank': blank,
             'correct': n_correct, 'p_value': _pct(p), 'p_raw': p,
@@ -280,7 +286,8 @@ def _recommendations(subject_mastery, topics, flagged, blank_heavy, cohort_maste
     def rec(bucket, tone, title, text):
         bucket.append({'tone': tone, 'title': title, 'text': text})
 
-    weak_topics = [t for t in topics if t['band'] in ('critical', 'weak')][:6]
+    from utils.coded_topics import NOT_CODED
+    weak_topics = [t for t in topics if t['band'] in ('critical', 'weak') and t['topic'] != NOT_CODED][:6]
     crit_subj = [s for s in subject_mastery if s['band'] in ('critical', 'weak')]
 
     # --- students ---

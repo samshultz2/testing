@@ -1253,14 +1253,62 @@ def _bank_coverage(subject):
             'need': sum(bp.values())}
 
 
+@mock_jamb_bp.context_processor
+def _coded_label_helper():
+    """``qlabel(q)`` -> (topic, sub-topic) to show for a question: its coded
+    syllabus names (or "Not yet coded" in a coded subject); a Novel question
+    keeps its book title."""
+    def qlabel(q):
+        if (q.section or '') == 'novel':
+            return q.topic, q.subtopic
+        from utils.coded_topics import label_maps, label
+        maps, coded = label_maps({q.subject_id})
+        return label(q.subject_id, q.syllabus_item_code, q.topic, q.subtopic, maps, coded)
+    return {'qlabel': qlabel}
+
+
+def _has_coded(subject_id):
+    """Does this subject have an imported, coded syllabus?"""
+    from models import MockJAMBSyllabus
+    return bool(subject_id) and MockJAMBSyllabus.query.filter_by(subject_id=subject_id).first() is not None
+
+
+def _coded_only(subject):
+    """Refuse a keyword/free-text tagger for a subject with a coded syllabus:
+    its questions are tagged by syllabus code (AI retag), not by keywords."""
+    if subject and _has_coded(subject.id):
+        flash(f'{subject.name} has a coded syllabus, so its questions are tagged by syllabus code. '
+              f'Use AI retag on the Syllabus page instead.', 'info')
+        return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject.id))
+    return None
+
+
+def _mj_topic_tree(subject_id):
+    """Topic / sub-topic picker for Mock JAMB authoring: the subject's coded
+    syllabus (JAMB's own topic and item names) when one is imported, else the
+    school's CBT topic list."""
+    from utils.coded_topics import coded_tree
+    tree = coded_tree(subject_id)
+    if tree:
+        return tree
+    from routes.cbt import _subject_topic_tree
+    return _subject_topic_tree(subject_id)
+
+
 def _bank_filter_options(subject_id):
     """Distinct topics / sub-topics / years / exam bodies present in a subject's
     bank — the option lists that drive the filter drop-downs. Sub-topics are
     grouped by their topic so the picker can narrow as the topic changes."""
     from models import MockJAMBQuestion
-    rows = (db.session.query(MockJAMBQuestion.topic, MockJAMBQuestion.subtopic)
-            .filter(MockJAMBQuestion.subject_id == subject_id,
-                    MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all())
+    from utils.coded_topics import coded_tree, NOT_CODED
+    tree = coded_tree(subject_id)
+    if tree:   # the coded syllabus's own topic and item names
+        rows = [(t['title'], s['title']) for t in tree for s in t['subtopics']] + \
+               [(t['title'], None) for t in tree] + [(NOT_CODED, None)]
+    else:
+        rows = (db.session.query(MockJAMBQuestion.topic, MockJAMBQuestion.subtopic)
+                .filter(MockJAMBQuestion.subject_id == subject_id,
+                        MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all())
     topics, subs_by_topic = set(), {}
     for topic, sub in rows:
         t = (topic or '').strip()
@@ -1277,7 +1325,7 @@ def _bank_filter_options(subject_id):
                              MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all()
                      if (b or '').strip()})
     return {
-        'topics': sorted(topics, key=str.lower),
+        'topics': ([t['title'] for t in tree] + [NOT_CODED]) if tree else sorted(topics, key=str.lower),
         'subtopics_by_topic': {t: sorted(v, key=str.lower) for t, v in subs_by_topic.items()},
         'all_subtopics': sorted({s for v in subs_by_topic.values() for s in v}, key=str.lower),
         'years': years, 'exam_bodies': bodies,
@@ -1312,16 +1360,26 @@ def bank():
         sections = sections_for(subject.name)
         coverage = _bank_coverage(subject)
         filter_options = _bank_filter_options(subject_id)
+        from utils.coded_topics import label_maps, codes_matching, NOT_CODED
+        coded_filter = subject_id in label_maps({subject_id})[1]
 
         def _apply(query):
             """Apply the shared bank filters (section/topic/subtopic/year/body/text)
             to a MockJAMBQuestion query."""
             if section:
                 query = query.filter(MockJAMBQuestion.section == section)
-            if f_topic:
-                query = query.filter(MockJAMBQuestion.topic == f_topic)
-            if f_subtopic:
-                query = query.filter(MockJAMBQuestion.subtopic == f_subtopic)
+            if coded_filter and (f_topic or f_subtopic):
+                if f_topic == NOT_CODED:
+                    query = query.filter((MockJAMBQuestion.syllabus_item_code.is_(None))
+                                         | (MockJAMBQuestion.syllabus_item_code == ''))
+                else:
+                    codes = codes_matching(subject_id, f_topic, f_subtopic) or ['__none__']
+                    query = query.filter(MockJAMBQuestion.syllabus_item_code.in_(codes))
+            else:
+                if f_topic:
+                    query = query.filter(MockJAMBQuestion.topic == f_topic)
+                if f_subtopic:
+                    query = query.filter(MockJAMBQuestion.subtopic == f_subtopic)
             if f_year:
                 query = query.filter(MockJAMBQuestion.exam_year == f_year)
             if f_body:
@@ -1384,14 +1442,14 @@ def bank():
                            subject_id=subject_id, section=section, sections=sections,
                            passages=passages, standalone=standalone, coverage=coverage,
                            pagination=pagination, q_search=q_search, jamb_ok_ids=jamb_ok_ids,
-                           topic_tree=_subject_topic_tree(subject_id),
+                           topic_tree=_mj_topic_tree(subject_id),
                            filter_options=filter_options,
                            f_topic=f_topic, f_subtopic=f_subtopic, f_year=f_year, f_body=f_body,
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),
                            novel_cards=(_novel_choices()[0] if section == 'novel' else []),
                            novel_untagged=(_novel_untagged() if section == 'novel' else (0, None)),
-                           syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
+                           syllabus_url=(None if _has_coded(subject_id) else url_for('cbt.syllabus', subject_id=subject_id or '')),
                            coded_syllabus_url=url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''),
                            analytics_url=url_for('mock_jamb.bank_analytics', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
@@ -1820,6 +1878,9 @@ def bank_retag():
     if not subject:
         flash('Pick a subject first.', 'error')
         return redirect(url_for('mock_jamb.bank_analytics'))
+    stop = _coded_only(subject)
+    if stop:
+        return stop
     mode = 'all' if request.form.get('mode') == 'all' else 'untagged'
     ensure_section = bool(request.form.get('ensure_section'))
     year = (request.form.get('year') or '').strip() or None
@@ -1891,6 +1952,9 @@ def bank_local_tag():
     if not subject:
         flash('Pick a subject first.', 'error')
         return redirect(url_for('mock_jamb.bank_analytics'))
+    stop = _coded_only(subject)
+    if stop:
+        return stop
     if not available():
         flash('Local tagging needs the "sentence-transformers" package installed on the server.', 'error')
         return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
@@ -1996,7 +2060,30 @@ def _read_bank_question(form, q, files, subject):
     diff = (form.get('difficulty') or '').strip().lower()
     q.difficulty = diff if diff in ('easy', 'medium', 'hard') else None
     q.exam_year = (form.get('exam_year') or '').strip()[:8] or None
+    _set_code_from_topic(q, subject, section_given=bool((form.get('section') or '').strip()))
     return None
+
+
+def _set_code_from_topic(q, subject, section_given=False):
+    """In a subject with a coded syllabus, the picked topic / sub-topic IS a
+    syllabus item: store its code, and file the question in that code's paper
+    section unless a section was chosen on the form."""
+    from utils.coded_topics import code_for, label_maps
+    if not subject:
+        return
+    maps, coded = label_maps({subject.id})
+    if subject.id not in coded:
+        return
+    code = code_for(subject.id, q.topic, q.subtopic)
+    q.syllabus_item_code = code
+    if code and not section_given and not q.passage_id:
+        from utils.mock_bank_coded_retag import coded_nodes, place_section
+        from utils.jamb_blueprint import sections_for
+        by_code, _s = coded_nodes(subject.id)
+        node = by_code.get(code)
+        if node is not None:
+            place_section(q, subject.name, node, {n.id: n for n in by_code.values()},
+                          {x['section'] for x in sections_for(subject.name)})
 
 
 @mock_jamb_bp.route('/bank/question/add', methods=['POST'])
@@ -2054,7 +2141,7 @@ def bank_edit_question(question_id):
                            math_editor=_mx_config(subject.name if subject else ''),
                            src_link=mock_figures.source_link,
                            sections=sections_for(subject.name),
-                           topic_tree=_subject_topic_tree(q.subject_id),
+                           topic_tree=_mj_topic_tree(q.subject_id),
                            back_url=_bank_url(q.subject_id, q.section))
 
 
@@ -2150,12 +2237,14 @@ def bank_import():
         # original page (and its diagram) is one click away.
         src_qid = mock_figures.myschool_qid(parts[11]) if len(parts) > 11 else None
         base += 1
-        db.session.add(MockJAMBQuestion(
+        _nq = MockJAMBQuestion(
             mock_exam_id=None, subject_id=subject_id, section=section, exam_body=exam_body,
             question_text=text, option_a=a, option_b=b, option_c=c, option_d=d,
             correct_option=correct, marks=1, topic=topic, subtopic=subtopic,
             exam_year=year, image_url=image, order=base, needs_image=img_failed,
-            source='myschool' if src_qid else 'paste', source_ref=src_qid))
+            source='myschool' if src_qid else 'paste', source_ref=src_qid)
+        db.session.add(_nq)
+        _set_code_from_topic(_nq, subject, section_given=bool(len(parts) > 6 and parts[6]))
         added += 1
     db.session.commit()
     msg = f'Imported {added} question(s).'
@@ -2621,8 +2710,8 @@ def questions(exam_id):
                            subject_counts=subject_counts, bank_count=bank_count,
                            subject=subject, subject_id=subject_id, passages=passages,
                            standalone=standalone, qcount=qcount, pagination=pagination,
-                           topic_tree=_subject_topic_tree(subject_id),
-                           syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''))
+                           topic_tree=_mj_topic_tree(subject_id),
+                           syllabus_url=(None if _has_coded(subject_id) else url_for('cbt.syllabus', subject_id=subject_id or '')))
 
 
 def _q_url(exam_id, subject_id):
@@ -2732,6 +2821,7 @@ def add_mock_question(exam_id):
     if err:
         flash(err, 'error')
         return redirect(_q_url(exam_id, subject_id))
+    _set_code_from_topic(q, db.session.get(Subject, subject_id))
     q.order = (db.session.query(func.coalesce(func.max(MockJAMBQuestion.order), 0))
                .filter(MockJAMBQuestion.mock_exam_id == exam_id,
                        MockJAMBQuestion.subject_id == subject_id).scalar()) + 1
@@ -2753,13 +2843,14 @@ def edit_mock_question(question_id):
         if err:
             flash(err, 'error')
             return redirect(url_for('mock_jamb.edit_mock_question', question_id=question_id))
+        _set_code_from_topic(q, db.session.get(Subject, q.subject_id))
         db.session.commit()
         flash('Question updated.', 'success')
         return redirect(_q_url(q.mock_exam_id, q.subject_id))
     from utils.cbt_symbols import editor_config as _mx_config
     return render_template('mock_jamb/edit_question.html', q=q, exam=q.exam,
                            math_editor=_mx_config(q.subject.name if q.subject else ''),
-                           topic_tree=_subject_topic_tree(q.subject_id),
+                           topic_tree=_mj_topic_tree(q.subject_id),
                            back_url=_q_url(q.mock_exam_id, q.subject_id))
 
 
